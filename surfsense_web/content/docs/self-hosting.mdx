@@ -144,10 +144,19 @@ Google, limit who Google lets in: an OAuth consent screen of user type
 | `BTCPAY_URL` | none | Your own BTCPay Server, for crypto payments. Crypto is offered only once it is switched on and its URL, store ID, API key and webhook secret are all set (the billing admin page, or `BTCPAY_STORE_ID`, `BTCPAY_API_KEY` and `BTCPAY_WEBHOOK_SECRET`). |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | none | Card payments through Stripe, offered only when switched on and both are set. |
 
+**Billing is optional.** The default `BILLING_MODE=shadow` records what an
+action would cost but never blocks it. `BILLING_MODE=off` records nothing;
+`live` enforces plans and credits. On a fresh server, set the mode in
+`docker/.env` before the first start. Accounts in `BILLING_ADMIN_EMAILS` are
+exempt, and an administrator can mark any account **exempt** in the billing
+admin page, so you can keep live billing for other people and still use the
+server without limits yourself.
+
 ## The phone app
 
 The Soloclef app for iPhone and Android can sign in to your server: on its
-sign-in screen, **Change server**, then this server's address. One app build
+sign-in screen, **Change server**, then this server's address. The iPhone beta
+is at <https://testflight.apple.com/join/1tjGWu1Q>. One app build
 works with every server; a separate build, bundle id, or store account is
 not needed to use the app with your server (those are only for publishing a
 store listing of your own). It takes https addresses only, with a

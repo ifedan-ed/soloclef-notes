@@ -19,7 +19,7 @@ Thanks to the SurfSense team for the foundation.
 ## Quick start
 
 ```bash
-git clone <your-repository-url> soloclef
+git clone https://github.com/ifedan-ed/soloclef-notes.git soloclef
 cd soloclef
 cp docker/.env.example docker/.env
 ```
@@ -61,6 +61,36 @@ models by copying
 mounting it at `/app/app/config/global_llm_config.yaml` in the backend and
 Celery services.
 
+## Billing is optional
+
+You do not need payments or credits to self-host. The default is
+`BILLING_MODE=shadow`: usage is recorded, but nothing is blocked or charged.
+For a completely free server, set:
+
+```dotenv
+BILLING_MODE=off
+```
+
+and restart the backend. If you keep live billing for other people but want
+your own account unlimited, put your address in `BILLING_ADMIN_EMAILS`;
+configured administrators are exempt. An administrator can also mark any
+account **exempt** on the billing admin page.
+
+## OIDC is optional: use a password
+
+The default sign-in is a local email/password account (`AUTH_TYPE=LOCAL`,
+`OIDC_ENABLED` unset). No identity provider is required. Create the account
+with the `--set-password` command above; it asks for the password
+interactively. If you want people to create their own accounts, set
+`NEXT_PUBLIC_SIGNUPS_OPEN=true` in `docker/.env`, rebuild the frontend, and
+keep the sign-up route open (see the self-hosting docs for closing it later).
+Password reset by email needs `SMTP_*`; without SMTP, create accounts with
+`--set-password`.
+
+OIDC is only for adding single sign-on beside the password form. Set
+`OIDC_ENABLED=TRUE` and the `OIDC_*` values in `docker/.env`, and register
+`{BACKEND_URL}/auth/oidc/callback` with your provider.
+
 ## Add a PDF
 
 Choose **Add sources** and upload a PDF. The default parser is **Local
@@ -77,8 +107,11 @@ launch enter your server's https address, or set
 server. Push notifications need `SURFSENSE_PUBLIC_URL` to be the exact https
 address people type in the app.
 
+**iPhone beta:** <https://testflight.apple.com/join/1tjGWu1Q>
+
 ## Documentation
 
+- Documentation index: [`docs/README.md`](docs/README.md)
 - Full self-hosting reference: `surfsense_web/content/docs/self-hosting.mdx`
   (served at `/docs/self-hosting` by a running server).
 - User guide: `surfsense_web/content/docs/getting-started.mdx`.
