@@ -1,0 +1,5327 @@
+{
+	"paths": {
+		"/auth/desktop/login": {
+			"post": {
+				"tags": [
+					"auth"
+				],
+				"summary": "Desktop Password Login",
+				"operationId": "desktop_password_login_auth_desktop_login_post",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/DesktopLoginRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/RefreshTokenResponse"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/auth/jwt/refresh": {
+			"post": {
+				"tags": [
+					"auth"
+				],
+				"summary": "Refresh Access Token",
+				"description": "Exchange a valid refresh token for a new access token and refresh token.\nImplements token rotation for security.",
+				"operationId": "refresh_access_token_auth_jwt_refresh_post",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"anyOf": [
+									{
+										"$ref": "#/components/schemas/RefreshTokenRequest"
+									},
+									{
+										"type": "null"
+									}
+								],
+								"title": "Body"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/auth/jwt/revoke": {
+			"post": {
+				"tags": [
+					"auth"
+				],
+				"summary": "Revoke Token",
+				"description": "Logout current device by revoking the provided refresh token.\nDoes not require authentication - just the refresh token.",
+				"operationId": "revoke_token_auth_jwt_revoke_post",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"anyOf": [
+									{
+										"$ref": "#/components/schemas/LogoutRequest"
+									},
+									{
+										"type": "null"
+									}
+								],
+								"title": "Body"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/LogoutResponse"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/users/me": {
+			"get": {
+				"tags": [
+					"users"
+				],
+				"summary": "Get Current User Profile",
+				"operationId": "get_current_user_profile_users_me_get",
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/UserRead"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workspaces": {
+			"get": {
+				"tags": [
+					"crud"
+				],
+				"summary": "Read Workspaces",
+				"operationId": "read_workspaces_api_v1_workspaces_get",
+				"parameters": [
+					{
+						"name": "skip",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"default": 0,
+							"title": "Skip"
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"default": 200,
+							"title": "Limit"
+						}
+					},
+					{
+						"name": "owned_only",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "boolean",
+							"default": false,
+							"title": "Owned Only"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/WorkspaceWithStats"
+									},
+									"title": "Response Read Workspaces Api V1 Workspaces Get"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workspaces/{workspace_id}/notebooks": {
+			"get": {
+				"tags": [
+					"crud",
+					"notebooks"
+				],
+				"summary": "List Notebooks",
+				"operationId": "list_notebooks_api_v1_workspaces__workspace_id__notebooks_get",
+				"parameters": [
+					{
+						"name": "workspace_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Workspace Id"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/NotebookRead"
+									},
+									"title": "Response List Notebooks Api V1 Workspaces  Workspace Id  Notebooks Get"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": [
+					"crud",
+					"notebooks"
+				],
+				"summary": "Create Notebook",
+				"operationId": "create_notebook_api_v1_workspaces__workspace_id__notebooks_post",
+				"parameters": [
+					{
+						"name": "workspace_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Workspace Id"
+						}
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/NotebookCreate"
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/NotebookRead"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workspaces/{workspace_id}/notebooks/search": {
+			"get": {
+				"tags": [
+					"crud",
+					"notebooks"
+				],
+				"summary": "Search Inside Notebooks",
+				"description": "Passages matching ``q`` from each notebook's enabled sources and notes.\n\nNeeds the same permission as listing notebooks. Source passages quote\ndocument content, so they also need document read access; without it the\nsearch covers notes only. Studio outputs and chats are never searched.",
+				"operationId": "search_inside_notebooks_api_v1_workspaces__workspace_id__notebooks_search_get",
+				"parameters": [
+					{
+						"name": "workspace_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Workspace Id"
+						}
+					},
+					{
+						"name": "q",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"maxLength": 200,
+							"default": "",
+							"title": "Q"
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"maximum": 8,
+							"minimum": 1,
+							"default": 8,
+							"title": "Limit"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/NotebookSearchRead"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workspaces/{workspace_id}/notebooks/{notebook_id}": {
+			"get": {
+				"tags": [
+					"crud",
+					"notebooks"
+				],
+				"summary": "Get Notebook",
+				"operationId": "get_notebook_api_v1_workspaces__workspace_id__notebooks__notebook_id__get",
+				"parameters": [
+					{
+						"name": "workspace_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Workspace Id"
+						}
+					},
+					{
+						"name": "notebook_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Notebook Id"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/NotebookRead"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"patch": {
+				"tags": [
+					"crud",
+					"notebooks"
+				],
+				"summary": "Update Notebook",
+				"operationId": "update_notebook_api_v1_workspaces__workspace_id__notebooks__notebook_id__patch",
+				"parameters": [
+					{
+						"name": "workspace_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Workspace Id"
+						}
+					},
+					{
+						"name": "notebook_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Notebook Id"
+						}
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/NotebookUpdate"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/NotebookRead"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": [
+					"crud",
+					"notebooks"
+				],
+				"summary": "Delete Notebook",
+				"description": "Remove the notebook, its source links and notes; documents and chats stay.",
+				"operationId": "delete_notebook_api_v1_workspaces__workspace_id__notebooks__notebook_id__delete",
+				"parameters": [
+					{
+						"name": "workspace_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Workspace Id"
+						}
+					},
+					{
+						"name": "notebook_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Notebook Id"
+						}
+					}
+				],
+				"responses": {
+					"204": {
+						"description": "Successful Response"
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workspaces/{workspace_id}/notebooks/{notebook_id}/sources": {
+			"get": {
+				"tags": [
+					"crud",
+					"notebooks"
+				],
+				"summary": "Get Sources",
+				"operationId": "get_sources_api_v1_workspaces__workspace_id__notebooks__notebook_id__sources_get",
+				"parameters": [
+					{
+						"name": "workspace_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Workspace Id"
+						}
+					},
+					{
+						"name": "notebook_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Notebook Id"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/SourceRead"
+									},
+									"title": "Response Get Sources Api V1 Workspaces  Workspace Id  Notebooks  Notebook Id  Sources Get"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": [
+					"crud",
+					"notebooks"
+				],
+				"summary": "Add Sources",
+				"description": "Link documents/folders; every target must belong to this workspace.",
+				"operationId": "add_sources_api_v1_workspaces__workspace_id__notebooks__notebook_id__sources_post",
+				"parameters": [
+					{
+						"name": "workspace_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Workspace Id"
+						}
+					},
+					{
+						"name": "notebook_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Notebook Id"
+						}
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SourcesAdd"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/SourceRead"
+									},
+									"title": "Response Add Sources Api V1 Workspaces  Workspace Id  Notebooks  Notebook Id  Sources Post"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workspaces/{workspace_id}/notebooks/{notebook_id}/sources/{source_id}": {
+			"patch": {
+				"tags": [
+					"crud",
+					"notebooks"
+				],
+				"summary": "Toggle Source",
+				"operationId": "toggle_source_api_v1_workspaces__workspace_id__notebooks__notebook_id__sources__source_id__patch",
+				"parameters": [
+					{
+						"name": "workspace_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Workspace Id"
+						}
+					},
+					{
+						"name": "notebook_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Notebook Id"
+						}
+					},
+					{
+						"name": "source_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Source Id"
+						}
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SourceToggle"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SourceRead"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": [
+					"crud",
+					"notebooks"
+				],
+				"summary": "Remove Source",
+				"description": "Unlink a source; the document itself is untouched.",
+				"operationId": "remove_source_api_v1_workspaces__workspace_id__notebooks__notebook_id__sources__source_id__delete",
+				"parameters": [
+					{
+						"name": "workspace_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Workspace Id"
+						}
+					},
+					{
+						"name": "notebook_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Notebook Id"
+						}
+					},
+					{
+						"name": "source_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Source Id"
+						}
+					}
+				],
+				"responses": {
+					"204": {
+						"description": "Successful Response"
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workspaces/{workspace_id}/notebooks/{notebook_id}/sources/toggle": {
+			"post": {
+				"tags": [
+					"crud",
+					"notebooks"
+				],
+				"summary": "Toggle Sources",
+				"description": "Select or clear all sources (or the listed subset) in one write.",
+				"operationId": "toggle_sources_api_v1_workspaces__workspace_id__notebooks__notebook_id__sources_toggle_post",
+				"parameters": [
+					{
+						"name": "workspace_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Workspace Id"
+						}
+					},
+					{
+						"name": "notebook_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Notebook Id"
+						}
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SourcesBulkToggle"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/SourceRead"
+									},
+									"title": "Response Toggle Sources Api V1 Workspaces  Workspace Id  Notebooks  Notebook Id  Sources Toggle Post"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workspaces/{workspace_id}/notebooks/{notebook_id}/sources/{source_id}/guide": {
+			"get": {
+				"tags": [
+					"crud",
+					"notebooks"
+				],
+				"summary": "Get Source Guide",
+				"operationId": "get_source_guide_api_v1_workspaces__workspace_id__notebooks__notebook_id__sources__source_id__guide_get",
+				"parameters": [
+					{
+						"name": "workspace_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Workspace Id"
+						}
+					},
+					{
+						"name": "notebook_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Notebook Id"
+						}
+					},
+					{
+						"name": "source_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Source Id"
+						}
+					},
+					{
+						"name": "locale",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"anyOf": [
+								{
+									"type": "string",
+									"maxLength": 35
+								},
+								{
+									"type": "null"
+								}
+							],
+							"description": "The UI locale the guide is written in",
+							"title": "Locale"
+						},
+						"description": "The UI locale the guide is written in"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SourceGuideRead"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workspaces/{workspace_id}/notebooks/{notebook_id}/research/import": {
+			"post": {
+				"tags": [
+					"crud",
+					"notebooks"
+				],
+				"summary": "Import Results",
+				"description": "Add the picked results as pending sources; their pages are read in the background.",
+				"operationId": "import_results_api_v1_workspaces__workspace_id__notebooks__notebook_id__research_import_post",
+				"parameters": [
+					{
+						"name": "workspace_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Workspace Id"
+						}
+					},
+					{
+						"name": "notebook_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Notebook Id"
+						}
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/app__notebooks__research__schemas__ImportRequest"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/SourceRead"
+									},
+									"title": "Response Import Results Api V1 Workspaces  Workspace Id  Notebooks  Notebook Id  Research Import Post"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workspaces/{workspace_id}/notebooks/{notebook_id}/threads": {
+			"get": {
+				"tags": [
+					"crud",
+					"notebooks"
+				],
+				"summary": "List Notebook Threads",
+				"description": "The notebook's chats the caller may see, newest first.\n\nSame visibility rule as the main chat list: your own chats plus chats\nshared with the workspace. Studio's generation threads are excluded.",
+				"operationId": "list_notebook_threads_api_v1_workspaces__workspace_id__notebooks__notebook_id__threads_get",
+				"parameters": [
+					{
+						"name": "workspace_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Workspace Id"
+						}
+					},
+					{
+						"name": "notebook_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Notebook Id"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/NotebookThreadRead"
+									},
+									"title": "Response List Notebook Threads Api V1 Workspaces  Workspace Id  Notebooks  Notebook Id  Threads Get"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"tags": [
+					"crud",
+					"notebooks"
+				],
+				"summary": "Create Notebook Thread",
+				"description": "Start a chat bound to the notebook; its sources become the chat's pins.",
+				"operationId": "create_notebook_thread_api_v1_workspaces__workspace_id__notebooks__notebook_id__threads_post",
+				"parameters": [
+					{
+						"name": "workspace_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Workspace Id"
+						}
+					},
+					{
+						"name": "notebook_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Notebook Id"
+						}
+					}
+				],
+				"responses": {
+					"201": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/NotebookThreadRead"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workspaces/{workspace_id}/notebooks/{notebook_id}/followups": {
+			"post": {
+				"tags": [
+					"crud",
+					"notebooks"
+				],
+				"summary": "Get Followups",
+				"operationId": "get_followups_api_v1_workspaces__workspace_id__notebooks__notebook_id__followups_post",
+				"parameters": [
+					{
+						"name": "workspace_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Workspace Id"
+						}
+					},
+					{
+						"name": "notebook_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Notebook Id"
+						}
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/FollowupsRequest"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/FollowupsRead"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workspaces/{workspace_id}/notebooks/{notebook_id}/studio/outputs": {
+			"get": {
+				"tags": [
+					"crud",
+					"notebooks"
+				],
+				"summary": "Get Outputs",
+				"operationId": "get_outputs_api_v1_workspaces__workspace_id__notebooks__notebook_id__studio_outputs_get",
+				"parameters": [
+					{
+						"name": "workspace_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Workspace Id"
+						}
+					},
+					{
+						"name": "notebook_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Notebook Id"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/StudioOutputRead"
+									},
+									"title": "Response Get Outputs Api V1 Workspaces  Workspace Id  Notebooks  Notebook Id  Studio Outputs Get"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workspaces/{workspace_id}/notebooks/{notebook_id}/studio/outputs/{output_id}": {
+			"patch": {
+				"tags": [
+					"crud",
+					"notebooks"
+				],
+				"summary": "Rename Output",
+				"operationId": "rename_output_api_v1_workspaces__workspace_id__notebooks__notebook_id__studio_outputs__output_id__patch",
+				"parameters": [
+					{
+						"name": "workspace_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Workspace Id"
+						}
+					},
+					{
+						"name": "notebook_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Notebook Id"
+						}
+					},
+					{
+						"name": "output_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Output Id"
+						}
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/OutputRename"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/StudioOutputRead"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": [
+					"crud",
+					"notebooks"
+				],
+				"summary": "Delete Output",
+				"description": "Stop the generation if it is still running and delete what it produced.",
+				"operationId": "delete_output_api_v1_workspaces__workspace_id__notebooks__notebook_id__studio_outputs__output_id__delete",
+				"parameters": [
+					{
+						"name": "workspace_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Workspace Id"
+						}
+					},
+					{
+						"name": "notebook_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Notebook Id"
+						}
+					},
+					{
+						"name": "output_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Output Id"
+						}
+					}
+				],
+				"responses": {
+					"204": {
+						"description": "Successful Response"
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workspaces/{workspace_id}/notebooks/{notebook_id}/studio/generate": {
+			"post": {
+				"tags": [
+					"crud",
+					"notebooks"
+				],
+				"summary": "Generate",
+				"operationId": "generate_api_v1_workspaces__workspace_id__notebooks__notebook_id__studio_generate_post",
+				"parameters": [
+					{
+						"name": "workspace_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Workspace Id"
+						}
+					},
+					{
+						"name": "notebook_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Notebook Id"
+						}
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"anyOf": [
+									{
+										"$ref": "#/components/schemas/AudioRequest"
+									},
+									{
+										"$ref": "#/components/schemas/VideoRequest"
+									},
+									{
+										"$ref": "#/components/schemas/StudyRequest"
+									},
+									{
+										"$ref": "#/components/schemas/MindmapRequest"
+									},
+									{
+										"$ref": "#/components/schemas/SlidesRequest"
+									},
+									{
+										"$ref": "#/components/schemas/DataTableRequest"
+									},
+									{
+										"$ref": "#/components/schemas/InfographicRequest"
+									},
+									{
+										"$ref": "#/components/schemas/ReportRequest"
+									}
+								],
+								"title": "Request"
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/StudioOutputRead"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workspaces/{workspace_id}/notebooks/{notebook_id}/studio/suggestions": {
+			"get": {
+				"tags": [
+					"crud",
+					"notebooks"
+				],
+				"summary": "Get Suggestions",
+				"operationId": "get_suggestions_api_v1_workspaces__workspace_id__notebooks__notebook_id__studio_suggestions_get",
+				"parameters": [
+					{
+						"name": "workspace_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Workspace Id"
+						}
+					},
+					{
+						"name": "notebook_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Notebook Id"
+						}
+					},
+					{
+						"name": "kind",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"anyOf": [
+								{
+									"type": "string"
+								},
+								{
+									"type": "null"
+								}
+							],
+							"title": "Kind"
+						}
+					},
+					{
+						"name": "variant",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"anyOf": [
+								{
+									"type": "string",
+									"maxLength": 32
+								},
+								{
+									"type": "null"
+								}
+							],
+							"title": "Variant"
+						}
+					},
+					{
+						"name": "language",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"anyOf": [
+								{
+									"type": "string",
+									"maxLength": 35
+								},
+								{
+									"type": "null"
+								}
+							],
+							"title": "Language"
+						}
+					},
+					{
+						"name": "locale",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"anyOf": [
+								{
+									"type": "string",
+									"maxLength": 35
+								},
+								{
+									"type": "null"
+								}
+							],
+							"title": "Locale"
+						}
+					},
+					{
+						"name": "refresh",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "boolean",
+							"default": false,
+							"title": "Refresh"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SuggestionsRead"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workspaces/{workspace_id}/notebook-report-templates": {
+			"get": {
+				"tags": [
+					"crud",
+					"notebooks"
+				],
+				"summary": "Get Report Templates",
+				"operationId": "get_report_templates_api_v1_workspaces__workspace_id__notebook_report_templates_get",
+				"parameters": [
+					{
+						"name": "workspace_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Workspace Id"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/ReportTemplateRead"
+									},
+									"title": "Response Get Report Templates Api V1 Workspaces  Workspace Id  Notebook Report Templates Get"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workspaces/{workspace_id}/artifacts/{artifact_id}/manifest": {
+			"get": {
+				"tags": [
+					"crud"
+				],
+				"summary": "Get Artifact Manifest",
+				"operationId": "get_artifact_manifest_api_v1_workspaces__workspace_id__artifacts__artifact_id__manifest_get",
+				"parameters": [
+					{
+						"name": "workspace_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Workspace Id"
+						}
+					},
+					{
+						"name": "artifact_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Artifact Id"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workspaces/{workspace_id}/artifacts/{artifact_id}/download": {
+			"get": {
+				"tags": [
+					"crud"
+				],
+				"summary": "Download Artifact",
+				"operationId": "download_artifact_api_v1_workspaces__workspace_id__artifacts__artifact_id__download_get",
+				"parameters": [
+					{
+						"name": "workspace_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Workspace Id"
+						}
+					},
+					{
+						"name": "artifact_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Artifact Id"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/workspaces/{workspace_id}/artifacts/{artifact_id}/files/{file_id}/content": {
+			"get": {
+				"tags": [
+					"crud"
+				],
+				"summary": "Stream Artifact File",
+				"operationId": "stream_artifact_file_api_v1_workspaces__workspace_id__artifacts__artifact_id__files__file_id__content_get",
+				"parameters": [
+					{
+						"name": "workspace_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Workspace Id"
+						}
+					},
+					{
+						"name": "artifact_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Artifact Id"
+						}
+					},
+					{
+						"name": "file_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "File Id"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/threads/{thread_id}": {
+			"get": {
+				"tags": [
+					"crud"
+				],
+				"summary": "Get Thread Messages",
+				"operationId": "get_thread_messages_api_v1_threads__thread_id__get",
+				"parameters": [
+					{
+						"name": "thread_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Thread Id"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ThreadHistoryLoadResponse"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/threads/{thread_id}/cancel-active-turn": {
+			"post": {
+				"tags": [
+					"crud"
+				],
+				"summary": "Cancel Active Turn",
+				"operationId": "cancel_active_turn_api_v1_threads__thread_id__cancel_active_turn_post",
+				"parameters": [
+					{
+						"name": "thread_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Thread Id"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CancelActiveTurnResponse"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/new_chat": {
+			"post": {
+				"tags": [
+					"crud"
+				],
+				"summary": "Handle New Chat",
+				"operationId": "handle_new_chat_api_v1_new_chat_post",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/NewChatRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/documents/by-chunk/{chunk_id}": {
+			"get": {
+				"tags": [
+					"crud"
+				],
+				"summary": "Get Document By Chunk Id",
+				"description": "Retrieves a document based on a chunk ID, including a window of chunks around the cited one.\nUses SQL-level pagination to avoid loading all chunks into memory.",
+				"operationId": "get_document_by_chunk_id_api_v1_documents_by_chunk__chunk_id__get",
+				"parameters": [
+					{
+						"name": "chunk_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "integer",
+							"title": "Chunk Id"
+						}
+					},
+					{
+						"name": "chunk_window",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 0,
+							"description": "Number of chunks before/after the cited chunk to include",
+							"default": 5,
+							"title": "Chunk Window"
+						},
+						"description": "Number of chunks before/after the cited chunk to include"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/DocumentWithChunksRead"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/documents/fileupload": {
+			"post": {
+				"tags": [
+					"crud"
+				],
+				"summary": "Create Documents File Upload",
+				"operationId": "create_documents_file_upload_api_v1_documents_fileupload_post",
+				"requestBody": {
+					"content": {
+						"multipart/form-data": {
+							"schema": {
+								"$ref": "#/components/schemas/Body_create_documents_file_upload_api_v1_documents_fileupload_post"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/etl/capabilities": {
+			"get": {
+				"tags": [
+					"crud"
+				],
+				"summary": "Get Etl Capabilities",
+				"operationId": "get_etl_capabilities_api_v1_etl_capabilities_get",
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/EtlCapabilitiesRead"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/podcasts/languages": {
+			"get": {
+				"tags": [
+					"crud"
+				],
+				"summary": "List Languages",
+				"description": "Languages the active TTS provider can offer the brief editor.",
+				"operationId": "list_languages_api_v1_podcasts_languages_get",
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/LanguageOptions"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/billing/me": {
+			"get": {
+				"tags": [
+					"crud",
+					"billing"
+				],
+				"summary": "My Billing",
+				"operationId": "my_billing_api_v1_billing_me_get",
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {}
+							}
+						}
+					}
+				}
+			}
+		}
+	},
+	"components": {
+		"schemas": {
+			"AlwaysHandledExtensionsRead": {
+				"properties": {
+					"plaintext": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array",
+						"title": "Plaintext"
+					},
+					"direct_convert": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array",
+						"title": "Direct Convert"
+					},
+					"audio": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array",
+						"title": "Audio"
+					},
+					"image": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array",
+						"title": "Image"
+					}
+				},
+				"type": "object",
+				"required": [
+					"plaintext",
+					"direct_convert",
+					"audio",
+					"image"
+				],
+				"title": "AlwaysHandledExtensionsRead",
+				"description": "File types that do not depend on the parser choice."
+			},
+			"AudioRequest": {
+				"properties": {
+					"source_ids": {
+						"anyOf": [
+							{
+								"items": {
+									"type": "integer"
+								},
+								"type": "array",
+								"maxItems": 500
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Source Ids",
+						"description": "Notebook source ids to generate from; omitted means the enabled ones"
+					},
+					"focus": {
+						"type": "string",
+						"maxLength": 2000,
+						"title": "Focus",
+						"default": ""
+					},
+					"title": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 200
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Title"
+					},
+					"language": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 40
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Language"
+					},
+					"request_id": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 64,
+								"pattern": "^[A-Za-z0-9_-]+$"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Request Id"
+					},
+					"kind": {
+						"type": "string",
+						"const": "audio",
+						"title": "Kind"
+					},
+					"format": {
+						"type": "string",
+						"enum": [
+							"deep_dive",
+							"brief",
+							"critique",
+							"debate"
+						],
+						"title": "Format",
+						"default": "deep_dive"
+					},
+					"length": {
+						"type": "string",
+						"enum": [
+							"short",
+							"default",
+							"long"
+						],
+						"title": "Length",
+						"default": "default"
+					}
+				},
+				"additionalProperties": false,
+				"type": "object",
+				"required": [
+					"kind"
+				],
+				"title": "AudioRequest"
+			},
+			"Body_create_documents_file_upload_api_v1_documents_fileupload_post": {
+				"properties": {
+					"files": {
+						"items": {
+							"type": "string",
+							"contentMediaType": "application/octet-stream"
+						},
+						"type": "array",
+						"title": "Files"
+					},
+					"workspace_id": {
+						"type": "integer",
+						"title": "Workspace Id"
+					},
+					"use_vision_llm": {
+						"type": "boolean",
+						"title": "Use Vision Llm",
+						"default": false
+					},
+					"parser": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Parser"
+					},
+					"processing_mode": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Processing Mode"
+					}
+				},
+				"type": "object",
+				"required": [
+					"files",
+					"workspace_id"
+				],
+				"title": "Body_create_documents_file_upload_api_v1_documents_fileupload_post"
+			},
+			"CancelActiveTurnResponse": {
+				"properties": {
+					"status": {
+						"type": "string",
+						"enum": [
+							"cancelling",
+							"idle"
+						],
+						"title": "Status"
+					},
+					"error_code": {
+						"type": "string",
+						"enum": [
+							"TURN_CANCELLING",
+							"NO_ACTIVE_TURN"
+						],
+						"title": "Error Code"
+					},
+					"message": {
+						"type": "string",
+						"title": "Message"
+					},
+					"retry_after_ms": {
+						"anyOf": [
+							{
+								"type": "integer"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Retry After Ms"
+					},
+					"retry_after_at": {
+						"anyOf": [
+							{
+								"type": "integer"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Retry After At"
+					}
+				},
+				"type": "object",
+				"required": [
+					"status",
+					"error_code",
+					"message"
+				],
+				"title": "CancelActiveTurnResponse",
+				"description": "Response for canceling an active turn on a chat thread."
+			},
+			"ChatMessage": {
+				"properties": {
+					"role": {
+						"type": "string",
+						"title": "Role"
+					},
+					"content": {
+						"type": "string",
+						"title": "Content"
+					}
+				},
+				"type": "object",
+				"required": [
+					"role",
+					"content"
+				],
+				"title": "ChatMessage",
+				"description": "A single message in the chat history."
+			},
+			"ChunkRead": {
+				"properties": {
+					"created_at": {
+						"type": "string",
+						"format": "date-time",
+						"title": "Created At"
+					},
+					"id": {
+						"type": "integer",
+						"title": "Id"
+					},
+					"content": {
+						"type": "string",
+						"title": "Content"
+					},
+					"document_id": {
+						"type": "integer",
+						"title": "Document Id"
+					}
+				},
+				"type": "object",
+				"required": [
+					"created_at",
+					"id",
+					"content",
+					"document_id"
+				],
+				"title": "ChunkRead"
+			},
+			"DataTableRequest": {
+				"properties": {
+					"source_ids": {
+						"anyOf": [
+							{
+								"items": {
+									"type": "integer"
+								},
+								"type": "array",
+								"maxItems": 500
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Source Ids",
+						"description": "Notebook source ids to generate from; omitted means the enabled ones"
+					},
+					"focus": {
+						"type": "string",
+						"maxLength": 2000,
+						"title": "Focus",
+						"default": ""
+					},
+					"title": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 200
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Title"
+					},
+					"language": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 40
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Language"
+					},
+					"request_id": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 64,
+								"pattern": "^[A-Za-z0-9_-]+$"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Request Id"
+					},
+					"kind": {
+						"type": "string",
+						"const": "data_table",
+						"title": "Kind"
+					}
+				},
+				"additionalProperties": false,
+				"type": "object",
+				"required": [
+					"kind"
+				],
+				"title": "DataTableRequest"
+			},
+			"DesktopLoginRequest": {
+				"properties": {
+					"email": {
+						"type": "string",
+						"title": "Email"
+					},
+					"password": {
+						"type": "string",
+						"title": "Password"
+					}
+				},
+				"type": "object",
+				"required": [
+					"email",
+					"password"
+				],
+				"title": "DesktopLoginRequest"
+			},
+			"DocumentParser": {
+				"type": "string",
+				"enum": [
+					"local",
+					"cloud"
+				],
+				"title": "DocumentParser",
+				"description": "Which parser an upload asked for.\n\nLOCAL is pymupdf4llm on this box; CLOUD is whatever\n``ETL_CLOUD_SERVICE`` names. See ``app.etl_pipeline.capabilities``."
+			},
+			"DocumentStatusSchema": {
+				"properties": {
+					"state": {
+						"type": "string",
+						"title": "State"
+					},
+					"reason": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Reason"
+					}
+				},
+				"type": "object",
+				"required": [
+					"state"
+				],
+				"title": "DocumentStatusSchema",
+				"description": "Document processing status."
+			},
+			"DocumentType": {
+				"type": "string",
+				"enum": [
+					"EXTENSION",
+					"CRAWLED_URL",
+					"FILE",
+					"SLACK_CONNECTOR",
+					"TEAMS_CONNECTOR",
+					"ONEDRIVE_FILE",
+					"NOTION_CONNECTOR",
+					"YOUTUBE_VIDEO",
+					"GITHUB_CONNECTOR",
+					"LINEAR_CONNECTOR",
+					"DISCORD_CONNECTOR",
+					"JIRA_CONNECTOR",
+					"CONFLUENCE_CONNECTOR",
+					"CLICKUP_CONNECTOR",
+					"GOOGLE_CALENDAR_CONNECTOR",
+					"GOOGLE_GMAIL_CONNECTOR",
+					"GOOGLE_DRIVE_FILE",
+					"AIRTABLE_CONNECTOR",
+					"LUMA_CONNECTOR",
+					"ELASTICSEARCH_CONNECTOR",
+					"BOOKSTACK_CONNECTOR",
+					"CIRCLEBACK",
+					"OBSIDIAN_CONNECTOR",
+					"NOTE",
+					"ARTIFACT",
+					"DROPBOX_FILE",
+					"COMPOSIO_GOOGLE_DRIVE_CONNECTOR",
+					"COMPOSIO_GMAIL_CONNECTOR",
+					"COMPOSIO_GOOGLE_CALENDAR_CONNECTOR",
+					"LOCAL_FOLDER_FILE"
+				],
+				"title": "DocumentType"
+			},
+			"DocumentWithChunksRead": {
+				"properties": {
+					"id": {
+						"type": "integer",
+						"title": "Id"
+					},
+					"title": {
+						"type": "string",
+						"title": "Title"
+					},
+					"document_type": {
+						"$ref": "#/components/schemas/DocumentType"
+					},
+					"document_metadata": {
+						"additionalProperties": true,
+						"type": "object",
+						"title": "Document Metadata"
+					},
+					"content": {
+						"type": "string",
+						"title": "Content",
+						"default": ""
+					},
+					"content_preview": {
+						"type": "string",
+						"title": "Content Preview",
+						"default": ""
+					},
+					"content_hash": {
+						"type": "string",
+						"title": "Content Hash"
+					},
+					"unique_identifier_hash": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Unique Identifier Hash"
+					},
+					"created_at": {
+						"type": "string",
+						"format": "date-time",
+						"title": "Created At"
+					},
+					"updated_at": {
+						"anyOf": [
+							{
+								"type": "string",
+								"format": "date-time"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Updated At"
+					},
+					"workspace_id": {
+						"type": "integer",
+						"title": "Workspace Id"
+					},
+					"folder_id": {
+						"anyOf": [
+							{
+								"type": "integer"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Folder Id"
+					},
+					"created_by_id": {
+						"anyOf": [
+							{
+								"type": "string",
+								"format": "uuid"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Created By Id"
+					},
+					"created_by_name": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Created By Name"
+					},
+					"created_by_email": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Created By Email"
+					},
+					"status": {
+						"anyOf": [
+							{
+								"$ref": "#/components/schemas/DocumentStatusSchema"
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"chunks": {
+						"items": {
+							"$ref": "#/components/schemas/ChunkRead"
+						},
+						"type": "array",
+						"title": "Chunks",
+						"default": []
+					},
+					"total_chunks": {
+						"type": "integer",
+						"title": "Total Chunks",
+						"default": 0
+					},
+					"chunk_start_index": {
+						"type": "integer",
+						"title": "Chunk Start Index",
+						"default": 0
+					}
+				},
+				"type": "object",
+				"required": [
+					"id",
+					"title",
+					"document_type",
+					"document_metadata",
+					"content_hash",
+					"unique_identifier_hash",
+					"created_at",
+					"updated_at",
+					"workspace_id"
+				],
+				"title": "DocumentWithChunksRead"
+			},
+			"EtlCapabilitiesRead": {
+				"properties": {
+					"default_parser": {
+						"$ref": "#/components/schemas/DocumentParser"
+					},
+					"parsers": {
+						"items": {
+							"$ref": "#/components/schemas/ParserCapabilityRead"
+						},
+						"type": "array",
+						"title": "Parsers"
+					},
+					"always_handled": {
+						"$ref": "#/components/schemas/AlwaysHandledExtensionsRead"
+					},
+					"page_credit_billing_enabled": {
+						"type": "boolean",
+						"title": "Page Credit Billing Enabled"
+					}
+				},
+				"type": "object",
+				"required": [
+					"default_parser",
+					"parsers",
+					"always_handled",
+					"page_credit_billing_enabled"
+				],
+				"title": "EtlCapabilitiesRead"
+			},
+			"FollowupsRead": {
+				"properties": {
+					"suggestions": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array",
+						"title": "Suggestions"
+					}
+				},
+				"type": "object",
+				"required": [
+					"suggestions"
+				],
+				"title": "FollowupsRead"
+			},
+			"FollowupsRequest": {
+				"properties": {
+					"answer": {
+						"type": "string",
+						"maxLength": 50000,
+						"minLength": 1,
+						"title": "Answer"
+					},
+					"locale": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 35
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Locale"
+					}
+				},
+				"type": "object",
+				"required": [
+					"answer"
+				],
+				"title": "FollowupsRequest"
+			},
+			"HTTPValidationError": {
+				"properties": {
+					"detail": {
+						"items": {
+							"$ref": "#/components/schemas/ValidationError"
+						},
+						"type": "array",
+						"title": "Detail"
+					}
+				},
+				"type": "object",
+				"title": "HTTPValidationError"
+			},
+			"ImportItem": {
+				"properties": {
+					"url": {
+						"type": "string",
+						"title": "Url"
+					},
+					"title": {
+						"type": "string",
+						"maxLength": 500,
+						"minLength": 1,
+						"title": "Title"
+					},
+					"snippet": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 4000
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Snippet"
+					},
+					"source": {
+						"type": "string",
+						"enum": [
+							"web",
+							"google_search",
+							"exa",
+							"tavily",
+							"youtube",
+							"reddit",
+							"instagram",
+							"tiktok",
+							"google_maps",
+							"indeed",
+							"amazon",
+							"walmart",
+							"pubmed",
+							"arxiv",
+							"medrxiv",
+							"google_scholar"
+						],
+						"title": "Source",
+						"default": "web"
+					},
+					"paper": {
+						"anyOf": [
+							{
+								"$ref": "#/components/schemas/PaperRef"
+							},
+							{
+								"type": "null"
+							}
+						]
+					}
+				},
+				"type": "object",
+				"required": [
+					"url",
+					"title"
+				],
+				"title": "ImportItem"
+			},
+			"InfographicRequest": {
+				"properties": {
+					"source_ids": {
+						"anyOf": [
+							{
+								"items": {
+									"type": "integer"
+								},
+								"type": "array",
+								"maxItems": 500
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Source Ids",
+						"description": "Notebook source ids to generate from; omitted means the enabled ones"
+					},
+					"focus": {
+						"type": "string",
+						"maxLength": 2000,
+						"title": "Focus",
+						"default": ""
+					},
+					"title": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 200
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Title"
+					},
+					"language": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 40
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Language"
+					},
+					"request_id": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 64,
+								"pattern": "^[A-Za-z0-9_-]+$"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Request Id"
+					},
+					"kind": {
+						"type": "string",
+						"const": "infographic",
+						"title": "Kind"
+					},
+					"style": {
+						"type": "string",
+						"enum": [
+							"auto",
+							"kawaii",
+							"clay",
+							"sketch-note",
+							"anime",
+							"editorial",
+							"instructional",
+							"bento-grid",
+							"bricks",
+							"scientific",
+							"professional"
+						],
+						"title": "Style",
+						"default": "auto"
+					},
+					"orientation": {
+						"type": "string",
+						"enum": [
+							"landscape",
+							"portrait",
+							"square"
+						],
+						"title": "Orientation",
+						"default": "landscape"
+					},
+					"detail": {
+						"type": "string",
+						"enum": [
+							"concise",
+							"standard",
+							"detailed"
+						],
+						"title": "Detail",
+						"default": "standard"
+					}
+				},
+				"additionalProperties": false,
+				"type": "object",
+				"required": [
+					"kind"
+				],
+				"title": "InfographicRequest"
+			},
+			"LanguageOptions": {
+				"properties": {
+					"languages": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array",
+						"title": "Languages"
+					},
+					"allows_custom": {
+						"type": "boolean",
+						"title": "Allows Custom"
+					}
+				},
+				"type": "object",
+				"required": [
+					"languages",
+					"allows_custom"
+				],
+				"title": "LanguageOptions",
+				"description": "The languages the brief editor may offer for the active provider.\n\nWhen ``allows_custom`` is true the list is a curated starting point and\nthe editor accepts any BCP-47 tag beyond it."
+			},
+			"LlmSetupStatusRead": {
+				"properties": {
+					"status": {
+						"type": "string",
+						"enum": [
+							"ready",
+							"needs_setup"
+						],
+						"title": "Status"
+					},
+					"source": {
+						"type": "string",
+						"enum": [
+							"global_config",
+							"models",
+							"none"
+						],
+						"title": "Source"
+					},
+					"can_configure": {
+						"type": "boolean",
+						"title": "Can Configure"
+					},
+					"stage": {
+						"type": "string",
+						"enum": [
+							"initial_setup",
+							"recovery",
+							"ready"
+						],
+						"title": "Stage"
+					}
+				},
+				"type": "object",
+				"required": [
+					"status",
+					"source",
+					"can_configure",
+					"stage"
+				],
+				"title": "LlmSetupStatusRead",
+				"description": "Server-authoritative verdict for the per-workspace LLM onboarding gate.\n\n``status`` is the only thing the frontend gate acts on; ``source`` is\ninformational and ``can_configure`` selects the onboarding vs. blocked\nscreen for members who cannot manage models. ``stage`` refines a\n``needs_setup`` verdict into first-run (``initial_setup``) vs. recovery."
+			},
+			"LocalFilesystemMountPayload": {
+				"properties": {
+					"mount_id": {
+						"type": "string",
+						"title": "Mount Id"
+					},
+					"root_path": {
+						"type": "string",
+						"title": "Root Path"
+					}
+				},
+				"type": "object",
+				"required": [
+					"mount_id",
+					"root_path"
+				],
+				"title": "LocalFilesystemMountPayload"
+			},
+			"LogoutRequest": {
+				"properties": {
+					"refresh_token": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Refresh Token"
+					}
+				},
+				"type": "object",
+				"title": "LogoutRequest",
+				"description": "Request body for logout endpoint (current device)."
+			},
+			"LogoutResponse": {
+				"properties": {
+					"detail": {
+						"type": "string",
+						"title": "Detail",
+						"default": "Successfully logged out"
+					}
+				},
+				"type": "object",
+				"title": "LogoutResponse",
+				"description": "Response from logout endpoint (current device)."
+			},
+			"MentionedDocumentInfo": {
+				"properties": {
+					"id": {
+						"type": "integer",
+						"title": "Id"
+					},
+					"title": {
+						"type": "string",
+						"maxLength": 500,
+						"minLength": 1,
+						"title": "Title"
+					},
+					"document_type": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 100,
+								"minLength": 1
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Document Type"
+					},
+					"kind": {
+						"type": "string",
+						"enum": [
+							"doc",
+							"folder",
+							"connector",
+							"thread"
+						],
+						"title": "Kind",
+						"description": "Discriminator for the chip's referent: ``doc`` is a knowledge-base ``Document`` row, ``folder`` is a knowledge-base ``Folder`` row, ``connector`` is a concrete connected account, and ``thread`` is another ``NewChatThread`` referenced as read-only context.",
+						"default": "doc"
+					},
+					"connector_type": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 100
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Connector Type"
+					},
+					"account_name": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 255
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Account Name"
+					}
+				},
+				"type": "object",
+				"required": [
+					"id",
+					"title"
+				],
+				"title": "MentionedDocumentInfo",
+				"description": "Display metadata for a single ``@``-mention chip.\n\nCarries a knowledge-base document, knowledge-base folder, connected\naccount, or another chat thread (discriminated by ``kind``). Each\nkind uses its real identity fields: docs carry ``document_type``,\nfolders carry only their folder id/title, connectors carry\n``connector_type`` plus account metadata, and threads carry only\ntheir thread id/title.\n\n``kind`` defaults to ``\"doc\"`` so legacy clients and persisted rows\nthat predate folder mentions deserialise unchanged."
+			},
+			"MindmapRequest": {
+				"properties": {
+					"source_ids": {
+						"anyOf": [
+							{
+								"items": {
+									"type": "integer"
+								},
+								"type": "array",
+								"maxItems": 500
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Source Ids",
+						"description": "Notebook source ids to generate from; omitted means the enabled ones"
+					},
+					"focus": {
+						"type": "string",
+						"maxLength": 2000,
+						"title": "Focus",
+						"default": ""
+					},
+					"title": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 200
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Title"
+					},
+					"language": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 40
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Language"
+					},
+					"request_id": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 64,
+								"pattern": "^[A-Za-z0-9_-]+$"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Request Id"
+					},
+					"kind": {
+						"type": "string",
+						"const": "mindmap",
+						"title": "Kind"
+					},
+					"detail": {
+						"type": "string",
+						"enum": [
+							"overview",
+							"standard",
+							"detailed"
+						],
+						"title": "Detail",
+						"default": "standard"
+					}
+				},
+				"additionalProperties": false,
+				"type": "object",
+				"required": [
+					"kind"
+				],
+				"title": "MindmapRequest"
+			},
+			"NewChatMessageRead": {
+				"properties": {
+					"created_at": {
+						"type": "string",
+						"format": "date-time",
+						"title": "Created At"
+					},
+					"id": {
+						"type": "integer",
+						"title": "Id"
+					},
+					"role": {
+						"$ref": "#/components/schemas/NewChatMessageRole"
+					},
+					"content": {
+						"title": "Content"
+					},
+					"thread_id": {
+						"type": "integer",
+						"title": "Thread Id"
+					},
+					"author_id": {
+						"anyOf": [
+							{
+								"type": "string",
+								"format": "uuid"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Author Id"
+					},
+					"author_display_name": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Author Display Name"
+					},
+					"author_avatar_url": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Author Avatar Url"
+					},
+					"token_usage": {
+						"anyOf": [
+							{
+								"$ref": "#/components/schemas/TokenUsageSummary"
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"turn_id": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Turn Id"
+					}
+				},
+				"type": "object",
+				"required": [
+					"created_at",
+					"id",
+					"role",
+					"content",
+					"thread_id"
+				],
+				"title": "NewChatMessageRead",
+				"description": "Schema for reading a message."
+			},
+			"NewChatMessageRole": {
+				"type": "string",
+				"enum": [
+					"user",
+					"assistant",
+					"system"
+				],
+				"title": "NewChatMessageRole",
+				"description": "Role enum for new chat messages."
+			},
+			"NewChatRequest": {
+				"properties": {
+					"chat_id": {
+						"type": "integer",
+						"title": "Chat Id"
+					},
+					"user_query": {
+						"type": "string",
+						"title": "User Query"
+					},
+					"workspace_id": {
+						"type": "integer",
+						"title": "Workspace Id"
+					},
+					"retrieval_scope": {
+						"$ref": "#/components/schemas/RetrievalScope",
+						"default": "documents"
+					},
+					"preferred_tool": {
+						"anyOf": [
+							{
+								"$ref": "#/components/schemas/ToolPreference"
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"messages": {
+						"anyOf": [
+							{
+								"items": {
+									"$ref": "#/components/schemas/ChatMessage"
+								},
+								"type": "array"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Messages"
+					},
+					"mentioned_document_ids": {
+						"anyOf": [
+							{
+								"items": {
+									"type": "integer"
+								},
+								"type": "array"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Mentioned Document Ids"
+					},
+					"mentioned_folder_ids": {
+						"anyOf": [
+							{
+								"items": {
+									"type": "integer"
+								},
+								"type": "array"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Mentioned Folder Ids",
+						"description": "Optional knowledge-base folder IDs the user mentioned with @. Resolved to virtual paths (``/documents/.../``) by ``mention_resolver``, surfaced to the agent via backtick-wrapped substitution in ``user_query`` and pinned into the ``search_knowledge_base`` retrieval scope. The agent's ``ls`` tool can then walk the folder itself."
+					},
+					"mentioned_documents": {
+						"anyOf": [
+							{
+								"items": {
+									"$ref": "#/components/schemas/MentionedDocumentInfo"
+								},
+								"type": "array"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Mentioned Documents",
+						"description": "Display metadata (id, title, document_type, kind) for every @-mention chip — both documents and folders. Persisted as a ``mentioned-documents`` ContentPart on the user message so reload renders chips without an extra fetch. Optional and additive — when None the user message is persisted without a mentioned-documents part."
+					},
+					"mentioned_connector_ids": {
+						"anyOf": [
+							{
+								"items": {
+									"type": "integer"
+								},
+								"type": "array"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Mentioned Connector Ids",
+						"description": "Optional concrete connector account IDs the user @-mentioned."
+					},
+					"mentioned_connectors": {
+						"anyOf": [
+							{
+								"items": {
+									"$ref": "#/components/schemas/MentionedDocumentInfo"
+								},
+								"type": "array"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Mentioned Connectors",
+						"description": "Display/context metadata for selected connector accounts. Kept separate from document/folder id arrays so tools can prefer the exact account the user selected."
+					},
+					"mentioned_thread_ids": {
+						"anyOf": [
+							{
+								"items": {
+									"type": "integer"
+								},
+								"type": "array"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Mentioned Thread Ids",
+						"description": "Other chat thread IDs the user @-mentioned. Each is resolved (access-checked, same workspace) into a read-only ``<referenced_chat_context>`` block prepended to the agent query. Display chips persist via the ``mentioned_documents`` list (kind=``thread``)."
+					},
+					"disabled_tools": {
+						"anyOf": [
+							{
+								"items": {
+									"type": "string"
+								},
+								"type": "array"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Disabled Tools"
+					},
+					"filesystem_mode": {
+						"type": "string",
+						"enum": [
+							"cloud",
+							"desktop_local_folder"
+						],
+						"title": "Filesystem Mode",
+						"default": "cloud"
+					},
+					"client_platform": {
+						"type": "string",
+						"enum": [
+							"web",
+							"desktop"
+						],
+						"title": "Client Platform",
+						"default": "web"
+					},
+					"local_filesystem_mounts": {
+						"anyOf": [
+							{
+								"items": {
+									"$ref": "#/components/schemas/LocalFilesystemMountPayload"
+								},
+								"type": "array"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Local Filesystem Mounts"
+					},
+					"user_images": {
+						"anyOf": [
+							{
+								"items": {
+									"$ref": "#/components/schemas/NewChatUserImagePart"
+								},
+								"type": "array"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "User Images",
+						"description": "Optional images for this user turn"
+					}
+				},
+				"type": "object",
+				"required": [
+					"chat_id",
+					"user_query",
+					"workspace_id"
+				],
+				"title": "NewChatRequest",
+				"description": "Request schema for the deep agent chat endpoint."
+			},
+			"NewChatUserImagePart": {
+				"properties": {
+					"media_type": {
+						"type": "string",
+						"enum": [
+							"image/png",
+							"image/jpeg",
+							"image/webp"
+						],
+						"title": "Media Type"
+					},
+					"data": {
+						"type": "string",
+						"minLength": 1,
+						"title": "Data"
+					}
+				},
+				"type": "object",
+				"required": [
+					"media_type",
+					"data"
+				],
+				"title": "NewChatUserImagePart",
+				"description": "One inline image for a user turn (raw base64 body, no data: URL prefix)."
+			},
+			"NotebookCreate": {
+				"properties": {
+					"title": {
+						"type": "string",
+						"maxLength": 200,
+						"title": "Title",
+						"default": "Untitled notebook"
+					},
+					"icon": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 16
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Icon"
+					}
+				},
+				"type": "object",
+				"title": "NotebookCreate"
+			},
+			"NotebookRead": {
+				"properties": {
+					"id": {
+						"type": "integer",
+						"title": "Id"
+					},
+					"workspace_id": {
+						"type": "integer",
+						"title": "Workspace Id"
+					},
+					"title": {
+						"type": "string",
+						"title": "Title"
+					},
+					"icon": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Icon"
+					},
+					"created_at": {
+						"type": "string",
+						"format": "date-time",
+						"title": "Created At"
+					},
+					"updated_at": {
+						"type": "string",
+						"format": "date-time",
+						"title": "Updated At"
+					},
+					"source_count": {
+						"type": "integer",
+						"title": "Source Count",
+						"default": 0
+					},
+					"enabled_source_count": {
+						"type": "integer",
+						"title": "Enabled Source Count",
+						"default": 0
+					},
+					"chat_goal": {
+						"type": "string",
+						"enum": [
+							"default",
+							"learning_guide",
+							"custom"
+						],
+						"title": "Chat Goal",
+						"default": "default"
+					},
+					"chat_instructions": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Chat Instructions"
+					},
+					"response_length": {
+						"type": "string",
+						"enum": [
+							"default",
+							"longer",
+							"shorter"
+						],
+						"title": "Response Length",
+						"default": "default"
+					},
+					"featured": {
+						"type": "boolean",
+						"title": "Featured",
+						"default": false
+					}
+				},
+				"type": "object",
+				"required": [
+					"id",
+					"workspace_id",
+					"title",
+					"icon",
+					"created_at",
+					"updated_at"
+				],
+				"title": "NotebookRead"
+			},
+			"NotebookSearchRead": {
+				"properties": {
+					"query": {
+						"type": "string",
+						"title": "Query"
+					},
+					"notebooks": {
+						"items": {
+							"$ref": "#/components/schemas/SearchNotebookHit"
+						},
+						"type": "array",
+						"title": "Notebooks"
+					},
+					"took_ms": {
+						"type": "integer",
+						"title": "Took Ms"
+					}
+				},
+				"type": "object",
+				"required": [
+					"query",
+					"notebooks",
+					"took_ms"
+				],
+				"title": "NotebookSearchRead"
+			},
+			"NotebookThreadRead": {
+				"properties": {
+					"id": {
+						"type": "integer",
+						"title": "Id"
+					},
+					"title": {
+						"type": "string",
+						"title": "Title"
+					},
+					"created_at": {
+						"type": "string",
+						"format": "date-time",
+						"title": "Created At"
+					},
+					"updated_at": {
+						"type": "string",
+						"format": "date-time",
+						"title": "Updated At"
+					}
+				},
+				"type": "object",
+				"required": [
+					"id",
+					"title",
+					"created_at",
+					"updated_at"
+				],
+				"title": "NotebookThreadRead"
+			},
+			"NotebookUpdate": {
+				"properties": {
+					"title": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 200
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Title"
+					},
+					"icon": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 16
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Icon"
+					},
+					"chat_goal": {
+						"anyOf": [
+							{
+								"type": "string",
+								"enum": [
+									"default",
+									"learning_guide",
+									"custom"
+								]
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Chat Goal"
+					},
+					"chat_instructions": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 2000
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Chat Instructions"
+					},
+					"response_length": {
+						"anyOf": [
+							{
+								"type": "string",
+								"enum": [
+									"default",
+									"longer",
+									"shorter"
+								]
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Response Length"
+					}
+				},
+				"type": "object",
+				"title": "NotebookUpdate"
+			},
+			"OutputRename": {
+				"properties": {
+					"title": {
+						"type": "string",
+						"maxLength": 200,
+						"minLength": 1,
+						"title": "Title"
+					}
+				},
+				"type": "object",
+				"required": [
+					"title"
+				],
+				"title": "OutputRename"
+			},
+			"PaperRef": {
+				"properties": {
+					"doi": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Doi"
+					},
+					"pmid": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Pmid"
+					},
+					"pmcid": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Pmcid"
+					},
+					"arxiv_id": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Arxiv Id"
+					},
+					"server": {
+						"anyOf": [
+							{
+								"type": "string",
+								"enum": [
+									"medrxiv",
+									"biorxiv"
+								]
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Server"
+					},
+					"version": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 8
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Version"
+					},
+					"pdf_url": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 2048
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Pdf Url"
+					},
+					"authors": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array",
+						"maxItems": 30,
+						"title": "Authors"
+					},
+					"venue": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 300
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Venue"
+					},
+					"year": {
+						"anyOf": [
+							{
+								"type": "integer",
+								"maximum": 3000,
+								"minimum": 1000
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Year"
+					},
+					"published": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 32
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Published"
+					},
+					"categories": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array",
+						"maxItems": 12,
+						"title": "Categories"
+					},
+					"cited_by": {
+						"anyOf": [
+							{
+								"type": "integer",
+								"minimum": 0
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Cited By"
+					},
+					"badges": {
+						"items": {
+							"type": "string",
+							"enum": [
+								"pubmed",
+								"pmc",
+								"arxiv",
+								"medrxiv",
+								"biorxiv",
+								"scholar"
+							]
+						},
+						"type": "array",
+						"maxItems": 6,
+						"title": "Badges"
+					},
+					"open_access": {
+						"type": "boolean",
+						"title": "Open Access",
+						"default": false
+					}
+				},
+				"type": "object",
+				"title": "PaperRef"
+			},
+			"ParserCapabilityRead": {
+				"properties": {
+					"parser": {
+						"$ref": "#/components/schemas/DocumentParser"
+					},
+					"service": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Service"
+					},
+					"available": {
+						"type": "boolean",
+						"title": "Available"
+					},
+					"unavailable_reason": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Unavailable Reason"
+					},
+					"page_multiplier": {
+						"type": "integer",
+						"title": "Page Multiplier"
+					},
+					"document_extensions": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array",
+						"title": "Document Extensions"
+					}
+				},
+				"type": "object",
+				"required": [
+					"parser",
+					"service",
+					"available",
+					"unavailable_reason",
+					"page_multiplier",
+					"document_extensions"
+				],
+				"title": "ParserCapabilityRead"
+			},
+			"RefreshTokenRequest": {
+				"properties": {
+					"refresh_token": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Refresh Token"
+					}
+				},
+				"type": "object",
+				"title": "RefreshTokenRequest",
+				"description": "Request body for token refresh endpoint."
+			},
+			"RefreshTokenResponse": {
+				"properties": {
+					"access_token": {
+						"type": "string",
+						"title": "Access Token"
+					},
+					"refresh_token": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Refresh Token"
+					},
+					"token_type": {
+						"type": "string",
+						"title": "Token Type",
+						"default": "bearer"
+					},
+					"access_expires_at": {
+						"type": "integer",
+						"title": "Access Expires At"
+					}
+				},
+				"type": "object",
+				"required": [
+					"access_token",
+					"access_expires_at"
+				],
+				"title": "RefreshTokenResponse",
+				"description": "Response from token refresh endpoint."
+			},
+			"ReportRequest": {
+				"properties": {
+					"source_ids": {
+						"anyOf": [
+							{
+								"items": {
+									"type": "integer"
+								},
+								"type": "array",
+								"maxItems": 500
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Source Ids",
+						"description": "Notebook source ids to generate from; omitted means the enabled ones"
+					},
+					"focus": {
+						"type": "string",
+						"maxLength": 2000,
+						"title": "Focus",
+						"default": ""
+					},
+					"title": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 200
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Title"
+					},
+					"language": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 40
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Language"
+					},
+					"request_id": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 64,
+								"pattern": "^[A-Za-z0-9_-]+$"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Request Id"
+					},
+					"kind": {
+						"type": "string",
+						"const": "report",
+						"title": "Kind"
+					},
+					"format": {
+						"type": "string",
+						"enum": [
+							"interactive",
+							"document"
+						],
+						"title": "Format",
+						"default": "document"
+					},
+					"file_type": {
+						"type": "string",
+						"enum": [
+							"pdf",
+							"docx"
+						],
+						"title": "File Type",
+						"default": "pdf"
+					},
+					"template_key": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 64
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Template Key"
+					},
+					"template_prompt": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 4000
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Template Prompt"
+					}
+				},
+				"additionalProperties": false,
+				"type": "object",
+				"required": [
+					"kind"
+				],
+				"title": "ReportRequest"
+			},
+			"ReportTemplateRead": {
+				"properties": {
+					"key": {
+						"type": "string",
+						"title": "Key"
+					},
+					"format": {
+						"type": "string",
+						"enum": [
+							"interactive",
+							"document"
+						],
+						"title": "Format"
+					},
+					"title": {
+						"type": "string",
+						"title": "Title"
+					},
+					"description": {
+						"type": "string",
+						"title": "Description"
+					},
+					"prompt": {
+						"type": "string",
+						"title": "Prompt"
+					},
+					"customized": {
+						"type": "boolean",
+						"title": "Customized"
+					}
+				},
+				"type": "object",
+				"required": [
+					"key",
+					"format",
+					"title",
+					"description",
+					"prompt",
+					"customized"
+				],
+				"title": "ReportTemplateRead"
+			},
+			"RetrievalScope": {
+				"type": "string",
+				"enum": [
+					"documents",
+					"web",
+					"all"
+				],
+				"title": "RetrievalScope",
+				"description": "Sources the agent may read while answering one user turn."
+			},
+			"SearchNotebookHit": {
+				"properties": {
+					"id": {
+						"type": "integer",
+						"title": "Id"
+					},
+					"title": {
+						"type": "string",
+						"title": "Title"
+					},
+					"icon": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Icon"
+					},
+					"updated_at": {
+						"type": "string",
+						"format": "date-time",
+						"title": "Updated At"
+					},
+					"passages": {
+						"items": {
+							"$ref": "#/components/schemas/SearchPassage"
+						},
+						"type": "array",
+						"title": "Passages"
+					}
+				},
+				"type": "object",
+				"required": [
+					"id",
+					"title",
+					"updated_at",
+					"passages"
+				],
+				"title": "SearchNotebookHit"
+			},
+			"SearchPassage": {
+				"properties": {
+					"kind": {
+						"type": "string",
+						"enum": [
+							"source",
+							"note"
+						],
+						"title": "Kind"
+					},
+					"title": {
+						"type": "string",
+						"title": "Title"
+					},
+					"snippet": {
+						"type": "string",
+						"title": "Snippet"
+					},
+					"highlights": {
+						"items": {
+							"prefixItems": [
+								{
+									"type": "integer"
+								},
+								{
+									"type": "integer"
+								}
+							],
+							"type": "array",
+							"maxItems": 2,
+							"minItems": 2
+						},
+						"type": "array",
+						"title": "Highlights"
+					},
+					"document_id": {
+						"anyOf": [
+							{
+								"type": "integer"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Document Id"
+					},
+					"note_id": {
+						"anyOf": [
+							{
+								"type": "integer"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Note Id"
+					},
+					"source_id": {
+						"anyOf": [
+							{
+								"type": "integer"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Source Id"
+					},
+					"folder_name": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Folder Name"
+					},
+					"document_type": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Document Type"
+					},
+					"score": {
+						"type": "number",
+						"title": "Score"
+					}
+				},
+				"type": "object",
+				"required": [
+					"kind",
+					"title",
+					"snippet",
+					"score"
+				],
+				"title": "SearchPassage",
+				"description": "One matching passage: from a source document or from a note."
+			},
+			"SlidesRequest": {
+				"properties": {
+					"source_ids": {
+						"anyOf": [
+							{
+								"items": {
+									"type": "integer"
+								},
+								"type": "array",
+								"maxItems": 500
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Source Ids",
+						"description": "Notebook source ids to generate from; omitted means the enabled ones"
+					},
+					"focus": {
+						"type": "string",
+						"maxLength": 2000,
+						"title": "Focus",
+						"default": ""
+					},
+					"title": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 200
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Title"
+					},
+					"language": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 40
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Language"
+					},
+					"request_id": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 64,
+								"pattern": "^[A-Za-z0-9_-]+$"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Request Id"
+					},
+					"kind": {
+						"type": "string",
+						"const": "slides",
+						"title": "Kind"
+					},
+					"format": {
+						"type": "string",
+						"enum": [
+							"detailed",
+							"presenter"
+						],
+						"title": "Format",
+						"default": "detailed"
+					},
+					"length": {
+						"type": "string",
+						"enum": [
+							"short",
+							"default",
+							"long"
+						],
+						"title": "Length",
+						"default": "default"
+					}
+				},
+				"additionalProperties": false,
+				"type": "object",
+				"required": [
+					"kind"
+				],
+				"title": "SlidesRequest"
+			},
+			"SourceGuideRead": {
+				"properties": {
+					"document_id": {
+						"type": "integer",
+						"title": "Document Id"
+					},
+					"title": {
+						"type": "string",
+						"title": "Title"
+					},
+					"summary": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Summary"
+					},
+					"status": {
+						"type": "string",
+						"enum": [
+							"ready",
+							"unavailable"
+						],
+						"title": "Status"
+					}
+				},
+				"type": "object",
+				"required": [
+					"document_id",
+					"title",
+					"summary",
+					"status"
+				],
+				"title": "SourceGuideRead"
+			},
+			"SourceRead": {
+				"properties": {
+					"id": {
+						"type": "integer",
+						"title": "Id"
+					},
+					"kind": {
+						"type": "string",
+						"enum": [
+							"document",
+							"folder"
+						],
+						"title": "Kind"
+					},
+					"target_id": {
+						"type": "integer",
+						"title": "Target Id"
+					},
+					"title": {
+						"type": "string",
+						"title": "Title"
+					},
+					"document_type": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Document Type"
+					},
+					"status": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Status"
+					},
+					"enabled": {
+						"type": "boolean",
+						"title": "Enabled"
+					},
+					"added_at": {
+						"type": "string",
+						"format": "date-time",
+						"title": "Added At"
+					}
+				},
+				"type": "object",
+				"required": [
+					"id",
+					"kind",
+					"target_id",
+					"title",
+					"enabled",
+					"added_at"
+				],
+				"title": "SourceRead"
+			},
+			"SourceTarget": {
+				"properties": {
+					"kind": {
+						"type": "string",
+						"enum": [
+							"document",
+							"folder"
+						],
+						"title": "Kind"
+					},
+					"id": {
+						"type": "integer",
+						"exclusiveMinimum": 0,
+						"title": "Id"
+					}
+				},
+				"type": "object",
+				"required": [
+					"kind",
+					"id"
+				],
+				"title": "SourceTarget"
+			},
+			"SourceToggle": {
+				"properties": {
+					"enabled": {
+						"type": "boolean",
+						"title": "Enabled"
+					}
+				},
+				"type": "object",
+				"required": [
+					"enabled"
+				],
+				"title": "SourceToggle"
+			},
+			"SourcesAdd": {
+				"properties": {
+					"targets": {
+						"items": {
+							"$ref": "#/components/schemas/SourceTarget"
+						},
+						"type": "array",
+						"maxItems": 500,
+						"minItems": 1,
+						"title": "Targets"
+					}
+				},
+				"type": "object",
+				"required": [
+					"targets"
+				],
+				"title": "SourcesAdd"
+			},
+			"SourcesBulkToggle": {
+				"properties": {
+					"enabled": {
+						"type": "boolean",
+						"title": "Enabled"
+					},
+					"source_ids": {
+						"anyOf": [
+							{
+								"items": {
+									"type": "integer"
+								},
+								"type": "array"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Source Ids",
+						"description": "Sources to change; omitted means every source in the notebook"
+					}
+				},
+				"type": "object",
+				"required": [
+					"enabled"
+				],
+				"title": "SourcesBulkToggle"
+			},
+			"StudioOutputRead": {
+				"properties": {
+					"id": {
+						"type": "integer",
+						"title": "Id"
+					},
+					"kind": {
+						"type": "string",
+						"title": "Kind"
+					},
+					"title": {
+						"type": "string",
+						"title": "Title"
+					},
+					"status": {
+						"type": "string",
+						"enum": [
+							"queued",
+							"running",
+							"ready",
+							"failed",
+							"cancelled"
+						],
+						"title": "Status"
+					},
+					"phase": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Phase"
+					},
+					"progress": {
+						"anyOf": [
+							{
+								"type": "integer"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Progress"
+					},
+					"failure_code": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Failure Code"
+					},
+					"artifact_id": {
+						"anyOf": [
+							{
+								"type": "integer"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Artifact Id"
+					},
+					"artifact_format": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Artifact Format"
+					},
+					"duration_seconds": {
+						"anyOf": [
+							{
+								"type": "integer"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Duration Seconds"
+					},
+					"source_count": {
+						"type": "integer",
+						"title": "Source Count"
+					},
+					"options": {
+						"additionalProperties": true,
+						"type": "object",
+						"title": "Options"
+					},
+					"generated_by": {
+						"anyOf": [
+							{
+								"additionalProperties": true,
+								"type": "object"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Generated By"
+					},
+					"created_at": {
+						"type": "string",
+						"format": "date-time",
+						"title": "Created At"
+					}
+				},
+				"type": "object",
+				"required": [
+					"id",
+					"kind",
+					"title",
+					"status",
+					"source_count",
+					"options",
+					"created_at"
+				],
+				"title": "StudioOutputRead"
+			},
+			"StudyRequest": {
+				"properties": {
+					"source_ids": {
+						"anyOf": [
+							{
+								"items": {
+									"type": "integer"
+								},
+								"type": "array",
+								"maxItems": 500
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Source Ids",
+						"description": "Notebook source ids to generate from; omitted means the enabled ones"
+					},
+					"focus": {
+						"type": "string",
+						"maxLength": 2000,
+						"title": "Focus",
+						"default": ""
+					},
+					"title": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 200
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Title"
+					},
+					"language": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 40
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Language"
+					},
+					"request_id": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 64,
+								"pattern": "^[A-Za-z0-9_-]+$"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Request Id"
+					},
+					"kind": {
+						"type": "string",
+						"enum": [
+							"quiz",
+							"flashcards"
+						],
+						"title": "Kind"
+					},
+					"count": {
+						"type": "string",
+						"enum": [
+							"fewer",
+							"standard",
+							"more"
+						],
+						"title": "Count",
+						"default": "standard"
+					},
+					"difficulty": {
+						"type": "string",
+						"enum": [
+							"easy",
+							"medium",
+							"hard"
+						],
+						"title": "Difficulty",
+						"default": "medium"
+					}
+				},
+				"additionalProperties": false,
+				"type": "object",
+				"required": [
+					"kind"
+				],
+				"title": "StudyRequest"
+			},
+			"SuggestionsRead": {
+				"properties": {
+					"suggestions": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array",
+						"title": "Suggestions"
+					},
+					"placeholder": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Placeholder"
+					},
+					"pool": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array",
+						"title": "Pool",
+						"default": []
+					},
+					"examples": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array",
+						"title": "Examples",
+						"default": []
+					}
+				},
+				"type": "object",
+				"required": [
+					"suggestions"
+				],
+				"title": "SuggestionsRead"
+			},
+			"ThreadHistoryLoadResponse": {
+				"properties": {
+					"messages": {
+						"items": {
+							"$ref": "#/components/schemas/NewChatMessageRead"
+						},
+						"type": "array",
+						"title": "Messages"
+					}
+				},
+				"type": "object",
+				"required": [
+					"messages"
+				],
+				"title": "ThreadHistoryLoadResponse",
+				"description": "Response format for the ThreadHistoryAdapter.load() method.\nReturns messages array for the current thread."
+			},
+			"TokenUsageSummary": {
+				"properties": {
+					"prompt_tokens": {
+						"type": "integer",
+						"title": "Prompt Tokens",
+						"default": 0
+					},
+					"completion_tokens": {
+						"type": "integer",
+						"title": "Completion Tokens",
+						"default": 0
+					},
+					"total_tokens": {
+						"type": "integer",
+						"title": "Total Tokens",
+						"default": 0
+					},
+					"cost_micros": {
+						"type": "integer",
+						"title": "Cost Micros",
+						"default": 0
+					},
+					"model_breakdown": {
+						"anyOf": [
+							{
+								"additionalProperties": true,
+								"type": "object"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Model Breakdown"
+					}
+				},
+				"type": "object",
+				"title": "TokenUsageSummary"
+			},
+			"ToolPreference": {
+				"type": "string",
+				"enum": [
+					"web",
+					"google_search",
+					"youtube",
+					"reddit",
+					"instagram",
+					"tiktok",
+					"google_maps",
+					"indeed",
+					"amazon",
+					"walmart"
+				],
+				"title": "ToolPreference"
+			},
+			"UserRead": {
+				"properties": {
+					"id": {
+						"type": "string",
+						"format": "uuid",
+						"title": "Id"
+					},
+					"email": {
+						"type": "string",
+						"format": "email",
+						"title": "Email"
+					},
+					"is_active": {
+						"type": "boolean",
+						"title": "Is Active",
+						"default": true
+					},
+					"is_superuser": {
+						"type": "boolean",
+						"title": "Is Superuser",
+						"default": false
+					},
+					"is_verified": {
+						"type": "boolean",
+						"title": "Is Verified",
+						"default": false
+					},
+					"credit_micros_balance": {
+						"type": "integer",
+						"title": "Credit Micros Balance"
+					},
+					"display_name": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Display Name"
+					},
+					"avatar_url": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Avatar Url"
+					}
+				},
+				"type": "object",
+				"required": [
+					"id",
+					"email",
+					"credit_micros_balance"
+				],
+				"title": "UserRead"
+			},
+			"ValidationError": {
+				"properties": {
+					"loc": {
+						"items": {
+							"anyOf": [
+								{
+									"type": "string"
+								},
+								{
+									"type": "integer"
+								}
+							]
+						},
+						"type": "array",
+						"title": "Location"
+					},
+					"msg": {
+						"type": "string",
+						"title": "Message"
+					},
+					"type": {
+						"type": "string",
+						"title": "Error Type"
+					},
+					"input": {
+						"title": "Input"
+					},
+					"ctx": {
+						"type": "object",
+						"title": "Context"
+					}
+				},
+				"type": "object",
+				"required": [
+					"loc",
+					"msg",
+					"type"
+				],
+				"title": "ValidationError"
+			},
+			"VideoRequest": {
+				"properties": {
+					"source_ids": {
+						"anyOf": [
+							{
+								"items": {
+									"type": "integer"
+								},
+								"type": "array",
+								"maxItems": 500
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Source Ids",
+						"description": "Notebook source ids to generate from; omitted means the enabled ones"
+					},
+					"focus": {
+						"type": "string",
+						"maxLength": 2000,
+						"title": "Focus",
+						"default": ""
+					},
+					"title": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 200
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Title"
+					},
+					"language": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 40
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Language"
+					},
+					"request_id": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 64,
+								"pattern": "^[A-Za-z0-9_-]+$"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Request Id"
+					},
+					"kind": {
+						"type": "string",
+						"const": "video",
+						"title": "Kind"
+					},
+					"format": {
+						"type": "string",
+						"enum": [
+							"short",
+							"explainer"
+						],
+						"title": "Format",
+						"default": "explainer"
+					},
+					"visual_style": {
+						"type": "string",
+						"enum": [
+							"auto",
+							"custom",
+							"classic",
+							"whiteboard",
+							"playful",
+							"dark",
+							"minimal"
+						],
+						"title": "Visual Style",
+						"default": "auto"
+					},
+					"style_prompt": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 300
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Style Prompt"
+					}
+				},
+				"additionalProperties": false,
+				"type": "object",
+				"required": [
+					"kind"
+				],
+				"title": "VideoRequest"
+			},
+			"WorkspaceWithStats": {
+				"properties": {
+					"created_at": {
+						"type": "string",
+						"format": "date-time",
+						"title": "Created At"
+					},
+					"id": {
+						"type": "integer",
+						"title": "Id"
+					},
+					"name": {
+						"type": "string",
+						"title": "Name"
+					},
+					"description": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Description"
+					},
+					"user_id": {
+						"type": "string",
+						"format": "uuid",
+						"title": "User Id"
+					},
+					"citations_enabled": {
+						"type": "boolean",
+						"title": "Citations Enabled"
+					},
+					"api_access_enabled": {
+						"type": "boolean",
+						"title": "Api Access Enabled",
+						"default": false
+					},
+					"qna_custom_instructions": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Qna Custom Instructions"
+					},
+					"shared_memory_md": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"title": "Shared Memory Md"
+					},
+					"knowledge_store_enabled": {
+						"type": "boolean",
+						"title": "Knowledge Store Enabled",
+						"default": false
+					},
+					"llm_setup": {
+						"anyOf": [
+							{
+								"$ref": "#/components/schemas/LlmSetupStatusRead"
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"member_count": {
+						"type": "integer",
+						"title": "Member Count",
+						"default": 1
+					},
+					"is_owner": {
+						"type": "boolean",
+						"title": "Is Owner",
+						"default": false
+					}
+				},
+				"type": "object",
+				"required": [
+					"created_at",
+					"id",
+					"name",
+					"user_id",
+					"citations_enabled"
+				],
+				"title": "WorkspaceWithStats",
+				"description": "Extended workspace info with member count and ownership status."
+			},
+			"app__notebooks__research__schemas__ImportRequest": {
+				"properties": {
+					"items": {
+						"items": {
+							"$ref": "#/components/schemas/ImportItem"
+						},
+						"type": "array",
+						"maxItems": 50,
+						"minItems": 1,
+						"title": "Items"
+					}
+				},
+				"type": "object",
+				"required": [
+					"items"
+				],
+				"title": "ImportRequest"
+			}
+		}
+	}
+}

@@ -1,0 +1,473 @@
+import logging
+import uuid
+from datetime import UTC, datetime
+
+import httpx
+import jwt
+from fastapi import Depends, HTTPException, Request, Response, status
+from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi_users import BaseUserManager, FastAPIUsers, UUIDIDMixin, models
+from fastapi_users.authentication import (
+    AuthenticationBackend,
+    BearerTransport,
+    JWTStrategy,
+)
+from fastapi_users.db import SQLAlchemyUserDatabase
+from fastapi_users.jwt import generate_jwt
+from sqlalchemy import update
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.auth.context import AuthContext
+from app.auth.password_policy import validate_new_password
+from app.auth.session_cookies import access_expires_at, write_session
+from app.config import config
+from app.db import (
+    Prompt,
+    User,
+    Workspace,
+    WorkspaceMembership,
+    WorkspaceRole,
+    async_session_maker,
+    get_async_session,
+    get_default_roles_config,
+    get_user_db,
+)
+from app.observability.analytics import posthog as ph_analytics
+from app.observability.logs.context import bind_log_context
+from app.password_reset.delivery import schedule_reset_email
+from app.prompts.system_defaults import SYSTEM_PROMPT_DEFAULTS
+from app.signup_credit.award import award_signup_credit
+from app.utils.pat import PAT_PREFIX, maybe_touch_last_used, resolve_pat
+from app.utils.refresh_tokens import create_refresh_token, revoke_all_user_tokens
+from app.workspace_model_defaults import apply_default_role_models
+
+logger = logging.getLogger(__name__)
+
+
+SECRET = config.SECRET_KEY
+
+
+async def create_default_workspace(session: AsyncSession, user: User) -> Workspace:
+    """Bootstrap a user's default workspace with its owner role and membership.
+
+    Born flipped when the global switch is on, matching ``POST /workspaces``; the
+    signup path used to skip this and default the column to legacy.
+    """
+    workspace = Workspace(
+        name="My Workspace",
+        description="Your personal workspace",
+        user_id=user.id,
+        knowledge_store_enabled=config.KNOWLEDGE_STORE_ENABLED,
+    )
+    apply_default_role_models(workspace)
+    session.add(workspace)
+    await session.flush()
+
+    owner_role_id = None
+    for role_config in get_default_roles_config():
+        db_role = WorkspaceRole(
+            name=role_config["name"],
+            description=role_config["description"],
+            permissions=role_config["permissions"],
+            is_default=role_config["is_default"],
+            is_system_role=role_config["is_system_role"],
+            workspace_id=workspace.id,
+        )
+        session.add(db_role)
+        await session.flush()
+        if role_config["name"] == "Owner":
+            owner_role_id = db_role.id
+
+    session.add(
+        WorkspaceMembership(
+            user_id=user.id,
+            workspace_id=workspace.id,
+            role_id=owner_role_id,
+            is_owner=True,
+        )
+    )
+    return workspace
+
+
+if config.AUTH_TYPE == "GOOGLE":
+    from httpx_oauth.clients.google import GoogleOAuth2
+
+    google_oauth_client = GoogleOAuth2(
+        config.GOOGLE_OAUTH_CLIENT_ID,
+        config.GOOGLE_OAUTH_CLIENT_SECRET,
+    )
+
+
+class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
+    """
+    Custom user manager extending fastapi-users BaseUserManager.
+
+    Authentication returns a generic error for both non-existent accounts
+    and incorrect passwords to comply with OWASP WSTG-IDNT-04 and
+    prevent user enumeration attacks.
+    """
+
+    reset_password_token_secret = SECRET
+    reset_password_token_lifetime_seconds = config.PASSWORD_RESET_TOKEN_LIFETIME_SECONDS
+    verification_token_secret = SECRET
+
+    async def validate_password(self, password: str, user: object) -> None:
+        """Every new password: long enough, and not the account's own email."""
+        await validate_new_password(password, getattr(user, "email", None))
+
+    async def oauth_callback(
+        self,
+        oauth_name: str,
+        access_token: str,
+        account_id: str,
+        account_email: str,
+        expires_at: int | None = None,
+        refresh_token: str | None = None,
+        request: Request | None = None,
+        *,
+        associate_by_email: bool = False,
+        is_verified_by_default: bool = False,
+    ) -> User:
+        """
+        Override OAuth callback to capture Google profile data (name, avatar).
+        """
+        # Call parent implementation to create/get user
+        user = await super().oauth_callback(
+            oauth_name,
+            access_token,
+            account_id,
+            account_email,
+            expires_at,
+            refresh_token,
+            request,
+            associate_by_email=associate_by_email,
+            is_verified_by_default=is_verified_by_default,
+        )
+
+        # Fetch and store Google profile data if not already set
+        if oauth_name == "google" and (not user.display_name or not user.avatar_url):
+            try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.get(
+                        "https://people.googleapis.com/v1/people/me",
+                        params={"personFields": "names,photos"},
+                        headers={"Authorization": f"Bearer {access_token}"},
+                    )
+                    response.raise_for_status()
+                    profile = response.json()
+
+                update_dict = {}
+
+                # Extract name from names array
+                names = profile.get("names", [])
+                if not user.display_name and names:
+                    display_name = names[0].get("displayName")
+                    if display_name:
+                        update_dict["display_name"] = display_name
+
+                # Extract photo URL from photos array
+                photos = profile.get("photos", [])
+                if not user.avatar_url and photos:
+                    photo_url = photos[0].get("url")
+                    if photo_url:
+                        update_dict["avatar_url"] = photo_url
+
+                if update_dict:
+                    user = await self.user_db.update(user, update_dict)
+
+            except Exception as e:
+                logger.warning(f"Failed to fetch Google profile: {e}")
+
+        return user
+
+    async def on_after_login(
+        self,
+        user: User,
+        request: Request | None = None,
+        response: Response | None = None,
+    ) -> None:
+        try:
+            async with async_session_maker() as session:
+                await session.execute(
+                    update(User)
+                    .where(User.id == user.id)
+                    .values(last_login=datetime.now(UTC))
+                )
+                await session.commit()
+        except Exception as e:
+            logger.warning(f"Failed to update last_login for user {user.id}: {e}")
+
+        # Authoritative login event (vs. the frontend's optimistic capture).
+        ph_analytics.capture("auth_login_success", distinct_id=str(user.id))
+
+    async def on_after_register(self, user: User, request: Request | None = None):
+        """
+        Called after a user registers. Grants the welcome credit and creates a
+        default workspace so they can start chatting without manual setup.
+        """
+        logger.info(f"User {user.id} has registered. Creating default workspace...")
+
+        try:
+            async with async_session_maker() as session:
+                # Shares the transaction below: a rollback must not leave an
+                # identity marked as having taken a credit it never received.
+                granted = await award_signup_credit(session, user)
+
+                default_workspace = await create_default_workspace(session, user)
+
+                for default in SYSTEM_PROMPT_DEFAULTS:
+                    session.add(
+                        Prompt(
+                            user_id=user.id,
+                            default_prompt_slug=default["slug"],
+                            name=default["name"],
+                            prompt=default["prompt"],
+                            mode=default["mode"],
+                            version=default["version"],
+                        )
+                    )
+
+                await session.commit()
+                logger.info(
+                    f"Created default workspace (ID: {default_workspace.id}) for user {user.id}"
+                )
+
+                # Keep the registration response honest; the grant was applied
+                # to the row, not to this instance.
+                user.credit_micros_balance = (user.credit_micros_balance or 0) + granted
+
+                # Authoritative registration + auto-created default workspace.
+                ph_analytics.capture(
+                    "auth_registration_success", distinct_id=str(user.id)
+                )
+                ph_analytics.capture(
+                    "workspace_created",
+                    distinct_id=str(user.id),
+                    properties={"client": "auto_register"},
+                    groups={"workspace": str(default_workspace.id)},
+                )
+        except Exception as e:
+            logger.error(f"Failed to create default workspace for user {user.id}: {e}")
+
+    async def on_after_forgot_password(
+        self, user: User, token: str, request: Request | None = None
+    ):
+        # Mailed after the response, so a known address answers as fast as an
+        # unknown one. The token itself is never logged.
+        schedule_reset_email(user.id, user.email, token)
+
+    async def on_after_reset_password(
+        self, user: User, request: Request | None = None
+    ) -> None:
+        # A reset means the old password may be known to someone else: end
+        # every other session (refresh tokens) so they cannot stay signed in.
+        try:
+            await revoke_all_user_tokens(user.id)
+        except Exception:
+            logger.warning("Could not revoke sessions after reset for user %s", user.id)
+        logger.info("Password reset completed for user %s", user.id)
+
+    async def on_after_request_verify(
+        self, user: User, token: str, request: Request | None = None
+    ):
+        # Email verification is not offered; never print the token.
+        logger.info("Verification requested for user %s (not mailed)", user.id)
+
+
+async def get_user_manager(user_db: SQLAlchemyUserDatabase = Depends(get_user_db)):
+    yield UserManager(user_db)
+
+
+class IatJWTStrategy(JWTStrategy[models.UP, models.ID]):
+    async def write_token(self, user: models.UP) -> str:
+        data = {
+            "sub": str(user.id),
+            "aud": self.token_audience,
+            "iat": int(datetime.now(UTC).timestamp()),
+        }
+        return generate_jwt(
+            data,
+            self.encode_key,
+            self.lifetime_seconds,
+            algorithm=self.algorithm,
+        )
+
+
+def get_jwt_strategy() -> JWTStrategy[models.UP, models.ID]:
+    return IatJWTStrategy(
+        secret=SECRET,
+        lifetime_seconds=config.ACCESS_TOKEN_LIFETIME_SECONDS,
+    )
+
+
+# # COOKIE AUTH | Uncomment if you want to use cookie auth.
+# from fastapi_users.authentication import (
+#     CookieTransport,
+# )
+# class CustomCookieTransport(CookieTransport):
+#     async def get_login_response(self, token: str) -> Response:
+#         response = RedirectResponse(config.OAUTH_REDIRECT_URL, status_code=302)
+#         return self._set_login_cookie(response, token)
+
+# cookie_transport = CustomCookieTransport(
+#     cookie_max_age=3600,
+# )
+
+# auth_backend = AuthenticationBackend(
+#     name="jwt",
+#     transport=cookie_transport,
+#     get_strategy=get_jwt_strategy,
+# )
+
+
+# BEARER AUTH CODE.
+class CustomBearerTransport(BearerTransport):
+    async def get_login_response(self, token: str) -> Response:
+        try:
+            payload = jwt.decode(
+                token, SECRET, algorithms=["HS256"], options={"verify_aud": False}
+            )
+            user_id = uuid.UUID(payload.get("sub"))
+            refresh_token = await create_refresh_token(user_id)
+        except Exception as e:
+            logger.error(f"Failed to create refresh token: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create session",
+            ) from e
+
+        if config.AUTH_TYPE == "GOOGLE":
+            response = RedirectResponse(
+                f"{config.NEXT_FRONTEND_URL}/dashboard",
+                status_code=302,
+            )
+        else:
+            response = JSONResponse(
+                {
+                    "authenticated": True,
+                    "access_expires_at": access_expires_at(token),
+                }
+            )
+
+        write_session(response, token, refresh_token)
+        return response
+
+
+bearer_transport = CustomBearerTransport(tokenUrl="auth/jwt/login")
+
+
+auth_backend = AuthenticationBackend(
+    name="jwt",
+    transport=bearer_transport,
+    get_strategy=get_jwt_strategy,
+)
+
+fastapi_users = FastAPIUsers[User, uuid.UUID](get_user_manager, [auth_backend])
+
+
+def _token_meets_epoch(token: str) -> bool:
+    min_issued_at = config.MIN_ISSUED_AT
+    if min_issued_at <= 0:
+        return True
+
+    try:
+        payload = jwt.decode(
+            token, SECRET, algorithms=["HS256"], options={"verify_aud": False}
+        )
+    except jwt.PyJWTError:
+        return False
+
+    issued_at = payload.get("iat")
+    return isinstance(issued_at, int | float) and int(issued_at) >= min_issued_at
+
+
+async def get_auth_context(
+    request: Request,
+    session: AsyncSession = Depends(get_async_session),
+    user_manager: UserManager = Depends(get_user_manager),
+) -> AuthContext:
+    """Resolve the authenticated principal.
+
+    Use this for authorization-sensitive routes where session-vs-PAT matters.
+    FastAPI-Users still handles JWT mechanics; PATs are resolved here so RBAC
+    receives the full SurfSense principal instead of a bare User.
+    """
+
+    def _stash(ctx: AuthContext) -> AuthContext:
+        # Expose the resolved principal on request.state so downstream
+        # middleware (e.g. PostHog pat_api_request attribution) can read it
+        # without re-resolving auth.
+        request.state.auth_context = ctx
+        bind_log_context(user_id=getattr(ctx.user, "id", None))
+        return ctx
+
+    auth_header = request.headers.get("Authorization")
+    if auth_header:
+        scheme, _, credential = auth_header.partition(" ")
+        is_bearer = scheme.lower() == "bearer" and bool(credential)
+        token = credential if is_bearer else auth_header.strip()
+
+        if token.startswith(PAT_PREFIX):
+            pat = await resolve_pat(session, token)
+            if pat and pat.user and pat.user.is_active:
+                maybe_touch_last_used(pat)
+                return _stash(AuthContext.pat_auth(pat.user, pat))
+
+        # An agent's Authentik access token (claude.ai/ChatGPT through the MCP
+        # server). Imported here: app.agent_sign_in reaches app.users through
+        # app.auth_oidc. A token claiming that issuer is either valid or
+        # refused (401/403); it never falls through to the session check.
+        from app.agent_sign_in.principal import agent_user, is_agent_token
+
+        if is_bearer and is_agent_token(token):
+            return _stash(AuthContext.agent(await agent_user(token, session)))
+
+        if is_bearer and _token_meets_epoch(token):
+            try:
+                user = await get_jwt_strategy().read_token(token, user_manager)
+            except Exception:
+                logger.exception("Failed to read bearer access token")
+                user = None
+
+            if user and user.is_active:
+                return _stash(AuthContext.session(user))
+
+    cookie_token = request.cookies.get(config.SESSION_COOKIE_NAME)
+    if cookie_token and _token_meets_epoch(cookie_token):
+        try:
+            user = await get_jwt_strategy().read_token(cookie_token, user_manager)
+        except Exception:
+            logger.exception("Failed to read session cookie access token")
+            user = None
+
+        if user and user.is_active:
+            return _stash(AuthContext.session(user))
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Unauthorized",
+    )
+
+
+async def allow_any_principal(
+    auth: AuthContext = Depends(get_auth_context),
+) -> AuthContext:
+    """Allow either session or PAT principals for bootstrap probes only.
+
+    Routes using this dependency intentionally have no workspace gate.
+    Adding a new call site is a security decision and must be covered by
+    the fail-closed PAT allowlist test.
+    """
+    return auth
+
+
+async def require_session_context(
+    auth: AuthContext = Depends(get_auth_context),
+) -> AuthContext:
+    """Require an interactive session and reject PAT-authenticated requests."""
+    if not auth.is_session:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This action requires an interactive session",
+        )
+    return auth

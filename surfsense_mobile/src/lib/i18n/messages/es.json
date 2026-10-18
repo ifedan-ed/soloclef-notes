@@ -1,0 +1,753 @@
+{
+	"common": {
+		"app_name": "{brand}",
+		"welcome": "Bienvenido",
+		"save": "Guardar",
+		"cancel": "Cancelar",
+		"delete": "Eliminar",
+		"edit": "Editar",
+		"create": "Crear",
+		"update": "Actualizar",
+		"search": "Buscar",
+		"close": "Cerrar",
+		"confirm": "Confirmar",
+		"back": "Volver",
+		"next": "Siguiente",
+		"submit": "Enviar",
+		"yes": "Sí",
+		"no": "No",
+		"add": "Agregar",
+		"remove": "Eliminar",
+		"select": "Seleccionar",
+		"all": "Todo",
+		"none": "Ninguno",
+		"error": "Error",
+		"success": "Éxito",
+		"warning": "Advertencia",
+		"info": "Información",
+		"required": "Obligatorio",
+		"optional": "Opcional",
+		"retry": "Reintentar",
+		"owner": "Propietario",
+		"shared": "Compartido",
+		"settings": "Configuración"
+	},
+	"auth": {
+		"login": "Iniciar sesión",
+		"register": "Registrarse",
+		"logout": "Cerrar sesión",
+		"email": "Correo electrónico",
+		"password": "Contraseña",
+		"confirm_password": "Confirmar contraseña",
+		"forgot_password": "¿Olvidaste tu contraseña?",
+		"show_password": "Mostrar contraseña",
+		"hide_password": "Ocultar contraseña",
+		"remember_me": "Recuérdame",
+		"sign_in": "Iniciar sesión",
+		"sign_up": "Registrarse",
+		"sign_in_with": "Iniciar sesión con {provider}",
+		"dont_have_account": "¿No tienes una cuenta?",
+		"already_have_account": "¿Ya tienes una cuenta?",
+		"reset_password": "Restablecer contraseña",
+		"email_required": "El correo electrónico es obligatorio",
+		"password_required": "La contraseña es obligatoria",
+		"invalid_email": "Dirección de correo electrónico inválida",
+		"password_too_short": "La contraseña debe tener al menos 8 caracteres",
+		"welcome_back": "Bienvenido de nuevo",
+		"create_account": "Crea tu cuenta",
+		"login_subtitle": "Ingresa tus credenciales para acceder a tu cuenta",
+		"register_subtitle": "Regístrate para comenzar con {brand}",
+		"or_continue_with": "O continuar con",
+		"by_continuing": "Al continuar, aceptas nuestros",
+		"terms_of_service": "Términos de servicio",
+		"and": "y",
+		"privacy_policy": "Política de privacidad",
+		"full_name": "Nombre completo",
+		"username": "Nombre de usuario",
+		"continue": "Continuar",
+		"back_to_login": "Volver al inicio de sesión",
+		"login_success": "Sesión iniciada correctamente",
+		"register_success": "Cuenta creada correctamente",
+		"continue_with_google": "Continuar con Google",
+		"cloud_dev_notice": "{brand} está actualmente en desarrollo. Consulta",
+		"docs": "Documentación",
+		"cloud_dev_self_hosted": "para más información sobre la versión autoalojada.",
+		"passwords_no_match": "Las contraseñas no coinciden",
+		"password_mismatch": "Las contraseñas no coinciden",
+		"passwords_no_match_desc": "Las contraseñas que ingresaste no coinciden",
+		"creating_account": "Creando tu cuenta",
+		"creating_account_btn": "Creando cuenta",
+		"redirecting_login": "Redirigiendo a la página de inicio de sesión",
+		"request_access": "Solicitar acceso",
+		"signups_closed_title": "Todavía no se pueden crear cuentas",
+		"signups_closed_body": "El registro está cerrado por ahora. Si quieres una cuenta, pídela y recibirás una respuesta por correo."
+	},
+	"notebooks": {
+		"title": "Cuadernos",
+		"recent": "Cuadernos recientes",
+		"create": "Crear cuaderno",
+		"untitled": "Cuaderno sin título",
+		"create_failed": "No se pudo crear el cuaderno.",
+		"load_failed": "No se pudieron cargar los cuadernos.",
+		"retry": "Reintentar",
+		"empty_hint": "Aún no hay cuadernos. Crea uno para empezar a reunir fuentes.",
+		"rename": "Cambiar nombre",
+		"rename_failed": "No se pudo cambiar el nombre del cuaderno.",
+		"delete": "Eliminar",
+		"delete_failed": "No se pudo eliminar el cuaderno.",
+		"delete_confirm_title": "¿Eliminar «{title}»?",
+		"delete_confirm_body": "Se eliminan sus notas y los vínculos a las fuentes. Tus documentos y chats permanecen en el espacio de trabajo.",
+		"cancel": "Cancelar",
+		"save": "Guardar",
+		"confirm": "Confirmar",
+		"back": "Atrás",
+		"open": "Abrir",
+		"play": "Reproducir",
+		"more_actions": "Más acciones",
+		"source_count": "{count, plural, =0 {Sin fuentes} one {# fuente} other {# fuentes}}",
+		"composer_sources": "{count, plural, =0 {Sin fuentes} one {# fuente} other {# fuentes}}",
+		"back_to_notebooks": "Volver a los cuadernos",
+		"change_icon": "Cambiar icono",
+		"notebook_title": "Título del cuaderno",
+		"notebook_not_found": "No se pudo cargar este cuaderno.",
+		"sources": "Fuentes",
+		"chat": "Chat",
+		"studio": "Estudio",
+		"collapse_sources": "Contraer fuentes",
+		"expand_sources": "Expandir fuentes",
+		"collapse_studio": "Contraer estudio",
+		"expand_studio": "Expandir estudio",
+		"add_sources": "Añadir fuentes",
+		"add_sources_description": "Sube archivos nuevos, elige documentos que ya están en este espacio de trabajo o elige archivos de Nextcloud.",
+		"add_from_library": "De tu espacio de trabajo",
+		"add_upload": "Subir archivos",
+		"search_library": "Buscar documentos y carpetas",
+		"add_n_sources": "{count, plural, =0 {Añadir fuentes} one {Añadir # fuente} other {Añadir # fuentes}}",
+		"add_sources_failed": "No se pudieron añadir esas fuentes.",
+		"remove_pick": "Quitar {title}",
+		"select_all": "Seleccionar todas las fuentes",
+		"use_source": "Usar {title}",
+		"remove_source": "Quitar del cuaderno",
+		"source_indexing": "Aún se está indexando",
+		"sources_update_failed": "No se pudieron actualizar las fuentes.",
+		"back_to_sources": "Volver a las fuentes",
+		"source_guide": "Guía de la fuente",
+		"source_guide_generating": "Redactando una guía para esta fuente…",
+		"source_guide_unavailable": "Todavía no hay una guía disponible para esta fuente.",
+		"new_chat_failed": "No se pudo iniciar el chat.",
+		"mention_heading": "Fuentes de este cuaderno",
+		"mention_no_match": "Ninguna fuente coincide",
+		"mention_no_sources": "Este cuaderno aún no tiene fuentes para mencionar.",
+		"save_to_note": "Guardar en nota",
+		"save_to_note_failed": "No se pudo guardar la nota.",
+		"saved_to_note": "Guardado en notas",
+		"studio_empty": "Después de añadir fuentes, haz clic para añadir un resumen en audio, un mapa mental y mucho más.",
+		"add_note": "Añadir nota",
+		"new_note": "Nota nueva",
+		"note": "Nota",
+		"note_title": "Título de la nota",
+		"note_placeholder": "Escribe tu nota…",
+		"note_is_source": "Añadida como fuente",
+		"note_create_failed": "No se pudo crear la nota.",
+		"note_save_failed": "No se pudieron guardar los cambios.",
+		"note_delete_failed": "No se pudo eliminar la nota.",
+		"delete_note_confirm": "¿Eliminar esta nota?",
+		"convert_to_source": "Convertir en fuente",
+		"convert_failed": "No se pudo añadir la nota como fuente.",
+		"converted": "La nota ahora es una fuente.",
+		"back_to_studio": "Volver al estudio",
+		"generate_now": "Generar ahora",
+		"generate_failed": "No se pudo iniciar la generación.",
+		"generation_started": "Generando: aparecerá en el estudio.",
+		"choose_sources": "Elige al menos una fuente.",
+		"default_suffix": "(Predeterminado)",
+		"default_is": "Predeterminado: {value}",
+		"language_default": "Predeterminado",
+		"delete_output_confirm": "¿Eliminar «{title}»? También se elimina el archivo generado.",
+		"try_again": "Intentar de nuevo",
+		"status_progress": "Generando {progress}%",
+		"status": {
+			"queued": "En cola",
+			"running": "Generando",
+			"ready": "Listo",
+			"failed": "Error",
+			"cancelled": "Cancelado"
+		},
+		"edit_template": "Editar {title}",
+		"template_prompt": "Instrucciones de la plantilla",
+		"template_save_default": "Guardar como predeterminada",
+		"template_saved": "Plantilla guardada para este espacio de trabajo.",
+		"template_save_failed": "No se pudo guardar la plantilla.",
+		"fields": {
+			"format": "Formato",
+			"length": "Duración",
+			"detail": "Nivel de detalle",
+			"count": "Cantidad",
+			"difficulty": "Dificultad",
+			"file_type": "Tipo de archivo",
+			"language": "Idioma",
+			"template": "Plantilla",
+			"style": "Estilo visual",
+			"visual_style": "Elige el estilo visual",
+			"orientation": "Orientación"
+		},
+		"kinds": {
+			"audio": {
+				"label": "Resumen en audio",
+				"tooltip": "Genera una conversación tipo pódcast sobre tus fuentes.",
+				"dialog_title": "Personalizar resumen en audio",
+				"description": "Dos presentadores (o uno, en el formato breve) repasan tus fuentes.",
+				"focus_label": "¿En qué deberían centrarse los presentadores?",
+				"focus_placeholder": "p. ej., Céntrate en los métodos y en lo que implican para la práctica",
+				"ideas_label": "Ideas para los presentadores"
+			},
+			"video": {
+				"label": "Resumen en vídeo",
+				"tooltip": "Genera un vídeo explicativo presentado por IA.",
+				"dialog_title": "Personalizar resumen en vídeo",
+				"description": "Un vídeo narrado y animado creado a partir de tus fuentes.",
+				"focus_label": "¿En qué debería centrarse el vídeo?",
+				"focus_placeholder": "p. ej., Explica el hallazgo principal a un colega nuevo",
+				"ideas_label": "Ideas para el narrador"
+			},
+			"report": {
+				"label": "Informes",
+				"tooltip": "Crea un informe estructurado o un resumen interactivo.",
+				"dialog_title": "Crear informe",
+				"description": "Un informe escrito a partir de tus fuentes, como documento o como página interactiva.",
+				"focus_label": "¿Algo que destacar?",
+				"focus_placeholder": "p. ej., Que ocupe dos páginas y resalte las preguntas abiertas",
+				"ideas_label": "Enfoques"
+			},
+			"slides": {
+				"label": "Presentación",
+				"tooltip": "Crea una presentación de PowerPoint editable a partir de tus fuentes.",
+				"dialog_title": "Personalizar presentación",
+				"description": "Una presentación .pptx editable creada a partir de tus fuentes.",
+				"focus_label": "¿Qué debería cubrir la presentación?",
+				"focus_placeholder": "p. ej., Una sesión docente de 10 minutos para residentes",
+				"ideas_label": "Enfoques"
+			},
+			"mindmap": {
+				"label": "Mapa mental",
+				"tooltip": "Representa las ideas principales de tus fuentes y cómo se relacionan.",
+				"dialog_title": "Personalizar mapa mental",
+				"description": "Un mapa jerárquico de las ideas de tus fuentes.",
+				"focus_label": "¿En torno a qué debería girar el mapa?",
+				"focus_placeholder": "p. ej., Céntralo en el diagnóstico y el tratamiento",
+				"ideas_label": "Esquemas del mapa"
+			},
+			"flashcards": {
+				"label": "Tarjetas didácticas",
+				"tooltip": "Crea tarjetas para practicar el recuerdo activo.",
+				"dialog_title": "Personalizar tarjetas",
+				"description": "Un mazo de estudio con preguntas en una cara y respuestas en la otra.",
+				"focus_label": "¿Qué deberían evaluar las tarjetas?",
+				"focus_placeholder": "p. ej., Definiciones y valores de corte",
+				"ideas_label": "Qué evaluar"
+			},
+			"quiz": {
+				"label": "Cuestionario",
+				"tooltip": "Crea un cuestionario de opción múltiple con puntuación.",
+				"dialog_title": "Personalizar cuestionario",
+				"description": "Preguntas de respuesta única con puntuación.",
+				"focus_label": "¿Qué debería cubrir el cuestionario?",
+				"focus_placeholder": "p. ej., Razonamiento clínico más que memoria",
+				"ideas_label": "Qué evaluar"
+			},
+			"data_table": {
+				"label": "Tabla de datos",
+				"tooltip": "Extrae los datos y cifras clave a una hoja de cálculo.",
+				"dialog_title": "Crear tabla de datos",
+				"description": "Un libro de Excel con los datos estructurados de tus fuentes.",
+				"focus_label": "¿Qué debería recoger la tabla?",
+				"focus_placeholder": "p. ej., Una fila por estudio con el tamaño muestral y el resultado principal",
+				"ideas_label": "Diseños de tabla"
+			},
+			"infographic": {
+				"label": "Infografía",
+				"tooltip": "Convierte los datos clave en una sola imagen ilustrada.",
+				"dialog_title": "Crear infografía",
+				"description": "Una sola imagen que presenta de un vistazo los datos y cifras clave.",
+				"focus_label": "Describe la infografía que quieres crear",
+				"focus_placeholder": "p. ej., Usa una paleta azul y destaca las 3 cifras clave",
+				"ideas_label": "Mensajes clave"
+			}
+		},
+		"options": {
+			"audio": {
+				"format": {
+					"deep_dive": {
+						"label": "Análisis a fondo",
+						"description": "Una conversación animada entre dos presentadores que desglosa y relaciona los temas de tus fuentes."
+					},
+					"brief": {
+						"label": "Breve",
+						"description": "Un resumen corto para captar rápidamente las ideas centrales."
+					},
+					"critique": {
+						"label": "Crítica",
+						"description": "Una revisión experta de tus fuentes con comentarios constructivos."
+					},
+					"debate": {
+						"label": "Debate",
+						"description": "Un debate reflexivo entre dos presentadores que ilumina distintas perspectivas."
+					}
+				},
+				"length": {
+					"short": {
+						"label": "Corto"
+					},
+					"default": {
+						"label": "Predeterminado"
+					},
+					"long": {
+						"label": "Largo"
+					}
+				}
+			},
+			"video": {
+				"format": {
+					"explainer": {
+						"label": "Explicativo",
+						"description": "Un resumen estructurado y completo que conecta las ideas."
+					},
+					"short": {
+						"label": "Corto",
+						"description": "Un vídeo breve que transmite rápidamente la idea central."
+					}
+				},
+				"visual_style": {
+					"auto": {
+						"label": "Selección automática",
+						"description": "El autor del vídeo elige el aspecto que mejor encaja con el material."
+					},
+					"custom": {
+						"label": "Personalizado",
+						"description": "Describe en pocas palabras el aspecto que quieres."
+					},
+					"classic": {
+						"label": "Clásico",
+						"description": "Diapositivas editoriales limpias: fondo marfil, texto azul marino y un acento azul."
+					},
+					"whiteboard": {
+						"label": "Pizarra",
+						"description": "Dibujos a rotulador, flechas y palabras clave rodeadas sobre blanco."
+					},
+					"playful": {
+						"label": "Divertido",
+						"description": "Colores pastel, formas redondeadas e iconos simpáticos."
+					},
+					"dark": {
+						"label": "Oscuro",
+						"description": "Fondos gris antracita con texto brillante y un acento verde azulado."
+					},
+					"minimal": {
+						"label": "Minimalista",
+						"description": "Mucho espacio en blanco, letra muy grande y pocas palabras por escena."
+					}
+				}
+			},
+			"report": {
+				"format": {
+					"document": {
+						"label": "Documento",
+						"description": "Un documento estructurado, solo de texto."
+					},
+					"interactive": {
+						"label": "Interactivo",
+						"description": "Una página interactiva con secciones que puedes explorar."
+					}
+				},
+				"file_type": {
+					"pdf": {
+						"label": "PDF"
+					},
+					"docx": {
+						"label": "Word"
+					}
+				}
+			},
+			"slides": {
+				"format": {
+					"detailed": {
+						"label": "Presentación detallada",
+						"description": "Una presentación completa con texto, pensada para leerse sola."
+					},
+					"presenter": {
+						"label": "Diapositivas para exponer",
+						"description": "Diapositivas visuales y limpias, con los puntos clave en las notas del orador."
+					}
+				},
+				"length": {
+					"short": {
+						"label": "Corta"
+					},
+					"default": {
+						"label": "Predeterminada"
+					},
+					"long": {
+						"label": "Larga"
+					}
+				}
+			},
+			"mindmap": {
+				"detail": {
+					"overview": {
+						"label": "Visión general"
+					},
+					"standard": {
+						"label": "Estándar"
+					},
+					"detailed": {
+						"label": "Detallado"
+					}
+				}
+			},
+			"flashcards": {
+				"count": {
+					"fewer": {
+						"label": "Menos"
+					},
+					"standard": {
+						"label": "Estándar"
+					},
+					"more": {
+						"label": "Más"
+					}
+				},
+				"difficulty": {
+					"easy": {
+						"label": "Fácil"
+					},
+					"medium": {
+						"label": "Media"
+					},
+					"hard": {
+						"label": "Difícil"
+					}
+				}
+			},
+			"quiz": {
+				"count": {
+					"fewer": {
+						"label": "Menos"
+					},
+					"standard": {
+						"label": "Estándar"
+					},
+					"more": {
+						"label": "Más"
+					}
+				},
+				"difficulty": {
+					"easy": {
+						"label": "Fácil"
+					},
+					"medium": {
+						"label": "Media"
+					},
+					"hard": {
+						"label": "Difícil"
+					}
+				}
+			},
+			"data_table": {},
+			"infographic": {
+				"style": {
+					"auto": {
+						"label": "Selección automática",
+						"description": "Elige el estilo que mejor se adapta al material."
+					},
+					"sketch-note": {
+						"label": "Apuntes a mano",
+						"description": "Tinta dibujada a mano con un solo color de acento, como unos apuntes."
+					},
+					"kawaii": {
+						"label": "Kawaii",
+						"description": "Divertido y cercano, con formas redondeadas y colores pastel."
+					},
+					"clay": {
+						"label": "Plastilina",
+						"description": "Formas 3D suaves y táctiles con iluminación tenue."
+					},
+					"anime": {
+						"label": "Anime",
+						"description": "Ilustración vibrante y enérgica con sombreado plano."
+					},
+					"editorial": {
+						"label": "Editorial",
+						"description": "Diseño de revista: gran titular con serifa, un acento intenso y columnas limpias."
+					},
+					"instructional": {
+						"label": "Instructivo",
+						"description": "Pasos numerados, iconos de línea y flechas, como un manual."
+					},
+					"bento-grid": {
+						"label": "Cuadrícula bento",
+						"description": "Mosaicos redondeados de distintos tamaños, una idea por mosaico."
+					},
+					"bricks": {
+						"label": "Bloques",
+						"description": "Construido con bloques de juguete de colores, divertido y ordenado."
+					},
+					"scientific": {
+						"label": "Científico",
+						"description": "Diagramas y gráficos precisos y rotulados, como una figura de revista científica."
+					},
+					"professional": {
+						"label": "Profesional",
+						"description": "Estilo corporativo limpio: azul marino y verde azulado, gráficos y cifras clave."
+					}
+				},
+				"orientation": {
+					"landscape": {
+						"label": "Horizontal"
+					},
+					"portrait": {
+						"label": "Vertical"
+					},
+					"square": {
+						"label": "Cuadrado"
+					}
+				},
+				"detail": {
+					"concise": {
+						"label": "Conciso"
+					},
+					"standard": {
+						"label": "Estándar"
+					},
+					"detailed": {
+						"label": "Detallado"
+					}
+				}
+			}
+		},
+		"templates": {
+			"learning_overview": {
+				"title": "Resumen de aprendizaje",
+				"description": "Resume los conceptos clave para ayudarte a aprender el material."
+			},
+			"briefing_doc": {
+				"title": "Documento informativo",
+				"description": "Visión general de tus fuentes con las ideas y citas clave."
+			},
+			"study_guide": {
+				"title": "Guía de estudio",
+				"description": "Preguntas de respuesta corta, preguntas de desarrollo y un glosario de términos clave."
+			},
+			"blog_post": {
+				"title": "Entrada de blog",
+				"description": "Un artículo atractivo que hace tus fuentes fáciles de leer."
+			}
+		},
+		"scroll_previous": "Estilos anteriores",
+		"scroll_next": "Más estilos",
+		"custom_style_label": "Describe tu estilo",
+		"custom_style_placeholder": "p. ej., Neón retro de los 80 sobre una cuadrícula oscura, títulos en magenta",
+		"custom_topic": "Tema personalizado",
+		"custom_topic_description": "Escribe tu propio enfoque abajo.",
+		"close_viewer": "Cerrar visor",
+		"home": "Inicio",
+		"home_title": "Cuadernos",
+		"home_filter": "Mostrar cuadernos",
+		"tab_all": "Todos",
+		"tab_recent": "Recientes",
+		"search_notebooks": "Buscar cuadernos",
+		"view_mode": "Vista",
+		"view_grid": "Vista de cuadrícula",
+		"view_list": "Vista de lista",
+		"settings": "Configuración",
+		"featured": "Cuadernos destacados",
+		"new_notebook": "Nuevo cuaderno",
+		"no_matches": "Ningún cuaderno coincide con «{query}».",
+		"search_inside_title": "Encontrado dentro de los cuadernos",
+		"search_inside_empty": "Nada dentro de tus cuadernos coincide con «{query}».",
+		"search_inside_failed": "No se pudo buscar dentro de los cuadernos. Inténtalo de nuevo en un momento.",
+		"search_inside_updated": "Actualizado {when}",
+		"search_inside_note": "Nota",
+		"search_inside_source": "Fuente",
+		"search_inside_count": "{count, plural, =0 {Ningún cuaderno con coincidencias} one {# cuaderno con coincidencias} other {# cuadernos con coincidencias}}",
+		"pin_featured": "Fijar en destacados",
+		"unpin_featured": "Quitar de destacados",
+		"copy_notebook": "Copiar cuaderno",
+		"copy_title": "{title} (copia)",
+		"copied": "Cuaderno copiado con sus fuentes y notas.",
+		"copy_failed": "No se pudo copiar el cuaderno.",
+		"feature_failed": "No se pudieron actualizar los destacados.",
+		"notebook_menu": "Opciones del cuaderno",
+		"saving": "Guardando…",
+		"deleting": "Eliminando…",
+		"research_the_web": "Investigar en la web",
+		"configure_chat": {
+			"title": "Configurar chat",
+			"description": "Cómo responden los chats de este cuaderno. Se aplica desde el siguiente mensaje.",
+			"goal": "Objetivo de la conversación",
+			"goals": {
+				"default": {
+					"label": "Predeterminado",
+					"description": "Ideal para investigación general y lluvia de ideas."
+				},
+				"learning_guide": {
+					"label": "Guía de aprendizaje",
+					"description": "Te ayuda a entender paso a paso en lugar de solo dar respuestas."
+				},
+				"custom": {
+					"label": "Personalizado",
+					"description": "Tus propias instrucciones sobre cómo responder."
+				}
+			},
+			"instructions_label": "Instrucciones personalizadas",
+			"instructions_placeholder": "p. ej., Responde como un pediatra adjunto que enseña a residentes; cita las secciones de las guías.",
+			"length": "Longitud de la respuesta",
+			"lengths": {
+				"default": "Predeterminada",
+				"longer": "Más larga",
+				"shorter": "Más corta"
+			},
+			"save_failed": "No se pudo guardar la configuración del chat."
+		},
+		"customize": {
+			"title": "Personalizar cuaderno",
+			"description": "Su nombre y emoji, tal como aparecen en el inicio y en la cabecera.",
+			"emoji": "Emoji"
+		},
+		"delete_history": {
+			"title": "Eliminar historial de chat",
+			"body": "Esto elimina los chats que iniciaste en este cuaderno. El historial de chat es privado para ti, así que los chats de otras personas, las fuentes, las notas y los resultados de Studio se conservan. No se puede deshacer.",
+			"confirm": "Eliminar mis chats",
+			"failed": "No se pudo eliminar el historial.",
+			"done": "Se eliminó tu historial de chat en este cuaderno."
+		},
+		"welcome": {
+			"heading": "Empecemos tu cuaderno",
+			"body_no_sources": "Añade fuentes para fundamentar la conversación, o elige un punto de partida y te guiaré.",
+			"body_with_sources": "Pregunta lo que quieras sobre tus fuentes o empieza con una de estas preguntas.",
+			"heading_with_sources": "Pregunta a tus fuentes",
+			"questions_label": "Preguntas sugeridas",
+			"starts": {
+				"learn": {
+					"label": "Aprender sobre un tema nuevo",
+					"prompt": "Quiero aprender sobre un tema nuevo. Pregúntame qué tema y cuánto sé ya, luego guíame paso a paso y sugiere fuentes que valga la pena añadir a este cuaderno."
+				},
+				"create": {
+					"label": "Crear algo nuevo",
+					"prompt": "Quiero crear algo nuevo. Pregúntame qué quiero hacer (por ejemplo un informe, una presentación, una guía de estudio o un plan) y para quién es, y luego ayúdame a esbozarlo y reunir las fuentes necesarias."
+				},
+				"progress": {
+					"label": "Avanzar en un proyecto",
+					"prompt": "Quiero avanzar en un proyecto. Pregúntame de qué trata, en qué punto está y qué me bloquea, y luego sugiere próximos pasos concretos y qué fuentes ayudarían."
+				}
+			}
+		},
+		"followups_label": "Preguntas de seguimiento sugeridas",
+		"needs_sources": {
+			"body": "{output} se crea a partir de las fuentes del cuaderno, y este aún no tiene ninguna. Añade algunas o búscalas en la web y vuelve para crearlo.",
+			"add_hint": "Archivos, sitios web o documentos que ya tienes",
+			"research_hint": "Busca en la web, YouTube, Reddit y más",
+			"title": "Este cuaderno aún no tiene fuentes"
+		},
+		"focus_example": "p. ej., {example}",
+		"more_ideas": "Más ideas",
+		"more_ideas_failed": "No se pudieron obtener ideas nuevas. Las actuales siguen aquí.",
+		"studio_empty_title": "Los resultados de Studio se guardarán aquí.",
+		"notify": {
+			"offer_title": "Recibe un aviso cuando esté listo",
+			"offer_body": "Los resultados tardan unos minutos. Mostraremos una notificación del navegador cuando termine uno que iniciaste mientras esta pestaña esté en segundo plano.",
+			"turn_on": "Activar notificaciones",
+			"not_now": "Ahora no",
+			"ready_title": "Tu resultado de Studio está listo",
+			"failed_title": "No se pudo crear un resultado de Studio"
+		},
+		"phase_progress": "{phase} · {progress} %",
+		"phases": {
+			"preparing": "Preparando fuentes",
+			"drafting": "Redactando",
+			"authoring": "Escribiendo el guion",
+			"narrating": "Grabando la narración",
+			"reviewing": "Revisando",
+			"repairing": "Corrigiendo problemas",
+			"rendering": "Renderizando",
+			"verifying": "Comprobando el resultado",
+			"saving": "Guardando"
+		},
+		"add_from_connector": "Desde un conector",
+		"connector_sources_title": "Archivos de tus aplicaciones conectadas",
+		"connector_sources_files": "Los conectores de archivos (Google Drive, OneDrive, Dropbox, una carpeta vigilada) copian a tu biblioteca los archivos y carpetas que elijas. Una vez sincronizados, agrégalos aquí desde “De tu espacio de trabajo”.",
+		"connector_sources_tools": "Los conectores de herramientas (servidores MCP como Nextcloud, búsqueda web, un navegador) no se copian: el chat del cuaderno los usa en vivo cuando una pregunta lo requiere.",
+		"manage_connectors": "Administrar conectores",
+		"add_from_library_short": "Espacio",
+		"add_upload_short": "Subir",
+		"add_from_connector_short": "Conector",
+		"nextcloud_picker_title": "Archivos de Nextcloud",
+		"nextcloud_picker_hint": "Marca archivos o carpetas para añadirlos como fuentes. Se copian una vez ahora; nada se sigue sincronizando.",
+		"connector_sources_other": "Los archivos de Google Drive, OneDrive y Dropbox se añaden desde “De tu espacio de trabajo”. La herramienta “Nextcloud (Open Notebook folder)” es aparte: el chat la lee en directo.",
+		"connector_sources_nextcloud": "Nextcloud: conecta “Archivos de Nextcloud” en Conectores para elegir archivos aquí directamente, sin sincronizar.",
+		"made_with": "Hecho con {model}",
+		"made_with_fallback": "Hecho con {model} (respaldo)",
+		"output_view": {
+			"studio": "Studio",
+			"view_prompt": "Ver instrucciones y {count, plural, one {# fuente} other {# fuentes}}",
+			"prompt_title": "Instrucciones",
+			"no_prompt": "Creado sin un enfoque personalizado.",
+			"sources_title": "Fuentes",
+			"no_sources": "Las fuentes que usó ya no están en este cuaderno.",
+			"loading_sources": "Cargando fuentes…",
+			"expand": "Ampliar a toda la ventana",
+			"collapse": "Salir de la ventana completa",
+			"close": "Cerrar",
+			"back": "Volver a Studio",
+			"good": "Buen contenido",
+			"bad": "Mal contenido",
+			"thanks": "Gracias por tu opinión",
+			"loading": "Cargando…",
+			"open_failed": "No se pudo abrir este resultado.",
+			"try_again": "Reintentar"
+		},
+		"back_to_output": "Volver a {title}"
+	},
+	"upload_documents": {
+		"title": "Subir documentos",
+		"subtitle": "Sube tus archivos para hacerlos buscables y accesibles a través de conversaciones con IA.",
+		"file_size_limit": "Tamaño máximo de archivo: 500 MB por archivo",
+		"drop_files": "Suelta archivos o carpetas aquí",
+		"drag_drop": "Arrastra y suelta archivos o carpetas aquí",
+		"drag_drop_more": "Suelta o explora para agregar más archivos",
+		"or_browse": "o haz clic para explorar",
+		"browse_files": "Explorar archivos",
+		"browse_folder": "Explorar carpeta",
+		"selected_files": "{count} {count, plural, one {archivo seleccionado} other {archivos seleccionados}}",
+		"total_size": "Tamaño total",
+		"clear_all": "Limpiar todo",
+		"uploading_files": "Subiendo archivos",
+		"uploading": "Subiendo",
+		"upload_button": "Subir {count} {count, plural, one {archivo} other {archivos}}",
+		"upload_initiated": "Tarea de subida iniciada",
+		"upload_initiated_desc": "La subida de archivos ha comenzado",
+		"upload_error": "Error de subida",
+		"upload_error_desc": "Error al subir archivos",
+		"supported_file_types": "Tipos de archivo soportados",
+		"file_too_large": "Archivo demasiado grande",
+		"file_too_large_desc": "\"{name}\" excede el límite de {maxMB} MB por archivo.",
+		"no_supported_files_in_folder": "No se encontraron tipos de archivo compatibles en la carpeta seleccionada.",
+		"uploading_folder": "Subiendo carpeta…",
+		"upload_folder_button": "Subir carpeta ({count} {count, plural, one {archivo} other {archivos}})",
+		"select_files_or_folder": "Seleccionar archivos o carpeta",
+		"tap_select_files_or_folder": "Toca para seleccionar archivos o carpeta",
+		"parser_label": "Analizador",
+		"parser_local": "Local",
+		"parser_local_desc": "Lee el texto en este servidor, con OCR solo donde una página lo necesita. Gratis, y el archivo no sale de aquí.",
+		"parser_cloud": "Nube",
+		"parser_cloud_desc": "Envía el archivo a un analizador en la nube para leer con más detalle tablas, figuras y escaneos. Más lento.",
+		"parser_cost_note": "Unas {multiplier} veces el coste de análisis.",
+		"parser_unavailable_missing_api_key": "No disponible: no hay clave de API configurada en este servidor.",
+		"parser_unavailable_not_installed": "No disponible: no está instalado en este servidor.",
+		"parser_unavailable_unknown_service": "No disponible: no está configurado en este servidor.",
+		"unsupported_files_title": "{count, plural, one {# archivo no se añadió} other {# archivos no se añadieron}}",
+		"unsupported_files_desc": "El analizador {parser} no puede leer: {files}",
+		"unsupported_files_dismiss": "Descartar",
+		"vision_llm_label": "Activar LLM de visión",
+		"vision_llm_desc": "Describe imágenes con visión artificial (más caro y lento)"
+	}
+}

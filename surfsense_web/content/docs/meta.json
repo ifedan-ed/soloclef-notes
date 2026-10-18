@@ -1,0 +1,26 @@
+{
+	"title": "Docs",
+	"pages": [
+		"index",
+		"getting-started",
+		"---Using notebooks---",
+		"notebooks-and-sources",
+		"chat-and-citations",
+		"studio",
+		"notes",
+		"search",
+		"mobile-app",
+		"connect-your-agent",
+		"---Workspace---",
+		"workspaces-and-sharing",
+		"automations",
+		"email",
+		"---Account---",
+		"notifications",
+		"plans-and-credits",
+		"privacy-and-data",
+		"faq",
+		"---Running a server---",
+		"self-hosting"
+	]
+}

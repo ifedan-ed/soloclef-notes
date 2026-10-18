@@ -1,0 +1,26 @@
+# Caddy config for the isolated web e2e stack (docker-compose.e2e-web.yml).
+# Same routing as ./Caddyfile, plus the test-only /__e2e__/* routes that
+# only the E2E backend entrypoint mounts (token mint). Never used live.
+{
+	auto_https off
+}
+
+:80 {
+	request_body {
+		max_size 200MB
+	}
+
+	reverse_proxy /__e2e__/* backend:8000
+	reverse_proxy /__nextcloud__/* nextcloud-stub:8080
+	reverse_proxy /__google__/* google-stub:8080
+
+	reverse_proxy /auth/callback* frontend:3000
+	reverse_proxy /auth/* backend:8000
+	reverse_proxy /users/* backend:8000
+	reverse_proxy /api/v1/* backend:8000 {
+		flush_interval -1
+	}
+	reverse_proxy /zero/context backend:8000
+	reverse_proxy /zero/* zero-cache:4848
+	reverse_proxy /* frontend:3000
+}

@@ -1,0 +1,2 @@
+Email specialist: searches and reads the user's own connected mailboxes (IMAP) read-only — list accounts/folders, search by text/from/to/subject/date, read one message's headers, body, and attachment list.
+Use whenever the task needs something from the user's actual email (find an email, check a receipt/confirmation, read a message, list recent mail from someone). Never sends, deletes, moves, or flags mail — read-only, always. Not for composing or sending email (no such capability exists).

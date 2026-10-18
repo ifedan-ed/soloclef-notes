@@ -1,0 +1,24 @@
+{
+	"name": "Soloclef Notes",
+	"shortName": "Notes",
+	"tagline": "Notebooks that answer from your sources.",
+	"description": "Upload your documents and research, ask questions and get answers with citations, and turn your sources into reports, mind maps, quizzes, slides, audio and video overviews.",
+	"siteUrl": "",
+	"contactEmail": "",
+	"colors": {
+		"ink": "#1f2937",
+		"accent": "#2f6fed",
+		"accentOnDark": "#6b9bff",
+		"background": "#ffffff",
+		"backgroundDark": "#0f141c"
+	},
+	"logo": {
+		"mark": "/brand/mark.svg",
+		"markMono": "/brand/mark-mono.svg",
+		"wordmark": "/brand/wordmark.svg",
+		"icon192": "/brand/icon-192.png",
+		"icon512": "/brand/icon-512.png",
+		"maskable512": "/brand/maskable-512.png",
+		"og": "/og-image.png"
+	}
+}

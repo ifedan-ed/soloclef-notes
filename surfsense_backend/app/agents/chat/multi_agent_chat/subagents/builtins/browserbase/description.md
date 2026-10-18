@@ -1,0 +1,2 @@
+Browserbase specialist: opens public web pages in a real cloud browser (Browserbase, on this workspace's own key) and returns their text as markdown, including pages built with JavaScript that a plain fetch reads empty. One page per call.
+Use it when the task names page URLs to read and the user picked Browserbase, or when a page needs a real browser. Give it the URLs. It does not search the web: find the pages with a search specialist first. Not for YouTube links (YouTube specialist) or whole-site crawls (web crawling specialist).

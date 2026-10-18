@@ -1,0 +1,45 @@
+/**
+ * Tool UI Components
+ *
+ * This module exports custom UI components for assistant tools.
+ * These components are registered with assistant-ui to render
+ * rich UI when specific tools are called by the agent.
+ */
+
+export { Audio } from "./audio";
+export { CreateAutomationToolUI } from "./automation";
+export {
+	type GenerateImageArgs,
+	GenerateImageArgsSchema,
+	type GenerateImageResult,
+	GenerateImageResultSchema,
+	GenerateImageToolUI,
+} from "./generate-image";
+export { CreateGoogleDriveFileToolUI, DeleteGoogleDriveFileToolUI } from "./google-drive";
+export {
+	Image,
+	ImageErrorBoundary,
+	ImageLoading,
+	type ImageProps,
+	ImageSkeleton,
+	parseSerializableImage,
+	type SerializableImage,
+} from "./image";
+export { LegacyDeliverableToolUI } from "./legacy-deliverable";
+export { GeneratePodcastToolUI } from "./podcast";
+export {
+	type ExecuteArgs,
+	ExecuteArgsSchema,
+	type ExecuteResult,
+	ExecuteResultSchema,
+	SandboxExecuteToolUI,
+} from "./sandbox-execute";
+export { SaveArtifactToolUI } from "./save-artifact";
+export {
+	type UpdateMemoryArgs,
+	UpdateMemoryArgsSchema,
+	type UpdateMemoryResult,
+	UpdateMemoryResultSchema,
+	UpdateMemoryToolUI,
+} from "./user-memory";
+export { GenerateVideoPresentationToolUI } from "./video-presentation";

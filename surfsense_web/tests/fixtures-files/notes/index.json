@@ -1,0 +1,12 @@
+[
+  { "file": "plate-ward-round.md", "kind": "notebook_note", "origin": "hand", "title": "Ward round, bay 3", "notebook": 11 },
+  { "file": "chat-bronchiolitis-answer.md", "kind": "notebook_note", "origin": "chat", "title": "Oxygen in bronchiolitis", "notebook": 11 },
+  { "file": "chat-fluids-maths.md", "kind": "notebook_note", "origin": "chat", "title": "Maintenance fluids", "notebook": 15 },
+  { "file": "plate-checklist.md", "kind": "notebook_note", "origin": "hand", "title": "Discharge checklist", "notebook": 11 },
+  { "file": "chat-sequence-diagram.md", "kind": "notebook_note", "origin": "chat", "title": "How a result reaches the ward", "notebook": 12 },
+  { "file": "unicode-rtl.md", "kind": "notebook_note", "origin": "hand", "title": "Families' languages", "notebook": 12 },
+  { "file": "automation-weekly-digest.md", "kind": "document", "origin": "automation", "title": "Weekly literature digest — week 41", "automation": "Weekly digest" },
+  { "file": "loose-research-notes.md", "kind": "document", "origin": "chat", "title": "Research notes: croup", "folder": ["Research"] },
+  { "file": "edge-cases.md", "kind": "document", "origin": "hand", "title": "Odds and ends" },
+  { "file": "chat-pearson-answer.md", "kind": "notebook_note", "origin": "chat", "title": "The correlation was moderate and positive: Pearson's \\(r = 0.463\\), statistical…", "notebook": 11 }
+]

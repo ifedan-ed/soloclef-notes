@@ -1,0 +1,23 @@
+{
+	"connectorStatuses": {
+		"WEBCRAWLER_CONNECTOR": {
+			"enabled": true,
+			"status": "warning",
+			"statusMessage": "Rate limits may apply"
+		},
+		"GOOGLE_DRIVE_CONNECTOR": {
+			"enabled": false,
+			"status": "maintenance",
+			"statusMessage": "Temporarily unavailable for maintenance"
+		},
+		"MCP_CONNECTOR": {
+			"enabled": false,
+			"status": "deprecated",
+			"statusMessage": "Deprecated"
+		}
+	},
+	"globalSettings": {
+		"showWarnings": true,
+		"allowManualOverride": false
+	}
+}

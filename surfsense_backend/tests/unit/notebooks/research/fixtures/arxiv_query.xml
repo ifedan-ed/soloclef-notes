@@ -1,0 +1,64 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom">
+  <id>https://arxiv.org/api/1ZvmtzZttUvDKGGgLn/hDdKTH7I</id>
+  <title>arXiv Query: search_query=all:high AND all:flow AND all:nasal AND all:cannula&amp;id_list=&amp;start=0&amp;max_results=5</title>
+  <updated>2026-09-23T17:37:17Z</updated>
+  <link href="https://arxiv.org/api/query?search_query=all:high+AND+(all:flow+AND+(all:nasal+AND+all:cannula))&amp;start=0&amp;max_results=5&amp;id_list=" type="application/atom+xml"/>
+  <opensearch:itemsPerPage>5</opensearch:itemsPerPage>
+  <opensearch:totalResults>2</opensearch:totalResults>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <entry>
+    <id>http://arxiv.org/abs/2111.11846v1</id>
+    <title>Predicting High-Flow Nasal Cannula Failure in an ICU Using a Recurrent Neural Network with Transfer Learning and Input Data Perseveration: A Retrospective Analysis</title>
+    <updated>2021-11-20T01:23:18Z</updated>
+    <link href="https://arxiv.org/abs/2111.11846v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2111.11846v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>High Flow Nasal Cannula (HFNC) provides non-invasive respiratory support for critically ill children who may tolerate it more readily than other Non-Invasive (NIV) techniques. Timely prediction of HFNC failure can provide an indication for increasing respiratory support. This work developed and compared machine learning models to predict HFNC failure. A retrospective study was conducted using EMR of patients admitted to a tertiary pediatric ICU from January 2010 to February 2020. A Long Short-Term Memory (LSTM) model was trained to generate a continuous prediction of HFNC failure. Performance was assessed using the area under the receiver operating curve (AUROC) at various times following HFNC initiation. The sensitivity, specificity, positive and negative predictive values (PPV, NPV) of predictions at two hours after HFNC initiation were also evaluated. These metrics were also computed in a cohort with primarily respiratory diagnoses. 834 HFNC trials [455 training, 173 validation, 206 test] met the inclusion criteria, of which 175 [103, 30, 42] (21.0%) escalated to NIV or intubation. The LSTM models trained with transfer learning generally performed better than the LR models, with the best LSTM model achieving an AUROC of 0.78, vs 0.66 for the LR, two hours after initiation. Machine learning models trained using EMR data were able to identify children at risk for failing HFNC within 24 hours of initiation. LSTM models that incorporated transfer learning, input data perseveration and ensembling showed improved performance than the LR and standard LSTM models.</summary>
+    <category term="cs.LG" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.AI" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2021-11-20T01:23:18Z</published>
+    <arxiv:comment>13 pages, 7 figures, 6 tables</arxiv:comment>
+    <arxiv:primary_category term="cs.LG"/>
+    <author>
+      <name>George A. Pappy</name>
+    </author>
+    <author>
+      <name>Melissa D. Aczon</name>
+    </author>
+    <author>
+      <name>Randall C. Wetzel</name>
+    </author>
+    <author>
+      <name>David R. Ledbetter</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2106.00981v1</id>
+    <title>OxyJet: Design and Evaluation of A Low-Cost Precision Venturi Based Continuous Positive Airway Pressure (CPAP) System</title>
+    <updated>2021-06-02T06:55:28Z</updated>
+    <link href="https://arxiv.org/abs/2106.00981v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2106.00981v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>The Covid-19 pandemic has strained the hospital systems in many countries in the world, especially in developing countries. In many low-resource hospitals, severely ill hypoxemic Covid-19 patients are treated with various forms of low-flow oxygen therapy (0-15 L/min), including interfaces such as a nasal cannula, Hudson mask, venturi-mask, and non-rebreather masks. When 15L/min of pure oxygen flow is not sufficient for the patient, treatment guidelines suggest non-invasive positive pressure ventilation (NIPPV) or high-flow nasal oxygenation (HFNO) as the next stage of treatment. However, administering HFNO in the general wards of a low-resource hospital is difficult due to several factors, including difficulty in operation, unavailability of electric power outlets, and frequent maintenance. Therefore, in many cases, the highest level of care a patient receives in the general ward is 15L/min of oxygen on a Non-Rebreather Mask. With a shortage of Intensive Care Unit (ICU) beds, this is a major problem since intermediate forms of treatments are simply not available at an affordable cost. To address this gap, we have developed a low-cost CPAP system specifically designed for low-resource hospitals. The device is a precision venturi-based flow-generator capable of providing up to 60L/min of flow. The device utilizes the mechanics of a jet pump driven by high-pressure oxygen to increase the volumetric flow rate by entraining atmospheric air. The fraction of inspired oxygen (FiO2) can be attained between 40 - 100% using a dual-flowmeter. Consisting of a traditional 22mm breathing circuit, a non-vented CPAP mask, and a Positive End-Expiratory Pressure (PEEP) valve, the CPAP can provide positive pressures between 5-20 cm H2O. The device is manufactured using local 3D printing and workshop facilities.</summary>
+    <category term="physics.med-ph" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2021-06-02T06:55:28Z</published>
+    <arxiv:primary_category term="physics.med-ph"/>
+    <author>
+      <name>Md. Kawsar Ahmed</name>
+    </author>
+    <author>
+      <name>Meemnur Rashid</name>
+    </author>
+    <author>
+      <name>Kaisar Ahmed Alman</name>
+    </author>
+    <author>
+      <name>Farhan Muhib</name>
+    </author>
+    <author>
+      <name>Saeedur Rahman</name>
+    </author>
+    <author>
+      <name>Taufiq Hasan</name>
+    </author>
+  </entry>
+</feed>

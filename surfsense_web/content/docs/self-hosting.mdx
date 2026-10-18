@@ -1,0 +1,471 @@
+---
+title: Running your own server
+description: The settings that make a server yours, what each does and what it is when unset
+icon: Server
+---
+
+<BrandName /> is self-hosted: every server is built from the same code and
+knows nothing about any other. Its address, its contact, its sign-in and its
+payment server are its own settings, all in `docker/.env`. Unset, each one is
+off or empty, never another server's value: a new server links only to
+itself, publishes no contact address, offers no single sign-on and takes no
+payments until you set them.
+
+## Starting a server
+
+The compose files are in `docker/`. Copy `docker/.env.example` to
+`docker/.env` and set at least `SECRET_KEY`, the database password, the
+address below and `BILLING_ADMIN_EMAILS` (the account that may add model
+providers and change billing settings). Build the backend in its two stages
+first, then every image Compose knows how to build, and start the stack with
+the main compose file only:
+
+```bash
+docker build -t soloclef-backend-src:latest --target production surfsense_backend
+docker build -t soloclef-backend-fast:latest custom
+
+cd docker
+docker compose -f docker-compose.yml build
+docker compose -f docker-compose.yml up -d
+```
+
+The stack uses the Compose service names (`db`, `redis`, `backend`, ...), so
+it works under any project name. If your host needs extra networks, ports or
+volumes, put them in your own override file and name both files with `-f`.
+
+**The first account.** Sign-ups are closed by default. Create a verified
+account from the backend container, with `--set-password` so no mail is needed
+yet:
+
+```bash
+docker compose -f docker-compose.yml exec -it backend \
+  python scripts/create_account.py you@example.com --set-password
+```
+
+Without `--set-password` the password is random and the person sets theirs
+with **Forgot password?** (which needs `SMTP_`). Put the address in
+`BILLING_ADMIN_EMAILS` and restart the backend, worker and beat. Then sign in
+and add a model provider under **Settings → Models**, or mount a server-wide
+`global_llm_config.yaml` into the backend and Celery services (copy
+`surfsense_backend/app/config/global_llm_config.example.yaml`). Without a chat
+model, the app opens but chat and Studio cannot answer.
+
+**Rebuild the website after changing** the address, `SUPPORT_EMAIL`, any
+`OIDC_` setting or `NEXT_PUBLIC_SIGNUPS_OPEN`: the public pages (the sitemap,
+share cards, these docs, the sign-in page's sign-up link) are drawn once,
+when the image is built, and `docker compose build` hands those settings to
+the build. The rest is read when a service starts, so a restart is enough.
+
+## Address and contact
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `SURFSENSE_PUBLIC_URL` | `http://localhost:3929` | The one address people open, without a trailing slash. Links in emails (password reset, invitations, automation results), sign-in and connector callbacks, the sitemap, `robots.txt`, canonical and share-card links, the agent address in these docs and the docs link the assistant gives. A phone app built for this server is set to this address (set
+`EXPO_PUBLIC_DEFAULT_SERVER_URL` when you build it; people can still change
+it on the sign-in screen), and it is the address its push notifications
+name: for push, make it the https address people type in the app (see
+[The phone app](#the-phone-app)). On the website build it is empty when unset: no sitemap entries and no absolute links. |
+| `NEXT_FRONTEND_URL`, `BACKEND_URL` | `SURFSENSE_PUBLIC_URL` | Only when the website or the API has an address of its own. |
+| `BRAND_SITE_URL` | `NEXT_FRONTEND_URL` | Only when the public site lives somewhere other than the app; the backend's links to the docs and the contact page use it. The website's build takes `NEXT_PUBLIC_SITE_URL` for the same. Push notifications never name it. |
+| `SUPPORT_EMAIL` | none | Where **Report Issue** and the [contact page](/contact) send people, and the site's published contact point. An administrator can change it under **User settings → Billing → Admin → Settings**; a saved value wins. With none, the contact page says no address is published and **Report Issue** opens a message with no recipient. |
+| `SMTP_ENABLED`, `SMTP_HOST`, `SMTP_FROM` and the other `SMTP_` settings | off | Email. Off, the server sends none, so there are no password-reset links. `SMTP_FROM` is the sender, such as `notes@example.com`. |
+
+## Sign-in
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `OIDC_ENABLED` | `FALSE` | Single sign-on through an OpenID Connect provider (Authentik, Keycloak and others), beside the password form. |
+| `OIDC_DISCOVERY_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | none | The provider's discovery document and this server's client. The callback to register with the provider is `{BACKEND_URL}/auth/oidc/callback`. |
+| `OIDC_BUTTON_LABEL` | Continue with single sign-on | The button's name, here and on the sign-in page. |
+| `OIDC_AUTOCREATE_DOMAINS` | none | Addresses at these exact domains (commas or spaces between them) get an account on their first sign-in. |
+| `OIDC_ALLOW_SIGNUP` | `FALSE` | `TRUE` makes an account for any verified address, whatever its domain. |
+| `MCP_OAUTH_ISSUER`, `MCP_OAUTH_CLIENT_ID`, `MCP_OAUTH_CLIENT_SECRET` | none | Lets Claude and ChatGPT sign in to the agent server at `/mcp` (see [Connect your agent](/docs/connect-your-agent)). Unset, agents use API keys only. |
+| `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | none | Cloudflare Turnstile's bot check on sign-in, registration and password reset. Unset, there is none. |
+| `NEXT_PUBLIC_SIGNUPS_OPEN` | none | Exactly `true` offers sign-up: **Sign Up** on the sign-in page, **Create an account** in the phone app. Anything else, unset included, offers **Request access**, which opens the [contact page](/contact). The website reads it when it is built, so **rebuild the website after changing** it (setting it on the running website does nothing); the backend reads it when it starts and tells the phone app. It changes what is offered, not what the server accepts: see [Closing sign-ups](#closing-sign-ups). |
+| `REGISTRATION_ENABLED` | `TRUE` | Not a sign-up switch: a master switch for every way in. `FALSE` refuses sign-up and every sign-in too (the password form, single sign-on, the website's Google sign-in and the phone app), so nobody can sign in; people already signed in stay signed in. Keep it `TRUE`; it is for shutting the door in an emergency. |
+
+### Closing sign-ups
+
+No setting closes sign-ups while keeping sign-in. To take accounts only from
+people you add:
+
+1. Keep `REGISTRATION_ENABLED=TRUE` and leave `NEXT_PUBLIC_SIGNUPS_OPEN`
+   unset, so the website and the phone app offer **Request access** instead
+   of a sign-up form.
+2. Refuse the sign-up request itself in the proxy in front of the server,
+   because the server still takes one from anyone who sends it. With Caddy,
+   in the site's block (for the bundled proxy, the last block of
+   `docker/proxy/Caddyfile`; then restart the proxy):
+
+   ```text
+   @signup {
+   	method POST
+   	path /auth/register /api/v1/auth/register
+   }
+   respond @signup "Registration is closed." 403
+   ```
+
+3. Single sign-on makes accounts only as `OIDC_AUTOCREATE_DOMAINS` and
+   `OIDC_ALLOW_SIGNUP` say; leave both unset and it makes none.
+4. Turn Google sign-in off: `AUTH_TYPE=LOCAL`, and `GOOGLE_DESKTOP_CLIENT_ID`
+   unset. Google makes accounts for anyone (below). `GOOGLE_OAUTH_CLIENT_ID`
+   may stay for the Google Drive connection, which signs no one in.
+5. Make each account with
+   `docker compose -f docker-compose.yml exec backend python scripts/create_account.py someone@example.com`.
+   Its password is random and never shown; the person sets one with
+   **Forgot password?** (which needs email, `SMTP_`), or signs in through
+   single sign-on with the same address.
+
+Keep step 1 and step 2 together: with `NEXT_PUBLIC_SIGNUPS_OPEN=true` and the
+proxy refusing sign-ups, the website and the app would offer a form that
+always fails.
+
+**Google sign-in makes an account for any Google account, and nothing here
+can stop it.** With `AUTH_TYPE=GOOGLE` (which also takes the password form
+away), the first time any Google account signs in, the callback
+(`/auth/google/callback`) makes an account for it. The desktop app's Google
+sign-in (`/auth/desktop/session`) does the same whenever
+`GOOGLE_DESKTOP_CLIENT_ID` is set, whatever `AUTH_TYPE` says, and
+`REGISTRATION_ENABLED=FALSE` does not stop that one. No setting limits
+either to some addresses or domains, and the proxy cannot do it: the
+callback looks the same for a new account and an existing one, and the
+server learns who is signing in only while it answers. To take accounts
+only from people you add, turn Google off (step 4) and offer single sign-on
+instead, whose account rules are the two settings in step 3. To keep
+Google, limit who Google lets in: an OAuth consent screen of user type
+**Internal** (Google Workspace) admits only your organisation's accounts.
+
+## Connections and payments
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `NEXTCLOUD_BASE_URL` | none | The one Nextcloud server people connect to. Unset, Nextcloud is not offered. |
+| `BILLING_MODE` | `shadow` | `off` meters nothing, `shadow` records what everything would cost and charges nothing, `live` enforces plans and credits. An administrator's choice on the billing admin page wins. |
+| `BTCPAY_URL` | none | Your own BTCPay Server, for crypto payments. Crypto is offered only once it is switched on and its URL, store ID, API key and webhook secret are all set (the billing admin page, or `BTCPAY_STORE_ID`, `BTCPAY_API_KEY` and `BTCPAY_WEBHOOK_SECRET`). |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | none | Card payments through Stripe, offered only when switched on and both are set. |
+
+## The phone app
+
+The Soloclef app for iPhone and Android can sign in to your server: on its
+sign-in screen, **Change server**, then this server's address. One app build
+works with every server; a separate build, bundle id, or store account is
+not needed to use the app with your server (those are only for publishing a
+store listing of your own). It takes https addresses only, with a
+certificate phones trust. Before it changes
+anything it reads this server's public `/api/v1/sign-in-options`, which says
+that it is a Soloclef server and which ways in the app may offer: the single
+sign-on under `OIDC_BUTTON_LABEL` (while `OIDC_APP_REDIRECTS` keeps the
+app's return address `soloclef://auth`, as it does by default), the password
+form, and **Request access** or, with `NEXT_PUBLIC_SIGNUPS_OPEN=true`,
+**Create an account**. A server too old to answer it is refused as not a
+Soloclef server. Your server's invitation and public links open in the
+browser, on this website.
+
+**Push notifications** (`PUSH_ENABLED=TRUE`) need `SURFSENSE_PUBLIC_URL` to
+be the https address people type under **Change server**, with the `https`
+scheme in front; the shipped `http://localhost:3929` is not one.
+Every push names the server it comes from by that address, and the app
+ignores a push that names another server than the one it is set to, so a
+phone moved to another server stops showing this one's. So:
+
+- If people type another address for this server (another name for the same
+  machine, a different port), their phones drop every push. Set
+  `SURFSENSE_PUBLIC_URL` to the address they type.
+- A plain-http address, none, or one the app does not take (it takes https
+  names of letters, digits and hyphens, or an IPv4 address: no underscore,
+  no IPv6 address) names no server. Pushes still arrive, but a phone moved
+  to another server keeps showing this server's until it is signed out
+  here. The backend and the Celery worker say so in their log when they
+  start (`[startup] push: ...`).
+- An international name is named in its `xn--` form, which is also the form
+  the app takes: for `bücher.example`, people type
+  `xn--bcher-kva.example`.
+
+After changing it, rebuild the website (see
+[Starting a server](#starting-a-server)) and restart the backend and the
+Celery worker.
+
+## What stays the same everywhere
+
+The product's name, logo and colours are the product's, on every server. The
+share image shows the name and tagline but no address, because the link it
+is shared with already shows the address.
+
+## Reading documents
+
+Each upload is read by **Local** or **Cloud**, chosen in the upload dialog
+(see [Notebooks and sources](/docs/notebooks-and-sources)). Local is
+PyMuPDF4LLM on this server: free, and the file never leaves it. Cloud is one
+service, named by `ETL_CLOUD_SERVICE`. Both lines are read when the backend
+starts; any value other than the ones below stops it there, with a message
+naming the allowed ones.
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `ETL_DEFAULT_PARSER` | `LOCAL` | The parser an upload or a connector sync gets when it names none: `LOCAL` or `CLOUD`. People can still pick either in the upload dialog. |
+| `ETL_CLOUD_SERVICE` | `LLAMACLOUD` | The service behind **Cloud**: `LLAMACLOUD` (LlamaParse's agentic tier, through LlamaCloud's v2 Parse API), `DATALAB` (Datalab's Marker API, balanced mode) or `UNSTRUCTURED` (the open-source unstructured library, which runs on this server and needs no key). |
+| `LLAMA_CLOUD_API_KEY` | none | LlamaCloud's key. Without it, Cloud on `LLAMACLOUD` shows as unavailable. Beside `DATALAB` it lets LlamaCloud read the file types Datalab can't open and any file Datalab fails on. `LLAMA_CLOUD_BASE_URL` picks LlamaCloud's region: the https address of `api.cloud.eu.llamaindex.ai` for the EU; unset, the US. |
+| `DATALAB_API_KEY`, `DATALAB_BASE_URL` | none, Datalab's own | Datalab's key, and the address its documents are sent to (unset, Datalab's `www.datalab.to/api/v1/convert`). Without the key, Cloud on `DATALAB` shows as unavailable. |
+| `AZURE_DI_ENDPOINT`, `AZURE_DI_KEY` | none | Azure Document Intelligence's layout model in front of LlamaCloud, for PDF, Word, Excel, PowerPoint and common images; LlamaCloud reads the file if it fails. It adds HEIF to what Cloud opens. |
+| `UNSTRUCTURED_API_KEY` | none | Read but unused: the bundled library needs no key. |
+| `ETL_CACHE_ENABLED` and the other `ETL_CACHE_` settings | `FALSE` | Reuse a document's parse for the same file bytes in any workspace, so one file is not parsed, or billed by a cloud service, twice. Entries are kept per service, a file read with **Vision** on is never cached, unused entries go after `ETL_CACHE_TTL_DAYS` (90), the oldest go once the cache passes `ETL_CACHE_MAX_TOTAL_MB` (5120), `ETL_CACHE_EVICTION_BATCH` (500) at a time, and raising `ETL_CACHE_PARSER_VERSION` (1) drops them all. `ETL_CACHE_STORAGE_BACKEND` and `ETL_CACHE_STORAGE_LOCAL_PATH` give it its own storage; unset, it shares the uploads' storage. |
+| `ETL_CREDIT_BILLING_ENABLED` | `FALSE` | Only whether the upload dialog and the phone app show Cloud's cost note. What a page costs people is the Local or Cloud page price on the billing admin page, under `BILLING_MODE`, whichever service backs Cloud. |
+| `ETL_SERVICE` | none | Deprecated: the one parser setting from before the Local/Cloud choice. It is read only while `ETL_CLOUD_SERVICE` is unset (`LLAMACLOUD`, `DATALAB` or `UNSTRUCTURED` there names Cloud; `PYMUPDF4LLM`, `DOCLING` or `AZURE_DI` names none, and Cloud stays `LLAMACLOUD`), and whenever it is set the backend logs `[startup] parser: ...` at start. Remove the line. |
+
+**LlamaCloud's API.** The backend reads documents through LlamaCloud's v2
+Parse API, with LlamaCloud's `llama-cloud` package: the file goes up with the
+agentic tier at its latest version and English OCR, and the job is checked
+until it is done. Older versions of <BrandName /> used the v1 API, which
+LlamaCloud refuses to some accounts: with such a key every LlamaCloud parse
+failed with "The v1 Parse API is not available for this account". LlamaCloud
+keeps a parse for 48 hours: the same file sent again in that time gets the
+earlier result back, not billed again (the backend logs `cache_hit=True
+credits=0`; otherwise `credits=` the job's credits, 10 a page on the agentic
+tier).
+
+**Limits.** Datalab gets a file again after a network failure, a busy
+answer (429 or 5xx) or an empty result, up to 3 times in all. LlamaCloud's
+client tries each request again by itself after a network failure, a
+timeout or a busy answer (408, 409, 429 or 5xx): 5 more tries over about 15
+seconds (waits of about 0.5, 1, 2, 4 and 8 seconds, or what LlamaCloud's
+`Retry-After` asks, up to a minute). When those fail on the upload, the
+file fails at once, without being sent again; when they fail on a check of
+a running job, the job is checked again until its wait runs out.
+LlamaCloud gets a file again after an empty result or a job it ends as
+failed or cancelled, up to 5 times in all, each time asking for a fresh
+parse rather than the cached one. Between the times a file is sent again:
+10 seconds, then twice as long each time, at most 2 minutes. A refusal (a
+wrong key, a plan out of credits) or a job that runs past its wait is not
+sent again, since each resubmission is billed. A job may run 10 minutes plus
+a minute a page, more for a large file; LlamaCloud is allowed that (at most
+2 hours, the v2 API's limit) plus another minute a page, and this server
+waits at least 2,000 seconds for a LlamaCloud job. Each request to
+LlamaCloud may take 2 to 30 minutes to send or read, by file size. Datalab
+is asked every 2 seconds whether a job is done, LlamaCloud every 1 to 5.
+
+**Checking a service.** To see whether a cloud service reads a document
+with this server's key, and how long it takes, before switching to it or
+after changing its key, run in the `docker` folder (each run is billed one
+page at each service it asks; the check prints no key and reads no one's
+documents):
+`docker compose -f docker-compose.yml exec backend python scripts/check_cloud_parsers.py llamacloud`
+(`datalab` for Datalab; with neither, both). It prints the time, the
+length, the pages and the first lines of one public-domain page, and exits
+non-zero if the service could not read it.
+
+### Switching Cloud to another service
+
+1. In `docker/.env`, set `ETL_CLOUD_SERVICE` (for example
+   `ETL_CLOUD_SERVICE=LLAMACLOUD`) and that service's key.
+2. Restart the backend and Celery, then the website, which takes its
+   first file list from the same lines. A restart stops whatever is being
+   generated, so wait until nothing is (in the backend's folder,
+   `python3 scripts/deploy_gate.py --wait` checks):
+   `docker compose -f docker-compose.yml up -d backend celery_worker celery_beat frontend`.
+
+Documents already read keep their text; only new uploads and re-reads use
+the new service, and the parse cache starts afresh for it. For the people
+using the server:
+
+- **File types.** The upload dialog and the phone app take the new list
+  from the server. From `DATALAB` to `LLAMACLOUD`, Cloud gains RTF, BMP, SVG,
+  `.tif`, HWP and HWPX, macro-enabled and template Office files (`.docm`,
+  `.dot`, `.dotm`, `.pptm`, `.pot`, `.potx`, `.xlsb`, `.xlw`), which `DATALAB`
+  already sends to LlamaCloud when a LlamaCloud key is set, and loses Excel
+  templates (`.xltx`).
+- **Reading.** Both read tables, figures and scanned pages. LlamaCloud's
+  agentic parse is slower; Datalab's balanced mode answers a short file in
+  seconds.
+- **Cost.** People pay the same page price whichever service backs Cloud;
+  the server pays the service. At list prices (checked 11 October 2026),
+  Datalab's balanced mode is $4 per 1,000 pages, and LlamaCloud's agentic
+  parse at least 10 LlamaCloud credits a page at $1.25 per 1,000 credits,
+  so from $12.50 per 1,000 pages. LlamaCloud's Free plan has 10,000 credits a
+  month; once they are used, LlamaCloud refuses every parse until they reset,
+  and so does Datalab's fallback to it.
+
+## Embeddings: questions and documents
+
+Search finds a document by comparing the question's embedding, a list of
+numbers made by an embedding model, with the stored embeddings of every
+document. `EMBEDDING_MODEL` names that model (a `litellm://` model is asked
+at `EMBEDDING_BASE_URL`). Two more lines let questions and documents go to
+two hosts of that model: one close and quick for questions, where someone is
+waiting, and one with room for an import's thousands of chunks. Unset, both
+are `EMBEDDING_MODEL`, one model for everything. All of these are read when
+the backend, the Celery worker, Celery beat and the migrations start; an
+unreadable value stops them there, with a message naming the setting.
+
+Each document batch goes to one of two servers, and each has its own limits:
+the document model's own host, when the two lines name different models,
+and the question model's server, when they name one model and for every
+fallback batch. The small limits on the question model's server keep a
+question there from waiting behind an import; the larger ones on a document
+host of its own make imports fast.
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `EMBEDDING_QUERY_MODEL` | `EMBEDDING_MODEL` | The model a question or search text is embedded with: the chat's knowledge-base search, the connector searches and notebook search. A question never waits for a document slot, and its client keeps its own timeout and retries. |
+| `EMBEDDING_DOCUMENT_MODEL` | `EMBEDDING_MODEL` | The model every stored text is embedded with: uploads, connector syncs, research imports, notes, a reverted edit. |
+| `EMBEDDING_DIMENSION` | measured at start | The vector length to store and check. Leave it unset normally: the server measures both models. Set it when the model endpoint may not be up before the backend (for example LiteLLM starting beside it); otherwise a failed probe falls back to the client's own default and the server rejects the model's real vectors until it restarts. The model must give this length: all-MiniLM-L6-v2 is 384, bge-m3 is 1024. |
+| `EMBEDDING_DOCUMENT_CONCURRENCY` | `4` | For a document model of its own: how many document requests may be with it at once, counted across the backend and every Celery worker process (Redis keeps the count). One document's batches go side by side up to this. A hosted model answers requests side by side: at OpenRouter a request of 8 or of 32 chunks took 1 to 2 seconds, mostly the round trip. `0` removes the host-wide cap; one document then still sends at most 4 at once. |
+| `EMBEDDING_DOCUMENT_BATCH_SIZE` | `32` | Texts in one request to a document model of its own. At OpenRouter 32 chunks took 1.4 to 1.6 seconds and 8 took 0.9 to 2.0, so 32 a request is about four times the texts a second. |
+| `EMBEDDING_DOCUMENT_TIMEOUT_SECONDS` | `20` | How long one request to a document model of its own may take before it counts as failed, instead of its client's default 60 seconds. The slowest answer measured at OpenRouter took 2 seconds. With the fallback on, the request is also sent only once: not tried again by its client (a `litellm://openai/...` client otherwise tries three times) nor text by text. |
+| `EMBEDDING_DOCUMENT_BREAKER_SECONDS` | `300` | After a request to a document model of its own fails, every document batch goes straight to the question model for this long, in every process (a Redis key, `embedding:document_breaker:<model>`, that expires by itself; deleting it ends the wait early). A batch that was already waiting for a slot when the breaker opened checks it again once it has the slot, gives the slot back and goes to the question model too, so a failing host gets one round of requests (at most `EMBEDDING_DOCUMENT_CONCURRENCY`), not one per waiting batch. Then the next batches try the document model again. Only with the fallback on. `0` turns it off: every batch tries the document model first. |
+| `EMBEDDING_DOCUMENT_FALLBACK` | `TRUE` | When the document model fails a batch (its host down, out of credit, slower than the timeout, or vectors of the wrong length), that batch is embedded with the question model instead and the log says `Document embedding model ... failed for a batch`. `FALSE` lets the batch fail, and the document is marked as failed to index, as with any embedding error; there is then no breaker, and the client keeps its own retries. Nothing to fall back to while both lines name one model. |
+| `EMBEDDING_QUERY_HOST_DOCUMENT_CONCURRENCY` | `1` | Document requests at once on the question model's server (both lines name one model, or a fallback batch), counted the same way. A model server on a CPU works through one batch at a time, so with `1` a question waits behind at most one batch. `0` removes the cap (one document then sends up to 4 at once). |
+| `EMBEDDING_QUERY_HOST_DOCUMENT_BATCH_SIZE` | `8` | Texts in one document request there. On bge-m3 served by text-embeddings-inference on 10 CPU cores, 8 chunks took about 1 second, 16 about 1.6 and 32 between 3.3 and 8.4, so at 8 a question that arrives behind a batch waits about a second. A document's own text, the first in its batch, costs the most whatever the size: about 16 seconds for 5,800 tokens on that CPU. |
+
+On 12 October 2026, an import-like run at OpenRouter (10 documents of 20
+chunks, 4 indexed at a time) took 28 seconds with one request of 8 texts at a
+time and 4.5 seconds with the defaults above; one document of 200 chunks took
+24 seconds and 3.
+
+**Two hosts of one model, never two models.** A question's embedding means
+something only next to embeddings from the same model. Two hosts of one
+model (the same weights: bge-m3 on your own machine and bge-m3 at OpenRouter,
+say) give the same embeddings to within rounding: on 12 October 2026 the two
+bge-m3 hosts gave a cosine similarity of at least 0.999999 on each of 20
+sentences in five languages, and every one of 8 questions found the same five
+sentences in the same order whichever host had embedded them. So either line
+can move between hosts of the same model at any time, with **no
+re-indexing**: what is stored stays valid. A different model (another name,
+version or size) is not a settings change: every stored document has to be
+embedded again with it, and when its vectors have another length the
+database's vector columns have to change as well. There is no one command
+for that yet, so choose the model before the first upload.
+
+**Limits.**
+
+- At start, when the two lines name different models, every process that
+  reads these settings (the backend, the Celery worker, Celery beat, and the
+  migrations, which run before the others start) embeds a test phrase with
+  each model and refuses to start if the lengths differ, naming both. The
+  check waits at most 20 seconds for each `litellm://` model, once. A model
+  that cannot be reached then does not stop the start: the other's length is
+  used, and every vector it sends later is checked against it. Vectors of
+  another length are never stored.
+- A host that accepts connections and never answers delays each of those
+  starts. Each model's client also asks its model once while it is built.
+  A document model of its own, with the fallback on: two requests of
+  `EMBEDDING_DOCUMENT_TIMEOUT_SECONDS`, 40 seconds (with the fallback off,
+  its client tries three times while it is built: about 40 seconds more). The
+  question model's host: its client's three tries of 60 seconds while it is
+  built, then the 20-second check, about 3.5 minutes (one model for both:
+  about 3 minutes, as without these settings). The backend and the worker
+  wait for the migrations, so for them the delays add up: about 80 seconds
+  for a document host that hangs.
+- The backend and the worker each log one line at start naming the models,
+  the length and these limits: `[startup] embeddings: questions ...,
+  documents ...; 1024 dimensions; document batches at most 4 at once, 32
+  texts a request, 20 s timeout; on the question model's server at most 1 at
+  once, 8 texts a request; ...`.
+- A document slot is never a reason to fail indexing. Each server documents
+  go to has its own slots (Redis keys `embedding:document_slot:<model>:<n>`).
+  A batch waiting for one asks Redis again every 0.10 to 0.15 seconds; if no
+  slot comes free within 15 minutes, the batch goes anyway. A slot is held on
+  a 60-second lease that its request renews every 20 seconds while it runs,
+  so a slow request keeps its slot and one whose worker was killed frees
+  itself within a minute.
+- Each call to Redis waits at most 5 seconds. If Redis cannot be reached,
+  documents are embedded without slots and each process keeps its own
+  breaker; Redis is then left alone for a minute (said once in the log)
+  before it is asked again. Without Redis there is no cap at all, on
+  either server, so the limits below hold only while Redis answers (the
+  Celery workers need the same Redis, so imports rarely run without it).
+- A fallback batch gives the document host's slot back first and then takes
+  one of the question model's server's, in that server's batch size, so an
+  outage of the document host never gives that server more than
+  `EMBEDDING_QUERY_HOST_DOCUMENT_CONCURRENCY` document batches at once
+  (while Redis answers). While
+  the breaker is open every document batch goes there, so imports run at its
+  pace.
+- A model loaded into the server's own processes (a name without `://`, such
+  as `sentence-transformers/all-MiniLM-L6-v2`) takes no slot, since each
+  process has its own copy, and embeds one text at a time.
+- The 20-second timeout and the single try reach the document client
+  only where it accepts them: a `litellm://openai/...` model with an API
+  key (`OPENAI_API_KEY`, or the key in the model's own settings) sends
+  each request once; without a key LiteLLM builds its own client, which
+  tries each request 3 times. Clients that take no timeout (`jina://`)
+  keep their own.
+
+### Moving documents back to the questions' host
+
+When `EMBEDDING_DOCUMENT_MODEL` names another host of the questions' model:
+
+1. In `docker/.env`, delete the `EMBEDDING_DOCUMENT_MODEL` line (or set it
+   to the same value as `EMBEDDING_QUERY_MODEL`). Deleting it sends documents
+   to `EMBEDDING_MODEL`, which is the questions' model only when
+   `EMBEDDING_QUERY_MODEL` is unset or names the same model; otherwise set it
+   to `EMBEDDING_QUERY_MODEL`'s value.
+2. Restart the backend, the Celery worker and Celery beat once nothing is
+   being generated (in the backend's folder,
+   `python3 scripts/deploy_gate.py --wait` checks), with the compose files
+   your server runs on: `docker compose -f docker-compose.yml up -d backend celery_worker celery_beat`.
+   If you keep your own override file, add it after the first:
+   `-f docker-compose.yml -f <your override file>`.
+3. The start line now reads `[startup] embeddings: questions and documents
+   ...; document batches at most 1 at once, 8 texts a request; ...`: the
+   question model's server takes document batches with its own small limits
+   again. Nothing is re-indexed: the stored embeddings are the same model's.
+
+Moving them out again is the same line set back. The embedding cache
+(`EMBEDDING_CACHE_ENABLED`) keeps its entries per model name, so after a move
+it starts afresh for the new name, and the old entries age out.
+
+## Reranking
+
+Reranking is optional and **off by default**. When on, every knowledge-base
+search sends its retrieved passages to a reranker before the answer is
+written. It improves which passages come first; on this server it adds about
+a second per search.
+
+All settings are deployment-level, in `docker/.env`; there is no page for
+them. The model is asked through LiteLLM's Cohere-compatible `/rerank`
+route:
+
+```dotenv
+RERANKERS_ENABLED=TRUE
+RERANKERS_MODEL_TYPE=litellm
+RERANKERS_MODEL_NAME=cohere-rerank-v4.0-fast
+# Optional; unset, the LiteLLM gateway's own settings are used:
+# RERANKERS_API_BASE=http://litellm:4000/v1
+# RERANKERS_API_KEY=
+```
+
+Restart the backend after changing it. If the rerank call fails, the search
+keeps its original order, so the answer still works. `RERANKERS_ENABLED=FALSE`
+removes the extra second and the provider bill.
+
+## Web search and optional connectors
+
+**Google Search is built in and always available**; it needs no key and no
+connector. It is slower than Exa/Tavily (about 15 seconds a search, longer
+when Google asks for a check). On a server with no proxy it tries from the
+server's own address; set `PROXY_URL` (or `PROXY_URLS`) for reliable results,
+and `CAPTCHA_SOLVING_ENABLED`/`CAPTCHA_SOLVER_*` only if you accept the terms
+of a solving service. The bundled SearXNG container is the fallback for the
+research box's **Web** search and needs no setting. `SCRAPER_DIRECT_PLATFORMS`
+lets named platform scrapers (Reddit, TikTok, ...) leave from the server's
+address instead of the proxy.
+
+**Exa, Tavily and Browserbase are optional and per workspace.** They are not
+`.env` settings: a workspace Owner or Editor adds an MCP server under
+**Connectors → MCP servers** with that workspace's own key. They then appear
+in the chat's **Tools** menu and the research box, and their cost is on that
+workspace's provider bill. A workspace without the connector simply does not
+offer them; nothing is needed on the server. The user-facing rules and limits
+are in [Chat and citations](/docs/chat-and-citations#tools) and
+[Notebooks and sources](/docs/notebooks-and-sources#mcp-servers).
+
+### Who sets what
+
+| Setting | Where | Who |
+| --- | --- | --- |
+| Local/Cloud parser default | `docker/.env` (`ETL_DEFAULT_PARSER`, `ETL_CLOUD_SERVICE`, the cloud key) | operator |
+| Local or Cloud for one upload | upload dialog | anyone uploading |
+| Embedding model | `docker/.env` (`EMBEDDING_MODEL`, `EMBEDDING_QUERY_MODEL`, `EMBEDDING_DOCUMENT_MODEL`, `EMBEDDING_BASE_URL`, `EMBEDDING_DIMENSION`) | operator |
+| Reranker | `docker/.env` (`RERANKERS_*`) | operator |
+| Google Search | built in; optional proxy/captcha settings in `docker/.env` | operator |
+| Exa, Tavily, Browserbase | **Connectors → MCP servers**, one key per workspace | workspace Owner or Editor |

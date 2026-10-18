@@ -1,0 +1,124 @@
+---
+title: Workspaces and sharing
+description: Members, roles, public links and workspace settings
+icon: Users
+---
+
+A workspace holds notebooks, documents and settings. You can have several,
+switch between them from the rail, and invite other people into one.
+
+## Members
+
+Open your avatar menu → **Workspace** → **Manage members**. The **Members**
+table shows each person's name, when they last signed in, and their role. The
+Owner can change a member's role (**Make Editor**, **Make Viewer**) or
+**Remove** them.
+
+### Inviting people
+
+Owners and Editors can **Invite** someone, in one of two ways:
+
+- **By email:** enter their address. **Send invitation** emails them a link
+  (see [Email](/docs/email#emails-the-app-sends-you)). If the email can't be
+  sent, copy the link and send it to them yourself. Only the account with that
+  address can accept it.
+- **Invite link:** a link that anyone with an account here can use to join.
+  **Maximum uses** limits how many people can use it; it is unlimited by
+  default.
+
+Either way, choose the role they get, **Editor** or **Viewer**, and when the
+invitation expires: **In 7 days** (the default), **In 30 days** or **Never**.
+A **Note** is optional.
+
+The people you invite need an account here already, because sign-ups are
+closed. The invitation opens a page where they choose **Sign in to accept**,
+then **Accept invitation** or **Not now**.
+
+**Pending invitations** are listed under the members, with **Resend** (at most
+once a minute) and **Revoke**. Expired ones are listed separately.
+
+## Roles
+
+Every workspace has three roles, listed under **Workspace settings → Team
+Roles**. Custom roles are not available.
+
+- **Owner:** everything, including members, settings and public links. The
+  person who made the workspace is its Owner; ownership is never given
+  through an invitation or a role change.
+- **Editor:** adds sources, chats, makes Studio outputs and notes, adds
+  connectors, sets up automations, changes the workspace's models, and invites
+  Editors or Viewers. An Editor can't delete notebooks, documents, Studio
+  outputs, automations or chat history, change roles, edit General settings or
+  System Instructions, switch a connection off, or create public links.
+- **Viewer:** reads the workspace's notebooks, sources, notes, Studio outputs
+  and automations. A Viewer can't chat, add sources or make outputs.
+
+Members share connections too. In a workspace, the assistant can use the
+Google Drive, Nextcloud and Email connections of every member, except the
+ones their owner switched off there (see
+[Notebooks and sources](/docs/notebooks-and-sources#connectors)).
+
+## Public links
+
+Owners can share something read-only with anyone who has the link, without
+signing in:
+
+- **Share chat publicly…** in the notebook menu shares a copy of the chat as
+  it is now.
+- **Share publicly**, in a finished Studio output's viewer, shares a copy of
+  that output. It opens as you see it: a mind map to explore, flashcards and
+  a quiz to study (a visitor's answers stay in their browser), a slide deck's
+  slides, a data table's sheet, a report with its contents. Your prompt and
+  sources, **Explain** and a report's recommended outputs are not shown.
+  Sharing it again while it is unchanged gives the same link, with its
+  current title and the expiry you pick.
+- **Share notebook…** in the notebook menu makes a live link to the notebook.
+  Visitors see your newest chat in it, its finished Studio outputs and its
+  source files, as they are each time the link is opened. Notes are not
+  shown. The notebook then shows **Shared**. **New address** replaces the
+  link, and **Stop sharing** turns it off.
+
+A link expires **After 7 days** (the default), **After 30 days** or
+**Never**. An expired link says "This link has expired".
+
+**Workspace settings → Public links** lists every link (Chat, Output or Live
+notebook), with **Copy link**, **Open link** and **Revoke**. Revoking stops a
+link at once.
+
+## Workspace settings
+
+Open your avatar menu → **Workspace** → **Workspace settings**. Everyone in the
+workspace can open every page; what they can change depends on their role.
+
+- **General:** the workspace's **Name** and **Description**, and **API key
+  access** for agents (see [Connect your agent](/docs/connect-your-agent));
+  only the Owner can change these. **Export knowledge base** downloads every
+  document in the workspace as a ZIP of Markdown files.
+- **Connectors:** Google Drive, Nextcloud, Email and MCP servers. See
+  [Notebooks and sources](/docs/notebooks-and-sources#connectors) and
+  [Email](/docs/email).
+- **Automations:** see [Automations](/docs/automations).
+- **Models:** the model each job uses by default. See
+  [Chat and citations](/docs/chat-and-citations#choosing-the-model).
+- **Team Roles:** the three roles above.
+- **System Instructions:** see below.
+- **Public links:** see above.
+
+### System Instructions
+
+System Instructions shape every answer in the workspace, in chat and in
+Studio: tone, audience, format and length. Answers still come only from your
+sources, keep their citations and follow the safety rules. A line that tries
+to change those is ignored, and saving warns "Some instructions won't be
+followed". Instructions can be up to 4,000 characters, and only the Owner can
+change them. While they are set, the chat shows **Instructions applied**.
+
+## Leaving or deleting a workspace
+
+In your avatar menu → **Workspace**, the Owner can **Delete workspace** and
+everyone else can **Leave workspace**. Deleting a workspace deletes all its
+documents and chats; your Google Drive, Nextcloud and Email connections stay
+with your account. You can't delete or leave your only workspace: create or
+join another one first.
+
+Each person can own up to 400 workspaces.

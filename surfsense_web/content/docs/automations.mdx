@@ -1,0 +1,127 @@
+---
+title: Automations
+description: Tasks the assistant runs on a schedule, and where their results go
+icon: AlarmClock
+---
+
+An automation runs a task for you on a schedule, with no one watching: for
+example, a weekly summary of what is new in your documents. Automations are
+in **Workspace settings → Automations**, on the website only.
+
+## Making one
+
+- **Create via chat** opens your notebooks. Ask a notebook's chat to set up an
+  automation: it shows a **Create automation** card to **Approve**, **Reject**
+  or **Edit**. You can also reply in the chat to have it redrafted.
+- **Create manually** opens the form below.
+
+Owners and Editors can create, edit and pause automations. Viewers can see
+them and their runs. Only the workspace Owner can delete one.
+
+## The form
+
+**Basics.** A **Name** (up to 200 characters) and an optional
+**Description**.
+
+**Tasks.** Each task is one instruction in your own words. Type **@** to point
+it at files, folders or connectors. A task also has:
+
+- **Can use:** **Your documents** (the workspace's documents only), **Your
+  documents and the web** (it can also search the web and read pages, with
+  Tavily, Exa and Browserbase), or **The web only** (the web and connected
+  apps, not your documents).
+- **Notebook:** **Any notebook**, or one notebook, so that it answers only
+  from that notebook's switched-on sources.
+- **Save results to notebook:** **Don't save**, or a notebook. After each run
+  the result is added there as a [note](/docs/notes), titled with the
+  automation's name and the date, such as "Weekly digest — 2026-10-05".
+- **Max retries** and **Timeout**, to override the settings below for this
+  task.
+
+You can add more tasks and put them in order with the arrows. **Run without
+asking for approvals** is on by default. With it off, anything the assistant
+would ask you to approve is refused, and the task may not finish.
+
+**Schedule.** Choose a **Frequency**: **Every hour**, **Every day**, **Every
+weekday (Mon–Fri)**, **Specific days of the week** or **Once a month**. Then
+set the minute, time, days or day of the month, and the **Timezone**. A new
+automation starts as every weekday at 09:00. **Advanced: enter a schedule
+expression** takes a five-field cron expression instead, such as
+`0 9 * * 1-5`. Without a schedule, the automation doesn't run on its own.
+
+Schedules are checked every minute. There is no button to run an automation
+straight away.
+
+**Models.** The **Chat model**, **Image model** and **Vision model** its runs
+use. **Auto** picks a standard model; premium models are marked **Premium**.
+
+**Settings.**
+
+- **Timeout (seconds):** how long a whole run may take, 600 by default and at
+  most 86,400 (24 hours), counted from when it starts. A run still going at the limit is stopped where
+  it is and shown as **Timed out**; with **Email me the result** on, you get a
+  short email saying so. A task that runs past its own **Timeout** is tried
+  again; if its last try runs out of time too, the run is **Timed out**.
+- **Max retries:** how many times a failed task is tried again, 2 by default,
+  with **Retry backoff** Exponential (the default), Linear or None.
+- **If already running:** what happens when the schedule comes round while
+  the last run is still waiting to start or running:
+  - **Skip if already running** (the default): the new run is skipped. It
+    doesn't appear in **Recent runs**.
+  - **Queue the next run**: the new run waits, shown as Pending, and starts
+    when the run before it ends or is cancelled. Waiting runs start one at a
+    time, oldest first. Up to 20 can wait; any more are skipped.
+  - **Always run**: the new run starts at once, alongside the other.
+- **Tags**, to keep automations sorted.
+- **Email me the result:** off by default. See below.
+
+The **Summary** beside the form sums up what you've set. **Edit as JSON**
+shows the same automation as JSON, to edit by hand.
+
+## Runs and results
+
+The list shows each automation's **Status**: Active, Paused or Archived. Open
+one to **Edit**, **Pause**, **Resume** or **Delete** it. Its schedule has its
+own switch, and shows when it fires next.
+
+**Recent runs** lists the last 20 runs, each Pending (waiting to start, or
+queued behind another run), Running, Succeeded, Failed, Needs attention, Timed
+out or Cancelled, with the reason. Open a run to see its output, each task's
+result (including the task a time limit or a cancel cut off), the files it
+made and the inputs it ran with.
+
+**Cancelling a run.** A Pending or Running run has a **Cancel** button, for
+Owners and Editors. The run shows Cancelled at once and stops within a few
+seconds; what it already saved, such as a note, stays. **Pause** does the
+same to the run in progress and to any runs waiting behind it. **Delete**
+stops a run in progress and removes it with the rest of the history.
+
+If the app restarts in the middle of a run, that run can't finish. About three
+minutes after its time limit it is shown as Timed out (with the email, if
+**Email me the result** is on), and the next queued run starts.
+
+A run that is still waiting to start an hour after it could have started (for
+example, it was due while the app was down) isn't run late: it is shown as
+Cancelled, "Not started", and costs nothing. A queued run's hour counts from
+when the run ahead of it ended.
+
+The result of a run reaches you:
+
+- on the run's page,
+- as a note, with **Save results to notebook**,
+- by email, with **Email me the result**. After each run that finishes, an
+  email with the result goes to the person who created the automation. A run
+  that fails, needs attention or times out sends a short email with the
+  reason instead. A cancelled run sends no email. See
+  [Email](/docs/email#emails-the-app-sends-you).
+
+Automation results don't appear in [Notifications](/docs/notifications).
+
+## What it costs
+
+Each task in a run costs the same as one chat message on its model: 1 credit
+on a standard model, 5 on a premium one. If credits have run out, or your plan
+doesn't include the model, the task fails and says why ("Not enough credits to
+run this step…" or "Your plan doesn't include this step's model…"). A task cut
+off by a time limit or a cancel costs nothing; the tasks that finished before
+it are charged as usual. See [Plans and credits](/docs/plans-and-credits).

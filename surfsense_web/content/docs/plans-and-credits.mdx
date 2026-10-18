@@ -1,0 +1,112 @@
+---
+title: Plans and credits
+description: The plans, top-ups and what each action costs
+icon: CreditCard
+---
+
+<Callout title="Payments are not open yet">
+  Credits are counted: each action below uses credits from your plan's
+  monthly allowance, and your **Billing** page shows what is left. There is
+  no way to pay yet, so you can't buy a plan or top up; the prices may still
+  change before payments open.
+</Callout>
+
+## Plans
+
+Each plan comes with a monthly allowance of credits. What you can use also
+depends on the plan:
+
+| | Free | Plus | Pro |
+| --- | --- | --- | --- |
+| Parsers | Local | Local and Cloud | Local and Cloud |
+| Vision and premium models | No | Yes | Yes |
+| Video Overviews | No | Up to 5 minutes | Up to 10 minutes |
+| Pages per upload | 50 | 300 | 1,000 |
+| Jobs running at once | 1 | 2 | 4 |
+
+<PlanTable />
+
+## Top-ups
+
+If you run out before the month ends, you will be able to buy more credits
+once payments open.
+
+Until then, when your credits run out, anything that costs credits is
+refused until your next monthly allowance arrives. Plan credits left at the
+end of a period don't carry over. Top-up credits never expire, and are used
+after your plan credits.
+
+Your **Billing** page also has **Usage history**, what used credits in the
+last 30 days with totals by action, and **Payments and invoices**.
+
+<PackTable />
+
+## What costs what
+
+Credits are used when the app does work for you. Reading your sources with
+the Local parser, and indexing them for search, cost nothing.
+
+<CreditCostTable />
+
+A few things follow from this:
+
+- A 20-page PDF costs nothing with the Local parser, or 40 credits with the
+  Cloud parser.
+- Standard models cost 1 credit per chat message; premium models cost 5.
+- **Auto** picks a standard model. A premium model is used only when you
+  choose one, or when no standard model is available.
+- Each task in an [automation](/docs/automations) run costs the same as one
+  chat message on its model.
+- Reading [email](/docs/email) costs nothing beyond the chat message or
+  automation step, except that each image attachment counts as one vision
+  image.
+- A Studio output costs the same whatever length you choose.
+
+### Research and scraping
+
+Searching for new sources and reading web pages also use credits:
+
+| Action | Credits |
+| --- | --- |
+| Web page read (crawled), including **Read a web page** and imported pages | 0.2 per page |
+| Google Search | 0.55 per page of results |
+| Reddit | 0.35 per item |
+| YouTube | 0.25 per video, 0.15 per comment |
+| Instagram | 0.35 per item, 0.15 per comment |
+| TikTok | 0.35 per video, 0.25 per profile, 0.15 per comment |
+| Google Maps | 0.35 per place, 0.15 per review |
+| Indeed | 0.35 per job |
+| Amazon | 0.35 per product |
+| Walmart | 0.35 per product, 0.15 per review |
+
+- Searching **Web** uses the site's own search engine first, which is free;
+  Google Search runs only when it finds nothing.
+- Academic searches (PubMed, arXiv, medRxiv / bioRxiv and Google Scholar) are
+  free.
+- Exa and Tavily use the workspace's own API key, not credits.
+- The same prices apply to scrapers run by [agents](/docs/connect-your-agent).
+
+### Web tools in chat
+
+A tool picked from the chat's [Tools](/docs/chat-and-citations#tools) menu
+costs this on top of the message:
+
+| Tool | Credits |
+| --- | --- |
+| Web, Browserbase | 0.2 per page read |
+| Google Search | 0.55 per page of results |
+| Exa | 1.5 per search |
+| Tavily | 0.8 per search |
+
+A search or page that couldn't run costs nothing. Exa and Tavily searches in
+**Search the web for new sources** use the workspace's own key and cost no
+credits.
+
+## Paying
+
+Payments will be in cryptocurrency: Bitcoin, or USDT on the Tron or Polygon
+networks, paid on a secure checkout page. A plan is paid ahead for 1, 3 or 12
+months (longer periods can carry a discount) and does not renew on its own;
+buy more months whenever you like. Credit packs are a single payment. Card
+payments are not offered yet. Until payments open, the Billing page
+says so and shows no buy buttons.

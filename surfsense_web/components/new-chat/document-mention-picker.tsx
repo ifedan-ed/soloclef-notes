@@ -1,0 +1,604 @@
+"use client";
+
+import { useQuery as useZeroQuery } from "@rocicorp/zero/react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useAtomValue } from "jotai";
+import { ChevronLeft, ChevronRight, Files, Unplug } from "lucide-react";
+import {
+	Fragment,
+	forwardRef,
+	type UIEvent,
+	useCallback,
+	useDeferredValue,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
+import type { MentionedDocumentInfo } from "@/atoms/chat/mentioned-documents.atom";
+import { connectorsAtom } from "@/atoms/connectors/connector-query.atoms";
+import { getConnectorTitle } from "@/components/assistant-ui/connector-popup/constants/connector-constants";
+import { getConnectorDisplayName } from "@/components/assistant-ui/connector-popup/tabs/all-connectors-tab";
+import { MentionIcon } from "@/components/assistant-ui/mention-icon";
+import {
+	ComposerSuggestionGroup,
+	ComposerSuggestionGroupHeading,
+	ComposerSuggestionHeader,
+	ComposerSuggestionItem,
+	ComposerSuggestionList,
+	ComposerSuggestionMessage,
+	ComposerSuggestionSeparator,
+	ComposerSuggestionSkeleton,
+} from "@/components/new-chat/composer-suggestion-popup";
+import {
+	type ComposerSuggestionNavigatorRef,
+	type ComposerSuggestionNode,
+	useComposerSuggestionNavigator,
+} from "@/components/new-chat/use-composer-suggestion-navigator";
+import { Spinner } from "@/components/ui/spinner";
+import { getConnectorIcon } from "@/contracts/enums/connectorIcons";
+import type { SearchSourceConnector } from "@/contracts/types/connector.types";
+import type { Document, SearchDocumentTitlesResponse } from "@/contracts/types/document.types";
+import { useArtifactsByDocument } from "@/features/artifacts/hooks/use-artifacts-by-document";
+import { documentsApiService } from "@/lib/apis/documents-api.service";
+import { getMentionDocKey } from "@/lib/chat/mention-doc-key";
+import { queries } from "@/zero/queries";
+
+export type DocumentMentionPickerRef = ComposerSuggestionNavigatorRef;
+
+interface DocumentMentionPickerProps {
+	workspaceId: number;
+	onSelectionChange: (mentions: MentionedDocumentInfo[]) => void;
+	onDone: () => void;
+	initialSelectedDocuments?: MentionedDocumentInfo[];
+	externalSearch?: string;
+	/**
+	 * Documents and folders only, with no Connectors branch: for picking
+	 * notebook sources, where a connector account is not a document and
+	 * picking one added nothing. Opens straight on Files & Folders.
+	 */
+	documentsOnly?: boolean;
+}
+
+const PAGE_SIZE = 20;
+const MIN_SEARCH_LENGTH = 2;
+const DEBOUNCE_MS = 100;
+
+type BrowseView =
+	| { kind: "root" }
+	| { kind: "files-folders" }
+	| { kind: "connectors" }
+	| { kind: "connector-type"; connectorType: string; title: string };
+
+type ResourceNodeValue =
+	| { kind: "view"; view: BrowseView }
+	| { kind: "mention"; mention: MentionedDocumentInfo };
+
+function isConnectorActive(connector: SearchSourceConnector) {
+	return connector.is_active !== false;
+}
+
+function getMentionIcon(mention: MentionedDocumentInfo, artifactFormat?: string) {
+	return <MentionIcon mention={mention} artifactFormat={artifactFormat} className="size-4" />;
+}
+
+function useDebounced<T>(value: T, delay = DEBOUNCE_MS) {
+	const [debounced, setDebounced] = useState(value);
+	const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+	useEffect(() => {
+		if (timeoutRef.current) clearTimeout(timeoutRef.current);
+		timeoutRef.current = setTimeout(() => setDebounced(value), delay);
+		return () => {
+			if (timeoutRef.current) clearTimeout(timeoutRef.current);
+		};
+	}, [value, delay]);
+
+	return debounced;
+}
+
+function makeDocMention(
+	doc: Pick<Document, "id" | "title" | "document_type">
+): MentionedDocumentInfo {
+	return {
+		id: doc.id,
+		title: doc.title,
+		document_type: doc.document_type,
+		kind: "doc",
+	};
+}
+
+function makeFolderMention(folder: {
+	id: number;
+	title: string;
+}): Extract<MentionedDocumentInfo, { kind: "folder" }> {
+	return {
+		id: folder.id,
+		title: folder.title,
+		kind: "folder",
+	};
+}
+
+function makeConnectorMention(
+	connector: SearchSourceConnector
+): Extract<MentionedDocumentInfo, { kind: "connector" }> {
+	const accountName = getConnectorDisplayName(connector.name);
+	const connectorTitle = getConnectorTitle(connector.connector_type);
+	return {
+		id: connector.id,
+		title: `${connectorTitle}: ${accountName}`,
+		kind: "connector",
+		connector_type: connector.connector_type,
+		account_name: accountName,
+	};
+}
+
+function mentionMatchesSearch(mention: MentionedDocumentInfo, searchLower: string) {
+	return [
+		mention.title,
+		mention.kind,
+		mention.kind === "doc" ? mention.document_type : "",
+		mention.kind === "connector" ? mention.connector_type : "",
+		mention.kind === "connector" ? mention.account_name : "",
+	].some((value) => value.toLowerCase().includes(searchLower));
+}
+
+export const DocumentMentionPicker = forwardRef<
+	DocumentMentionPickerRef,
+	DocumentMentionPickerProps
+>(function DocumentMentionPicker(
+	{
+		workspaceId,
+		onSelectionChange,
+		onDone,
+		initialSelectedDocuments = [],
+		externalSearch = "",
+		documentsOnly = false,
+	},
+	ref
+) {
+	const search = externalSearch;
+	const debouncedSearch = useDebounced(search, DEBOUNCE_MS);
+	const deferredSearch = useDeferredValue(debouncedSearch);
+	const hasSearch = debouncedSearch.trim().length > 0;
+	const isSearchValid = debouncedSearch.trim().length >= MIN_SEARCH_LENGTH;
+	const isSingleCharSearch = debouncedSearch.trim().length === 1;
+	const [view, setView] = useState<BrowseView>(
+		documentsOnly ? { kind: "files-folders" } : { kind: "root" }
+	);
+
+	const [accumulatedDocuments, setAccumulatedDocuments] = useState<
+		Pick<Document, "id" | "title" | "document_type">[]
+	>([]);
+	const [currentPage, setCurrentPage] = useState(0);
+	const [hasMore, setHasMore] = useState(false);
+	const [isLoadingMore, setIsLoadingMore] = useState(false);
+	const [zeroFolders] = useZeroQuery(queries.folders.bySpace({ workspaceId }));
+	const { data: connectors = [], isLoading: isConnectorsLoading } = useAtomValue(connectorsAtom);
+	const activeConnectors = useMemo(() => connectors.filter(isConnectorActive), [connectors]);
+	const artifactsByDocument = useArtifactsByDocument(workspaceId);
+	const paginationScopeKey = useMemo(
+		() => `${workspaceId}:${debouncedSearch}`,
+		[workspaceId, debouncedSearch]
+	);
+	const previousPaginationScopeKeyRef = useRef<string | null>(null);
+
+	// Reset pagination state when the active search scope changes.
+	useEffect(() => {
+		if (previousPaginationScopeKeyRef.current === paginationScopeKey) return;
+		previousPaginationScopeKeyRef.current = paginationScopeKey;
+		setCurrentPage(0);
+		setHasMore(false);
+	}, [paginationScopeKey]);
+
+	useEffect(() => {
+		if (hasSearch) setView(documentsOnly ? { kind: "files-folders" } : { kind: "root" });
+	}, [hasSearch, documentsOnly]);
+
+	const titleSearchParams = useMemo(
+		() => ({
+			workspace_id: workspaceId,
+			page: 0,
+			page_size: PAGE_SIZE,
+			...(isSearchValid ? { title: debouncedSearch.trim() } : {}),
+		}),
+		[workspaceId, debouncedSearch, isSearchValid]
+	);
+
+	const { data: titleSearchResults, isLoading: isTitleSearchLoading } = useQuery({
+		queryKey: ["document-titles", titleSearchParams],
+		queryFn: ({ signal }) =>
+			documentsApiService.searchDocumentTitles({ queryParams: titleSearchParams }, signal),
+		staleTime: 60 * 1000,
+		enabled: !!workspaceId && currentPage === 0 && (!hasSearch || isSearchValid),
+		placeholderData: keepPreviousData,
+	});
+
+	const filterBySearchTerm = useCallback(
+		(docs: Pick<Document, "id" | "title" | "document_type">[]) => {
+			if (!isSearchValid) return docs;
+			const searchLower = debouncedSearch.trim().toLowerCase();
+			return docs.filter((doc) => doc.title.toLowerCase().includes(searchLower));
+		},
+		[debouncedSearch, isSearchValid]
+	);
+
+	useEffect(() => {
+		if (currentPage !== 0) return;
+		const combinedDocs: Pick<Document, "id" | "title" | "document_type">[] = [];
+
+		if (titleSearchResults?.items) {
+			combinedDocs.push(...titleSearchResults.items);
+			setHasMore(titleSearchResults.has_more);
+		}
+
+		setAccumulatedDocuments(filterBySearchTerm(combinedDocs));
+	}, [titleSearchResults, currentPage, filterBySearchTerm]);
+
+	const loadNextPage = useCallback(async () => {
+		if (isLoadingMore || !hasMore) return;
+
+		const nextPage = currentPage + 1;
+		setIsLoadingMore(true);
+
+		try {
+			const queryParams = {
+				workspace_id: workspaceId,
+				page: nextPage,
+				page_size: PAGE_SIZE,
+				...(isSearchValid ? { title: debouncedSearch.trim() } : {}),
+			};
+			const response: SearchDocumentTitlesResponse = await documentsApiService.searchDocumentTitles(
+				{
+					queryParams,
+				}
+			);
+
+			setAccumulatedDocuments((prev) => [...prev, ...response.items]);
+			setHasMore(response.has_more);
+			setCurrentPage(nextPage);
+		} catch (error) {
+			console.error("Failed to load next page:", error);
+		} finally {
+			setIsLoadingMore(false);
+		}
+	}, [currentPage, hasMore, isLoadingMore, debouncedSearch, workspaceId, isSearchValid]);
+
+	const actualDocuments = useMemo(() => {
+		if (!isSingleCharSearch) return accumulatedDocuments;
+		const searchLower = deferredSearch.trim().toLowerCase();
+		return accumulatedDocuments.filter((doc) => doc.title.toLowerCase().includes(searchLower));
+	}, [accumulatedDocuments, deferredSearch, isSingleCharSearch]);
+
+	const folderMentions = useMemo(() => {
+		const all = (zeroFolders ?? []).map((f) => makeFolderMention({ id: f.id, title: f.name }));
+		if (!hasSearch) return all;
+		const needle = (isSingleCharSearch ? deferredSearch : debouncedSearch).trim().toLowerCase();
+		if (!needle) return all;
+		return all.filter((f) => f.title.toLowerCase().includes(needle));
+	}, [zeroFolders, debouncedSearch, deferredSearch, isSingleCharSearch, hasSearch]);
+
+	const connectorMentions = useMemo(
+		() => activeConnectors.map(makeConnectorMention),
+		[activeConnectors]
+	);
+
+	const selectedKeys = useMemo(
+		() => new Set(initialSelectedDocuments.map((d) => getMentionDocKey(d))),
+		[initialSelectedDocuments]
+	);
+
+	const selectMention = useCallback(
+		(mention: MentionedDocumentInfo) => {
+			onSelectionChange([...initialSelectedDocuments, mention]);
+			onDone();
+		},
+		[initialSelectedDocuments, onSelectionChange, onDone]
+	);
+	const rootNodes = useMemo<ComposerSuggestionNode<ResourceNodeValue>[]>(() => {
+		return [
+			{
+				id: "files-folders",
+				label: "Files & Folders",
+				subtitle: "Browse your knowledge base",
+				icon: <Files className="size-4" />,
+				type: "branch",
+				value: { kind: "view", view: { kind: "files-folders" } },
+			},
+			{
+				id: "connectors",
+				label: "Connectors",
+				subtitle: activeConnectors.length
+					? "Choose the exact account for tool use"
+					: "No connected accounts yet",
+				icon: <Unplug className="size-4" />,
+				type: "branch",
+				disabled: activeConnectors.length === 0,
+				value: { kind: "view", view: { kind: "connectors" } },
+			},
+		];
+	}, [activeConnectors.length]);
+
+	const searchNodes = useMemo<ComposerSuggestionNode<ResourceNodeValue>[]>(() => {
+		const searchLower = (isSingleCharSearch ? deferredSearch : debouncedSearch)
+			.trim()
+			.toLowerCase();
+		const docNodes = actualDocuments.map((doc) => {
+			const mention = makeDocMention(doc);
+			return {
+				id: getMentionDocKey(mention),
+				label: doc.title,
+				icon: getMentionIcon(mention, artifactsByDocument.get(doc.id)?.format),
+				type: "item" as const,
+				disabled: selectedKeys.has(getMentionDocKey(mention)),
+				value: { kind: "mention" as const, mention },
+			};
+		});
+		const folderNodes = folderMentions.map((mention) => ({
+			id: getMentionDocKey(mention),
+			label: mention.title,
+			subtitle: "Folder",
+			icon: getMentionIcon(mention),
+			type: "item" as const,
+			disabled: selectedKeys.has(getMentionDocKey(mention)),
+			value: { kind: "mention" as const, mention },
+		}));
+		const connectorNodes = connectorMentions
+			.filter((mention) => !searchLower || mentionMatchesSearch(mention, searchLower))
+			.map((mention) => ({
+				id: getMentionDocKey(mention),
+				label: mention.title,
+				subtitle: "Connector account",
+				icon: getMentionIcon(mention),
+				type: "item" as const,
+				disabled: selectedKeys.has(getMentionDocKey(mention)),
+				value: { kind: "mention" as const, mention },
+			}));
+
+		return documentsOnly
+			? [...docNodes, ...folderNodes]
+			: [...docNodes, ...folderNodes, ...connectorNodes];
+	}, [
+		actualDocuments,
+		artifactsByDocument,
+		connectorMentions,
+		debouncedSearch,
+		deferredSearch,
+		documentsOnly,
+		folderMentions,
+		isSingleCharSearch,
+		selectedKeys,
+	]);
+
+	const connectorTypeEntries = useMemo(() => {
+		const byType = new Map<string, SearchSourceConnector[]>();
+		for (const connector of activeConnectors) {
+			const list = byType.get(connector.connector_type) ?? [];
+			list.push(connector);
+			byType.set(connector.connector_type, list);
+		}
+		return Array.from(byType.entries()).sort(([a], [b]) =>
+			getConnectorTitle(a).localeCompare(getConnectorTitle(b))
+		);
+	}, [activeConnectors]);
+
+	const browseNodes = useMemo<ComposerSuggestionNode<ResourceNodeValue>[]>(() => {
+		if (view.kind === "root") return rootNodes;
+		if (view.kind === "files-folders") {
+			const folders = folderMentions.map((mention) => ({
+				id: getMentionDocKey(mention),
+				label: mention.title,
+				subtitle: "Folder",
+				icon: getMentionIcon(mention),
+				type: "item" as const,
+				disabled: selectedKeys.has(getMentionDocKey(mention)),
+				value: { kind: "mention" as const, mention },
+			}));
+			const docs = actualDocuments.map((doc) => {
+				const mention = makeDocMention(doc);
+				return {
+					id: getMentionDocKey(mention),
+					label: doc.title,
+					icon: getMentionIcon(mention, artifactsByDocument.get(doc.id)?.format),
+					type: "item" as const,
+					disabled: selectedKeys.has(getMentionDocKey(mention)),
+					value: { kind: "mention" as const, mention },
+				};
+			});
+			return [...folders, ...docs];
+		}
+		if (view.kind === "connectors") {
+			return connectorTypeEntries.map(([connectorType, typeConnectors]) => ({
+				id: `connector-type:${connectorType}`,
+				label: getConnectorTitle(connectorType),
+				subtitle: `${typeConnectors.length} ${typeConnectors.length === 1 ? "account" : "accounts"}`,
+				icon: getConnectorIcon(connectorType, "size-4") ?? <Unplug className="size-4" />,
+				type: "branch" as const,
+				value: {
+					kind: "view" as const,
+					view: {
+						kind: "connector-type" as const,
+						connectorType,
+						title: getConnectorTitle(connectorType),
+					},
+				},
+			}));
+		}
+		return activeConnectors
+			.filter((connector) => connector.connector_type === view.connectorType)
+			.map((connector) => {
+				const mention = makeConnectorMention(connector);
+				return {
+					id: getMentionDocKey(mention),
+					label: getConnectorDisplayName(connector.name),
+					subtitle: `${view.title} account`,
+					icon: getMentionIcon(mention),
+					type: "item" as const,
+					disabled: selectedKeys.has(getMentionDocKey(mention)),
+					value: { kind: "mention" as const, mention },
+				};
+			});
+	}, [
+		actualDocuments,
+		activeConnectors,
+		artifactsByDocument,
+		connectorTypeEntries,
+		folderMentions,
+		rootNodes,
+		selectedKeys,
+		view,
+	]);
+
+	const visibleNodes = hasSearch ? searchNodes : browseNodes;
+	const handleNodeSelect = useCallback(
+		(node: ComposerSuggestionNode<ResourceNodeValue>) => {
+			const value = node.value;
+			if (!value) return;
+			if (value.kind === "view") {
+				setView(value.view);
+				return;
+			}
+			selectMention(value.mention);
+		},
+		[selectMention]
+	);
+	const handleBack = useCallback(() => {
+		if (hasSearch || view.kind === "root") return false;
+		if (documentsOnly && view.kind === "files-folders") return false;
+		if (view.kind === "connector-type") {
+			setView({ kind: "connectors" });
+			return true;
+		}
+		setView({ kind: "root" });
+		return true;
+	}, [documentsOnly, hasSearch, view]);
+
+	const navigator = useComposerSuggestionNavigator({
+		nodes: visibleNodes,
+		onSelect: handleNodeSelect,
+		onBack: handleBack,
+		ref,
+	});
+	const canLoadMoreDocuments = hasSearch || view.kind === "files-folders";
+
+	const handleScroll = useCallback(
+		(e: UIEvent<HTMLDivElement>) => {
+			if (!canLoadMoreDocuments) return;
+			const target = e.currentTarget;
+			const scrollBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
+
+			if (scrollBottom < 50 && hasMore && !isLoadingMore) {
+				loadNextPage();
+			}
+		},
+		[canLoadMoreDocuments, hasMore, isLoadingMore, loadNextPage]
+	);
+
+	const isRootBrowseView = !hasSearch && view.kind === "root";
+	const isVisibleViewLoading = hasSearch
+		? isTitleSearchLoading || isConnectorsLoading
+		: view.kind === "files-folders"
+			? isTitleSearchLoading
+			: view.kind === "connectors" || view.kind === "connector-type"
+				? isConnectorsLoading
+				: false;
+	const actualLoading =
+		isVisibleViewLoading && !isSingleCharSearch && visibleNodes.length === 0 && !isRootBrowseView;
+
+	const title =
+		hasSearch || view.kind === "root" || (documentsOnly && view.kind === "files-folders")
+			? null
+			: view.kind === "files-folders"
+				? "Files & Folders"
+				: view.kind === "connectors"
+					? "Connectors"
+					: view.title;
+
+	return (
+		<ComposerSuggestionList
+			ref={navigator.scrollContainerRef}
+			onScroll={handleScroll}
+			role="listbox"
+			tabIndex={-1}
+			className={isRootBrowseView ? "max-h-none overflow-visible sm:max-h-none" : undefined}
+		>
+			{actualLoading ? (
+				<ComposerSuggestionSkeleton rows={8} mobileRows={8} />
+			) : (
+				<ComposerSuggestionGroup>
+					{title ? (
+						<>
+							<ComposerSuggestionHeader
+								role="button"
+								tabIndex={0}
+								aria-label={`Back from ${title}`}
+								onClick={handleBack}
+								onKeyDown={(event) => {
+									if (event.key === "Enter" || event.key === " ") {
+										event.preventDefault();
+										handleBack();
+									}
+								}}
+								className="cursor-pointer rounded-sm transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+								icon={
+									<span className="-ml-0.5 flex size-4.5 items-center justify-center">
+										<ChevronLeft className="size-3.5" />
+									</span>
+								}
+							>
+								<span className="flex-1 truncate">{title}</span>
+							</ComposerSuggestionHeader>
+							<ComposerSuggestionSeparator />
+						</>
+					) : null}
+
+					{visibleNodes.length > 0 ? (
+						<>
+							{hasSearch ? (
+								<ComposerSuggestionGroupHeading>Suggested Context</ComposerSuggestionGroupHeading>
+							) : null}
+							{visibleNodes.map((node, index) => {
+								return (
+									<Fragment key={node.id}>
+										<ComposerSuggestionItem
+											ref={navigator.getItemRef(index)}
+											icon={node.icon}
+											selected={index === navigator.highlightedIndex}
+											disabled={node.disabled}
+											onClick={() => !node.disabled && handleNodeSelect(node)}
+											onMouseEnter={() => navigator.setHighlightedIndex(index)}
+										>
+											<span className="min-w-0 flex-1">
+												<span className="block truncate text-xs" title={node.label}>
+													{node.label}
+												</span>
+												{node.subtitle ? (
+													<span className="block truncate text-[10px] text-muted-foreground">
+														{node.subtitle}
+													</span>
+												) : null}
+											</span>
+											{node.type === "branch" ? (
+												<ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
+											) : null}
+										</ComposerSuggestionItem>
+									</Fragment>
+								);
+							})}
+						</>
+					) : (
+						<ComposerSuggestionMessage>
+							{hasSearch ? "No matching context" : "No items available"}
+						</ComposerSuggestionMessage>
+					)}
+
+					{canLoadMoreDocuments && isLoadingMore && (
+						<div className="flex items-center justify-center py-2 text-primary">
+							<Spinner size="sm" />
+						</div>
+					)}
+				</ComposerSuggestionGroup>
+			)}
+		</ComposerSuggestionList>
+	);
+});

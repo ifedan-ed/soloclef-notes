@@ -1,0 +1,47 @@
+./surfsense_backend/podcasts/
+.env
+node_modules/
+.ruff_cache/
+.venv
+.pnpm-store
+.DS_Store
+debug.log
+
+references/
+references
+specs/
+
+# Source/tests packages: exempt from the broad "references" scratch-folder ignore above.
+!surfsense_backend/app/agents/chat/runtime/references/
+!surfsense_backend/tests/unit/agents/chat/runtime/references/
+
+# Playwright (E2E test artifacts)
+surfsense_web/playwright/.auth/
+surfsense_web/playwright-report/
+surfsense_web/test-results/
+surfsense_web/blob-report/
+
+# Local Remotion harness fixtures and tests
+docker/sandbox/remotion/fixtures/
+docker/sandbox/remotion/tests/
+docker/sandbox/remotion/progress.json
+
+content_research/
+automation-design-plan.md
+automation-frontend-builder-plan.md
+# Credentials kept beside the stack. Never commit these.
+browserbase-key.txt
+oidc-client-secret.txt
+surfsense-litellm-key.txt
+plans/**/__pycache__/
+
+# Timestamped copies of docker/.env hold every secret the live one does.
+.env.backup-*
+.env.bak*
+
+# Database dumps taken before local migrations; never committed.
+docker/backups/
+
+# Any copy of an env file holds secrets (backups, pre-rotation snapshots).
+.env.*
+!.env.example

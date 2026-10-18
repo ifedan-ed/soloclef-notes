@@ -1,0 +1,753 @@
+{
+	"common": {
+		"app_name": "{brand}",
+		"welcome": "欢迎",
+		"save": "保存",
+		"cancel": "取消",
+		"delete": "删除",
+		"edit": "编辑",
+		"create": "创建",
+		"update": "更新",
+		"search": "搜索",
+		"close": "关闭",
+		"confirm": "确认",
+		"back": "返回",
+		"next": "下一步",
+		"submit": "提交",
+		"yes": "是",
+		"no": "否",
+		"add": "添加",
+		"remove": "移除",
+		"select": "选择",
+		"all": "全部",
+		"none": "无",
+		"error": "错误",
+		"success": "成功",
+		"warning": "警告",
+		"info": "信息",
+		"required": "必填",
+		"optional": "可选",
+		"retry": "重试",
+		"owner": "所有者",
+		"shared": "共享",
+		"settings": "设置"
+	},
+	"auth": {
+		"login": "登录",
+		"register": "注册",
+		"logout": "登出",
+		"email": "电子邮箱",
+		"password": "密码",
+		"confirm_password": "确认密码",
+		"forgot_password": "忘记密码？",
+		"show_password": "显示密码",
+		"hide_password": "隐藏密码",
+		"remember_me": "记住我",
+		"sign_in": "登录",
+		"sign_up": "注册",
+		"sign_in_with": "使用 {provider} 登录",
+		"dont_have_account": "还没有账户？",
+		"already_have_account": "已有账户？",
+		"reset_password": "重置密码",
+		"email_required": "请输入电子邮箱",
+		"password_required": "请输入密码",
+		"invalid_email": "电子邮箱格式不正确",
+		"password_too_short": "密码至少需要 8 个字符",
+		"welcome_back": "欢迎回来",
+		"create_account": "创建您的账户",
+		"login_subtitle": "输入您的凭据以访问您的账户",
+		"register_subtitle": "注册以开始使用 {brand}",
+		"or_continue_with": "或继续使用",
+		"by_continuing": "继续即表示您同意我们的",
+		"terms_of_service": "服务条款",
+		"and": "和",
+		"privacy_policy": "隐私政策",
+		"full_name": "全名",
+		"username": "用户名",
+		"continue": "继续",
+		"back_to_login": "返回登录",
+		"login_success": "登录成功",
+		"register_success": "账户创建成功",
+		"continue_with_google": "使用 Google 继续",
+		"cloud_dev_notice": "{brand} 云版本正在开发中。查看",
+		"docs": "文档",
+		"cloud_dev_self_hosted": "以获取有关自托管版本的更多信息。",
+		"passwords_no_match": "密码不匹配",
+		"password_mismatch": "密码不匹配",
+		"passwords_no_match_desc": "您输入的密码不一致",
+		"creating_account": "正在创建您的账户",
+		"creating_account_btn": "创建中",
+		"redirecting_login": "正在跳转到登录页面",
+		"request_access": "申请使用",
+		"signups_closed_title": "暂不开放注册新账户",
+		"signups_closed_body": "目前暂停注册。如需账户，请提出申请，我们会通过电子邮件回复。"
+	},
+	"notebooks": {
+		"title": "笔记本",
+		"recent": "最近的笔记本",
+		"create": "新建笔记本",
+		"untitled": "未命名笔记本",
+		"create_failed": "无法创建笔记本。",
+		"load_failed": "无法加载笔记本。",
+		"retry": "重试",
+		"empty_hint": "还没有笔记本。新建一个，开始收集来源。",
+		"rename": "重命名",
+		"rename_failed": "无法重命名笔记本。",
+		"delete": "删除",
+		"delete_failed": "无法删除笔记本。",
+		"delete_confirm_title": "删除“{title}”？",
+		"delete_confirm_body": "其笔记和来源链接将被移除。你的文档和聊天仍保留在工作区中。",
+		"cancel": "取消",
+		"save": "保存",
+		"confirm": "确认",
+		"back": "返回",
+		"open": "打开",
+		"play": "播放",
+		"more_actions": "更多操作",
+		"source_count": "{count, plural, =0 {没有来源} other {# 个来源}}",
+		"composer_sources": "{count, plural, =0 {没有来源} other {# 个来源}}",
+		"back_to_notebooks": "返回笔记本",
+		"change_icon": "更换图标",
+		"notebook_title": "笔记本标题",
+		"notebook_not_found": "无法加载此笔记本。",
+		"sources": "来源",
+		"chat": "聊天",
+		"studio": "工作室",
+		"collapse_sources": "收起来源",
+		"expand_sources": "展开来源",
+		"collapse_studio": "收起工作室",
+		"expand_studio": "展开工作室",
+		"add_sources": "添加来源",
+		"add_sources_description": "上传新文件、选择此工作区中已有的文档，或从 Nextcloud 选择文件。",
+		"add_from_library": "从你的工作区",
+		"add_upload": "上传文件",
+		"search_library": "搜索文档和文件夹",
+		"add_n_sources": "{count, plural, =0 {添加来源} other {添加 # 个来源}}",
+		"add_sources_failed": "无法添加这些来源。",
+		"remove_pick": "移除 {title}",
+		"select_all": "选择全部来源",
+		"use_source": "使用 {title}",
+		"remove_source": "从笔记本中移除",
+		"source_indexing": "仍在建立索引",
+		"sources_update_failed": "无法更新来源。",
+		"back_to_sources": "返回来源",
+		"source_guide": "来源指南",
+		"source_guide_generating": "正在为此来源撰写指南…",
+		"source_guide_unavailable": "此来源暂无指南。",
+		"new_chat_failed": "无法开始聊天。",
+		"mention_heading": "此笔记本中的来源",
+		"mention_no_match": "没有匹配的来源",
+		"mention_no_sources": "此笔记本还没有可提及的来源。",
+		"save_to_note": "保存为笔记",
+		"save_to_note_failed": "无法保存笔记。",
+		"saved_to_note": "已保存到笔记",
+		"studio_empty": "添加来源后，点击即可添加音频概览、思维导图等更多内容！",
+		"add_note": "添加笔记",
+		"new_note": "新笔记",
+		"note": "笔记",
+		"note_title": "笔记标题",
+		"note_placeholder": "写下你的笔记…",
+		"note_is_source": "已添加为来源",
+		"note_create_failed": "无法创建笔记。",
+		"note_save_failed": "无法保存你的更改。",
+		"note_delete_failed": "无法删除笔记。",
+		"delete_note_confirm": "删除这条笔记？",
+		"convert_to_source": "转换为来源",
+		"convert_failed": "无法将笔记添加为来源。",
+		"converted": "这条笔记现在是一个来源。",
+		"back_to_studio": "返回工作室",
+		"generate_now": "立即生成",
+		"generate_failed": "无法开始生成。",
+		"generation_started": "正在生成，完成后会显示在工作室中。",
+		"choose_sources": "请至少选择一个来源。",
+		"default_suffix": "（默认）",
+		"default_is": "默认：{value}",
+		"language_default": "默认",
+		"delete_output_confirm": "删除“{title}”？生成的文件也会被删除。",
+		"try_again": "重试",
+		"status_progress": "正在生成 {progress}%",
+		"status": {
+			"queued": "排队中",
+			"running": "生成中",
+			"ready": "已就绪",
+			"failed": "失败",
+			"cancelled": "已取消"
+		},
+		"edit_template": "编辑 {title}",
+		"template_prompt": "模板说明",
+		"template_save_default": "保存为默认",
+		"template_saved": "已为此工作区保存模板。",
+		"template_save_failed": "无法保存模板。",
+		"fields": {
+			"format": "格式",
+			"length": "时长",
+			"detail": "详细程度",
+			"count": "数量",
+			"difficulty": "难度",
+			"file_type": "文件类型",
+			"language": "语言",
+			"template": "模板",
+			"style": "视觉风格",
+			"visual_style": "选择视觉风格",
+			"orientation": "方向"
+		},
+		"kinds": {
+			"audio": {
+				"label": "音频概览",
+				"tooltip": "针对你的来源生成播客式对话。",
+				"dialog_title": "自定义音频概览",
+				"description": "两位主持人（简要格式为一位）讲解你的来源。",
+				"focus_label": "AI 主持人应该重点讨论什么？",
+				"focus_placeholder": "例如：重点讲研究方法及其对实践的意义",
+				"ideas_label": "主持人话题建议"
+			},
+			"video": {
+				"label": "视频概览",
+				"tooltip": "生成由 AI 讲解的解说视频。",
+				"dialog_title": "自定义视频概览",
+				"description": "根据你的来源制作的带旁白动画视频。",
+				"focus_label": "视频应该重点讲什么？",
+				"focus_placeholder": "例如：向新同事解释主要发现",
+				"ideas_label": "旁白话题建议"
+			},
+			"report": {
+				"label": "报告",
+				"tooltip": "创建结构化报告或交互式概览。",
+				"dialog_title": "创建报告",
+				"description": "根据你的来源撰写的报告，可为文档或交互式页面。",
+				"focus_label": "有需要强调的内容吗？",
+				"focus_placeholder": "例如：控制在两页内，并突出尚未解决的问题",
+				"ideas_label": "切入角度"
+			},
+			"slides": {
+				"label": "演示文稿",
+				"tooltip": "根据你的来源创建可编辑的 PowerPoint 演示文稿。",
+				"dialog_title": "自定义演示文稿",
+				"description": "根据你的来源制作的可编辑 .pptx 演示文稿。",
+				"focus_label": "演示文稿应涵盖什么？",
+				"focus_placeholder": "例如：面向住院医师的 10 分钟教学",
+				"ideas_label": "切入角度"
+			},
+			"mindmap": {
+				"label": "思维导图",
+				"tooltip": "梳理来源中的主要观点及其关联。",
+				"dialog_title": "自定义思维导图",
+				"description": "来源中观点的层级结构图。",
+				"focus_label": "导图应以什么为中心？",
+				"focus_placeholder": "例如：以诊断和治疗为中心",
+				"ideas_label": "导图框架"
+			},
+			"flashcards": {
+				"label": "闪卡",
+				"tooltip": "创建用于主动回忆的闪卡。",
+				"dialog_title": "自定义闪卡",
+				"description": "正面是问题、背面是答案的学习卡组。",
+				"focus_label": "闪卡应考查什么？",
+				"focus_placeholder": "例如：定义和临界值",
+				"ideas_label": "考查内容"
+			},
+			"quiz": {
+				"label": "测验",
+				"tooltip": "创建计分的单选题测验。",
+				"dialog_title": "自定义测验",
+				"description": "带计分的单一答案题目。",
+				"focus_label": "测验应涵盖什么？",
+				"focus_placeholder": "例如：侧重临床推理而非记忆",
+				"ideas_label": "考查内容"
+			},
+			"data_table": {
+				"label": "数据表",
+				"tooltip": "把关键事实和数字提取到电子表格中。",
+				"dialog_title": "创建数据表",
+				"description": "包含来源中结构化事实的 Excel 工作簿。",
+				"focus_label": "表格应记录什么？",
+				"focus_placeholder": "例如：每项研究一行，包含样本量和主要结局",
+				"ideas_label": "表格设计"
+			},
+			"infographic": {
+				"label": "信息图",
+				"tooltip": "把关键事实做成一张插画图片。",
+				"dialog_title": "创建信息图",
+				"description": "一张图片，一目了然地呈现关键事实和数据。",
+				"focus_label": "描述你想创建的信息图",
+				"focus_placeholder": "例如：使用蓝色主题，并突出 3 个关键数据",
+				"ideas_label": "核心信息"
+			}
+		},
+		"options": {
+			"audio": {
+				"format": {
+					"deep_dive": {
+						"label": "深度探讨",
+						"description": "两位主持人生动对话，拆解并串联来源中的主题。"
+					},
+					"brief": {
+						"label": "简要",
+						"description": "简短概览，帮你快速把握核心观点。"
+					},
+					"critique": {
+						"label": "评析",
+						"description": "对你的来源进行专家点评，并给出建设性意见。"
+					},
+					"debate": {
+						"label": "辩论",
+						"description": "两位主持人深入辩论，呈现不同视角。"
+					}
+				},
+				"length": {
+					"short": {
+						"label": "较短"
+					},
+					"default": {
+						"label": "默认"
+					},
+					"long": {
+						"label": "较长"
+					}
+				}
+			},
+			"video": {
+				"format": {
+					"explainer": {
+						"label": "解说",
+						"description": "结构化、全面的概览，把各个要点串联起来。"
+					},
+					"short": {
+						"label": "简短",
+						"description": "快速传达核心观点的短视频。"
+					}
+				},
+				"visual_style": {
+					"auto": {
+						"label": "自动选择",
+						"description": "由视频作者挑选与内容相符的外观。"
+					},
+					"custom": {
+						"label": "自定义",
+						"description": "用几句话描述你想要的外观。"
+					},
+					"classic": {
+						"label": "经典",
+						"description": "简洁的编辑风幻灯片：米白底色、藏青文字、一种蓝色点缀。"
+					},
+					"whiteboard": {
+						"label": "白板",
+						"description": "白底上的马克笔手绘、箭头和圈出的关键词。"
+					},
+					"playful": {
+						"label": "活泼",
+						"description": "马卡龙色、圆润造型和友好的图标。"
+					},
+					"dark": {
+						"label": "深色",
+						"description": "深炭灰背景，明亮文字，一种青绿点缀。"
+					},
+					"minimal": {
+						"label": "极简",
+						"description": "大量留白、超大字号，每个画面文字很少。"
+					}
+				}
+			},
+			"report": {
+				"format": {
+					"document": {
+						"label": "文档",
+						"description": "结构化的纯文本文档。"
+					},
+					"interactive": {
+						"label": "交互式",
+						"description": "可逐节浏览的交互式页面。"
+					}
+				},
+				"file_type": {
+					"pdf": {
+						"label": "PDF"
+					},
+					"docx": {
+						"label": "Word"
+					}
+				}
+			},
+			"slides": {
+				"format": {
+					"detailed": {
+						"label": "详细版",
+						"description": "包含完整文字、可独立阅读的演示文稿。"
+					},
+					"presenter": {
+						"label": "演讲版",
+						"description": "简洁的视觉幻灯片，要点写在演讲者备注中。"
+					}
+				},
+				"length": {
+					"short": {
+						"label": "较短"
+					},
+					"default": {
+						"label": "默认"
+					},
+					"long": {
+						"label": "较长"
+					}
+				}
+			},
+			"mindmap": {
+				"detail": {
+					"overview": {
+						"label": "概要"
+					},
+					"standard": {
+						"label": "标准"
+					},
+					"detailed": {
+						"label": "详细"
+					}
+				}
+			},
+			"flashcards": {
+				"count": {
+					"fewer": {
+						"label": "较少"
+					},
+					"standard": {
+						"label": "标准"
+					},
+					"more": {
+						"label": "较多"
+					}
+				},
+				"difficulty": {
+					"easy": {
+						"label": "简单"
+					},
+					"medium": {
+						"label": "中等"
+					},
+					"hard": {
+						"label": "困难"
+					}
+				}
+			},
+			"quiz": {
+				"count": {
+					"fewer": {
+						"label": "较少"
+					},
+					"standard": {
+						"label": "标准"
+					},
+					"more": {
+						"label": "较多"
+					}
+				},
+				"difficulty": {
+					"easy": {
+						"label": "简单"
+					},
+					"medium": {
+						"label": "中等"
+					},
+					"hard": {
+						"label": "困难"
+					}
+				}
+			},
+			"data_table": {},
+			"infographic": {
+				"style": {
+					"auto": {
+						"label": "自动选择",
+						"description": "根据内容自动选择合适的风格。"
+					},
+					"sketch-note": {
+						"label": "手绘笔记",
+						"description": "手绘墨线加一种强调色，像学习笔记一样。"
+					},
+					"kawaii": {
+						"label": "可爱风",
+						"description": "圆润的造型和柔和的马卡龙色，活泼亲切。"
+					},
+					"clay": {
+						"label": "黏土风",
+						"description": "柔和光线下柔软、有触感的 3D 造型。"
+					},
+					"anime": {
+						"label": "动漫风",
+						"description": "赛璐璐着色、充满活力的插画。"
+					},
+					"editorial": {
+						"label": "杂志风",
+						"description": "杂志式版面：大号衬线标题、一种醒目强调色、整洁的分栏。"
+					},
+					"instructional": {
+						"label": "说明书",
+						"description": "编号步骤、简洁线条图标和箭头，像一本操作手册。"
+					},
+					"bento-grid": {
+						"label": "便当格",
+						"description": "大小不一的圆角格子，每格一个要点。"
+					},
+					"bricks": {
+						"label": "积木",
+						"description": "由彩色玩具积木搭成，活泼又整齐。"
+					},
+					"scientific": {
+						"label": "科学",
+						"description": "精确标注的示意图和图表，像论文插图。"
+					},
+					"professional": {
+						"label": "商务",
+						"description": "简洁的企业风格：海军蓝与青绿色，图表和关键数字。"
+					}
+				},
+				"orientation": {
+					"landscape": {
+						"label": "横向"
+					},
+					"portrait": {
+						"label": "纵向"
+					},
+					"square": {
+						"label": "方形"
+					}
+				},
+				"detail": {
+					"concise": {
+						"label": "简洁"
+					},
+					"standard": {
+						"label": "标准"
+					},
+					"detailed": {
+						"label": "详细"
+					}
+				}
+			}
+		},
+		"templates": {
+			"learning_overview": {
+				"title": "学习概览",
+				"description": "总结关键概念，帮助你掌握内容。"
+			},
+			"briefing_doc": {
+				"title": "简报文档",
+				"description": "概述你的来源，突出关键见解和引文。"
+			},
+			"study_guide": {
+				"title": "学习指南",
+				"description": "简答测验、论述题和关键术语表。"
+			},
+			"blog_post": {
+				"title": "博客文章",
+				"description": "一篇引人入胜、让来源易于阅读的文章。"
+			}
+		},
+		"scroll_previous": "上一组风格",
+		"scroll_next": "更多风格",
+		"custom_style_label": "描述你想要的风格",
+		"custom_style_placeholder": "例如：深色网格上的 80 年代复古霓虹，粗体洋红标题",
+		"custom_topic": "自定义主题",
+		"custom_topic_description": "在下方写下你自己的重点。",
+		"close_viewer": "关闭查看器",
+		"home": "首页",
+		"home_title": "笔记本",
+		"home_filter": "显示笔记本",
+		"tab_all": "全部",
+		"tab_recent": "最近",
+		"search_notebooks": "搜索笔记本",
+		"view_mode": "布局",
+		"view_grid": "网格视图",
+		"view_list": "列表视图",
+		"settings": "设置",
+		"featured": "精选笔记本",
+		"new_notebook": "新建笔记本",
+		"no_matches": "没有与“{query}”匹配的笔记本。",
+		"search_inside_title": "在笔记本中找到",
+		"search_inside_empty": "笔记本中没有与“{query}”匹配的内容。",
+		"search_inside_failed": "无法在笔记本中搜索，请稍后再试。",
+		"search_inside_updated": "更新于{when}",
+		"search_inside_note": "笔记",
+		"search_inside_source": "来源",
+		"search_inside_count": "{count, plural, =0 {没有匹配的笔记本} other {# 个笔记本有匹配}}",
+		"pin_featured": "固定到精选",
+		"unpin_featured": "从精选中移除",
+		"copy_notebook": "复制笔记本",
+		"copy_title": "{title}（副本）",
+		"copied": "笔记本已连同来源和笔记一起复制。",
+		"copy_failed": "无法复制笔记本。",
+		"feature_failed": "无法更新精选笔记本。",
+		"notebook_menu": "笔记本选项",
+		"saving": "正在保存…",
+		"deleting": "正在删除…",
+		"research_the_web": "在网络上研究",
+		"configure_chat": {
+			"title": "配置聊天",
+			"description": "此笔记本中的聊天如何回答。从下一条消息开始生效。",
+			"goal": "对话目标",
+			"goals": {
+				"default": {
+					"label": "默认",
+					"description": "最适合一般研究和头脑风暴。"
+				},
+				"learning_guide": {
+					"label": "学习向导",
+					"description": "一步步帮助你理解，而不只是给出答案。"
+				},
+				"custom": {
+					"label": "自定义",
+					"description": "你自己设定的回答方式。"
+				}
+			},
+			"instructions_label": "自定义指令",
+			"instructions_placeholder": "例如：以带教住院医师的儿科主治医师身份回答，并引用指南章节。",
+			"length": "回答长度",
+			"lengths": {
+				"default": "默认",
+				"longer": "更长",
+				"shorter": "更短"
+			},
+			"save_failed": "无法保存聊天设置。"
+		},
+		"customize": {
+			"title": "自定义笔记本",
+			"description": "它在首页和顶栏中显示的名称和表情。",
+			"emoji": "表情"
+		},
+		"delete_history": {
+			"title": "删除聊天记录",
+			"body": "这会删除你在此笔记本中发起的聊天。聊天记录仅你本人可见，因此他人的聊天、来源、笔记和 Studio 输出都会保留。此操作无法撤销。",
+			"confirm": "删除我的聊天",
+			"failed": "无法删除聊天记录。",
+			"done": "你在此笔记本中的聊天记录已删除。"
+		},
+		"welcome": {
+			"heading": "开始你的笔记本吧",
+			"body_no_sources": "添加来源为对话提供依据，或者选一个起点，我来引导你。",
+			"body_with_sources": "就你的来源随便提问，或从下面的问题开始。",
+			"heading_with_sources": "向你的来源提问",
+			"questions_label": "推荐问题",
+			"starts": {
+				"learn": {
+					"label": "了解一个新主题",
+					"prompt": "我想了解一个新主题。先问我是什么主题、我已经了解多少，然后一步步引导我，并推荐值得添加到这个笔记本的来源。"
+				},
+				"create": {
+					"label": "创作新内容",
+					"prompt": "我想创作新内容。先问我想做什么（例如报告、演示文稿、学习指南或计划）以及面向谁，然后帮我列提纲并收集所需的来源。"
+				},
+				"progress": {
+					"label": "推进一个项目",
+					"prompt": "我想推进一个项目。先问我项目是什么、目前进展如何、卡在哪里，然后给出具体的下一步和有帮助的来源。"
+				}
+			}
+		},
+		"followups_label": "推荐的追问",
+		"needs_sources": {
+			"body": "{output}需要基于笔记本的来源生成，而此笔记本还没有来源。请先添加或在网上查找来源，然后再回来创建。",
+			"add_hint": "文件、网站或你已有的文档",
+			"research_hint": "搜索网络、YouTube、Reddit 等",
+			"title": "此笔记本还没有来源"
+		},
+		"focus_example": "例如：{example}",
+		"more_ideas": "更多建议",
+		"more_ideas_failed": "未能获取新建议，当前建议仍保留。",
+		"studio_empty_title": "Studio 输出将保存在这里。",
+		"notify": {
+			"offer_title": "准备好时通知我",
+			"offer_body": "生成需要几分钟。当你发起的输出在此标签页处于后台时完成，我们会显示浏览器通知。",
+			"turn_on": "开启通知",
+			"not_now": "暂不",
+			"ready_title": "你的 Studio 输出已就绪",
+			"failed_title": "有一个 Studio 输出未能生成"
+		},
+		"phase_progress": "{phase} · {progress}%",
+		"phases": {
+			"preparing": "正在准备来源",
+			"drafting": "正在起草",
+			"authoring": "正在编写脚本",
+			"narrating": "正在录制旁白",
+			"reviewing": "正在审阅",
+			"repairing": "正在修复问题",
+			"rendering": "正在渲染",
+			"verifying": "正在检查结果",
+			"saving": "正在保存"
+		},
+		"add_from_connector": "来自连接器",
+		"connector_sources_title": "来自已连接应用的文件",
+		"connector_sources_files": "文件连接器（Google Drive、OneDrive、Dropbox、监视的文件夹）会把你选择的文件和文件夹复制到资料库。同步完成后，在这里的“从你的工作区”中添加。",
+		"connector_sources_tools": "工具连接器（如 Nextcloud 等 MCP 服务器、网页搜索、浏览器）不会被复制：当问题需要时，笔记本的聊天会实时调用它们。",
+		"manage_connectors": "管理连接器",
+		"add_from_library_short": "工作区",
+		"add_upload_short": "上传",
+		"add_from_connector_short": "连接器",
+		"nextcloud_picker_title": "Nextcloud 文件",
+		"nextcloud_picker_hint": "勾选文件或文件夹即可将其添加为来源。它们现在复制一次，之后不会持续同步。",
+		"connector_sources_other": "Google Drive、OneDrive 和 Dropbox 的文件请在“来自你的工作区”中添加。“Nextcloud (Open Notebook folder)” 工具是独立的：聊天会实时读取它。",
+		"connector_sources_nextcloud": "Nextcloud：在“连接器”中连接“Nextcloud 文件”，即可在这里直接选择文件，无需同步。",
+		"made_with": "由 {model} 生成",
+		"made_with_fallback": "由 {model} 生成（备用）",
+		"output_view": {
+			"studio": "Studio",
+			"view_prompt": "查看提示和 {count, plural, other {# 个来源}}",
+			"prompt_title": "提示",
+			"no_prompt": "未使用自定义重点生成。",
+			"sources_title": "来源",
+			"no_sources": "它使用的来源已不在此笔记本中。",
+			"loading_sources": "正在加载来源…",
+			"expand": "展开到整个窗口",
+			"collapse": "退出整个窗口",
+			"close": "关闭",
+			"back": "返回 Studio",
+			"good": "内容不错",
+			"bad": "内容不佳",
+			"thanks": "感谢反馈",
+			"loading": "正在加载…",
+			"open_failed": "无法打开此输出。",
+			"try_again": "重试"
+		},
+		"back_to_output": "返回 {title}"
+	},
+	"upload_documents": {
+		"title": "上传文档",
+		"subtitle": "上传您的文件，使其可通过 AI 对话进行搜索和访问。",
+		"file_size_limit": "最大文件大小：每个文件 500MB",
+		"drop_files": "将文件或文件夹拖放到此处",
+		"drag_drop": "拖放文件或文件夹到这里",
+		"drag_drop_more": "拖放或浏览以添加更多文件",
+		"or_browse": "或点击浏览",
+		"browse_files": "浏览文件",
+		"browse_folder": "浏览文件夹",
+		"selected_files": "已选择 {count} 个文件",
+		"total_size": "总大小",
+		"clear_all": "全部清除",
+		"uploading_files": "正在上传文件...",
+		"uploading": "上传中...",
+		"upload_button": "上传 {count} 个文件",
+		"upload_initiated": "上传任务已启动",
+		"upload_initiated_desc": "文件上传已开始",
+		"upload_error": "上传错误",
+		"upload_error_desc": "上传文件时出错",
+		"supported_file_types": "支持的文件类型",
+		"file_too_large": "文件过大",
+		"file_too_large_desc": "\"{name}\" 超过了每个文件 {maxMB}MB 的限制。",
+		"no_supported_files_in_folder": "所选文件夹中没有找到支持的文件类型。",
+		"uploading_folder": "正在上传文件夹…",
+		"upload_folder_button": "上传文件夹（{count}个文件）",
+		"select_files_or_folder": "选择文件或文件夹",
+		"tap_select_files_or_folder": "点击选择文件或文件夹",
+		"parser_label": "解析器",
+		"parser_local": "本地",
+		"parser_local_desc": "在本服务器上读取文本，仅在页面需要时使用 OCR。免费，文件不会离开本机。",
+		"parser_cloud": "云端",
+		"parser_cloud_desc": "将文件发送到云端解析器，更细致地读取表格、图表和扫描件。速度较慢。",
+		"parser_cost_note": "解析成本约为 {multiplier} 倍。",
+		"parser_unavailable_missing_api_key": "不可用：本服务器未配置 API 密钥。",
+		"parser_unavailable_not_installed": "不可用：本服务器未安装。",
+		"parser_unavailable_unknown_service": "不可用：本服务器未配置。",
+		"unsupported_files_title": "{count, plural, other {# 个文件未添加}}",
+		"unsupported_files_desc": "{parser}解析器无法读取：{files}",
+		"unsupported_files_dismiss": "关闭",
+		"vision_llm_label": "启用视觉 LLM",
+		"vision_llm_desc": "使用 AI 视觉描述图像（成本较高，较慢）"
+	}
+}

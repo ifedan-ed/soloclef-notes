@@ -1,0 +1,753 @@
+{
+	"common": {
+		"app_name": "{brand}",
+		"welcome": "Welcome",
+		"save": "Save",
+		"cancel": "Cancel",
+		"delete": "Delete",
+		"edit": "Edit",
+		"create": "Create",
+		"update": "Update",
+		"search": "Search",
+		"close": "Close",
+		"confirm": "Confirm",
+		"back": "Back",
+		"next": "Next",
+		"submit": "Submit",
+		"yes": "Yes",
+		"no": "No",
+		"add": "Add",
+		"remove": "Remove",
+		"select": "Select",
+		"all": "All",
+		"none": "None",
+		"error": "Error",
+		"success": "Success",
+		"warning": "Warning",
+		"info": "Information",
+		"required": "Required",
+		"optional": "Optional",
+		"retry": "Retry",
+		"owner": "Owner",
+		"shared": "Shared",
+		"settings": "Settings"
+	},
+	"auth": {
+		"login": "Login",
+		"register": "Register",
+		"logout": "Logout",
+		"email": "Email",
+		"password": "Password",
+		"confirm_password": "Confirm Password",
+		"forgot_password": "Forgot Password?",
+		"show_password": "Show password",
+		"hide_password": "Hide password",
+		"remember_me": "Remember Me",
+		"sign_in": "Sign In",
+		"sign_up": "Sign Up",
+		"sign_in_with": "Sign in with {provider}",
+		"dont_have_account": "Don't have an account?",
+		"already_have_account": "Already have an account?",
+		"reset_password": "Reset Password",
+		"email_required": "Email is required",
+		"password_required": "Password is required",
+		"invalid_email": "Invalid email address",
+		"password_too_short": "Password must be at least 8 characters",
+		"welcome_back": "Welcome back",
+		"create_account": "Create your account",
+		"login_subtitle": "Enter your credentials to access your account",
+		"register_subtitle": "Sign up to get started with {brand}",
+		"or_continue_with": "Or continue with",
+		"by_continuing": "By continuing, you agree to our",
+		"terms_of_service": "Terms of Service",
+		"and": "and",
+		"privacy_policy": "Privacy Policy",
+		"full_name": "Full Name",
+		"username": "Username",
+		"continue": "Continue",
+		"back_to_login": "Back to Login",
+		"login_success": "Successfully logged in",
+		"register_success": "Account created successfully",
+		"continue_with_google": "Continue with Google",
+		"cloud_dev_notice": "{brand} is currently in development. Check",
+		"docs": "Docs",
+		"cloud_dev_self_hosted": "for more information on Self-Hosted version.",
+		"passwords_no_match": "Passwords do not match",
+		"password_mismatch": "Password Mismatch",
+		"passwords_no_match_desc": "The passwords you entered do not match",
+		"creating_account": "Creating your account",
+		"creating_account_btn": "Creating account",
+		"redirecting_login": "Redirecting to login page",
+		"request_access": "Request access",
+		"signups_closed_title": "New accounts are not open yet",
+		"signups_closed_body": "Sign-ups are closed for now. If you would like an account, ask for one and you will get an answer by email."
+	},
+	"notebooks": {
+		"title": "Notebooks",
+		"recent": "Recent notebooks",
+		"create": "Create notebook",
+		"untitled": "Untitled notebook",
+		"create_failed": "Couldn't create the notebook.",
+		"load_failed": "Couldn't load notebooks.",
+		"retry": "Retry",
+		"empty_hint": "No notebooks yet. Create one to start collecting sources.",
+		"rename": "Rename",
+		"rename_failed": "Couldn't rename the notebook.",
+		"delete": "Delete",
+		"delete_failed": "Couldn't delete the notebook.",
+		"delete_confirm_title": "Delete “{title}”?",
+		"delete_confirm_body": "Its notes and source links are removed. Your documents and chats stay in the workspace.",
+		"cancel": "Cancel",
+		"save": "Save",
+		"confirm": "Confirm",
+		"back": "Back",
+		"open": "Open",
+		"play": "Play",
+		"more_actions": "More actions",
+		"source_count": "{count, plural, =0 {No sources} one {# source} other {# sources}}",
+		"composer_sources": "{count, plural, =0 {No sources} one {# source} other {# sources}}",
+		"back_to_notebooks": "Back to notebooks",
+		"change_icon": "Change icon",
+		"notebook_title": "Notebook title",
+		"notebook_not_found": "This notebook could not be loaded.",
+		"sources": "Sources",
+		"chat": "Chat",
+		"studio": "Studio",
+		"collapse_sources": "Collapse sources",
+		"expand_sources": "Expand sources",
+		"collapse_studio": "Collapse studio",
+		"expand_studio": "Expand studio",
+		"add_sources": "Add sources",
+		"add_sources_description": "Upload new files, pick documents already in this workspace, or pick files from Nextcloud.",
+		"add_from_library": "From your workspace",
+		"add_upload": "Upload files",
+		"search_library": "Search documents and folders",
+		"add_n_sources": "{count, plural, =0 {Add sources} one {Add # source} other {Add # sources}}",
+		"add_sources_failed": "Couldn't add those sources.",
+		"remove_pick": "Remove {title}",
+		"select_all": "Select all sources",
+		"use_source": "Use {title}",
+		"remove_source": "Remove from notebook",
+		"source_indexing": "Still being indexed",
+		"sources_update_failed": "Couldn't update the sources.",
+		"back_to_sources": "Back to sources",
+		"source_guide": "Source guide",
+		"source_guide_generating": "Writing a guide for this source…",
+		"source_guide_unavailable": "No guide is available for this source yet.",
+		"new_chat_failed": "Couldn't start the chat.",
+		"mention_heading": "Sources in this notebook",
+		"mention_no_match": "No source matches",
+		"mention_no_sources": "This notebook has no sources to mention yet.",
+		"save_to_note": "Save to note",
+		"save_to_note_failed": "Couldn't save the note.",
+		"saved_to_note": "Saved to notes",
+		"studio_empty": "After adding sources, click to add Audio Overview, Mind Map, and more!",
+		"add_note": "Add note",
+		"new_note": "New note",
+		"note": "Note",
+		"note_title": "Note title",
+		"note_placeholder": "Write your note…",
+		"note_is_source": "Added as a source",
+		"note_create_failed": "Couldn't create the note.",
+		"note_save_failed": "Couldn't save your changes.",
+		"note_delete_failed": "Couldn't delete the note.",
+		"delete_note_confirm": "Delete this note?",
+		"convert_to_source": "Convert to source",
+		"convert_failed": "Couldn't add the note as a source.",
+		"converted": "The note is now a source.",
+		"back_to_studio": "Back to studio",
+		"generate_now": "Generate now",
+		"generate_failed": "Couldn't start the generation.",
+		"generation_started": "Generating — it will appear in Studio.",
+		"choose_sources": "Choose at least one source.",
+		"default_suffix": "(Default)",
+		"default_is": "Default: {value}",
+		"language_default": "Default",
+		"delete_output_confirm": "Delete “{title}”? This also deletes the generated file.",
+		"try_again": "Try again",
+		"status_progress": "Generating {progress}%",
+		"status": {
+			"queued": "Queued",
+			"running": "Generating",
+			"ready": "Ready",
+			"failed": "Failed",
+			"cancelled": "Cancelled"
+		},
+		"edit_template": "Edit {title}",
+		"template_prompt": "Template instructions",
+		"template_save_default": "Save as default",
+		"template_saved": "Template saved for this workspace.",
+		"template_save_failed": "Couldn't save the template.",
+		"fields": {
+			"format": "Format",
+			"length": "Length",
+			"detail": "Level of detail",
+			"count": "Number",
+			"difficulty": "Difficulty",
+			"file_type": "File type",
+			"language": "Language",
+			"template": "Template",
+			"style": "Visual style",
+			"visual_style": "Choose visual style",
+			"orientation": "Orientation"
+		},
+		"kinds": {
+			"audio": {
+				"label": "Audio Overview",
+				"tooltip": "Generate a podcast-style conversation about your sources.",
+				"dialog_title": "Customize Audio Overview",
+				"description": "Two hosts (or one, for a brief) talk through your sources.",
+				"focus_label": "What should the AI hosts focus on?",
+				"focus_placeholder": "e.g. Focus on the methods and what they mean for practice",
+				"ideas_label": "Ideas for the hosts"
+			},
+			"video": {
+				"label": "Video Overview",
+				"tooltip": "Generate an explainer video, presented to you by AI.",
+				"dialog_title": "Customize Video Overview",
+				"description": "A narrated, animated video built from your sources.",
+				"focus_label": "What should the video focus on?",
+				"focus_placeholder": "e.g. Explain the key finding to a new colleague",
+				"ideas_label": "Ideas for the narrator"
+			},
+			"report": {
+				"label": "Reports",
+				"tooltip": "Create a structured report or an interactive overview.",
+				"dialog_title": "Create report",
+				"description": "A written report from your sources, as a document or an interactive page.",
+				"focus_label": "Anything to emphasize?",
+				"focus_placeholder": "e.g. Keep it to two pages and highlight open questions",
+				"ideas_label": "Angles"
+			},
+			"slides": {
+				"label": "Slide Deck",
+				"tooltip": "Create an editable PowerPoint deck from your sources.",
+				"dialog_title": "Customize slide deck",
+				"description": "An editable .pptx deck built from your sources.",
+				"focus_label": "What should the deck cover?",
+				"focus_placeholder": "e.g. A 10-minute teaching session for residents",
+				"ideas_label": "Angles"
+			},
+			"mindmap": {
+				"label": "Mind Map",
+				"tooltip": "Map the main ideas in your sources and how they connect.",
+				"dialog_title": "Customize mind map",
+				"description": "A hierarchical map of the ideas in your sources.",
+				"focus_label": "What should the map center on?",
+				"focus_placeholder": "e.g. Center it on diagnosis and management",
+				"ideas_label": "Map outlines"
+			},
+			"flashcards": {
+				"label": "Flashcards",
+				"tooltip": "Create flashcards for active recall.",
+				"dialog_title": "Customize flashcards",
+				"description": "A study deck with questions on one side and answers on the other.",
+				"focus_label": "What should the cards test?",
+				"focus_placeholder": "e.g. Definitions and cut-off values",
+				"ideas_label": "What to test"
+			},
+			"quiz": {
+				"label": "Quiz",
+				"tooltip": "Create a scored multiple-choice quiz.",
+				"dialog_title": "Customize quiz",
+				"description": "Single-answer questions with scoring.",
+				"focus_label": "What should the quiz cover?",
+				"focus_placeholder": "e.g. Clinical reasoning rather than recall",
+				"ideas_label": "What to test"
+			},
+			"data_table": {
+				"label": "Data Table",
+				"tooltip": "Extract the key facts and figures into a spreadsheet.",
+				"dialog_title": "Create data table",
+				"description": "An Excel workbook of the structured facts in your sources.",
+				"focus_label": "What should the table capture?",
+				"focus_placeholder": "e.g. One row per study with sample size and main outcome",
+				"ideas_label": "Table designs"
+			},
+			"infographic": {
+				"label": "Infographic",
+				"tooltip": "Turn the key facts into one illustrated image.",
+				"dialog_title": "Create infographic",
+				"description": "A single image that presents the key facts and figures at a glance.",
+				"focus_label": "Describe the infographic you want to create",
+				"focus_placeholder": "e.g. Use a blue color theme and highlight the 3 key stats",
+				"ideas_label": "Key messages"
+			}
+		},
+		"options": {
+			"audio": {
+				"format": {
+					"deep_dive": {
+						"label": "Deep Dive",
+						"description": "A lively conversation between two hosts, unpacking and connecting topics in your sources."
+					},
+					"brief": {
+						"label": "Brief",
+						"description": "A bite-sized overview to help you grasp the core ideas quickly."
+					},
+					"critique": {
+						"label": "Critique",
+						"description": "An expert review of your sources, with constructive feedback."
+					},
+					"debate": {
+						"label": "Debate",
+						"description": "A thoughtful debate between two hosts, illuminating different perspectives."
+					}
+				},
+				"length": {
+					"short": {
+						"label": "Short"
+					},
+					"default": {
+						"label": "Default"
+					},
+					"long": {
+						"label": "Long"
+					}
+				}
+			},
+			"video": {
+				"format": {
+					"explainer": {
+						"label": "Explainer",
+						"description": "A structured, comprehensive overview that connects the dots."
+					},
+					"short": {
+						"label": "Short",
+						"description": "A bite-sized video that lands the core idea quickly."
+					}
+				},
+				"visual_style": {
+					"auto": {
+						"label": "Auto-select",
+						"description": "The video's author picks a look that suits the material."
+					},
+					"custom": {
+						"label": "Custom",
+						"description": "Describe the look you want in a few words."
+					},
+					"classic": {
+						"label": "Classic",
+						"description": "Clean editorial slides: off-white, navy text, one blue accent."
+					},
+					"whiteboard": {
+						"label": "Whiteboard",
+						"description": "Marker-ink drawings, arrows and circled keywords on white."
+					},
+					"playful": {
+						"label": "Playful",
+						"description": "Pastel colours, rounded shapes and friendly icons."
+					},
+					"dark": {
+						"label": "Dark",
+						"description": "Deep charcoal backgrounds with bright text and a teal accent."
+					},
+					"minimal": {
+						"label": "Minimal",
+						"description": "Lots of white space, very large type, few words per scene."
+					}
+				}
+			},
+			"report": {
+				"format": {
+					"document": {
+						"label": "Document",
+						"description": "A structured, text-only document."
+					},
+					"interactive": {
+						"label": "Interactive",
+						"description": "An interactive page with sections you can explore."
+					}
+				},
+				"file_type": {
+					"pdf": {
+						"label": "PDF"
+					},
+					"docx": {
+						"label": "Word"
+					}
+				}
+			},
+			"slides": {
+				"format": {
+					"detailed": {
+						"label": "Detailed deck",
+						"description": "A comprehensive deck with full text, made to be read on its own."
+					},
+					"presenter": {
+						"label": "Presenter slides",
+						"description": "Clean visual slides with talking points in the speaker notes."
+					}
+				},
+				"length": {
+					"short": {
+						"label": "Short"
+					},
+					"default": {
+						"label": "Default"
+					},
+					"long": {
+						"label": "Long"
+					}
+				}
+			},
+			"mindmap": {
+				"detail": {
+					"overview": {
+						"label": "Overview"
+					},
+					"standard": {
+						"label": "Standard"
+					},
+					"detailed": {
+						"label": "Detailed"
+					}
+				}
+			},
+			"flashcards": {
+				"count": {
+					"fewer": {
+						"label": "Fewer"
+					},
+					"standard": {
+						"label": "Standard"
+					},
+					"more": {
+						"label": "More"
+					}
+				},
+				"difficulty": {
+					"easy": {
+						"label": "Easy"
+					},
+					"medium": {
+						"label": "Medium"
+					},
+					"hard": {
+						"label": "Hard"
+					}
+				}
+			},
+			"quiz": {
+				"count": {
+					"fewer": {
+						"label": "Fewer"
+					},
+					"standard": {
+						"label": "Standard"
+					},
+					"more": {
+						"label": "More"
+					}
+				},
+				"difficulty": {
+					"easy": {
+						"label": "Easy"
+					},
+					"medium": {
+						"label": "Medium"
+					},
+					"hard": {
+						"label": "Hard"
+					}
+				}
+			},
+			"data_table": {},
+			"infographic": {
+				"style": {
+					"auto": {
+						"label": "Auto-select",
+						"description": "Picks the style that suits the material."
+					},
+					"sketch-note": {
+						"label": "Sketch Note",
+						"description": "Hand-drawn ink with one accent colour, like study notes."
+					},
+					"kawaii": {
+						"label": "Kawaii",
+						"description": "Playful and friendly, with rounded shapes and pastel colours."
+					},
+					"clay": {
+						"label": "Clay",
+						"description": "Soft, tactile 3D forms with gentle lighting."
+					},
+					"anime": {
+						"label": "Anime",
+						"description": "Bold, energetic cel-shaded illustration."
+					},
+					"editorial": {
+						"label": "Editorial",
+						"description": "Magazine layout: big serif headline, one bold accent, clean columns."
+					},
+					"instructional": {
+						"label": "Instructional",
+						"description": "Numbered steps, simple line icons and arrows, like a manual."
+					},
+					"bento-grid": {
+						"label": "Bento Grid",
+						"description": "Rounded tiles of different sizes, one idea per tile."
+					},
+					"bricks": {
+						"label": "Bricks",
+						"description": "Built from colourful toy bricks, playful and tidy."
+					},
+					"scientific": {
+						"label": "Scientific",
+						"description": "Precise labelled diagrams and charts, like a journal figure."
+					},
+					"professional": {
+						"label": "Professional",
+						"description": "Clean corporate look: navy and teal, charts and key numbers."
+					}
+				},
+				"orientation": {
+					"landscape": {
+						"label": "Landscape"
+					},
+					"portrait": {
+						"label": "Portrait"
+					},
+					"square": {
+						"label": "Square"
+					}
+				},
+				"detail": {
+					"concise": {
+						"label": "Concise"
+					},
+					"standard": {
+						"label": "Standard"
+					},
+					"detailed": {
+						"label": "Detailed"
+					}
+				}
+			}
+		},
+		"templates": {
+			"learning_overview": {
+				"title": "Learning Overview",
+				"description": "Summarizes key concepts to help you learn the material."
+			},
+			"briefing_doc": {
+				"title": "Briefing Doc",
+				"description": "Overview of your sources featuring key insights and quotes."
+			},
+			"study_guide": {
+				"title": "Study Guide",
+				"description": "Short-answer quiz, essay questions and a glossary of key terms."
+			},
+			"blog_post": {
+				"title": "Blog Post",
+				"description": "An engaging article that makes your sources easy to read."
+			}
+		},
+		"scroll_previous": "Previous styles",
+		"scroll_next": "More styles",
+		"custom_style_label": "Describe your style",
+		"custom_style_placeholder": "e.g. Retro 80s neon on a dark grid, bold magenta headings",
+		"custom_topic": "Custom topic",
+		"custom_topic_description": "Write your own focus below.",
+		"close_viewer": "Close viewer",
+		"home": "Home",
+		"home_title": "Notebooks",
+		"home_filter": "Show notebooks",
+		"tab_all": "All",
+		"tab_recent": "Recent",
+		"search_notebooks": "Search notebooks",
+		"view_mode": "Layout",
+		"view_grid": "Grid view",
+		"view_list": "List view",
+		"settings": "Settings",
+		"featured": "Featured notebooks",
+		"new_notebook": "New notebook",
+		"no_matches": "No notebooks match “{query}”.",
+		"search_inside_title": "Found inside notebooks",
+		"search_inside_empty": "Nothing inside your notebooks matches “{query}”.",
+		"search_inside_failed": "Couldn’t search inside notebooks. Try again in a moment.",
+		"search_inside_updated": "Updated {when}",
+		"search_inside_note": "Note",
+		"search_inside_source": "Source",
+		"search_inside_count": "{count, plural, =0 {No notebooks with matches} one {# notebook with matches} other {# notebooks with matches}}",
+		"pin_featured": "Pin to featured",
+		"unpin_featured": "Remove from featured",
+		"copy_notebook": "Copy notebook",
+		"copy_title": "{title} (copy)",
+		"copied": "Notebook copied with its sources and notes.",
+		"copy_failed": "Couldn't copy the notebook.",
+		"feature_failed": "Couldn't update featured notebooks.",
+		"notebook_menu": "Notebook options",
+		"saving": "Saving…",
+		"deleting": "Deleting…",
+		"research_the_web": "Research the web",
+		"configure_chat": {
+			"title": "Configure chat",
+			"description": "How chats in this notebook answer. Applies from the next message.",
+			"goal": "Conversational goal",
+			"goals": {
+				"default": {
+					"label": "Default",
+					"description": "Best for general research and brainstorming."
+				},
+				"learning_guide": {
+					"label": "Learning guide",
+					"description": "Helps you understand step by step instead of just giving answers."
+				},
+				"custom": {
+					"label": "Custom",
+					"description": "Your own instructions for how to respond."
+				}
+			},
+			"instructions_label": "Custom instructions",
+			"instructions_placeholder": "e.g. Answer as a pediatric attending teaching residents; cite guideline sections.",
+			"length": "Response length",
+			"lengths": {
+				"default": "Default",
+				"longer": "Longer",
+				"shorter": "Shorter"
+			},
+			"save_failed": "Couldn't save the chat settings."
+		},
+		"customize": {
+			"title": "Customize notebook",
+			"description": "Its name and emoji, as they appear on the home and in the header.",
+			"emoji": "Emoji"
+		},
+		"delete_history": {
+			"title": "Delete chat history",
+			"body": "This deletes the chats you started in this notebook. Chat history is private to you, so other people's chats, the sources, notes and Studio outputs stay. This can't be undone.",
+			"confirm": "Delete my chats",
+			"failed": "Couldn't delete the chat history.",
+			"done": "Your chat history in this notebook was deleted."
+		},
+		"welcome": {
+			"heading": "Let's start your notebook",
+			"body_no_sources": "Add sources to ground the conversation, or pick a starting point and I'll guide you.",
+			"body_with_sources": "Ask anything about your sources, or start with one of these questions.",
+			"heading_with_sources": "Ask your sources",
+			"questions_label": "Suggested questions",
+			"starts": {
+				"learn": {
+					"label": "Learn about a new topic",
+					"prompt": "I want to learn about a new topic. Ask me which topic and how much I already know, then guide me through it step by step and suggest sources worth adding to this notebook."
+				},
+				"create": {
+					"label": "Create something new",
+					"prompt": "I want to create something new. Ask me what I want to make (for example a report, a presentation, a study guide or a plan) and who it is for, then help me outline it and gather the sources it needs."
+				},
+				"progress": {
+					"label": "Make progress on a project",
+					"prompt": "I want to make progress on a project. Ask me what the project is, where it stands and what is blocking me, then suggest concrete next steps and what sources would help."
+				}
+			}
+		},
+		"followups_label": "Suggested follow-up questions",
+		"needs_sources": {
+			"body": "{output} is made from your notebook's sources, and this notebook has none yet. Add some, or find them on the web, then come back to create it.",
+			"add_hint": "Files, websites or documents you already have",
+			"research_hint": "Search the web, YouTube, Reddit and more",
+			"title": "This notebook has no sources yet"
+		},
+		"focus_example": "e.g. {example}",
+		"more_ideas": "More ideas",
+		"more_ideas_failed": "Couldn't get new ideas. The current ones are still here.",
+		"studio_empty_title": "Studio output will be saved here.",
+		"notify": {
+			"offer_title": "Get notified when it's ready",
+			"offer_body": "Outputs take a few minutes. We'll show a browser notification when one you started finishes while this tab is in the background.",
+			"turn_on": "Turn on notifications",
+			"not_now": "Not now",
+			"ready_title": "Your Studio output is ready",
+			"failed_title": "A Studio output couldn't be created"
+		},
+		"phase_progress": "{phase} · {progress}%",
+		"phases": {
+			"preparing": "Preparing sources",
+			"drafting": "Drafting",
+			"authoring": "Writing the script",
+			"narrating": "Recording narration",
+			"reviewing": "Reviewing",
+			"repairing": "Fixing issues",
+			"rendering": "Rendering",
+			"verifying": "Checking the result",
+			"saving": "Saving"
+		},
+		"add_from_connector": "From a connector",
+		"connector_sources_title": "Files from your connected apps",
+		"connector_sources_files": "File connectors (Google Drive, OneDrive, Dropbox, a watched folder) copy the files and folders you choose into your library. Once synced, add them here from “From your workspace”.",
+		"connector_sources_tools": "Tool connectors (MCP servers such as Nextcloud, web search, a browser) are not copied: the notebook's chat calls them live when a question needs them.",
+		"manage_connectors": "Manage connectors",
+		"add_from_library_short": "Workspace",
+		"add_upload_short": "Upload",
+		"add_from_connector_short": "Connector",
+		"nextcloud_picker_title": "Nextcloud files",
+		"nextcloud_picker_hint": "Tick files or folders to add them as sources. They are copied once now; nothing keeps syncing.",
+		"connector_sources_other": "Google Drive, OneDrive and Dropbox files are added from “From your workspace”. The “Nextcloud (Open Notebook folder)” tool is separate: the chat reads it live.",
+		"connector_sources_nextcloud": "Nextcloud: connect “Nextcloud files” under Connectors to pick files here directly, without syncing.",
+		"made_with": "Made with {model}",
+		"made_with_fallback": "Made with {model} (fallback)",
+		"output_view": {
+			"studio": "Studio",
+			"view_prompt": "View prompt and {count, plural, one {# source} other {# sources}}",
+			"prompt_title": "Prompt",
+			"no_prompt": "Made without a custom focus.",
+			"sources_title": "Sources",
+			"no_sources": "The sources it used are no longer in this notebook.",
+			"loading_sources": "Loading sources…",
+			"expand": "Expand to full window",
+			"collapse": "Exit full window",
+			"close": "Close",
+			"back": "Back to Studio",
+			"good": "Good content",
+			"bad": "Bad content",
+			"thanks": "Thanks for the feedback",
+			"loading": "Loading…",
+			"open_failed": "Couldn't open this output.",
+			"try_again": "Try again"
+		},
+		"back_to_output": "Back to {title}"
+	},
+	"upload_documents": {
+		"title": "Upload Documents",
+		"subtitle": "Upload your files to make them searchable and accessible through AI-powered conversations.",
+		"file_size_limit": "Maximum file size: 500MB per file",
+		"drop_files": "Drop files or folders here",
+		"drag_drop": "Drag & drop files or folders here",
+		"drag_drop_more": "Drop or browse to add more files",
+		"or_browse": "or click to browse",
+		"browse_files": "Browse Files",
+		"browse_folder": "Browse Folder",
+		"selected_files": "{count} selected {count, plural, one {file} other {files}}",
+		"total_size": "Total size",
+		"clear_all": "Clear all",
+		"uploading_files": "Uploading files",
+		"uploading": "Uploading",
+		"upload_button": "Upload {count} {count, plural, one {file} other {files}}",
+		"upload_initiated": "Upload Task Initiated",
+		"upload_initiated_desc": "Files Uploading Initiated",
+		"upload_error": "Upload Error",
+		"upload_error_desc": "Error uploading files",
+		"supported_file_types": "Supported File Types",
+		"file_too_large": "File Too Large",
+		"file_too_large_desc": "\"{name}\" exceeds the {maxMB}MB per-file limit.",
+		"no_supported_files_in_folder": "No supported file types found in the selected folder.",
+		"uploading_folder": "Uploading folder…",
+		"upload_folder_button": "Upload Folder ({count} {count, plural, one {file} other {files}})",
+		"select_files_or_folder": "Select files or folder",
+		"tap_select_files_or_folder": "Tap to select files or folder",
+		"parser_label": "Parser",
+		"parser_local": "Local",
+		"parser_local_desc": "Reads the text on this server, with OCR only where a page needs it. Free, and the file stays here.",
+		"parser_cloud": "Cloud",
+		"parser_cloud_desc": "Sends the file to a cloud parser for a closer read of tables, figures and scans. Slower.",
+		"parser_cost_note": "About {multiplier}x the parsing cost.",
+		"parser_unavailable_missing_api_key": "Unavailable: no API key is configured on this server.",
+		"parser_unavailable_not_installed": "Unavailable: not installed on this server.",
+		"parser_unavailable_unknown_service": "Unavailable: not configured on this server.",
+		"unsupported_files_title": "{count, plural, one {# file was} other {# files were}} not added",
+		"unsupported_files_desc": "The {parser} parser can't read: {files}",
+		"unsupported_files_dismiss": "Dismiss",
+		"vision_llm_label": "Enable Vision LLM",
+		"vision_llm_desc": "Describes images using AI vision (costly, slower)"
+	}
+}

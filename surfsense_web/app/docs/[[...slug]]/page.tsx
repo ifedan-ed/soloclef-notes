@@ -1,0 +1,63 @@
+import { DocsBody, DocsDescription, DocsPage, DocsTitle } from "fumadocs-ui/page";
+import { notFound } from "next/navigation";
+import { cache } from "react";
+import { BRAND, siteUrl } from "@/lib/brand";
+import { source } from "@/lib/source";
+import { getMDXComponents } from "@/mdx-components";
+
+const getDocPage = cache((slug?: string[]) => {
+	return source.getPage(slug);
+});
+
+export default async function Page(props: { params: Promise<{ slug?: string[] }> }) {
+	const params = await props.params;
+	const page = getDocPage(params.slug);
+	if (!page) notFound();
+
+	const MDX = page.data.body;
+
+	return (
+		<DocsPage
+			toc={page.data.toc}
+			full={page.data.full}
+			tableOfContent={{
+				style: "clerk",
+				single: false,
+			}}
+			tableOfContentPopover={{
+				style: "clerk",
+			}}
+		>
+			<DocsTitle>{page.data.title}</DocsTitle>
+			<DocsDescription>{page.data.description}</DocsDescription>
+			<DocsBody>
+				<MDX components={getMDXComponents()} />
+			</DocsBody>
+		</DocsPage>
+	);
+}
+
+export async function generateStaticParams() {
+	return source.generateParams();
+}
+
+export async function generateMetadata(props: { params: Promise<{ slug?: string[] }> }) {
+	const params = await props.params;
+	const page = getDocPage(params.slug);
+	if (!page) notFound();
+
+	const slugPath = params.slug ? params.slug.join("/") : "";
+	return {
+		title: `${page.data.title} | ${BRAND.name} Docs`,
+		description: page.data.description,
+		alternates: {
+			// Left out when the server has no address (lib/brand siteUrl).
+			canonical: siteUrl(`/docs${slugPath ? `/${slugPath}` : ""}`),
+		},
+		openGraph: {
+			title: `${page.data.title} | ${BRAND.name} Docs`,
+			description: page.data.description,
+			type: "article",
+		},
+	};
+}
