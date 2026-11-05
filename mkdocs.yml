@@ -1,0 +1,46 @@
+site_name: Soloclef Notes
+site_description: A self-hosted NotebookLM-style workspace for your own documents, with an iPhone app.
+site_url: https://ifedan-ed.github.io/soloclef-notes/
+repo_url: https://github.com/ifedan-ed/soloclef-notes
+repo_name: ifedan-ed/soloclef-notes
+edit_uri: edit/main/docs/
+docs_dir: docs
+theme:
+  name: material
+  logo: images/mark.svg
+  favicon: images/mark.svg
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle: { icon: material/weather-night, name: Dark mode }
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle: { icon: material/weather-sunny, name: Light mode }
+  features:
+    - navigation.instant
+    - navigation.top
+    - content.code.copy
+    - search.highlight
+extra_css:
+  - stylesheets/extra.css
+extra:
+  homepage: https://soloclef.com
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc: { permalink: true }
+  - pymdownx.highlight
+  - pymdownx.superfences
+nav:
+  - Home: index.md
+  - Run your own server: self-hosting.md
+  - Sign-in: sign-in.md
+  - Usage and limits: usage.md
+  - Phone app: phone-app.md
+  - Updating and backups: operations.md

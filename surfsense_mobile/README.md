@@ -6,7 +6,7 @@ has its sources, one chat, and a Studio of generated outputs.
 
 Expo SDK 57 · React Native 0.86 · TypeScript · expo-router · TanStack Query · zod.
 
-**iPhone beta:** <https://testflight.apple.com/join/1tjGWu1Q>
+**iPhone:** [Soloclef on the App Store](https://apps.apple.com/app/soloclef/id6821393434)
 
 ## What it does
 

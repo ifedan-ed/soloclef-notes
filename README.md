@@ -5,6 +5,12 @@ web pages or notes, ask questions with cited answers, and generate reports,
 slide decks, mind maps, quizzes, flashcards, audio/video overviews and more.
 The web app, iPhone/Android app and MCP server are all in this repository.
 
+**Website:** <https://soloclef.com> · **Docs:** <https://ifedan-ed.github.io/soloclef-notes/> ·
+**iPhone app:** [Soloclef on the App Store](https://apps.apple.com/app/soloclef/id6821393434)
+
+There is no hosted service, no trial and nothing to buy: you run your own
+server.
+
 Soloclef Notes is a fork of [SurfSense](https://github.com/MODSetter/SurfSense).
 Thanks to the SurfSense team for the foundation.
 
@@ -61,20 +67,20 @@ models by copying
 mounting it at `/app/app/config/global_llm_config.yaml` in the backend and
 Celery services.
 
-## Billing is optional
+## Usage: unlimited, no trials or codes
 
-You do not need payments or credits to self-host. The default is
-`BILLING_MODE=shadow`: usage is recorded, but nothing is blocked or charged.
-For a completely free server, set:
+There are no trials, invite codes or payments. For a server where nobody is
+ever limited, set:
 
 ```dotenv
 BILLING_MODE=off
 ```
 
-and restart the backend. If you keep live billing for other people but want
-your own account unlimited, put your address in `BILLING_ADMIN_EMAILS`;
-configured administrators are exempt. An administrator can also mark any
-account **exempt** on the billing admin page.
+and restart the backend. The default, `shadow`, records usage but never blocks
+anything. The accounts in `BILLING_ADMIN_EMAILS` are always unlimited, and the
+administrator can give anyone else unlimited use (**User settings → Billing →
+Admin → Users → Exempt (unlimited)**) or add to their allowance (**Adjust
+credits**). See [Usage and limits](https://ifedan-ed.github.io/soloclef-notes/usage/).
 
 ## OIDC is optional: use a password
 
@@ -101,17 +107,15 @@ the default, leave `ETL_DEFAULT_PARSER=LOCAL` in `docker/.env`.
 
 ## The phone app
 
-The app in `surfsense_mobile` can sign in to any Soloclef server. On first
-launch enter your server's https address, or set
-`EXPO_PUBLIC_DEFAULT_SERVER_URL` when you build it. One build works for every
-server. Push notifications need `SURFSENSE_PUBLIC_URL` to be the exact https
-address people type in the app.
-
-**iPhone beta:** <https://testflight.apple.com/join/1tjGWu1Q>
+[Soloclef on the App Store](https://apps.apple.com/app/soloclef/id6821393434)
+works with any Soloclef server: on its sign-in screen tap **Change server** and
+enter your server's https address. Push notifications need
+`SURFSENSE_PUBLIC_URL` to be that exact address. The app's source is in
+`surfsense_mobile`; see [Phone app](https://ifedan-ed.github.io/soloclef-notes/phone-app/).
 
 ## Documentation
 
-- Documentation index: [`docs/README.md`](docs/README.md)
+- Documentation site: <https://ifedan-ed.github.io/soloclef-notes/> (source in [`docs/`](docs/))
 - Full self-hosting reference: `surfsense_web/content/docs/self-hosting.mdx`
   (served at `/docs/self-hosting` by a running server).
 - User guide: `surfsense_web/content/docs/getting-started.mdx`.
