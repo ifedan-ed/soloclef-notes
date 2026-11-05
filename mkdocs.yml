@@ -22,6 +22,8 @@ theme:
       toggle: { icon: material/weather-sunny, name: Light mode }
   features:
     - navigation.instant
+    - navigation.tabs
+    - navigation.sections
     - navigation.top
     - content.code.copy
     - search.highlight
@@ -39,8 +41,26 @@ markdown_extensions:
   - pymdownx.superfences
 nav:
   - Home: index.md
-  - Run your own server: self-hosting.md
-  - Sign-in: sign-in.md
-  - Usage and limits: usage.md
-  - Phone app: phone-app.md
-  - Updating and backups: operations.md
+  - Self-hosting:
+      - Run your own server: self-hosting.md
+      - Sign-in: sign-in.md
+      - Usage and limits: usage.md
+      - Phone app: phone-app.md
+      - Updating and backups: operations.md
+      - Every setting: guide/settings-reference.md
+  - User guide:
+      - Overview: guide/overview.md
+      - Getting started: guide/getting-started.md
+      - Notebooks and sources: guide/notebooks-and-sources.md
+      - Chat and citations: guide/chat-and-citations.md
+      - Studio: guide/studio.md
+      - Notes: guide/notes.md
+      - Search: guide/search.md
+      - Automations: guide/automations.md
+      - Email: guide/email.md
+      - Workspaces and sharing: guide/workspaces-and-sharing.md
+      - Connect your agent: guide/connect-your-agent.md
+      - Mobile app: guide/mobile-app.md
+      - Notifications: guide/notifications.md
+      - Privacy and data: guide/privacy-and-data.md
+      - FAQ: guide/faq.md
