@@ -12,6 +12,7 @@ from __future__ import annotations
 import contextlib
 import gc
 import logging
+import time
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -48,13 +49,29 @@ async def close_session_and_clear_ai_responding(
         await session.close()
 
 
+# A full collection walks every object in the process (about 1 GB here) and
+# holds the event loop for over a second; run after every turn, it was the
+# whole cost of a chat message once the model answered (load test
+# 2026-11-06: 1.35 s a message, 0.9 messages a second for the whole
+# process). Python's own generational collector keeps running as normal; the
+# full pass and the heap trim now run at most once a minute per process.
+FULL_GC_MIN_INTERVAL_SECONDS = 60.0
+_last_full_gc = 0.0
+
+
 def run_gc_pass(*, log_prefix: str, chat_id: int) -> None:
-    """One full gen0/1/2 pass + native-heap trim + END system snapshot.
+    """A full gen0/1/2 pass + native-heap trim + END system snapshot, at most
+    once every ``FULL_GC_MIN_INTERVAL_SECONDS`` per process.
 
     Breaking circular refs held by the agent graph, tools, and LLM wrappers
     needs to happen in the caller (set the locals to ``None``) — this just
     runs the collector and logs how many objects came back.
     """
+    global _last_full_gc
+    now = time.monotonic()
+    if now - _last_full_gc < FULL_GC_MIN_INTERVAL_SECONDS:
+        return
+    _last_full_gc = now
     collected = gc.collect(0) + gc.collect(1) + gc.collect(2)
     if collected:
         _perf_log.info(
