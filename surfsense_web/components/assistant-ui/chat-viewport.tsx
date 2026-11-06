@@ -23,44 +23,62 @@ export interface ChatViewportProps {
 	children: ReactNode;
 	footer?: ReactNode;
 	/**
-	 * Keep the footer (composer) pinned even when the thread has no messages —
+	 * Keep the footer (composer) shown even when the thread has no messages —
 	 * needed while an existing thread's messages are still loading, so the
 	 * bottom composer stays visible above the loading skeleton.
 	 */
 	footerAlwaysVisible?: boolean;
 }
 
+/**
+ * The chat's scrolling area with the composer beneath it.
+ *
+ * The composer sits below the scrolling area, not pinned inside it. A browser
+ * scrolls an area while text is drag-selected only once the pointer leaves
+ * that area; with the composer inside, dragging a selection down onto it
+ * scrolled nothing, so nothing below it could be selected (2026-11-06,
+ * tests/app/chat-select-scroll.spec.ts). The public chat (public-thread.tsx)
+ * is laid out the same way. A fade at the top of the composer still shows
+ * that text continues beneath it, and lets the pointer through to the
+ * messages.
+ */
 export const ChatViewport: FC<ChatViewportProps> = ({
 	children,
 	footer,
 	footerAlwaysVisible = false,
 }) => (
-	<ThreadPrimitive.Viewport
-		turnAnchor="top"
-		autoScroll
-		scrollToBottomOnRunStart
-		scrollToBottomOnInitialize
-		scrollToBottomOnThreadSwitch
-		className="aui-thread-viewport relative flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-y-auto px-4 scroll-smooth"
-		style={{ scrollbarGutter: "stable" }}
-	>
-		<div
-			aria-hidden
-			className="aui-chat-viewport-top-fade pointer-events-none sticky top-0 z-10 -mx-4 h-2 shrink-0 bg-gradient-to-b from-main-panel from-20% to-transparent"
-		/>
-		{children}
+	<div className="aui-chat-viewport-column relative flex min-h-0 min-w-0 w-full flex-1 flex-col">
+		<ThreadPrimitive.Viewport
+			turnAnchor="top"
+			autoScroll
+			scrollToBottomOnRunStart
+			scrollToBottomOnInitialize
+			scrollToBottomOnThreadSwitch
+			className="aui-thread-viewport relative flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-y-auto px-4 scroll-smooth"
+			style={{ scrollbarGutter: "stable" }}
+		>
+			<div
+				aria-hidden
+				className="aui-chat-viewport-top-fade pointer-events-none sticky top-0 z-10 -mx-4 h-2 shrink-0 bg-gradient-to-b from-main-panel from-20% to-transparent"
+			/>
+			{children}
+		</ThreadPrimitive.Viewport>
 		{footer ? (
 			<AuiIf condition={({ thread }) => footerAlwaysVisible || !thread.isEmpty}>
-				<ThreadPrimitive.ViewportFooter
-					className="aui-chat-composer-footer sticky bottom-0 z-20 -mx-4 mt-auto flex min-w-0 flex-col items-stretch bg-gradient-to-t from-main-panel from-60% to-transparent px-4 pt-6"
+				<div
+					className="aui-chat-composer-footer relative z-20 flex min-w-0 shrink-0 flex-col items-stretch bg-main-panel px-4 pt-2"
 					style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
 				>
+					<div
+						aria-hidden
+						className="aui-chat-composer-fade pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-t from-main-panel to-transparent"
+					/>
 					<div className="aui-chat-composer-area relative mx-auto flex min-w-0 w-full max-w-(--thread-max-width) flex-col gap-3 overflow-visible">
 						<ChatScrollToBottom />
 						{footer}
 					</div>
-				</ThreadPrimitive.ViewportFooter>
+				</div>
 			</AuiIf>
 		) : null}
-	</ThreadPrimitive.Viewport>
+	</div>
 );
