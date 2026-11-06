@@ -252,9 +252,21 @@ celery_app = Celery(
 )
 
 # ── Queue names ──────────────────────────────────────────────
-# Default queue  : fast, user-facing tasks (file upload, podcast, reindex, …)
+# Default queue  : fast, user-facing tasks (file upload, reindex, …)
 # Connectors queue: slow, long-running indexing tasks (Google Drive, web crawl, …)
+# Heavy queue    : minutes-long generation (podcasts, video presentations,
+#                  Studio deliverables), so a burst of them never holds up the
+#                  fast queue. A worker with no CELERY_QUEUES consumes all three
+#                  (scripts/docker/entrypoint.sh); this host gives the heavy
+#                  queue a worker of its own (docker-compose.yml, celery_heavy).
 CONNECTORS_QUEUE = f"{CELERY_TASK_DEFAULT_QUEUE}.connectors"
+HEAVY_QUEUE = f"{CELERY_TASK_DEFAULT_QUEUE}.heavy"
+HEAVY_TASKS = (
+    "podcast.draft_transcript",
+    "podcast.render_audio",
+    "generate_video_presentation",
+    "deliverables.execute_queued",
+)
 
 # Celery configuration
 celery_app.conf.update(
@@ -285,16 +297,18 @@ celery_app.conf.update(
     # Beat scheduler settings
     beat_max_loop_interval=60,  # Check every minute
     # ── Task routing ─────────────────────────────────────────
-    # Route slow connector/indexing tasks to a dedicated queue so they
-    # never block fast user-facing tasks (file uploads, podcasts, etc.)
+    # Route slow connector/indexing tasks and long generation to queues of
+    # their own so they never block fast user-facing tasks (file uploads, …)
     task_routes={
         # Connector indexing tasks → connectors queue
         "index_google_drive_files": {"queue": CONNECTORS_QUEUE},
         # A whole-workspace rebuild embeds every document; the per-save index
         # task stays on the fast queue because search freshness is user-facing.
         "reindex_knowledge_store": {"queue": CONNECTORS_QUEUE},
-        # Everything else (document processing, podcasts, reindexing,
-        # schedule checker, cleanup) stays on the default fast queue.
+        # Long generation → heavy queue.
+        **{name: {"queue": HEAVY_QUEUE} for name in HEAVY_TASKS},
+        # Everything else (document processing, reindexing, schedule checker,
+        # cleanup) stays on the default fast queue.
     },
 )
 

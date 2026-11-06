@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 import yaml
 
-from app.celery_app import celery_app
+from app.celery_app import HEAVY_QUEUE, celery_app
 from app.db import DeliverableFailureCode
 from app.deliverables.jobs.dispatch import DELIVERABLE_JOB_TASK
 from app.deliverables.jobs.policy import VIDEO_SPEC
@@ -66,7 +66,7 @@ def _job(**overrides: Any) -> SimpleNamespace:
     return SimpleNamespace(**values)
 
 
-def test_task_registration_is_late_acked_bounded_and_uses_default_queue() -> None:
+def test_task_registration_is_late_acked_bounded_and_uses_the_heavy_queue() -> None:
     task = celery_app.tasks[DELIVERABLE_JOB_TASK]
 
     assert task.acks_late is True
@@ -74,7 +74,9 @@ def test_task_registration_is_late_acked_bounded_and_uses_default_queue() -> Non
     assert task.soft_time_limit == VIDEO_SPEC.soft_time_limit_seconds
     assert task.time_limit == VIDEO_SPEC.hard_time_limit_seconds
     assert celery_app.conf.worker_prefetch_multiplier == 1
-    assert DELIVERABLE_JOB_TASK not in celery_app.conf.task_routes
+    # Long generation has a queue of its own (app/celery_app.py HEAVY_TASKS);
+    # a worker with no CELERY_QUEUES still consumes it.
+    assert celery_app.conf.task_routes[DELIVERABLE_JOB_TASK] == {"queue": HEAVY_QUEUE}
 
 
 def test_worker_has_no_queued_subagent_or_checkpointer_dependencies() -> None:

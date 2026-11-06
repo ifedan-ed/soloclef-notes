@@ -27,3 +27,6 @@ wheels/
 htmlcov/
 
 tests/
+# Uploaded files from local runs: never baked into an image (they once
+# seeded a new object-store volume with 1.5 GB of documents).
+.local_object_store/

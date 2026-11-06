@@ -99,7 +99,7 @@ start_worker() {
         # used by the default deployment.
         # Without --queues, Celery consumes only the default queue.
         DEFAULT_Q="${CELERY_TASK_DEFAULT_QUEUE:-surfsense}"
-        QUEUE_ARGS="--queues=${DEFAULT_Q},${DEFAULT_Q}.connectors"
+        QUEUE_ARGS="--queues=${DEFAULT_Q},${DEFAULT_Q}.connectors,${DEFAULT_Q}.heavy"
     fi
 
     echo "Starting Celery Worker (autoscale=${CELERY_MAX_WORKERS},${CELERY_MIN_WORKERS}, max-tasks-per-child=${CELERY_MAX_TASKS_PER_CHILD}, queues=${CELERY_QUEUES:-all})..."
