@@ -65,7 +65,7 @@ other people unlimited use.
 
 ## Models
 
-Sign in, open **Settings → Models**, and add a provider: its base URL, key and
+Sign in, open Settings → Models, and add a provider: its base URL, key and
 model names. Or give the whole server its models from a file: copy
 `surfsense_backend/app/config/global_llm_config.example.yaml`, edit it, and
 mount it at `/app/app/config/global_llm_config.yaml` in the backend and Celery

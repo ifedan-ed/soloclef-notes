@@ -35,7 +35,7 @@ The stack uses the Compose service names (`db`, `redis`, `backend`, ...), so
 it works under any project name. If your host needs extra networks, ports or
 volumes, put them in your own override file and name both files with `-f`.
 
-**The first account.** Sign-ups are closed by default. Create a verified
+The first account. Sign-ups are closed by default. Create a verified
 account from the backend container, with `--set-password` so no mail is needed
 yet:
 
@@ -45,14 +45,14 @@ docker compose -f docker-compose.yml exec -it backend \
 ```
 
 Without `--set-password` the password is random and the person sets theirs
-with **Forgot password?** (which needs `SMTP_`). Put the address in
+with Forgot password? (which needs `SMTP_`). Put the address in
 `BILLING_ADMIN_EMAILS` and restart the backend, worker and beat. Then sign in
-and add a model provider under **Settings → Models**, or mount a server-wide
+and add a model provider under Settings → Models, or mount a server-wide
 `global_llm_config.yaml` into the backend and Celery services (copy
 `surfsense_backend/app/config/global_llm_config.example.yaml`). Without a chat
 model, the app opens but chat and Studio cannot answer.
 
-**Rebuild the website after changing** the address, `SUPPORT_EMAIL`, any
+Rebuild the website after changing the address, `SUPPORT_EMAIL`, any
 `OIDC_` setting or `NEXT_PUBLIC_SIGNUPS_OPEN`: the public pages (the sitemap,
 share cards, these docs, the sign-in page's sign-up link) are drawn once,
 when the image is built, and `docker compose build` hands those settings to
@@ -69,7 +69,7 @@ name: for push, make it the https address people type in the app (see
 [The phone app](#the-phone-app)). On the website build it is empty when unset: no sitemap entries and no absolute links. |
 | `NEXT_FRONTEND_URL`, `BACKEND_URL` | `SURFSENSE_PUBLIC_URL` | Only when the website or the API has an address of its own. |
 | `BRAND_SITE_URL` | `NEXT_FRONTEND_URL` | Only when the public site lives somewhere other than the app; the backend's links to the docs and the contact page use it. The website's build takes `NEXT_PUBLIC_SITE_URL` for the same. Push notifications never name it. |
-| `SUPPORT_EMAIL` | none | Where **Report Issue** and the contact page (your server's contact page) send people, and the site's published contact point. An administrator can change it under **User settings → Billing → Admin → Settings**; a saved value wins. With none, the contact page says no address is published and **Report Issue** opens a message with no recipient. |
+| `SUPPORT_EMAIL` | none | Where Report Issue and the contact page (your server's contact page) send people, and the site's published contact point. An administrator can change it under User settings → Billing → Admin → Settings; a saved value wins. With none, the contact page says no address is published and Report Issue opens a message with no recipient. |
 | `SMTP_ENABLED`, `SMTP_HOST`, `SMTP_FROM` and the other `SMTP_` settings | off | Email. Off, the server sends none, so there are no password-reset links. `SMTP_FROM` is the sender, such as `notes@example.com`. |
 
 ## Sign-in
@@ -83,7 +83,7 @@ name: for push, make it the https address people type in the app (see
 | `OIDC_ALLOW_SIGNUP` | `FALSE` | `TRUE` makes an account for any verified address, whatever its domain. |
 | `MCP_OAUTH_ISSUER`, `MCP_OAUTH_CLIENT_ID`, `MCP_OAUTH_CLIENT_SECRET` | none | Lets Claude and ChatGPT sign in to the agent server at `/mcp` (see [Connect your agent](connect-your-agent.md)). Unset, agents use API keys only. |
 | `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | none | Cloudflare Turnstile's bot check on sign-in, registration and password reset. Unset, there is none. |
-| `NEXT_PUBLIC_SIGNUPS_OPEN` | none | Exactly `true` offers sign-up: **Sign Up** on the sign-in page, **Create an account** in the phone app. Anything else, unset included, offers **Request access**, which opens the contact page (your server's contact page). The website reads it when it is built, so **rebuild the website after changing** it (setting it on the running website does nothing); the backend reads it when it starts and tells the phone app. It changes what is offered, not what the server accepts: see [Closing sign-ups](#closing-sign-ups). |
+| `NEXT_PUBLIC_SIGNUPS_OPEN` | none | Exactly `true` offers sign-up: Sign Up on the sign-in page, Create an account in the phone app. Anything else, unset included, offers Request access, which opens the contact page (your server's contact page). The website reads it when it is built, so rebuild the website after changing it (setting it on the running website does nothing); the backend reads it when it starts and tells the phone app. It changes what is offered, not what the server accepts: see [Closing sign-ups](#closing-sign-ups). |
 | `REGISTRATION_ENABLED` | `TRUE` | Not a sign-up switch: a master switch for every way in. `FALSE` refuses sign-up and every sign-in too (the password form, single sign-on, the website's Google sign-in and the phone app), so nobody can sign in; people already signed in stay signed in. Keep it `TRUE`; it is for shutting the door in an emergency. |
 
 ### Closing sign-ups
@@ -92,7 +92,7 @@ No setting closes sign-ups while keeping sign-in. To take accounts only from
 people you add:
 
 1. Keep `REGISTRATION_ENABLED=TRUE` and leave `NEXT_PUBLIC_SIGNUPS_OPEN`
-   unset, so the website and the phone app offer **Request access** instead
+   unset, so the website and the phone app offer Request access instead
    of a sign-up form.
 2. Refuse the sign-up request itself in the proxy in front of the server,
    because the server still takes one from anyone who sends it. With Caddy,
@@ -115,7 +115,7 @@ people you add:
 5. Make each account with
    `docker compose -f docker-compose.yml exec backend python scripts/create_account.py someone@example.com`.
    Its password is random and never shown; the person sets one with
-   **Forgot password?** (which needs email, `SMTP_`), or signs in through
+   Forgot password? (which needs email, `SMTP_`), or signs in through
    single sign-on with the same address.
 
 Keep step 1 and step 2 together: with `NEXT_PUBLIC_SIGNUPS_OPEN=true` and the
@@ -135,7 +135,7 @@ server learns who is signing in only while it answers. To take accounts
 only from people you add, turn Google off (step 4) and offer single sign-on
 instead, whose account rules are the two settings in step 3. To keep
 Google, limit who Google lets in: an OAuth consent screen of user type
-**Internal** (Google Workspace) admits only your organisation's accounts.
+Internal (Google Workspace) admits only your organisation's accounts.
 
 ## Connections and payments
 
@@ -146,18 +146,18 @@ Google, limit who Google lets in: an OAuth consent screen of user type
 | `BTCPAY_URL` | none | Your own BTCPay Server, for crypto payments. Crypto is offered only once it is switched on and its URL, store ID, API key and webhook secret are all set (the billing admin page, or `BTCPAY_STORE_ID`, `BTCPAY_API_KEY` and `BTCPAY_WEBHOOK_SECRET`). |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | none | Card payments through Stripe, offered only when switched on and both are set. |
 
-**Billing is optional.** The default `BILLING_MODE=shadow` records what an
+Billing is optional. The default `BILLING_MODE=shadow` records what an
 action would cost but never blocks it. `BILLING_MODE=off` records nothing;
 `live` enforces plans and credits. On a fresh server, set the mode in
 `docker/.env` before the first start. Accounts in `BILLING_ADMIN_EMAILS` are
-exempt, and an administrator can mark any account **exempt** in the billing
+exempt, and an administrator can mark any account exempt in the billing
 admin page, so you can keep live billing for other people and still use the
 server without limits yourself.
 
 ## The phone app
 
 The Soloclef app for iPhone and Android can sign in to your server: on its
-sign-in screen, **Change server**, then this server's address. The iPhone app
+sign-in screen, Change server, then this server's address. The iPhone app
 is on the App Store at <https://apps.apple.com/app/soloclef/id6821393434>. One app build
 works with every server; a separate build, bundle id, or store account is
 not needed to use the app with your server (those are only for publishing a
@@ -167,13 +167,13 @@ anything it reads this server's public `/api/v1/sign-in-options`, which says
 that it is a Soloclef server and which ways in the app may offer: the single
 sign-on under `OIDC_BUTTON_LABEL` (while `OIDC_APP_REDIRECTS` keeps the
 app's return address `soloclef://auth`, as it does by default), the password
-form, and **Request access** or, with `NEXT_PUBLIC_SIGNUPS_OPEN=true`,
-**Create an account**. A server too old to answer it is refused as not a
+form, and Request access or, with `NEXT_PUBLIC_SIGNUPS_OPEN=true`,
+Create an account. A server too old to answer it is refused as not a
 Soloclef server. Your server's invitation and public links open in the
 browser, on this website.
 
-**Push notifications** (`PUSH_ENABLED=TRUE`) need `SURFSENSE_PUBLIC_URL` to
-be the https address people type under **Change server**, with the `https`
+Push notifications (`PUSH_ENABLED=TRUE`) need `SURFSENSE_PUBLIC_URL` to
+be the https address people type under Change server, with the `https`
 scheme in front; the shipped `http://localhost:3929` is not one.
 Every push names the server it comes from by that address, and the app
 ignores a push that names another server than the one it is set to, so a
@@ -204,7 +204,7 @@ is shared with already shows the address.
 
 ## Reading documents
 
-Each upload is read by **Local** or **Cloud**, chosen in the upload dialog
+Each upload is read by Local or Cloud, chosen in the upload dialog
 (see [Notebooks and sources](notebooks-and-sources.md)). Local is
 PyMuPDF4LLM on this server: free, and the file never leaves it. Cloud is one
 service, named by `ETL_CLOUD_SERVICE`. Both lines are read when the backend
@@ -214,16 +214,16 @@ naming the allowed ones.
 | Setting | Default | What it does |
 | --- | --- | --- |
 | `ETL_DEFAULT_PARSER` | `LOCAL` | The parser an upload or a connector sync gets when it names none: `LOCAL` or `CLOUD`. People can still pick either in the upload dialog. |
-| `ETL_CLOUD_SERVICE` | `LLAMACLOUD` | The service behind **Cloud**: `LLAMACLOUD` (LlamaParse's agentic tier, through LlamaCloud's v2 Parse API), `DATALAB` (Datalab's Marker API, balanced mode) or `UNSTRUCTURED` (the open-source unstructured library, which runs on this server and needs no key). |
+| `ETL_CLOUD_SERVICE` | `LLAMACLOUD` | The service behind Cloud: `LLAMACLOUD` (LlamaParse's agentic tier, through LlamaCloud's v2 Parse API), `DATALAB` (Datalab's Marker API, balanced mode) or `UNSTRUCTURED` (the open-source unstructured library, which runs on this server and needs no key). |
 | `LLAMA_CLOUD_API_KEY` | none | LlamaCloud's key. Without it, Cloud on `LLAMACLOUD` shows as unavailable. Beside `DATALAB` it lets LlamaCloud read the file types Datalab can't open and any file Datalab fails on. `LLAMA_CLOUD_BASE_URL` picks LlamaCloud's region: the https address of `api.cloud.eu.llamaindex.ai` for the EU; unset, the US. |
 | `DATALAB_API_KEY`, `DATALAB_BASE_URL` | none, Datalab's own | Datalab's key, and the address its documents are sent to (unset, Datalab's `www.datalab.to/api/v1/convert`). Without the key, Cloud on `DATALAB` shows as unavailable. |
 | `AZURE_DI_ENDPOINT`, `AZURE_DI_KEY` | none | Azure Document Intelligence's layout model in front of LlamaCloud, for PDF, Word, Excel, PowerPoint and common images; LlamaCloud reads the file if it fails. It adds HEIF to what Cloud opens. |
 | `UNSTRUCTURED_API_KEY` | none | Read but unused: the bundled library needs no key. |
-| `ETL_CACHE_ENABLED` and the other `ETL_CACHE_` settings | `FALSE` | Reuse a document's parse for the same file bytes in any workspace, so one file is not parsed, or billed by a cloud service, twice. Entries are kept per service, a file read with **Vision** on is never cached, unused entries go after `ETL_CACHE_TTL_DAYS` (90), the oldest go once the cache passes `ETL_CACHE_MAX_TOTAL_MB` (5120), `ETL_CACHE_EVICTION_BATCH` (500) at a time, and raising `ETL_CACHE_PARSER_VERSION` (1) drops them all. `ETL_CACHE_STORAGE_BACKEND` and `ETL_CACHE_STORAGE_LOCAL_PATH` give it its own storage; unset, it shares the uploads' storage. |
+| `ETL_CACHE_ENABLED` and the other `ETL_CACHE_` settings | `FALSE` | Reuse a document's parse for the same file bytes in any workspace, so one file is not parsed, or billed by a cloud service, twice. Entries are kept per service, a file read with Vision on is never cached, unused entries go after `ETL_CACHE_TTL_DAYS` (90), the oldest go once the cache passes `ETL_CACHE_MAX_TOTAL_MB` (5120), `ETL_CACHE_EVICTION_BATCH` (500) at a time, and raising `ETL_CACHE_PARSER_VERSION` (1) drops them all. `ETL_CACHE_STORAGE_BACKEND` and `ETL_CACHE_STORAGE_LOCAL_PATH` give it its own storage; unset, it shares the uploads' storage. |
 | `ETL_CREDIT_BILLING_ENABLED` | `FALSE` | Only whether the upload dialog and the phone app show Cloud's cost note. What a page costs people is the Local or Cloud page price on the billing admin page, under `BILLING_MODE`, whichever service backs Cloud. |
 | `ETL_SERVICE` | none | Deprecated: the one parser setting from before the Local/Cloud choice. It is read only while `ETL_CLOUD_SERVICE` is unset (`LLAMACLOUD`, `DATALAB` or `UNSTRUCTURED` there names Cloud; `PYMUPDF4LLM`, `DOCLING` or `AZURE_DI` names none, and Cloud stays `LLAMACLOUD`), and whenever it is set the backend logs `[startup] parser: ...` at start. Remove the line. |
 
-**LlamaCloud's API.** The backend reads documents through LlamaCloud's v2
+LlamaCloud's API. The backend reads documents through LlamaCloud's v2
 Parse API, with LlamaCloud's `llama-cloud` package: the file goes up with the
 agentic tier at its latest version and English OCR, and the job is checked
 until it is done. Older versions of Soloclef Notes used the v1 API, which
@@ -234,7 +234,7 @@ earlier result back, not billed again (the backend logs `cache_hit=True
 credits=0`; otherwise `credits=` the job's credits, 10 a page on the agentic
 tier).
 
-**Limits.** Datalab gets a file again after a network failure, a busy
+Limits. Datalab gets a file again after a network failure, a busy
 answer (429 or 5xx) or an empty result, up to 3 times in all. LlamaCloud's
 client tries each request again by itself after a network failure, a
 timeout or a busy answer (408, 409, 429 or 5xx): 5 more tries over about 15
@@ -254,7 +254,7 @@ waits at least 2,000 seconds for a LlamaCloud job. Each request to
 LlamaCloud may take 2 to 30 minutes to send or read, by file size. Datalab
 is asked every 2 seconds whether a job is done, LlamaCloud every 1 to 5.
 
-**Checking a service.** To see whether a cloud service reads a document
+Checking a service. To see whether a cloud service reads a document
 with this server's key, and how long it takes, before switching to it or
 after changing its key, run in the `docker` folder (each run is billed one
 page at each service it asks; the check prints no key and reads no one's
@@ -278,16 +278,16 @@ Documents already read keep their text; only new uploads and re-reads use
 the new service, and the parse cache starts afresh for it. For the people
 using the server:
 
-- **File types.** The upload dialog and the phone app take the new list
+- File types. The upload dialog and the phone app take the new list
   from the server. From `DATALAB` to `LLAMACLOUD`, Cloud gains RTF, BMP, SVG,
   `.tif`, HWP and HWPX, macro-enabled and template Office files (`.docm`,
   `.dot`, `.dotm`, `.pptm`, `.pot`, `.potx`, `.xlsb`, `.xlw`), which `DATALAB`
   already sends to LlamaCloud when a LlamaCloud key is set, and loses Excel
   templates (`.xltx`).
-- **Reading.** Both read tables, figures and scanned pages. LlamaCloud's
+- Reading. Both read tables, figures and scanned pages. LlamaCloud's
   agentic parse is slower; Datalab's balanced mode answers a short file in
   seconds.
-- **Cost.** People pay the same page price whichever service backs Cloud;
+- Cost. People pay the same page price whichever service backs Cloud;
   the server pays the service. At list prices (checked 11 October 2026),
   Datalab's balanced mode is $4 per 1,000 pages, and LlamaCloud's agentic
   parse at least 10 LlamaCloud credits a page at $1.25 per 1,000 credits,
@@ -332,7 +332,7 @@ chunks, 4 indexed at a time) took 28 seconds with one request of 8 texts at a
 time and 4.5 seconds with the defaults above; one document of 200 chunks took
 24 seconds and 3.
 
-**Two hosts of one model, never two models.** A question's embedding means
+Two hosts of one model, never two models. A question's embedding means
 something only next to embeddings from the same model. Two hosts of one
 model (the same weights: bge-m3 on your own machine and bge-m3 at OpenRouter,
 say) give the same embeddings to within rounding: on 12 October 2026 the two
@@ -346,7 +346,7 @@ embedded again with it, and when its vectors have another length the
 database's vector columns have to change as well. There is no one command
 for that yet, so choose the model before the first upload.
 
-**Limits.**
+Limits.
 
 - At start, when the two lines name different models, every process that
   reads these settings (the backend, the Celery worker, Celery beat, and the
@@ -427,7 +427,7 @@ it starts afresh for the new name, and the old entries age out.
 
 ## Reranking
 
-Reranking is optional and **off by default**. When on, every knowledge-base
+Reranking is optional and off by default. When on, every knowledge-base
 search sends its retrieved passages to a reranker before the answer is
 written. It improves which passages come first; on this server it adds about
 a second per search.
@@ -451,20 +451,20 @@ removes the extra second and the provider bill.
 
 ## Web search and optional connectors
 
-**Google Search is built in and always available**; it needs no key and no
+Google Search is built in and always available; it needs no key and no
 connector. It is slower than Exa/Tavily (about 15 seconds a search, longer
 when Google asks for a check). On a server with no proxy it tries from the
 server's own address; set `PROXY_URL` (or `PROXY_URLS`) for reliable results,
 and `CAPTCHA_SOLVING_ENABLED`/`CAPTCHA_SOLVER_*` only if you accept the terms
 of a solving service. The bundled SearXNG container is the fallback for the
-research box's **Web** search and needs no setting. `SCRAPER_DIRECT_PLATFORMS`
+research box's Web search and needs no setting. `SCRAPER_DIRECT_PLATFORMS`
 lets named platform scrapers (Reddit, TikTok, ...) leave from the server's
 address instead of the proxy.
 
-**Exa, Tavily and Browserbase are optional and per workspace.** They are not
+Exa, Tavily and Browserbase are optional and per workspace. They are not
 `.env` settings: a workspace Owner or Editor adds an MCP server under
-**Connectors → MCP servers** with that workspace's own key. They then appear
-in the chat's **Tools** menu and the research box, and their cost is on that
+Connectors → MCP servers with that workspace's own key. They then appear
+in the chat's Tools menu and the research box, and their cost is on that
 workspace's provider bill. A workspace without the connector simply does not
 offer them; nothing is needed on the server. The user-facing rules and limits
 are in [Chat and citations](chat-and-citations.md#tools) and
@@ -479,4 +479,4 @@ are in [Chat and citations](chat-and-citations.md#tools) and
 | Embedding model | `docker/.env` (`EMBEDDING_MODEL`, `EMBEDDING_QUERY_MODEL`, `EMBEDDING_DOCUMENT_MODEL`, `EMBEDDING_BASE_URL`, `EMBEDDING_DIMENSION`) | operator |
 | Reranker | `docker/.env` (`RERANKERS_*`) | operator |
 | Google Search | built in; optional proxy/captcha settings in `docker/.env` | operator |
-| Exa, Tavily, Browserbase | **Connectors → MCP servers**, one key per workspace | workspace Owner or Editor |
+| Exa, Tavily, Browserbase | Connectors → MCP servers, one key per workspace | workspace Owner or Editor |

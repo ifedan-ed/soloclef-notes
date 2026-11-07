@@ -5,7 +5,7 @@ hide:
 
 # Soloclef Notes
 
-**Your own private NotebookLM, on your own server.** Put your material in a
+Your own private NotebookLM, on your own server. Put your material in a
 notebook (PDFs, lecture notes, web pages, papers, YouTube videos), ask questions
 and get answers that cite the exact passage, and turn it into podcasts, videos,
 mind maps, quizzes and more. Let the assistant run tasks on a schedule and
@@ -26,16 +26,16 @@ on it.
 
 | | |
 | --- | --- |
-| **[Sources](guide/notebooks-and-sources.md)** | Upload PDFs (scans too), Word, PowerPoint, Excel and images; read on the server by default. Pick files from Google Drive or Nextcloud. Search and import from the web, PubMed, arXiv, medRxiv/bioRxiv, Google Scholar, YouTube (with transcripts), Reddit and more. |
-| **[Chat with citations](guide/chat-and-citations.md)** | One chat per notebook that answers only from the sources you tick, with numbered citations you can open. @-mention a source, choose the model, set instructions. |
-| **[Studio](guide/studio.md)** | Reports, mind maps, infographics, flashcards, quizzes, slide decks, data tables, audio overviews (podcast-style) and video overviews, from the sources you pick. |
-| **[Notes](guide/notes.md)** | Save answers as notes, write your own, and turn a note into a source. |
-| **[Automations](guide/automations.md)** | Tasks the assistant runs on a schedule (hourly, daily, weekdays, monthly): a weekly digest of your notebook, a morning summary of new papers. Results are saved as notes and can be emailed to you. |
-| **[Email](guide/email.md)** | Connect a mailbox (any IMAP account, Gmail or Microsoft) so the assistant can search and read your mail and its attachments, read-only. Mail is read live and never copied into the app. |
-| **[Workspaces and sharing](guide/workspaces-and-sharing.md)** | Invite people with roles, and share a chat, an output or a whole notebook by link. |
-| **[Agents (MCP)](guide/connect-your-agent.md)** | Claude, ChatGPT, Claude Code, Cursor and other agents can search and read your workspace. |
-| **[Phone app](phone-app.md)** | Soloclef for iPhone: notebooks, chat, Studio with background audio, uploads, notifications and changes made offline. |
-| **[Search](guide/search.md)** | Find notebooks, and find things inside their sources and notes. |
+| [Sources](guide/notebooks-and-sources.md) | Upload PDFs (scans too), Word, PowerPoint, Excel and images; read on the server by default. Pick files from Google Drive or Nextcloud. Search and import from the web, PubMed, arXiv, medRxiv/bioRxiv, Google Scholar, YouTube (with transcripts), Reddit and more. |
+| [Chat with citations](guide/chat-and-citations.md) | One chat per notebook that answers only from the sources you tick, with numbered citations you can open. @-mention a source, choose the model, set instructions. |
+| [Studio](guide/studio.md) | Reports, mind maps, infographics, flashcards, quizzes, slide decks, data tables, audio overviews (podcast-style) and video overviews, from the sources you pick. |
+| [Notes](guide/notes.md) | Save answers as notes, write your own, and turn a note into a source. |
+| [Automations](guide/automations.md) | Tasks the assistant runs on a schedule (hourly, daily, weekdays, monthly): a weekly digest of your notebook, a morning summary of new papers. Results are saved as notes and can be emailed to you. |
+| [Email](guide/email.md) | Connect a mailbox (any IMAP account, Gmail or Microsoft) so the assistant can search and read your mail and its attachments, read-only. Mail is read live and never copied into the app. |
+| [Workspaces and sharing](guide/workspaces-and-sharing.md) | Invite people with roles, and share a chat, an output or a whole notebook by link. |
+| [Agents (MCP)](guide/connect-your-agent.md) | Claude, ChatGPT, Claude Code, Cursor and other agents can search and read your workspace. |
+| [Phone app](phone-app.md) | Soloclef for iPhone: notebooks, chat, Studio with background audio, uploads, notifications and changes made offline. |
+| [Search](guide/search.md) | Find notebooks, and find things inside their sources and notes. |
 
 ![An answer with a citation](images/chat-answer.png)
 

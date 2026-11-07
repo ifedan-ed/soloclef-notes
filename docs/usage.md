@@ -29,12 +29,12 @@ unlimited.**
 The administrator manages everyone else under **User settings → Billing →
 Admin**:
 
-- **Users → Exempt (unlimited):** gives one person unlimited use, with a
+- Users → Exempt (unlimited): gives one person unlimited use, with a
   reason you write for yourself.
-- **Users → Adjust credits:** adds to one person's allowance (a negative
+- Users → Adjust credits: adds to one person's allowance (a negative
   number takes some away).
-- **Plans:** the monthly allowance everyone gets.
-- **Mode & payments:** the mode above. A choice saved here wins over
+- Plans: the monthly allowance everyone gets.
+- Mode & payments: the mode above. A choice saved here wins over
   `docker/.env`.
 
 ## Payments

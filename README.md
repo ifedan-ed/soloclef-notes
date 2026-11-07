@@ -5,8 +5,8 @@ web pages or notes, ask questions with cited answers, and generate reports,
 slide decks, mind maps, quizzes, flashcards, audio/video overviews and more.
 The web app, iPhone/Android app and MCP server are all in this repository.
 
-**Website:** <https://soloclef.com> · **Docs:** <https://ifedan-ed.github.io/soloclef-notes/> ·
-**iPhone app:** [Soloclef on the App Store](https://apps.apple.com/app/soloclef/id6821393434)
+Website: <https://soloclef.com> · Docs: <https://ifedan-ed.github.io/soloclef-notes/> ·
+iPhone app: [Soloclef on the App Store](https://apps.apple.com/app/soloclef/id6821393434)
 
 There is no hosted service, no trial and nothing to buy: you run your own
 server.
@@ -61,7 +61,7 @@ docker compose -f docker-compose.yml exec -it backend \
 ```
 
 Set the same address in `BILLING_ADMIN_EMAILS` and restart the backend. Sign
-in, open **Settings → Models**, and add a provider. Or provide server-wide
+in, open Settings → Models, and add a provider. Or provide server-wide
 models by copying
 `surfsense_backend/app/config/global_llm_config.example.yaml`, editing it, and
 mounting it at `/app/app/config/global_llm_config.yaml` in the backend and
@@ -79,7 +79,7 @@ BILLING_MODE=off
 and restart the backend. The default, `shadow`, records usage but never blocks
 anything. The accounts in `BILLING_ADMIN_EMAILS` are always unlimited, and the
 administrator can give anyone else unlimited use (**User settings → Billing →
-Admin → Users → Exempt (unlimited)**) or add to their allowance (**Adjust
+Admin → Users → Exempt (unlimited)) or add to their allowance (Adjust
 credits**). See [Usage and limits](https://ifedan-ed.github.io/soloclef-notes/usage/).
 
 ## OIDC is optional: use a password
@@ -99,7 +99,7 @@ OIDC is only for adding single sign-on beside the password form. Set
 
 ## Add a PDF
 
-Choose **Add sources** and upload a PDF. The default parser is **Local
+Choose Add sources and upload a PDF. The default parser is **Local
 (PyMuPDF4LLM)**: it extracts text and tables, runs OCR only where a page needs
 it, and the file never leaves the server. Cloud parsing (LlamaCloud, Datalab or
 the bundled Unstructured library) is optional and per upload. To keep Local as
@@ -108,7 +108,7 @@ the default, leave `ETL_DEFAULT_PARSER=LOCAL` in `docker/.env`.
 ## The phone app
 
 [Soloclef on the App Store](https://apps.apple.com/app/soloclef/id6821393434)
-works with any Soloclef server: on its sign-in screen tap **Change server** and
+works with any Soloclef server: on its sign-in screen tap Change server and
 enter your server's https address. Push notifications need
 `SURFSENSE_PUBLIC_URL` to be that exact address. The app's source is in
 `surfsense_mobile`; see [Phone app](https://ifedan-ed.github.io/soloclef-notes/phone-app/).

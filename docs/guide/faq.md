@@ -7,7 +7,7 @@ Why won't the chat answer from the web?
   A notebook chat answers only from the notebook's ticked sources, so you
   always know where an answer came from. To bring in new material, search
   for it in the Sources panel and add it. For a one-off web search, pick a
-  tool from **Tools**; its results are cited as Web and not added to the
+  tool from Tools; its results are cited as Web and not added to the
   notebook.
 
   
@@ -15,15 +15,15 @@ Why won't the chat answer from the web?
 The chat says it can't find something that is in my file.
 
   Check that the source is ticked and has finished indexing. For scans,
-  complex tables or figures, try uploading it again with the **Cloud**
-  parser, or with **Vision** on.
+  complex tables or figures, try uploading it again with the Cloud
+  parser, or with Vision on.
 
   
   
 Local or Cloud parser: which should I use?
 
-  Start with **Local**: it is free and the file stays on the server. Use
-  **Cloud** for scanned documents and files where tables and figures
+  Start with Local: it is free and the file stays on the server. Use
+  Cloud for scanned documents and files where tables and figures
   matter.
 
   
@@ -38,14 +38,14 @@ How long does a Studio output take?
   
 A Studio output failed.
 
-  Choose **Try again** on it in the Studio list. If it keeps failing, try
+  Choose Try again on it in the Studio list. If it keeps failing, try
   fewer sources or a narrower focus.
 
   
   
 I changed a file in Nextcloud. Does the notebook update?
 
-  No. Nextcloud files are copied once. Use **Refresh from Nextcloud** in the
+  No. Nextcloud files are copied once. Use Refresh from Nextcloud in the
   document's menu to fetch the new version.
 
   
@@ -87,5 +87,5 @@ I didn't get the email.
   further requests send nothing. If an invitation email couldn't be sent,
   the person who invited you sees "Invitation created, email not sent" and
   can copy the link to you. Automation results are emailed only to the
-  person who created the automation, and only when **Email me the result**
+  person who created the automation, and only when Email me the result
   is on. See [Email](email.md#emails-the-app-sends-you).

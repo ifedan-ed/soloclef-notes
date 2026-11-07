@@ -11,17 +11,17 @@ exactly what goes where, so you can choose.
 
 ## What stays on the server
 
-- **Your files and everything made from them.** Uploads, sources, notes,
+- Your files and everything made from them. Uploads, sources, notes,
   chats and Studio outputs are stored on the server.
-- **Local parsing.** The Local parser reads files on the server. The file
+- Local parsing. The Local parser reads files on the server. The file
   itself is not sent anywhere.
-- **Search index.** Sources are turned into search vectors with the BGE-M3
+- Search index. Sources are turned into search vectors with the BGE-M3
   embedding model, which runs on the server. If that local service is down,
   the text is sent to the same model at OpenRouter instead, so indexing
   doesn't stop.
-- **No analytics.** There is no third-party tracking or analytics. If the app
+- No analytics. There is no third-party tracking or analytics. If the app
   crashes in your browser, the error report goes to the server itself.
-- **Report Issue.** On an error message, **Report Issue** only opens your own
+- Report Issue. On an error message, Report Issue only opens your own
   mail app with a draft to the site's owner: the error code, request ID,
   message, page, browser and time. Nothing is sent unless you send it, through
   your own mail provider.
@@ -31,13 +31,13 @@ exactly what goes where, so you can choose.
 | When you… | What is sent | To |
 | --- | --- | --- |
 | Chat, or make a Studio output | Your question and the relevant passages from your sources | The AI model provider of the model in use (for example OpenAI, Google, DeepSeek or others through OpenRouter) |
-| Choose the **Cloud** parser | The whole file, and with **Vision** on, the images in it | The server's cloud parser, Datalab or LlamaCloud; with Datalab, LlamaCloud for the few file types Datalab can't open, or if Datalab fails |
-| Turn on **Vision** | The images in the file | The vision model's provider |
+| Choose the Cloud parser | The whole file, and with Vision on, the images in it | The server's cloud parser, Datalab or LlamaCloud; with Datalab, LlamaCloud for the few file types Datalab can't open, or if Datalab fails |
+| Turn on Vision | The images in the file | The vision model's provider |
 | Make an audio or video overview | The script to be read aloud | OpenAI, for the voices |
 | Search for new sources | Your search query | The service you search (Google, PubMed, arXiv, Exa, Tavily and so on). Google Search, the platforms (YouTube, Reddit and the others) and the web pages you import are reached through the site's web proxy service |
 | Read a web page | The page's address | Browserbase, if the workspace has a Browserbase connector; otherwise, or if Browserbase fails, the server reads it through the site's web proxy service |
 | Read a page that shows a captcha | The page's address and its captcha | A captcha-solving service (2captcha) |
-| Pick Exa, Tavily or Browserbase in the chat's **Tools** | The search words, or the address of the page to open | Exa, Tavily or Browserbase, with the workspace's own key |
+| Pick Exa, Tavily or Browserbase in the chat's Tools | The search words, or the address of the page to open | Exa, Tavily or Browserbase, with the workspace's own key |
 | Pick files from Nextcloud | Nothing extra: the server fetches the files from your Nextcloud | — |
 | Pick files from Google Drive | Nothing extra: the server fetches only the files you picked, and Google tells the app about no others | — |
 | Connect an agent over MCP | Whatever the agent asks for with your API key or sign-in: search results and documents from workspaces with API access on | Your agent and its model provider |
@@ -45,10 +45,10 @@ exactly what goes where, so you can choose.
 | Let the assistant read your mail | The text of the messages it reads, and of any attachment it opens; images in attachments go to the vision model | The AI model provider of the model in use, and the vision model's provider |
 | Get an email from the app (password reset, invitation, automation result) | The email: for an invitation, who invited you and to which workspace; for an automation, the run's full result | The site's mail provider (SMTP2GO), then your own mail provider |
 | Sign in with your password, or ask for a password reset, on the website | Your browser takes a bot check | Cloudflare (Turnstile) |
-| Sign in with **Continue with single sign-on** | You sign in there, and it tells the app your email address | The site owner's own single sign-on service |
+| Sign in with Continue with single sign-on | You sign in there, and it tells the app your email address | The site owner's own single sign-on service |
 
-If a file must not leave the server, use the **Local** parser, leave
-**Vision** off, and bear in mind that asking about it still sends the
+If a file must not leave the server, use the Local parser, leave
+Vision off, and bear in mind that asking about it still sends the
 relevant passages to a model provider.
 
 ## Who can see what
@@ -85,7 +85,7 @@ connectors and API keys, and anyone you shared one with loses that work too.
 It doesn't remove what you added to other people's workspaces: the documents
 you uploaded there stay, and the chats you started there can then be seen by
 that workspace's Owner. To keep a copy of your documents first, use **Export
-knowledge base** in **Workspace settings → General**.
+knowledge base** in Workspace settings → General.
 
-Removing a mailbox from the **Email (IMAP)** card removes it from the app
+Removing a mailbox from the Email (IMAP) card removes it from the app
 only; nothing in the mailbox changes.

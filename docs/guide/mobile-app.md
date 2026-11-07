@@ -7,31 +7,31 @@ and account as the website, so your notebooks are the same everywhere.
 
 ## What it does
 
-- **Notebooks:** browse, search, create, rename and delete them. The search
+- Notebooks: browse, search, create, rename and delete them. The search
   also looks inside notebooks' sources and notes, under **Found inside
   notebooks**.
-- **Sources:** tick sources on and off, see indexing status, add a web link,
+- Sources: tick sources on and off, see indexing status, add a web link,
   upload files from the phone (with the Local or Cloud parser), and read
   source guides. Long-press a source to remove it from the notebook.
-- **Chat:** the notebook's chat, with citations you can tap, suggested
-  questions and follow-ups, and **@** to ask about one or more sources.
-  Answers have **Stop**, **Try again** and **Copy**, and say so when they were
+- Chat: the notebook's chat, with citations you can tap, suggested
+  questions and follow-ups, and @ to ask about one or more sources.
+  Answers have Stop, Try again and Copy, and say so when they were
   cut off at the model's limit.
-- **Studio:** every output type, with the same options as on the web.
+- Studio: every output type, with the same options as on the web.
   Audio plays in the background with lock-screen controls, at 0.75× to 2×
   speed, with buttons to go back 15 seconds or forward 30, and the transcript
   below. Video, flashcards, quizzes, mind maps, infographics and interactive
   reports open in the app. Documents, slides and tables show their text in the
   app, and can be opened in another app or shared. Each output can be renamed,
   deleted or tried again, and says which model made it.
-- **Settings:** account, server, workspace, theme and language. The workspace
-  choice appears only when you have more than one. **Plan & credits** shows
-  your plan and the credits left this period; **Manage plan and credits**
-  opens the Billing page on the website. **Sign out** and the version number
+- Settings: account, server, workspace, theme and language. The workspace
+  choice appears only when you have more than one. Plan & credits shows
+  your plan and the credits left this period; Manage plan and credits
+  opens the Billing page on the website. Sign out and the version number
   are at the bottom.
 
 When something is refused because your credits ran out or your plan doesn't
-include it, the message offers **Get credits** or **See plans**, which open
+include it, the message offers Get credits or See plans, which open
 the website.
 
 ## Not in the app
@@ -39,10 +39,10 @@ the website.
 These are on the website only, which also works on a phone: notes,
 notifications, [automations](automations.md), [email](email.md) and the
 other connectors (Google Drive, Nextcloud), **Search the web for new
-sources**, picking workspace documents as sources, the model picker, **/**
-prompts, **Save to note**, **Delete chat history**, making workspaces,
+sources, picking workspace documents as sources, the model picker, **/
+prompts, Save to note, Delete chat history, making workspaces,
 members, invitations and public links, workspace and user settings, API keys
-and **Connect your agent**, and password reset.
+and Connect your agent, and password reset.
 
 ## Getting it
 

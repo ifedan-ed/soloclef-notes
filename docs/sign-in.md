@@ -3,7 +3,7 @@
 ## Email and password
 
 The default. Nothing else is needed: `AUTH_TYPE=LOCAL`, with `OIDC_ENABLED`
-unset. Passwords are stored only as Argon2id hashes. **Forgot password?**
+unset. Passwords are stored only as Argon2id hashes. Forgot password?
 sends a reset link when [email](self-hosting.md#email-optional) is set up;
 without email, the administrator sets a password with:
 
@@ -47,7 +47,7 @@ Who gets an account on their first single sign-on:
 ## Who can join
 
 Sign-ups are closed by default: the website and the phone app offer
-**Request access**, which opens your server's contact page (set
+Request access, which opens your server's contact page (set
 `SUPPORT_EMAIL` so it has an address). You add people yourself with
 `create_account.py`, or through single sign-on as above.
 

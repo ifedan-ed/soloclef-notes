@@ -11,8 +11,8 @@ research scrapers and academic searches.
 
 ## Before you start
 
-**Turn on API access for the workspace.** In **Workspace settings →
-General**, switch on **API key access**. Only the workspace's Owner can do
+Turn on API access for the workspace. In **Workspace settings →
+General, switch on **API key access. Only the workspace's Owner can do
 this. Until it is on, no agent sees the workspace, whether it signed in or
 uses a key.
 
@@ -21,19 +21,19 @@ uses a key.
 Connecting lets you use your Soloclef Notes workspace from inside Claude or
 ChatGPT.
 
-Open your avatar menu and choose **Connect your agent**. The top of the
-dialog shows this server's address, a **Client ID** and a **Client secret**,
+Open your avatar menu and choose Connect your agent. The top of the
+dialog shows this server's address, a Client ID and a Client secret,
 with copy buttons, and the steps for each:
 
-- **Claude:** **Customize → Connectors → Add custom connector** (on a Team
+- Claude: Customize → Connectors → Add custom connector (on a Team
   or Enterprise plan an Owner adds it under **Organization settings →
   Connectors**). Enter the server address, choose **Use your own OAuth
-  client** (or open **Advanced settings**) and paste the client ID and
-  secret. Then **Connect** and sign in. It works in Claude Desktop and the
+  client** (or open Advanced settings) and paste the client ID and
+  secret. Then Connect and sign in. It works in Claude Desktop and the
   mobile app too.
-- **ChatGPT:** turn on **Developer mode** under **Settings → Apps &
+- ChatGPT: turn on Developer mode under **Settings → Apps &
   Connectors → Advanced settings**, then create an app with the server
-  address and **OAuth**, and paste the client ID and secret under **Advanced
+  address and OAuth, and paste the client ID and secret under **Advanced
   OAuth settings** (token method `client_secret_post`). Then sign in when
   asked.
 
@@ -53,14 +53,14 @@ administrator for one through the contact page (your server's contact page).
 
 ## Coding agents: API key
 
-**Create an API key.** In **User settings → API Access**, choose **Create
+Create an API key. In User settings → API Access, choose **Create
 API key**, give it a name and, if you like, an expiry. Copy the key when it
 is shown: it is shown only once. Every account can make its own; a key acts
 as you and nobody else.
 
-Then open your avatar menu and choose **Connect your agent**.
+Then open your avatar menu and choose Connect your agent.
 
-1. Keep **Remote** selected: it uses this server, with nothing to install.
+1. Keep Remote selected: it uses this server, with nothing to install.
 2. Pick your agent's tab: Claude Code, Codex, OpenCode, Cursor, Claude
    Desktop, VS Code, Windsurf or Gemini CLI.
 3. Follow its steps and paste the configuration, replacing
@@ -69,10 +69,10 @@ Then open your avatar menu and choose **Connect your agent**.
    send the key as an `X-API-Key` header instead.
 
 In Claude Code, for example, run the command shown, then `/mcp` inside Claude
-Code should list **soloclef** as connected.
+Code should list soloclef as connected.
 
-**Open WebUI (and other MCP clients).** Add a tool server of type **MCP** with
-the address  (`https://your-server/mcp`), authentication **bearer**, and the
+Open WebUI (and other MCP clients). Add a tool server of type MCP with
+the address  (`https://your-server/mcp`), authentication bearer, and the
 key. Open WebUI can be limited to some of the tools with its function-name
 filter — to give it only the academic searches, list
 `soloclef_pubmed_search,soloclef_arxiv_search,soloclef_preprint_search,soloclef_scholar_search`.
@@ -82,29 +82,29 @@ Grant it to the accounts that should use it.
 
 The tools are all named `soloclef_…`:
 
-- **Workspaces:** `soloclef_list_workspaces`, `soloclef_select_workspace`.
+- Workspaces: `soloclef_list_workspaces`, `soloclef_select_workspace`.
   If the key can see only one workspace, it is used without asking.
   Otherwise the agent picks one with `soloclef_select_workspace`, or names it
   in each call. With an API key, the choice is remembered for that key, so
   agents that share a key share it. With a sign-in, it is remembered for your
   account, so all your connected Claude and ChatGPT agents share one choice.
   Either way it lasts until the server restarts.
-- **Search and read documents:** `soloclef_search_knowledge_base`,
+- Search and read documents: `soloclef_search_knowledge_base`,
   `soloclef_list_documents`, `soloclef_get_document`.
-- **Change documents:** `soloclef_add_document` (a note in text or
+- Change documents: `soloclef_add_document` (a note in text or
   Markdown), `soloclef_upload_file`, `soloclef_update_document`,
   `soloclef_delete_document`. New documents are indexed in the background.
   `soloclef_upload_file` reads a file path on the machine where the MCP server
-  runs. With **Remote** that is this server, so a file on your own computer
+  runs. With Remote that is this server, so a file on your own computer
   can't be uploaded: send its text with `soloclef_add_document` instead, or
-  use **Self-host**. Uploads use the Local parser, skip duplicates, and can be
+  use Self-host. Uploads use the Local parser, skip duplicates, and can be
   up to 500 MB. `soloclef_update_document` replaces a document's whole text
   and keeps its title; Studio outputs can't be changed. Deleting is permanent.
-- **Research scrapers:** Google Search, web crawling, Reddit, YouTube,
+- Research scrapers: Google Search, web crawling, Reddit, YouTube,
   Instagram, TikTok, Google Maps, Indeed, Amazon and Walmart (for example
   `soloclef_google_search`, `soloclef_web_crawl`), plus
   `soloclef_list_scraper_runs` and `soloclef_get_scraper_run` for past runs.
-- **Academic search:** `soloclef_pubmed_search` (optionally limited to
+- Academic search: `soloclef_pubmed_search` (optionally limited to
   publication years, or with open-access full-text excerpts),
   `soloclef_arxiv_search`, `soloclef_preprint_search` (medRxiv or bioRxiv;
   preprints are not peer reviewed) and `soloclef_scholar_search` (Google
@@ -114,7 +114,7 @@ The tools are all named `soloclef_…`:
 
 The agent works on workspace documents, not on notebooks: it can't ask a
 notebook's chat or make Studio outputs. Documents it adds can be picked into a
-notebook with **Add sources**. It can't read your email either: there are no
+notebook with Add sources. It can't read your email either: there are no
 mail tools, and mail is never stored as documents.
 
 What the agent may do follows your role in the workspace. With a Viewer's
@@ -140,10 +140,10 @@ Scraper runs made with your key are listed under **User settings → API
 Access → API runs**, with their cost. To cut an agent off, delete its key,
 or for Claude and ChatGPT remove the connector there.
 
-**API runs** shows every scraper run and notebook research search in the
-current workspace, by anyone; **Origin** says **API key** for calls made with a
+API runs shows every scraper run and notebook research search in the
+current workspace, by anyone; Origin says API key for calls made with a
 key or by a signed-in agent. Academic searches are not listed. To cut off every agent at once, the
-workspace Owner can turn off **API key access**.
+workspace Owner can turn off API key access.
 
 ### Limits for signed-in agents
 

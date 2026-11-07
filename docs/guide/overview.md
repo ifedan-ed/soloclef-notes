@@ -6,20 +6,20 @@ Soloclef Notes is a notebook app for studying and research. You put your
 material into a notebook, then ask questions about it and turn it into things
 you can learn from.
 
-- **Sources.** Upload files, pick files from Google Drive or Nextcloud, or
+- Sources. Upload files, pick files from Google Drive or Nextcloud, or
   search the web, PubMed, arXiv and more and import what you find.
-- **Chat.** Each notebook has one chat. It answers from that notebook's
+- Chat. Each notebook has one chat. It answers from that notebook's
   sources and shows citations you can open.
-- **Studio.** Two clicks make a report, mind map, infographic, flashcards,
+- Studio. Two clicks make a report, mind map, infographic, flashcards,
   quiz, slide deck, data table, audio overview or video overview from your
   sources.
-- **Notes.** Save answers as notes, write your own, and turn a note into a
+- Notes. Save answers as notes, write your own, and turn a note into a
   source.
-- **Automations.** Have the assistant run a task on a schedule, and keep or
+- Automations. Have the assistant run a task on a schedule, and keep or
   email you the result.
-- **Email.** Connect a mailbox so the assistant can search and read your
+- Email. Connect a mailbox so the assistant can search and read your
   mail, read-only.
-- **Sharing.** Invite people into a workspace, and share a chat, an output or
+- Sharing. Invite people into a workspace, and share a chat, an output or
   a whole notebook by link.
 
 ![A notebook: sources on the left, the chat in the middle, Studio on the right](../images/screens/notebook.png)

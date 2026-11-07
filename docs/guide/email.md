@@ -13,28 +13,28 @@ It works with any mail provider that lets you sign in over IMAP with a
 password or an app password, and with Microsoft mailboxes through Microsoft's
 own sign-in (see [Microsoft mailboxes](#microsoft-mailboxes)).
 
-1. Open **Workspace settings → Connectors** and choose **Connect** on the
-   **Email (IMAP)** card. It opens in place.
-2. Choose **Add account** and fill in:
-   - **Label:** a name for the mailbox, such as Work inbox. Left empty, the
+1. Open Workspace settings → Connectors and choose Connect on the
+   Email (IMAP) card. It opens in place.
+2. Choose Add account and fill in:
+   - Label: a name for the mailbox, such as Work inbox. Left empty, the
      username is used.
-   - **IMAP host** and **Port:** your provider's IMAP server. The port is 993
+   - IMAP host and Port: your provider's IMAP server. The port is 993
      unless you change it.
-   - **Use TLS:** on by default. With it off, the connection is still
+   - Use TLS: on by default. With it off, the connection is still
      encrypted, with STARTTLS; it never runs in plain text. The port doesn't
-     change by itself: with **Use TLS** off, set your provider's STARTTLS
+     change by itself: with Use TLS off, set your provider's STARTTLS
      port, usually 143.
-   - **Username** and **Password**.
-3. Choose **Test connection** to check the settings. It says how many folders
+   - Username and Password.
+3. Choose Test connection to check the settings. It says how many folders
    it found, and saves nothing.
-4. Choose **Save**.
+4. Choose Save.
 
 If your provider uses two-factor sign-in, the password must be an app
 password, not your normal one:
 
-- **Gmail:** Google Account → Security → App passwords. This needs 2-Step
+- Gmail: Google Account → Security → App passwords. This needs 2-Step
   Verification.
-- **Outlook / Microsoft 365:** no password works. Use **Connect a Microsoft
+- Outlook / Microsoft 365: no password works. Use **Connect a Microsoft
   account** instead, below.
 
 ### Microsoft mailboxes
@@ -44,50 +44,50 @@ Microsoft 365 work and school mailboxes from 1 October 2022 and for
 Outlook.com, Hotmail and Live mailboxes from 16 September 2024. These
 mailboxes connect through Microsoft instead:
 
-1. On the **Email (IMAP)** card, choose **Connect a Microsoft account**.
+1. On the Email (IMAP) card, choose Connect a Microsoft account.
 2. Microsoft's page opens. Choose the account, sign in and accept.
    Microsoft's page says the app may read and write your mail, because
    Microsoft has no read-only permission for IMAP; Soloclef Notes still only
    reads (see [What the assistant can do with it](#what-the-assistant-can-do-with-it)).
 3. You come back to the Connectors page with "Microsoft account connected",
-   and the mailbox in the list as *address · Microsoft*. **Test connection**
+   and the mailbox in the list as *address · Microsoft*. Test connection
    checks it.
 
-If the card has no **Connect a Microsoft account** button and says
+If the card has no Connect a Microsoft account button and says
 "Microsoft accounts aren't supported yet.", the site's administrator hasn't
 set up Microsoft sign-in.
 
-- **Finish within 10 minutes, in the same browser.** Otherwise you see "The
+- Finish within 10 minutes, in the same browser. Otherwise you see "The
   Microsoft sign-in timed out. Try again."
-- **Work or school accounts:** your organization may let only its
+- Work or school accounts: your organization may let only its
   administrators approve apps. You then see "Your organization's
   administrator has to approve this app first." Your administrator can also
-  turn IMAP off for a mailbox; **Test connection** then says the mail server
+  turn IMAP off for a mailbox; Test connection then says the mail server
   refused access and IMAP may be turned off for it.
-- **Staying connected.** The sign-in renews itself while the mailbox is
+- Staying connected. The sign-in renews itself while the mailbox is
   used. Changing your Microsoft password does not end it: to stop
   Soloclef Notes reading the mailbox, remove it here. Microsoft ends it when
   the mailbox isn't used for 90 days, when you remove the app's access (see
-  **Removing it** below), or when all your sign-in sessions are revoked, by
+  Removing it below), or when all your sign-in sessions are revoked, by
   you or, for a work or school account, by your administrator.
   The row then says "Microsoft needs you to sign in again." with a
-  **Reconnect** button; reconnecting keeps the same mailbox.
-- **Only your own mailbox.** You connect the mailbox of the Microsoft
+  Reconnect button; reconnecting keeps the same mailbox.
+- Only your own mailbox. You connect the mailbox of the Microsoft
   account you sign in with; shared mailboxes can't be added.
-- **Removing it** deletes the stored sign-in from Soloclef Notes. Microsoft
+- Removing it deletes the stored sign-in from Soloclef Notes. Microsoft
   keeps listing the app until you remove its access there too: for a
   personal account at account.live.com/consent/Manage; for a work or school
   account, ask your administrator.
 
 You can add several mailboxes. The password, or the Microsoft sign-in, is
 stored encrypted and is never shown again, to you or to anyone else.
-**Remove** takes a mailbox off Soloclef Notes only: nothing changes in the
+Remove takes a mailbox off Soloclef Notes only: nothing changes in the
 mailbox itself.
 
 To add a mailbox, you need to be an Owner or Editor of the workspace you add
 it from. The mail server must be on the internet: for a server on a private
-network, **Test connection** says "Couldn't connect: Could not connect to
-this mail server", and **Save** says "Couldn't add this account. Check the
+network, Test connection says "Couldn't connect: Could not connect to
+this mail server", and Save says "Couldn't add this account. Check the
 details and try again."
 
 ## What the assistant can do with it
@@ -111,7 +111,7 @@ It is read-only by design. It can't send, delete, move or flag mail, and it
 never marks a message as read.
 
 Mail is read in [automations](automations.md): a task is set to read it
-when its **Can use** includes the web. That is an instruction the assistant
+when its Can use includes the web. That is an instruction the assistant
 follows, not a lock. A notebook's [chat](chat-and-citations.md) can read
 mail too. A connected mailbox stays within the assistant's reach wherever the
 mailbox is on (see [In shared workspaces](#in-shared-workspaces)).
@@ -143,21 +143,21 @@ assistant can search and read the mailbox of every member who connected one:
 yours from their chats and automations there, and theirs from yours.
 
 To turn your mail off in one workspace, open **Workspace settings →
-Connectors** and pick **Email (IMAP)** under **Your connectors**. If you are
+Connectors** and pick Email (IMAP) under Your connectors. If you are
 the only member there with a mailbox, that opens your mail's settings. If
 other members have connected one too, it opens a list with one card for each
-member's mail, all named Email (IMAP); yours is marked **Yours**, the others
-**Another member's**. Switch off **Enabled in this workspace** on yours. The
+member's mail, all named Email (IMAP); yours is marked Yours, the others
+Another member's. Switch off Enabled in this workspace on yours. The
 switch covers all your mailboxes at once. From then on no one's chats or
-automations in that workspace read them. **Your connectors** then marks Email
-(IMAP) **Off**, or, while other members' mail is still on there, shows how
+automations in that workspace read them. Your connectors then marks Email
+(IMAP) Off, or, while other members' mail is still on there, shows how
 many are on, such as "1 of 2 on". Your other workspaces keep your mail, and
 switching it back on needs nothing new. Switching it off needs the Owner role
 in that workspace.
 
-Mailboxes are added and removed only on the **Email (IMAP)** card, under
-**Overview** on the same page; your mail's settings have no Disconnect.
-**Remove** on a mailbox takes it out of every workspace. The card shows only
+Mailboxes are added and removed only on the Email (IMAP) card, under
+Overview on the same page; your mail's settings have no Disconnect.
+Remove on a mailbox takes it out of every workspace. The card shows only
 your own mailboxes, not the ones other members connected.
 
 You can't connect a mailbox from the [phone app](mobile-app.md), and
@@ -168,17 +168,17 @@ You can't connect a mailbox from the [phone app](mobile-app.md), and
 These come from Soloclef Notes through the site's own mail service. If
 outgoing mail is off on the server, none are sent.
 
-- **Password reset.** **Forgot Password?** on the sign-in page sends "Reset
+- Password reset. Forgot Password? on the sign-in page sends "Reset
   your Soloclef Notes password". The link works once and expires in 30
   minutes. One address is sent at most 3 an hour; further requests send
   nothing. See [Getting started](getting-started.md#1-sign-in).
-- **Workspace invitation.** "*Name* invited you to *workspace* on
-  Soloclef Notes", with an **Open the invitation** button and the date it
+- Workspace invitation. "*Name* invited you to *workspace* on
+  Soloclef Notes", with an Open the invitation button and the date it
   expires. Only the account with that address can accept it. The person who
-  invited you can **Resend** it, at most once a minute. If the email can't be
+  invited you can Resend it, at most once a minute. If the email can't be
   sent, they see "Invitation created, email not sent" and can copy the link
   to you. See [Workspaces and sharing](workspaces-and-sharing.md#inviting-people).
-- **Automation result.** With **Email me the result** on, each run that
+- Automation result. With Email me the result on, each run that
   finishes sends its result to the person who created the automation. The
   subject is the automation's name and the date (in UTC), such as "Weekly
   digest — 2026-10-05", and the email holds the run's final answer. When a run
@@ -192,7 +192,7 @@ app, and no email is sent to confirm your address.
 
 ## Writing to the site's owner
 
-**Report Issue**, on an error message, opens your own mail app with a report
+Report Issue, on an error message, opens your own mail app with a report
 already written to the site's support address: the error code, request ID,
 message, page, browser and time. Nothing is sent until you send it. The
 contact page (your server's contact page) shows the same address.
