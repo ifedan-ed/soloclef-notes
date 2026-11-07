@@ -73,11 +73,18 @@ async def _create_checkpointer() -> AsyncPostgresSaver:
         open=False,
         # Connection kwargs required by AsyncPostgresSaver:
         # - autocommit: required for .setup() to commit checkpoint tables
-        # - prepare_threshold: disable prepared statements for compatibility
+        # - prepare_threshold None: psycopg prepares a statement after it has
+        #   been run this many times, so 0 means "prepare everything on first
+        #   use" -- the opposite of what the old comment here claimed. Only
+        #   None disables preparation. Behind pgbouncer in transaction pooling
+        #   a prepared statement does not survive to the next transaction, so 0
+        #   crashed AsyncPostgresSaver.setup() at startup with
+        #   `prepared statement "_pg3_0" does not exist`. Verified both values
+        #   against this host's pooler: 0 fails, None works.
         # - row_factory: checkpointer accesses rows as dicts (row["column"])
         kwargs={
             "autocommit": True,
-            "prepare_threshold": 0,
+            "prepare_threshold": None,
             "row_factory": dict_row,
         },
     )
