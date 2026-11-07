@@ -1,14 +1,12 @@
 "use client";
 
 import { CheckIcon, CopyIcon } from "lucide-react";
-import type { CSSProperties } from "react";
 import { memo, useEffect, useState } from "react";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { materialDark, materialLight } from "react-syntax-highlighter/dist/esm/styles/prism";
 
 import { MermaidDiagram } from "@/components/assistant-ui/mermaid-diagram";
 import { Button } from "@/components/ui/button";
-import { cn, copyToClipboard } from "@/lib/utils";
+import { HighlightedCode } from "@/features/code-highlighting/highlighted-code";
+import { copyToClipboard } from "@/lib/utils";
 
 type MarkdownCodeBlockProps = {
 	className?: string;
@@ -16,23 +14,6 @@ type MarkdownCodeBlockProps = {
 	codeText: string;
 	isDarkMode: boolean;
 };
-
-function stripThemeBackgrounds(
-	theme: Record<string, CSSProperties>
-): Record<string, CSSProperties> {
-	const cleaned: Record<string, CSSProperties> = {};
-	for (const key of Object.keys(theme)) {
-		const { background, backgroundColor, ...rest } = theme[key] as CSSProperties & {
-			background?: string;
-			backgroundColor?: string;
-		};
-		cleaned[key] = rest;
-	}
-	return cleaned;
-}
-
-const cleanMaterialDark = stripThemeBackgrounds(materialDark);
-const cleanMaterialLight = stripThemeBackgrounds(materialLight);
 
 function MarkdownCodeBlockComponent({
 	className,
@@ -69,15 +50,9 @@ function MarkdownCodeBlockComponent({
 				</Button>
 			</div>
 
-			<SyntaxHighlighter
-				style={isDarkMode ? cleanMaterialDark : cleanMaterialLight}
-				language={language}
-				PreTag="div"
-				customStyle={{ margin: 0, background: "transparent" }}
-				className={cn(className)}
-			>
-				{codeText}
-			</SyntaxHighlighter>
+			<pre className="overflow-x-auto bg-syntax-bg px-4 py-3 font-mono text-sm leading-relaxed">
+				<HighlightedCode language={normalizedLanguage} source={codeText} className={className} />
+			</pre>
 		</div>
 	);
 

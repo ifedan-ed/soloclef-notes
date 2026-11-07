@@ -56,7 +56,24 @@
 	--sidebar-border: oklch(0.922 0 0);
 	--sidebar-ring: oklch(0.708 0 0);
 	--main-panel: var(--panel);
-	--syntax-bg: #f5f5f5;
+	/* Syntax highlighting: the official highlight.js "GitHub" theme, verbatim,
+	 * token names kept as GitHub's own prettylights-syntax-* roles. Read by the
+	 * .hljs-* rules at the foot of this file. Dark is "GitHub Dark". */
+	--syntax-bg: #ffffff;
+	--syntax-fg: #24292e;
+	--syntax-keyword: #d73a49;
+	--syntax-entity: #6f42c1;
+	--syntax-constant: #005cc5;
+	--syntax-string: #032f62;
+	--syntax-variable: #e36209;
+	--syntax-comment: #6a737d;
+	--syntax-entity-tag: #22863a;
+	--syntax-markup-heading: #005cc5;
+	--syntax-markup-list: #735c0f;
+	--syntax-markup-inserted: #22863a;
+	--syntax-markup-inserted-bg: #f0fff4;
+	--syntax-markup-deleted: #b31d28;
+	--syntax-markup-deleted-bg: #ffeef0;
 	--brand: oklch(0.546 0.245 262.881);
 	--highlight: oklch(0.852 0.199 91.936);
 }
@@ -105,7 +122,21 @@ html[data-surfsense-auth-type="LOCAL"] .runtime-auth-google {
 	--sidebar-border: oklch(0.32 0 0);
 	--sidebar-ring: oklch(0.439 0 0);
 	--main-panel: var(--panel);
-	--syntax-bg: #1e1e1e;
+	--syntax-bg: #0d1117;
+	--syntax-fg: #c9d1d9;
+	--syntax-keyword: #ff7b72;
+	--syntax-entity: #d2a8ff;
+	--syntax-constant: #79c0ff;
+	--syntax-string: #a5d6ff;
+	--syntax-variable: #ffa657;
+	--syntax-comment: #8b949e;
+	--syntax-entity-tag: #7ee787;
+	--syntax-markup-heading: #1f6feb;
+	--syntax-markup-list: #f2cc60;
+	--syntax-markup-inserted: #aff5b4;
+	--syntax-markup-inserted-bg: #033a16;
+	--syntax-markup-deleted: #ffdcd7;
+	--syntax-markup-deleted-bg: #67060c;
 	--brand: oklch(0.546 0.245 262.881);
 	--highlight: oklch(0.852 0.199 91.936);
 }
@@ -155,6 +186,7 @@ html[data-surfsense-auth-type="LOCAL"] .runtime-auth-google {
 	--color-sidebar-ring: var(--sidebar-ring);
 	--color-brand: var(--brand);
 	--color-highlight: var(--highlight);
+	--color-syntax-bg: var(--syntax-bg);
 }
 
 @layer base {
@@ -638,4 +670,103 @@ button {
    screen. Fieldsets size like any other block here. */
 fieldset {
 	min-width: 0;
+}
+
+/* Syntax highlighting, shared by the chat's markdown code blocks
+   (features/code-highlighting) and the note editor's (components/ui/
+   code-block-node.tsx). Selector groups are the official highlight.js GitHub
+   themes', unchanged, so a scope is coloured the way every other GitHub-themed
+   code block colours it; only the values move to tokens, for light and dark.
+   Two of GitHub's own values fall under 4.5:1 on their own background --
+   .hljs-variable (#e36209, 3.49:1 light) and .hljs-section (#1f6feb, 4.08:1
+   dark). Kept as shipped rather than privately corrected. */
+.hljs {
+	color: var(--syntax-fg);
+}
+
+.hljs-doctag,
+.hljs-keyword,
+.hljs-meta .hljs-keyword,
+.hljs-template-tag,
+.hljs-template-variable,
+.hljs-type,
+.hljs-variable.language_ {
+	color: var(--syntax-keyword);
+}
+
+.hljs-title,
+.hljs-title.class_,
+.hljs-title.class_.inherited__,
+.hljs-title.function_ {
+	color: var(--syntax-entity);
+}
+
+.hljs-attr,
+.hljs-attribute,
+.hljs-literal,
+.hljs-meta,
+.hljs-number,
+.hljs-operator,
+.hljs-variable,
+.hljs-selector-attr,
+.hljs-selector-class,
+.hljs-selector-id {
+	color: var(--syntax-constant);
+}
+
+.hljs-regexp,
+.hljs-string,
+.hljs-meta .hljs-string {
+	color: var(--syntax-string);
+}
+
+.hljs-built_in,
+.hljs-symbol {
+	color: var(--syntax-variable);
+}
+
+.hljs-comment,
+.hljs-code,
+.hljs-formula {
+	color: var(--syntax-comment);
+}
+
+.hljs-name,
+.hljs-quote,
+.hljs-selector-tag,
+.hljs-selector-pseudo {
+	color: var(--syntax-entity-tag);
+}
+
+.hljs-subst {
+	color: var(--syntax-fg);
+}
+
+.hljs-section {
+	color: var(--syntax-markup-heading);
+	font-weight: bold;
+}
+
+.hljs-bullet {
+	color: var(--syntax-markup-list);
+}
+
+.hljs-emphasis {
+	color: var(--syntax-fg);
+	font-style: italic;
+}
+
+.hljs-strong {
+	color: var(--syntax-fg);
+	font-weight: bold;
+}
+
+.hljs-addition {
+	color: var(--syntax-markup-inserted);
+	background-color: var(--syntax-markup-inserted-bg);
+}
+
+.hljs-deletion {
+	color: var(--syntax-markup-deleted);
+	background-color: var(--syntax-markup-deleted-bg);
 }
