@@ -2515,8 +2515,8 @@ def _build_connect_args() -> dict:
 
 engine = create_async_engine(
     DATABASE_URL,
-    pool_size=30,
-    max_overflow=150,
+    pool_size=config.DB_POOL_SIZE,
+    max_overflow=config.DB_MAX_OVERFLOW,
     pool_recycle=1800,
     pool_pre_ping=True,
     pool_timeout=30,

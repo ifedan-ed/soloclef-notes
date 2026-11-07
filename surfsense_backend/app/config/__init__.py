@@ -536,6 +536,12 @@ class Config:
     DB_CELERY_IDLE_IN_TX_TIMEOUT_MS = int(
         os.getenv("DB_CELERY_IDLE_IN_TX_TIMEOUT_MS", "3600000")
     )
+    # Size of the API's connection pool. The Celery engine is NullPool, so this
+    # is the only pooled engine; the old 30 + 150 let one API process reach 180
+    # of the server's 200 connections on its own, leaving nothing for the
+    # workers' transient connections or zero-cache's replication slots.
+    DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "20"))
+    DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "30"))
 
     # Celery / Redis
     # Redis (single endpoint for Celery broker, result backend, and app cache).
