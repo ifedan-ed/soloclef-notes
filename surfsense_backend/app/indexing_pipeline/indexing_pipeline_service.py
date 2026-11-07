@@ -541,6 +541,8 @@ class IndexingPipelineService:
         )
 
         document.embedding = summary_embedding
+        # document_id and workspace_id are stamped by persist_scratch_index,
+        # which owns the batched INSERT.
         return [
             Chunk(
                 content=chunk.text,
@@ -598,6 +600,7 @@ class IndexingPipelineService:
                 start_line=pending.start_line,
                 end_line=pending.end_line,
                 document_id=document.id,
+                workspace_id=document.workspace_id,
             )
             for pending, emb in zip(plan.to_embed, new_embeddings, strict=True)
         )

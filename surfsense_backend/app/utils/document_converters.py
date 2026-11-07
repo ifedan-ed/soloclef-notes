@@ -203,12 +203,16 @@ def optimize_content_for_context_window(
     return optimized_content
 
 
-async def create_document_chunks(content: str) -> list[Chunk]:
+async def create_document_chunks(content: str, workspace_id: int) -> list[Chunk]:
     """
     Create chunks from document content.
 
     Args:
         content: Document content to chunk
+        workspace_id: The workspace the owning document belongs to. Stamped on
+            every chunk because callers attach these rows through
+            ``Document(chunks=...)``, which cascades the document id and
+            nothing else, and workspace-scoped search filters on this column.
 
     Returns:
         List of Chunk objects with embeddings
@@ -216,7 +220,7 @@ async def create_document_chunks(content: str) -> list[Chunk]:
     chunk_texts = [c.text for c in config.chunker_instance.chunk(content)]
     chunk_embeddings = await asyncio.to_thread(embed_texts, chunk_texts)
     return [
-        Chunk(content=text, embedding=emb, position=i)
+        Chunk(content=text, embedding=emb, position=i, workspace_id=workspace_id)
         for i, (text, emb) in enumerate(
             zip(chunk_texts, chunk_embeddings, strict=False)
         )

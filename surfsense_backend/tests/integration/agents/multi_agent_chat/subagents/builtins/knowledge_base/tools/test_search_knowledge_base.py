@@ -65,7 +65,13 @@ async def _add_document(
     db_session.add(document)
     await db_session.flush()
     db_session.add(
-        Chunk(content=text, document_id=document.id, position=0, embedding=_axis(0))
+        Chunk(
+            content=text,
+            document_id=document.id,
+            workspace_id=workspace_id,
+            position=0,
+            embedding=_axis(0),
+        )
     )
     await db_session.flush()
     return document

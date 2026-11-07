@@ -32,6 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.orm import DeclarativeBase, Mapped, backref, declared_attr, relationship
 
 from app.config import config
+from app.db_pooling.connect_args import build_asyncpg_connect_args
 
 if config.AUTH_TYPE == "GOOGLE":
     from fastapi_users.db import SQLAlchemyBaseOAuthAccountTableUUID
@@ -1075,6 +1076,27 @@ class Chunk(BaseModel, TimestampMixin):
         nullable=False,
         index=True,
     )
+
+    # The owning document's workspace, denormalised onto the chunk row.
+    #
+    # Filtered vector search is the only reason this column exists. Postgres
+    # cannot combine the HNSW index on ``embedding`` with a predicate that
+    # lives on ``documents``: it walks the index discarding other workspaces'
+    # rows and stops at the scan's candidate budget, so the query returns
+    # *fewer* rows than asked for, with no error anywhere. With the filter on
+    # this table the planner can push it through an iterative HNSW scan, or --
+    # for a workspace that is small next to the corpus -- read that one
+    # workspace's chunks exactly and skip the index altogether.
+    #
+    # NOT NULL is the safety net: a write path that forgets to stamp it fails
+    # loudly instead of writing a row no search will ever return. Index built
+    # as ``ix_chunks_workspace_id`` (_INDEX_DEFINITIONS, migration c0031).
+    workspace_id = Column(
+        Integer,
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
     document = relationship("Document", back_populates="chunks")
 
 
@@ -2493,24 +2515,20 @@ from app.studio_models.model import WorkspaceStudioModel  # noqa: E402, F401
 
 
 def _build_connect_args() -> dict:
-    """Build driver connect_args, including a protective idle-in-transaction
-    timeout for asyncpg connections.
+    """Driver connect_args for the API's engine (app/db_pooling/connect_args.py).
 
-    A single abandoned ``idle in transaction`` session can hold table/row locks
-    indefinitely and wedge writes plus boot-time DDL (the classic "FastAPI
-    stuck at application startup" failure). Setting
-    ``idle_in_transaction_session_timeout`` server-side makes Postgres reap such
-    sessions automatically. It never affects sessions that are actively running
-    statements — only ones that opened a transaction and went idle.
+    Directly against Postgres this asks it to reap this session if it opens a
+    transaction and goes idle: a single abandoned ``idle in transaction``
+    session can hold table/row locks indefinitely and wedge writes plus
+    boot-time DDL (the classic "FastAPI stuck at application startup"
+    failure). Through pgbouncer the timeout comes from the database's own
+    setting instead, and prepared statements are turned off.
     """
-    connect_args: dict = {}
-    idle_ms = config.DB_IDLE_IN_TX_TIMEOUT_MS
-    # ``server_settings`` is asyncpg-specific; only apply it for that driver.
-    if idle_ms and idle_ms > 0 and DATABASE_URL and "asyncpg" in DATABASE_URL:
-        connect_args["server_settings"] = {
-            "idle_in_transaction_session_timeout": str(idle_ms)
-        }
-    return connect_args
+    return build_asyncpg_connect_args(
+        database_url=DATABASE_URL,
+        idle_in_transaction_timeout_ms=config.DB_IDLE_IN_TX_TIMEOUT_MS,
+        pgbouncer_transaction_pooling=config.DB_PGBOUNCER_TRANSACTION_POOLING,
+    )
 
 
 engine = create_async_engine(
@@ -2569,6 +2587,14 @@ _INDEX_DEFINITIONS: list[tuple[str, str, str]] = [
         "chucks_search_index",
         "chunks",
         "CREATE INDEX CONCURRENTLY IF NOT EXISTS chucks_search_index ON chunks USING gin (to_tsvector('english', content))",
+    ),
+    # Lets the planner cost a workspace-scoped chunk read, so a small
+    # workspace is searched exactly instead of through an HNSW scan that
+    # throws away everyone else's rows (see Chunk.workspace_id).
+    (
+        "ix_chunks_workspace_id",
+        "chunks",
+        "CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_chunks_workspace_id ON chunks (workspace_id)",
     ),
     # pg_trgm index for efficient ILIKE '%term%' searches on titles — critical
     # for the document mention picker (@mentions) to scale.

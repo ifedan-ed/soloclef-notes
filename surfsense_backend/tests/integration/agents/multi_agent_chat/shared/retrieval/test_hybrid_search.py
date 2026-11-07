@@ -57,6 +57,7 @@ async def _add_document(
             Chunk(
                 content=content,
                 document_id=document.id,
+                workspace_id=workspace_id,
                 position=position,
                 embedding=embedding,
             )

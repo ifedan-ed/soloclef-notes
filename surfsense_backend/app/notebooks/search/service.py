@@ -25,6 +25,7 @@ from sqlalchemy import Float, func, literal, null, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import Chunk, Document
+from app.retriever.vector_scan_tuning import tune_vector_scan
 
 from ..persistence import Notebook, NotebookNote
 from .grouping import (
@@ -159,6 +160,11 @@ async def _chunk_candidates(
     """Fused chunk hits, best first."""
     if not document_ids or (tsquery is None and embedding is None):
         return []
+    if embedding is not None:
+        # A notebook is a handful of documents inside a whole corpus, so the
+        # semantic arm's filter rejects nearly every HNSW candidate. Without
+        # an iterative scan it returns fewer hits than _ARM_LIMIT asked for.
+        await tune_vector_scan(session)
     in_scope = Chunk.document_id.in_(document_ids)
     semantic = keyword = None
     if embedding is not None:

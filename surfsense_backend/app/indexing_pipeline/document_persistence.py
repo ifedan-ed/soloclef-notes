@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
 
 from app.db import Chunk, Document, DocumentStatus
+from app.indexing_pipeline.chunk_ownership import stamp_owning_document
 
 logger = logging.getLogger(__name__)
 
@@ -76,8 +77,7 @@ async def persist_scratch_index(
     for batch_idx, start in enumerate(range(0, total, effective_batch), start=1):
         batch = chunks[start : start + effective_batch]
         t_batch = time.perf_counter()
-        for chunk in batch:
-            chunk.document_id = doc_id
+        stamp_owning_document(batch, document)
         session.add_all(batch)
         await session.commit()
         perf.info(

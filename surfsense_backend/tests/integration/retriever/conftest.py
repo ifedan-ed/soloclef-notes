@@ -40,10 +40,12 @@ def _make_document(
     )
 
 
-def _make_chunk(*, content: str, document_id: int) -> Chunk:
+def _make_chunk(*, content: str, document: Document) -> Chunk:
+    """A chunk always carries its document's workspace (``Chunk.workspace_id``)."""
     return Chunk(
         content=content,
-        document_id=document_id,
+        document_id=document.id,
+        workspace_id=document.workspace_id,
         embedding=DUMMY_EMBEDDING,
     )
 
@@ -83,14 +85,14 @@ async def seed_large_doc(
     for i in range(35):
         chunk = _make_chunk(
             content=f"chunk {i} about quarterly performance review section {i}",
-            document_id=large_doc.id,
+            document=large_doc,
         )
         large_chunks.append(chunk)
 
     small_chunks = [
         _make_chunk(
             content="quarterly performance review summary note content",
-            document_id=small_doc.id,
+            document=small_doc,
         ),
     ]
 
@@ -140,11 +142,11 @@ async def seed_date_filtered_docs(
         [
             _make_chunk(
                 content="ocv meeting decisions and action items recent",
-                document_id=recent_doc.id,
+                document=recent_doc,
             ),
             _make_chunk(
                 content="ocv meeting decisions and action items old",
-                document_id=old_doc.id,
+                document=old_doc,
             ),
         ]
     )

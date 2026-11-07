@@ -127,7 +127,7 @@ async def add_extension_received_document(
         summary_embedding = await asyncio.to_thread(embed_text, summary_content)
 
         # Process chunks
-        chunks = await create_document_chunks(content.page_content)
+        chunks = await create_document_chunks(content.page_content, workspace_id)
 
         # Update or create document
         if existing_document:

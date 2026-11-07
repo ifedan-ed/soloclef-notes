@@ -18,6 +18,7 @@ from sqlalchemy.orm import joinedload
 from app.db import Chunk, Document, DocumentType
 from app.embedding_roles.query_embedding import embed_query
 from app.observability.domains import kb
+from app.retriever.vector_scan_tuning import tune_vector_scan
 from app.utils.perf import get_perf_logger
 
 from .models import ChunkHit, DocumentHit, SearchScope
@@ -89,6 +90,8 @@ async def _search(
     if query_embedding is None:
         query_embedding = await asyncio.to_thread(embed_query, query)
 
+    await tune_vector_scan(db_session)
+
     conditions = _base_conditions(workspace_id, scope, document_types)
     rows = await _fused_chunks(
         db_session,
@@ -118,15 +121,20 @@ def _base_conditions(
     scope: SearchScope,
     document_types: list[DocumentType] | None,
 ) -> list:
-    """Filters shared by both search legs."""
+    """Filters shared by both search legs.
+
+    Workspace and document scoping read ``chunks``, the table both legs'
+    indexes cover, so a candidate from another workspace is discarded without
+    leaving it. The remaining filters need ``documents`` and keep the join.
+    """
     conditions = [
-        Document.workspace_id == workspace_id,
+        Chunk.workspace_id == workspace_id,
         func.coalesce(Document.status["state"].astext, "ready") != "deleting",
     ]
     if document_types:
         conditions.append(Document.document_type.in_(document_types))
     if scope.document_ids:
-        conditions.append(Document.id.in_(scope.document_ids))
+        conditions.append(Chunk.document_id.in_(scope.document_ids))
     if scope.start_date is not None:
         conditions.append(Document.updated_at >= scope.start_date)
     if scope.end_date is not None:

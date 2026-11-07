@@ -191,7 +191,7 @@ async def add_received_markdown_file_document(
         summary_embedding = await asyncio.to_thread(embed_text, summary_content)
 
         # Process chunks
-        chunks = await create_document_chunks(file_in_markdown)
+        chunks = await create_document_chunks(file_in_markdown, workspace_id)
 
         # Update or create document
         if existing_document:

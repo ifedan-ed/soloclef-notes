@@ -77,7 +77,7 @@ class GoogleDriveKBSyncService:
             summary_content = f"Google Drive File: {file_name}\n\n{indexable_content}"
             summary_embedding = await asyncio.to_thread(embed_text, summary_content)
 
-            chunks = await create_document_chunks(indexable_content)
+            chunks = await create_document_chunks(indexable_content, workspace_id)
             now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
             document = Document(

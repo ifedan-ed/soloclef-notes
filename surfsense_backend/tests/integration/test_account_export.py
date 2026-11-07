@@ -173,7 +173,12 @@ async def test_account_export_matches_contract_and_skips_pending(
     )
     chunks = []
     for source_doc in (cited, beta, gamma):
-        chunk = Chunk(content="passage", document_id=source_doc.id, position=0)
+        chunk = Chunk(
+            content="passage",
+            document_id=source_doc.id,
+            workspace_id=source_doc.workspace_id,
+            position=0,
+        )
         db_session.add(chunk)
         chunks.append(chunk)
     await db_session.flush()

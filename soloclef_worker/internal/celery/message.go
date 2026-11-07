@@ -27,6 +27,26 @@ type Message struct {
 	// Queue the message was routed to, from properties.delivery_info.
 	Queue string
 
+	// Exchange the message was published to, from properties.delivery_info.
+	// Celery publishes a routed task through the anonymous exchange even
+	// though each queue has a direct exchange of its own, so this is empty
+	// for everything this app sends. It is read because Celery's own
+	// ack-emulation registry stores it alongside the payload.
+	Exchange string
+
+	// DeliveryTag is the per-delivery id the producer stamped into
+	// properties.delivery_tag. On the Redis transport there is no broker ack,
+	// so this tag is the key of the unacked registry that stands in for one.
+	DeliveryTag string
+
+	// Priority picks which of a queue's priority lists holds the message.
+	// Every Soloclef task publishes at 0 today.
+	Priority int
+
+	// Redelivered is set by whichever worker restored this message after a
+	// visibility window elapsed, so a second delivery is never silent.
+	Redelivered bool
+
 	// Zero when the producer set none.
 	ETA     time.Time
 	Expires time.Time
@@ -68,11 +88,15 @@ type messageHeaders struct {
 	Expires      *string `json:"expires"`
 	TimeLimit    []*int  `json:"timelimit"`
 	EnqueuedAtNs string  `json:"surfsense.enqueued_at_ns"`
+	Redelivered  bool    `json:"redelivered"`
 }
 
 type msgProperties struct {
 	BodyEncoding string `json:"body_encoding"`
+	DeliveryTag  string `json:"delivery_tag"`
+	Priority     int    `json:"priority"`
 	DeliveryInfo struct {
+		Exchange   string `json:"exchange"`
 		RoutingKey string `json:"routing_key"`
 	} `json:"delivery_info"`
 }
@@ -122,6 +146,11 @@ func Decode(raw []byte) (*Message, error) {
 		Queue:    env.Properties.DeliveryInfo.RoutingKey,
 		Kwargs:   map[string]any{},
 		Raw:      raw,
+
+		Exchange:    env.Properties.DeliveryInfo.Exchange,
+		DeliveryTag: env.Properties.DeliveryTag,
+		Priority:    env.Properties.Priority,
+		Redelivered: env.Headers.Redelivered,
 	}
 	if err := json.Unmarshal(parts[0], &msg.Args); err != nil {
 		return nil, fmt.Errorf("celery: args: %w", err)

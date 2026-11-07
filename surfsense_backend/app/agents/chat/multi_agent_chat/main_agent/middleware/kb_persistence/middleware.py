@@ -194,6 +194,7 @@ async def _create_document(
             [
                 Chunk(
                     document_id=doc.id,
+                    workspace_id=workspace_id,
                     content=text,
                     embedding=embedding,
                     position=i,
@@ -249,6 +250,7 @@ async def _update_document(
             [
                 Chunk(
                     document_id=document.id,
+                    workspace_id=workspace_id,
                     content=text,
                     embedding=embedding,
                     position=i,

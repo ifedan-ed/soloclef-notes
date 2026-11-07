@@ -79,7 +79,7 @@ async def save_file_document(
             titled_for_embedding, file_name, markdown_content
         )
         document_embedding = await asyncio.to_thread(embed_text, document_content)
-        chunks = await create_document_chunks(markdown_content)
+        chunks = await create_document_chunks(markdown_content, workspace_id)
         doc_metadata = {"FILE_NAME": file_name, "ETL_SERVICE": etl_service}
 
         if existing_document:

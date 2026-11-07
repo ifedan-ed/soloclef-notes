@@ -294,6 +294,15 @@ celery_app.conf.update(
     task_reject_on_worker_lost=True,
     # Broker settings
     broker_connection_retry_on_startup=True,
+    # Redis has no broker ack, so kombu emulates acks_late with a visibility
+    # window: a message a worker is holding becomes visible again once its
+    # claim is older than this, and another worker then runs it. The default is
+    # one hour, while task_time_limit above is eight -- so every podcast, video
+    # and deliverable run past the first hour was eligible to be started a
+    # second time, doing the work twice and writing its result twice. One hour
+    # past the hard limit, so only a task that has genuinely been abandoned is
+    # ever restored.
+    broker_transport_options={"visibility_timeout": 32400},
     # Beat scheduler settings
     beat_max_loop_interval=60,  # Check every minute
     # ── Task routing ─────────────────────────────────────────

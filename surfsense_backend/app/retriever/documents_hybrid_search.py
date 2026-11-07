@@ -83,6 +83,7 @@ class DocumentHybridSearchRetriever:
 
         from app.db import Document
         from app.embedding_roles.query_embedding import embed_query
+        from app.retriever.vector_scan_tuning import tune_vector_scan
 
         perf = get_perf_logger()
         t0 = time.perf_counter()
@@ -90,7 +91,12 @@ class DocumentHybridSearchRetriever:
         # Get embedding for the query
         query_embedding = await asyncio.to_thread(embed_query, query_text)
 
-        # Build the query filtered by workspace
+        await tune_vector_scan(self.db_session)
+
+        # ``workspace_id`` already sits on the table the HNSW index covers, so
+        # no join is in the way -- but the filter still runs after the index
+        # scan, and without an iterative scan a workspace holding few of the
+        # corpus's documents comes back with fewer than ``top_k`` rows.
         query = (
             select(Document)
             .options(joinedload(Document.workspace))
@@ -216,12 +222,15 @@ class DocumentHybridSearchRetriever:
 
         from app.db import Chunk, Document, DocumentType
         from app.embedding_roles.query_embedding import embed_query
+        from app.retriever.vector_scan_tuning import tune_vector_scan
 
         perf = get_perf_logger()
         t0 = time.perf_counter()
 
         if query_embedding is None:
             query_embedding = await asyncio.to_thread(embed_query, query_text)
+
+        await tune_vector_scan(self.db_session)
 
         # RRF constants
         k = 60

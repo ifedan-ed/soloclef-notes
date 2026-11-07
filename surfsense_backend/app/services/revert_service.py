@@ -240,6 +240,7 @@ async def _restore_in_place_document(
                 [
                     Chunk(
                         document_id=doc.id,
+                        workspace_id=doc.workspace_id,
                         content=text,
                         embedding=embedding,
                         position=i,
@@ -343,6 +344,7 @@ async def _reinsert_document_from_revision(
             [
                 Chunk(
                     document_id=new_doc.id,
+                    workspace_id=workspace_id,
                     content=text,
                     embedding=embedding,
                     position=i,

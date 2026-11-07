@@ -123,7 +123,9 @@ async def test_the_indexing_pipeline_embeds_with_the_document_model(roles, monke
 async def test_the_older_file_processors_embed_chunks_with_the_document_model(roles):
     from app.utils.document_converters import create_document_chunks
 
-    chunks = await create_document_chunks("A short document about rain.")
+    chunks = await create_document_chunks(
+        "A short document about rain.", workspace_id=1
+    )
 
     assert [c.content for c in chunks] == roles.document.texts
     assert roles.query.requests == []

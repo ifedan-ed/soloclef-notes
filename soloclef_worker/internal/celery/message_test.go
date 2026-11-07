@@ -122,3 +122,42 @@ func TestDueHoldsFutureWorkAndDiscardsExpired(t *testing.T) {
 		t.Error("a message with neither should run now")
 	}
 }
+
+// The broker tier needs four more envelope fields that phase 1 did not read:
+// the delivery tag is the key of Celery's Redis ack-emulation registry, the
+// exchange and priority decide where a lost message is restored to, and
+// redelivered says the broker already handed this message out once.
+func TestDecodeReadsWhatTheAckRegistryNeeds(t *testing.T) {
+	msg, err := Decode([]byte(liveEnvelope))
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	if msg.DeliveryTag != "29c542e6-f1d5-4414-9e6e-438bb374efe8" {
+		t.Errorf("DeliveryTag = %q", msg.DeliveryTag)
+	}
+	if msg.Exchange != "" {
+		t.Errorf("Exchange = %q, want the anonymous exchange", msg.Exchange)
+	}
+	if msg.Priority != 0 {
+		t.Errorf("Priority = %d", msg.Priority)
+	}
+	if msg.Redelivered {
+		t.Error("a first delivery must not look redelivered")
+	}
+}
+
+func TestDecodeReadsARedeliveredMessage(t *testing.T) {
+	raw := `{"body":"W1tdLHt9LHt9XQ==","headers":{"task":"t","redelivered":true},` +
+		`"properties":{"body_encoding":"base64","priority":6,"delivery_tag":"tag-1",` +
+		`"delivery_info":{"exchange":"surfsense.heavy","routing_key":"surfsense.heavy"}}}`
+	msg, err := Decode([]byte(raw))
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	if !msg.Redelivered {
+		t.Error("Redelivered should follow the headers.redelivered flag kombu sets on restore")
+	}
+	if msg.Exchange != "surfsense.heavy" || msg.Priority != 6 || msg.DeliveryTag != "tag-1" {
+		t.Errorf("Exchange/Priority/DeliveryTag = %q/%d/%q", msg.Exchange, msg.Priority, msg.DeliveryTag)
+	}
+}

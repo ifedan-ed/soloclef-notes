@@ -108,6 +108,7 @@ class ChucksHybridSearchRetriever:
 
         from app.db import Chunk, Document
         from app.embedding_roles.query_embedding import embed_query
+        from app.retriever.vector_scan_tuning import tune_vector_scan
 
         perf = get_perf_logger()
         t0 = time.perf_counter()
@@ -120,19 +121,23 @@ class ChucksHybridSearchRetriever:
             time.perf_counter() - t_embed,
         )
 
-        # Build the query filtered by workspace
+        await tune_vector_scan(self.db_session)
+
+        # The workspace predicate sits on ``chunks``, the same table as the
+        # HNSW index, so the scan can be filtered as it runs. ``documents`` is
+        # joined only when a date window needs its ``updated_at``.
         query = (
             select(Chunk)
             .options(joinedload(Chunk.document).joinedload(Document.workspace))
-            .join(Document, Chunk.document_id == Document.id)
-            .where(Document.workspace_id == workspace_id)
+            .where(Chunk.workspace_id == workspace_id)
         )
 
-        # Add time-based filtering if provided
-        if start_date is not None:
-            query = query.where(Document.updated_at >= start_date)
-        if end_date is not None:
-            query = query.where(Document.updated_at <= end_date)
+        if start_date is not None or end_date is not None:
+            query = query.join(Document, Chunk.document_id == Document.id)
+            if start_date is not None:
+                query = query.where(Document.updated_at >= start_date)
+            if end_date is not None:
+                query = query.where(Document.updated_at <= end_date)
 
         # Add vector similarity ordering
         query = query.order_by(Chunk.embedding.op("<=>")(query_embedding)).limit(top_k)
@@ -185,22 +190,23 @@ class ChucksHybridSearchRetriever:
         tsvector = func.to_tsvector("english", Chunk.content)
         tsquery = func.plainto_tsquery("english", query_text)
 
-        # Build the query filtered by workspace
+        # Workspace scoping stays on ``chunks`` so the GIN index and the
+        # filter sit on one table; ``documents`` is joined only for dates.
         query = (
             select(Chunk)
             .options(joinedload(Chunk.document).joinedload(Document.workspace))
-            .join(Document, Chunk.document_id == Document.id)
-            .where(Document.workspace_id == workspace_id)
+            .where(Chunk.workspace_id == workspace_id)
             .where(
                 tsvector.op("@@")(tsquery)
             )  # Only include results that match the query
         )
 
-        # Add time-based filtering if provided
-        if start_date is not None:
-            query = query.where(Document.updated_at >= start_date)
-        if end_date is not None:
-            query = query.where(Document.updated_at <= end_date)
+        if start_date is not None or end_date is not None:
+            query = query.join(Document, Chunk.document_id == Document.id)
+            if start_date is not None:
+                query = query.where(Document.updated_at >= start_date)
+            if end_date is not None:
+                query = query.where(Document.updated_at <= end_date)
 
         # Add text search ranking
         query = query.order_by(func.ts_rank_cd(tsvector, tsquery).desc()).limit(top_k)
@@ -255,6 +261,7 @@ class ChucksHybridSearchRetriever:
 
         from app.db import Chunk, Document, DocumentType
         from app.embedding_roles.query_embedding import embed_query
+        from app.retriever.vector_scan_tuning import tune_vector_scan
 
         perf = get_perf_logger()
         t0 = time.perf_counter()
@@ -267,6 +274,8 @@ class ChucksHybridSearchRetriever:
                 time.perf_counter() - t_embed,
             )
 
+        await tune_vector_scan(self.db_session)
+
         # RRF constants
         k = 60
         n_results = top_k * 5  # Fetch extra chunks for better document-level fusion
@@ -275,10 +284,14 @@ class ChucksHybridSearchRetriever:
         tsvector = func.to_tsvector("english", Chunk.content)
         tsquery = func.plainto_tsquery("english", query_text)
 
-        # Base conditions for chunk filtering - workspace is required.
-        # Exclude documents in "deleting" state (background deletion in progress).
         base_conditions = [
-            Document.workspace_id == workspace_id,
+            # On ``chunks``, alongside the HNSW and GIN indexes both legs
+            # scan, so each leg discards another workspace's candidates
+            # without leaving the table.
+            Chunk.workspace_id == workspace_id,
+            # Exclude documents in "deleting" state (background deletion in
+            # progress). This one needs ``documents``, so the legs keep the
+            # join.
             func.coalesce(Document.status["state"].astext, "ready") != "deleting",
         ]
 

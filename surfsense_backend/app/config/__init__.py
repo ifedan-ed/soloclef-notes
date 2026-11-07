@@ -542,6 +542,16 @@ class Config:
     # workers' transient connections or zero-cache's replication slots.
     DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "20"))
     DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "30"))
+    # TRUE when DATABASE_URL points at pgbouncer in transaction pooling mode
+    # (docker/pgbouncer), which the compose stack does for the API, the Celery
+    # workers and the mail sender. It changes how asyncpg is told to connect
+    # (app/db_pooling/connect_args.py): left FALSE against the pooler the
+    # engines ask for named prepared statements and for a startup parameter
+    # pgbouncer refuses, and set TRUE against a direct connection the
+    # idle-transaction reaper is left to the database's own setting.
+    DB_PGBOUNCER_TRANSACTION_POOLING = (
+        os.getenv("DB_PGBOUNCER_TRANSACTION_POOLING", "FALSE").upper() == "TRUE"
+    )
 
     # Celery / Redis
     # Redis (single endpoint for Celery broker, result backend, and app cache).
@@ -1263,6 +1273,30 @@ class Config:
     )
     INDEXING_CHUNK_INSERT_BATCH_SIZE = int(
         os.getenv("INDEXING_CHUNK_INSERT_BATCH_SIZE", "200")
+    )
+
+    # pgvector scan tuning for one search transaction, applied by
+    # app/retriever/vector_scan_tuning.py. Both are pgvector >= 0.8 GUCs.
+    #
+    # A workspace-scoped search asks the HNSW index for the nearest chunks and
+    # then keeps only one workspace's. Without an iterative scan the index
+    # hands back a single fixed-size candidate list, the filter empties most of
+    # it, and the query returns fewer rows than it was asked for -- quietly.
+    # "relaxed_order" lets the scan keep going until the LIMIT is satisfied;
+    # results can come back marginally out of distance order, which the
+    # retrievers' rank fusion and reranking absorb. "strict_order" keeps exact
+    # ordering at a higher cost; "off" restores the pre-0.8 behaviour.
+    VECTOR_SEARCH_ITERATIVE_SCAN = os.getenv(
+        "VECTOR_SEARCH_ITERATIVE_SCAN", "relaxed_order"
+    )
+    # The latency ceiling on that iteration: the most tuples one search may
+    # scan before it returns what it has. Unbounded iteration on a workspace
+    # holding a thousandth of the corpus would read the whole index. 20000 is
+    # pgvector's own default and costs tens of milliseconds; a workspace small
+    # enough to exhaust it is also small enough for the planner to prefer an
+    # exact workspace read over the index (ix_chunks_workspace_id).
+    VECTOR_SEARCH_MAX_SCAN_TUPLES = int(
+        os.getenv("VECTOR_SEARCH_MAX_SCAN_TUPLES", "20000")
     )
 
     # Proxy provider selection. Maps to a ProxyProvider implementation registered

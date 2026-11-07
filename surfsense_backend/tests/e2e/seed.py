@@ -437,7 +437,12 @@ async def seed_source_pdf(
             created_by_id=owner_id,
         )
         chunk = Chunk(
-            content=text, document_id=document.id, position=0, page_start=2, page_end=2
+            content=text,
+            document_id=document.id,
+            workspace_id=body.workspace_id,
+            position=0,
+            page_start=2,
+            page_end=2,
         )
         session.add(chunk)
         session.add(NotebookSource(notebook_id=notebook.id, document_id=document.id))

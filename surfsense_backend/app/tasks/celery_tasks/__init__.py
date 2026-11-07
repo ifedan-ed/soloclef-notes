@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.config import config
+from app.db_pooling.connect_args import build_asyncpg_connect_args
 
 logger = logging.getLogger(__name__)
 
@@ -36,18 +37,14 @@ def get_celery_session_maker() -> async_sessionmaker:
         # crashed mid-index) so they can't hold locks on documents/chunks and
         # wedge writes — the failure mode that previously left an "idle in
         # transaction" session holding locks for 11+ hours. Kept generous so a
-        # legitimate long per-document embed window is never killed.
-        connect_args: dict = {}
-        idle_ms = config.DB_CELERY_IDLE_IN_TX_TIMEOUT_MS
-        if (
-            idle_ms
-            and idle_ms > 0
-            and config.DATABASE_URL
-            and "asyncpg" in config.DATABASE_URL
-        ):
-            connect_args["server_settings"] = {
-                "idle_in_transaction_session_timeout": str(idle_ms)
-            }
+        # legitimate long per-document embed window is never killed. Through
+        # pgbouncer that reaping is the database's own setting, and prepared
+        # statements go off (app/db_pooling/connect_args.py).
+        connect_args = build_asyncpg_connect_args(
+            database_url=config.DATABASE_URL,
+            idle_in_transaction_timeout_ms=config.DB_CELERY_IDLE_IN_TX_TIMEOUT_MS,
+            pgbouncer_transaction_pooling=config.DB_PGBOUNCER_TRANSACTION_POOLING,
+        )
         _celery_engine = create_async_engine(
             config.DATABASE_URL,
             poolclass=NullPool,

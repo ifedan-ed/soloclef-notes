@@ -35,11 +35,13 @@ async def safe_set_chunks(
     from sqlalchemy.orm.attributes import set_committed_value
 
     from app.db import Chunk
+    from app.indexing_pipeline.chunk_ownership import stamp_owning_document
 
     if document.id is not None:
         await session.execute(delete(Chunk).where(Chunk.document_id == document.id))
-        for chunk in chunks:
-            chunk.document_id = document.id
+    # Outside the branch above: ``set_committed_value`` stops SQLAlchemy
+    # cascading the parent onto these rows, so nothing else would set them.
+    stamp_owning_document(chunks, document)
 
     set_committed_value(document, "chunks", chunks)
     session.add_all(chunks)
