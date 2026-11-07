@@ -70,3 +70,47 @@ func TestAnAPIKeyOnlySeesWorkspacesWithAPIAccessOn(t *testing.T) {
 		t.Errorf("got %+v", refusal)
 	}
 }
+
+func TestCheckAccessOnlyAsksForMembership(t *testing.T) {
+	// check_workspace_access requires no particular permission, so a member
+	// with none passes it.
+	if refusal := CheckAccess(&Membership{}); refusal != nil {
+		t.Errorf("a member was refused: %+v", refusal)
+	}
+	refusal := CheckAccess(nil)
+	if refusal == nil || refusal.Status != http.StatusForbidden ||
+		refusal.Message != "You don't have access to this workspace" {
+		t.Errorf("got %+v", refusal)
+	}
+}
+
+func TestEffectivePermissionsIsGetUserPermissions(t *testing.T) {
+	name := "Reader"
+	for _, example := range []struct {
+		why        string
+		membership *Membership
+		want       []string
+	}{
+		{"no membership", nil, nil},
+		{"an owner holds the wildcard", &Membership{IsOwner: true}, []string{FullAccess}},
+		{"an owner's role does not narrow it",
+			&Membership{IsOwner: true, RoleName: &name, RolePermissions: []string{"logs:read"}},
+			[]string{FullAccess}},
+		{"a role's permissions",
+			&Membership{RoleName: &name, RolePermissions: []string{"logs:read", "members:view"}},
+			[]string{"logs:read", "members:view"}},
+		{"no role, nothing granted", &Membership{}, nil},
+	} {
+		got := EffectivePermissions(example.membership)
+		if len(got) != len(example.want) {
+			t.Errorf("%s: got %v, want %v", example.why, got, example.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != example.want[i] {
+				t.Errorf("%s: got %v, want %v", example.why, got, example.want)
+				break
+			}
+		}
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"git.danvics.com/danvics/surfsense/soloclef_api/internal/errorenvelope"
+	"git.danvics.com/danvics/surfsense/soloclef_api/internal/requestnumber"
 )
 
 func TestReadParametersDefaultsTheWindowToTwentyFourHours(t *testing.T) {
@@ -69,8 +70,8 @@ func TestReadParametersReportsANumberNoRequestCanUse(t *testing.T) {
 			return readParameters("1", url.Values{"hours": {"99999999999999999999"}})
 		},
 	} {
-		if _, _, err := call(); !errors.Is(err, ErrNumberOutOfRange) {
-			t.Errorf("%s: got %v, want ErrNumberOutOfRange", name, err)
+		if _, _, err := call(); !errors.Is(err, requestnumber.ErrOutOfRange) {
+			t.Errorf("%s: got %v, want requestnumber.ErrOutOfRange", name, err)
 		}
 	}
 }

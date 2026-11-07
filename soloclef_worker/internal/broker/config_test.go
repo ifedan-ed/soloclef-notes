@@ -111,3 +111,60 @@ func TestLoadConfigRefusesAnUnreadableLimit(t *testing.T) {
 		t.Fatal("LoadConfig accepted a non-numeric limit")
 	}
 }
+
+// A queue limit below the sum of the task classes routed to it cannot hold
+// them: one class filling the queue starves the others, so the limits as
+// written are not the limits that apply.
+func TestValidateRejectsAQueueTooSmallForTheClassesItCarries(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Queues = []string{"surfsense.heavy"}
+	cfg.QueueConcurrency = map[string]int{"surfsense.heavy": 3}
+	cfg.TaskConcurrency = map[string]int{
+		"podcast.render_audio":        2,
+		"generate_video_presentation": 2,
+	}
+	cfg.TaskQueue = map[string]string{
+		"podcast.render_audio":        "surfsense.heavy",
+		"generate_video_presentation": "surfsense.heavy",
+	}
+	if err := cfg.Validate(); !errors.Is(err, ErrQueueLimitBelowClassSum) {
+		t.Fatalf("Validate() = %v, want ErrQueueLimitBelowClassSum", err)
+	}
+
+	cfg.QueueConcurrency["surfsense.heavy"] = 4
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("a queue sized for its classes was refused: %v", err)
+	}
+}
+
+// A class routed to a queue this worker does not consume says the routing and
+// the queue list disagree, which is a mistake rather than a limit.
+func TestValidateRejectsAClassRoutedToAQueueThisWorkerDoesNotTake(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Queues = []string{"surfsense"}
+	cfg.QueueConcurrency = map[string]int{"surfsense": 8}
+	cfg.TaskConcurrency = map[string]int{"podcast.render_audio": 2}
+	cfg.TaskQueue = map[string]string{"podcast.render_audio": "surfsense.heavy"}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("a class routed outside the consumed queues was accepted")
+	}
+}
+
+func TestLoadConfigReadsWhichQueueCarriesAClass(t *testing.T) {
+	env := map[string]string{
+		"SOLOCLEF_WORKER_QUEUES":            "surfsense.heavy",
+		"SOLOCLEF_WORKER_QUEUE_CONCURRENCY": "surfsense.heavy=6",
+		"SOLOCLEF_WORKER_TASK_CONCURRENCY":  "podcast.render_audio=2",
+		"SOLOCLEF_WORKER_TASK_QUEUE":        "podcast.render_audio=surfsense.heavy",
+	}
+	cfg, err := LoadConfig(func(k string) string { return env[k] })
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.TaskQueue["podcast.render_audio"] != "surfsense.heavy" {
+		t.Errorf("TaskQueue = %v", cfg.TaskQueue)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("Validate: %v", err)
+	}
+}

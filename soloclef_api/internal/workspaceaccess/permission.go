@@ -20,18 +20,25 @@ const FullAccess = "*"
 // LogsRead is Permission.LOGS_READ.
 const LogsRead = "logs:read"
 
-// Membership is what the rules need about a caller's place in a workspace.
+// MembersView is Permission.MEMBERS_VIEW.
+const MembersView = "members:view"
+
+// Membership is a caller's place in a workspace, as get_user_membership loads
+// it: the membership row and the role it points at.
 type Membership struct {
 	// IsOwner short-circuits to full access, as get_user_permissions does.
 	IsOwner bool
+	// RoleName is the role's name, absent when the membership has no role.
+	RoleName *string
 	// RolePermissions is the role's permissions column, empty when the
 	// membership has no role.
 	RolePermissions []string
 }
 
-// Workspace is what the rules need about the workspace itself.
+// Workspace is the workspace row the gate looks up.
 type Workspace struct {
 	Exists           bool
+	Name             string
 	APIAccessEnabled bool
 }
 
@@ -43,22 +50,40 @@ type Refusal struct {
 
 func (r Refusal) Error() string { return r.Message }
 
+// CheckAccess is the first half of check_workspace_access: the caller must be a
+// member, and no particular permission is required.
+func CheckAccess(membership *Membership) *Refusal {
+	if membership == nil {
+		return &Refusal{Status: http.StatusForbidden, Message: "You don't have access to this workspace"}
+	}
+	return nil
+}
+
 // CheckMembership is the first half of check_permission: the caller must be a
 // member and the membership must carry the permission. denialMessage is the
 // route's own wording for a member who may not do this.
 func CheckMembership(membership *Membership, permission, denialMessage string) *Refusal {
-	if membership == nil {
-		return &Refusal{Status: http.StatusForbidden, Message: "You don't have access to this workspace"}
+	if refusal := CheckAccess(membership); refusal != nil {
+		return refusal
 	}
-
-	permissions := membership.RolePermissions
-	if membership.IsOwner {
-		permissions = []string{FullAccess}
-	}
-	if !hasPermission(permissions, permission) {
+	if !hasPermission(EffectivePermissions(membership), permission) {
 		return &Refusal{Status: http.StatusForbidden, Message: denialMessage}
 	}
 	return nil
+}
+
+// EffectivePermissions is get_user_permissions: an owner holds the wildcard
+// whatever their role says, a membership with a role holds the role's
+// permissions, and one without a role holds nothing.
+func EffectivePermissions(membership *Membership) []string {
+	switch {
+	case membership == nil:
+		return nil
+	case membership.IsOwner:
+		return []string{FullAccess}
+	default:
+		return membership.RolePermissions
+	}
 }
 
 // CheckAPIAccess is _enforce_api_access_gate, which runs only once membership

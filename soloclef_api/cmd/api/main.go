@@ -26,10 +26,12 @@ import (
 	"git.danvics.com/danvics/surfsense/soloclef_api/internal/errorenvelope"
 	"git.danvics.com/danvics/surfsense/soloclef_api/internal/health"
 	"git.danvics.com/danvics/surfsense/soloclef_api/internal/logsummary"
+	"git.danvics.com/danvics/surfsense/soloclef_api/internal/myaccess"
 	"git.danvics.com/danvics/surfsense/soloclef_api/internal/principal"
 	"git.danvics.com/danvics/surfsense/soloclef_api/internal/pythondelegate"
 	"git.danvics.com/danvics/surfsense/soloclef_api/internal/requestcontext"
 	"git.danvics.com/danvics/surfsense/soloclef_api/internal/workspaceaccess"
+	"git.danvics.com/danvics/surfsense/soloclef_api/internal/workspacemembers"
 )
 
 func main() {
@@ -74,9 +76,21 @@ func run() error {
 	}
 
 	api := humago.New(http.NewServeMux(), huma.DefaultConfig("Soloclef API", "0.1.0"))
+	access := workspaceaccess.PostgresReader{Pool: pool}
 	logsummary.Route{
 		Logs:   logsummary.Reader{Pool: pool},
-		Access: workspaceaccess.PostgresReader{Pool: pool},
+		Access: access,
+		Errors: errors,
+		Logger: logger,
+	}.Register(api)
+	workspacemembers.Route{
+		Members: workspacemembers.Reader{Pool: pool},
+		Access:  access,
+		Errors:  errors,
+		Logger:  logger,
+	}.Register(api)
+	myaccess.Route{
+		Access: access,
 		Errors: errors,
 		Logger: logger,
 	}.Register(api)

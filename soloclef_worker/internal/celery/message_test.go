@@ -161,3 +161,23 @@ func TestDecodeReadsARedeliveredMessage(t *testing.T) {
 		t.Errorf("Exchange/Priority/DeliveryTag = %q/%d/%q", msg.Exchange, msg.Priority, msg.DeliveryTag)
 	}
 }
+
+func TestIgnoreResultIsReadFromTheHeader(t *testing.T) {
+	msg, err := Decode([]byte(liveEnvelope))
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	if msg.IgnoreResult {
+		t.Error("the live envelope says ignore_result is false")
+	}
+
+	ignored, err := Decode([]byte(`{"body":"W1tdLHt9LHt9XQ==","content-encoding":"utf-8",` +
+		`"headers":{"task":"push_send","id":"1","ignore_result":true},` +
+		`"properties":{"body_encoding":"base64"}}`))
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	if !ignored.IgnoreResult {
+		t.Error("a task declared ignore_result must say so, or this worker writes rows Celery would not")
+	}
+}

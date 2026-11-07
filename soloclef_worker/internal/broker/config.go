@@ -3,6 +3,7 @@ package broker
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 )
 
@@ -18,6 +19,10 @@ const (
 
 	// CeleryHardTimeLimit is task_time_limit: the longest a job may run.
 	CeleryHardTimeLimit = 28800 * time.Second
+
+	// CelerySoftTimeLimit is task_soft_time_limit: when a job is asked to
+	// stop, ten minutes before it is made to.
+	CelerySoftTimeLimit = 28200 * time.Second
 )
 
 var (
@@ -28,6 +33,10 @@ var (
 	// ErrNoQueueLimit refuses a queue with no concurrency limit rather than
 	// inventing one.
 	ErrNoQueueLimit = errors.New("broker: queue has no concurrency limit")
+
+	// ErrQueueLimitBelowClassSum refuses limits that cannot all hold: a queue
+	// smaller than the classes routed to it is a limit that never applies.
+	ErrQueueLimitBelowClassSum = errors.New("broker: queue limit below the sum of the task classes it carries")
 
 	// ErrVisibilityWindowTooShort refuses a window that would let this worker
 	// reclaim a message a live Celery worker is still running.
@@ -53,6 +62,12 @@ type Config struct {
 	// here is bounded only by its queue, which is why the queue limit should
 	// be at least the sum of the class limits the queue carries.
 	TaskConcurrency map[string]int
+
+	// TaskQueue names the queue each limited task class is routed to
+	// (task_routes in app/celery_app.py), which is what makes the rule above
+	// checkable rather than a note. A class with a limit but no entry here is
+	// taken as carried by whichever queue delivers it.
+	TaskQueue map[string]string
 
 	// VisibilityWindow is how long an unacked message stays this worker's
 	// before any worker may restore it. It must be at least
@@ -98,6 +113,7 @@ func DefaultConfig() Config {
 		Queues:           nil,
 		QueueConcurrency: map[string]int{},
 		TaskConcurrency:  map[string]int{},
+		TaskQueue:        map[string]string{},
 
 		// One hour longer than the 8h hard limit, so a job that runs to its
 		// limit is never restored under itself.
@@ -127,6 +143,9 @@ func (c Config) Validate() error {
 			return fmt.Errorf("broker: task %s has concurrency %d", task, limit)
 		}
 	}
+	if err := c.validateQueueSizing(); err != nil {
+		return err
+	}
 	if c.VisibilityWindow < KombuVisibilityWindow {
 		return fmt.Errorf("%w: %v < %v", ErrVisibilityWindowTooShort, c.VisibilityWindow, KombuVisibilityWindow)
 	}
@@ -138,6 +157,31 @@ func (c Config) Validate() error {
 	}
 	if c.PopTimeout < time.Second {
 		return fmt.Errorf("%w: %v", ErrPopTimeoutTooShort, c.PopTimeout)
+	}
+	return nil
+}
+
+// validateQueueSizing checks each queue against the classes routed to it. The
+// sum, not the maximum: the queue slot is taken before the class slot, so a
+// queue that cannot hold every class at its limit is a queue where one class
+// can shut the others out.
+func (c Config) validateQueueSizing() error {
+	carried := map[string]int{}
+	for task, queue := range c.TaskQueue {
+		limit, limited := c.TaskConcurrency[task]
+		if !limited {
+			continue
+		}
+		if !slices.Contains(c.Queues, queue) {
+			return fmt.Errorf("broker: task %s is routed to %s, which this worker does not consume", task, queue)
+		}
+		carried[queue] += limit
+	}
+	for queue, sum := range carried {
+		if limit := c.QueueConcurrency[queue]; limit < sum {
+			return fmt.Errorf("%w: %s allows %d but carries classes summing to %d",
+				ErrQueueLimitBelowClassSum, queue, limit, sum)
+		}
 	}
 	return nil
 }

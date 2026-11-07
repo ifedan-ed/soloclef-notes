@@ -47,6 +47,12 @@ type Message struct {
 	// visibility window elapsed, so a second delivery is never silent.
 	Redelivered bool
 
+	// IgnoreResult is the producer saying no one will read this task's
+	// outcome (@celery_app.task(ignore_result=True)). Celery stores no row at
+	// all for such a task, so neither may this worker: a SUCCESS row where
+	// Python leaves PENDING is a divergence, not a courtesy.
+	IgnoreResult bool
+
 	// Zero when the producer set none.
 	ETA     time.Time
 	Expires time.Time
@@ -89,6 +95,7 @@ type messageHeaders struct {
 	TimeLimit    []*int  `json:"timelimit"`
 	EnqueuedAtNs string  `json:"surfsense.enqueued_at_ns"`
 	Redelivered  bool    `json:"redelivered"`
+	IgnoreResult bool    `json:"ignore_result"`
 }
 
 type msgProperties struct {
@@ -151,6 +158,8 @@ func Decode(raw []byte) (*Message, error) {
 		DeliveryTag: env.Properties.DeliveryTag,
 		Priority:    env.Properties.Priority,
 		Redelivered: env.Headers.Redelivered,
+
+		IgnoreResult: env.Headers.IgnoreResult,
 	}
 	if err := json.Unmarshal(parts[0], &msg.Args); err != nil {
 		return nil, fmt.Errorf("celery: args: %w", err)

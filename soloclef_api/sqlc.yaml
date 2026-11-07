@@ -1,0 +1,69 @@
+# Every query this tier runs is generated from internal/schema/schema.sql, which
+# is the schema Soloclef's Alembic migrations produce
+# (internal/schema/dump_from_migrations.sh keeps it honest). A query that names a
+# column the migrations no longer create fails here, at generate time, instead
+# of at request time on a live route.
+#
+# One block per vertical slice: a slice owns its SQL and its generated code, and
+# nothing generates into a package that two routes share by accident.
+#
+# The overrides are the same in every block because they are about this
+# database, not about one slice:
+#   uuid  -> string, because every caller id in this tier is the text form the
+#            session token carries (internal/principal).
+#   int4  -> int64, because a workspace id past int32 must reach Postgres and
+#            make the query fail, as it does on the Python tier: narrowing it in
+#            Go would silently answer about a different workspace.
+#   timestamptz -> time.Time, because every timestamp here is rendered by
+#            internal/pythonjson, which formats a time.Time.
+version: "2"
+sql:
+  - &slice
+    engine: postgresql
+    schema: internal/schema/schema.sql
+    queries: internal/workspaceaccess/queries.sql
+    gen:
+      go: &slice_go
+        package: workspaceaccess
+        out: internal/workspaceaccess
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_pointers_for_null_types: true
+        output_db_file_name: connection.sql.go
+        output_models_file_name: tables.sql.go
+        overrides: &slice_overrides
+          - db_type: uuid
+            go_type: string
+          - db_type: uuid
+            nullable: true
+            go_type:
+              type: string
+              pointer: true
+          - db_type: pg_catalog.int4
+            go_type: int64
+          - db_type: pg_catalog.int4
+            nullable: true
+            go_type:
+              type: int64
+              pointer: true
+          - db_type: pg_catalog.timestamptz
+            go_type: time.Time
+          - db_type: pg_catalog.timestamptz
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true
+  - <<: *slice
+    queries: internal/logsummary/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: logsummary
+        out: internal/logsummary
+  - <<: *slice
+    queries: internal/workspacemembers/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: workspacemembers
+        out: internal/workspacemembers

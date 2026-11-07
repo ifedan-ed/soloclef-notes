@@ -15,39 +15,34 @@ type PostgresReader struct {
 }
 
 // Membership is get_user_membership: the caller's membership of one workspace,
-// with the role's permissions, or nil when there is none.
+// with the role it points at, or nil when there is none.
 func (r PostgresReader) Membership(ctx context.Context, userID string, workspaceID int64) (*Membership, error) {
-	var membership Membership
-	err := r.Pool.QueryRow(ctx, `
-		SELECT member.is_owner, COALESCE(role.permissions, '{}')
-		FROM workspace_memberships AS member
-		LEFT JOIN workspace_roles AS role ON role.id = member.role_id
-		WHERE member.user_id = $1::uuid AND member.workspace_id = $2
-		ORDER BY member.id
-		LIMIT 1`, userID, workspaceID,
-	).Scan(&membership.IsOwner, &membership.RolePermissions)
+	row, err := New(r.Pool).CallerMembership(ctx, CallerMembershipParams{
+		UserID:      userID,
+		WorkspaceID: workspaceID,
+	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	return &membership, nil
+	return &Membership{
+		IsOwner:         row.IsOwner,
+		RoleName:        row.RoleName,
+		RolePermissions: row.RolePermissions,
+	}, nil
 }
 
-// Workspace is what _enforce_api_access_gate needs: whether the workspace is
-// there at all, and whether it is open to API keys.
+// Workspace is the row _enforce_api_access_gate looks up: whether the workspace
+// is there at all, whether it is open to API keys, and its name.
 func (r PostgresReader) Workspace(ctx context.Context, workspaceID int64) (Workspace, error) {
-	var workspace Workspace
-	err := r.Pool.QueryRow(ctx,
-		`SELECT api_access_enabled FROM workspaces WHERE id = $1`, workspaceID,
-	).Scan(&workspace.APIAccessEnabled)
+	row, err := New(r.Pool).WorkspaceGate(ctx, workspaceID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Workspace{Exists: false}, nil
 	}
 	if err != nil {
 		return Workspace{}, err
 	}
-	workspace.Exists = true
-	return workspace, nil
+	return Workspace{Exists: true, Name: row.Name, APIAccessEnabled: row.ApiAccessEnabled}, nil
 }

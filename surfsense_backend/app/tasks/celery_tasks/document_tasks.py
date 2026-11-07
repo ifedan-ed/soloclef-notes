@@ -271,10 +271,12 @@ async def _delete_workspace_background(workspace_id: int) -> None:
         batch_size = 500
 
         while True:
+            # The chunk's own workspace, not its document's: the column is
+            # NOT NULL since migration c0032, so every batch is an index read
+            # on ix_chunks_workspace_id instead of a join against documents.
             chunk_ids_result = await session.execute(
                 select(Chunk.id)
-                .join(Document, Chunk.document_id == Document.id)
-                .where(Document.workspace_id == workspace_id)
+                .where(Chunk.workspace_id == workspace_id)
                 .limit(batch_size)
             )
             chunk_ids = chunk_ids_result.scalars().all()

@@ -25,14 +25,18 @@ cites the Python code it mirrors:
 
 | Path | Role |
 |------|------|
-| `internal/pythonjson` | JSON as Starlette renders it: insertion order, no HTML escaping, Python's `isoformat` and float `repr`. |
+| `internal/pythonjson` | JSON as the Python tier writes it: insertion order, no HTML escaping, float `repr`, and both datetime spellings — `isoformat`'s `+00:00` and pydantic's `Z`. |
 | `internal/errorenvelope` | `app.py:_build_error_response` and the 422 handler. |
 | `internal/requestcontext` | `X-Request-ID` and the access line. |
 | `internal/corsmirror` | Starlette's `CORSMiddleware` for a simple request. |
 | `internal/principal` | `app.users.get_auth_context`, in its order, with its fall-throughs. |
-| `internal/workspaceaccess` | `app.utils.rbac.check_permission`, split as it is there. |
+| `internal/requestnumber` | FastAPI's integer coercion for a parameter, and the 422 it raises. |
+| `internal/workspaceaccess` | `app.utils.rbac`'s membership, permission and API-access checks, split as they are there. |
 | `internal/pythondelegate` | Hands a request this tier cannot verify to the Python tier. |
-| `internal/logsummary` | The first route: the workspace log summary. |
+| `internal/schema` | The schema every query is generated against, and the check that it is still what the migrations produce. |
+| `internal/logsummary` | The workspace log summary. |
+| `internal/workspacemembers` | The workspace member list. |
+| `internal/myaccess` | The caller's own role and permissions in a workspace. |
 | `cmd/api` | The process: config, pool, routes, shutdown. |
 
 ## Commands
@@ -40,6 +44,14 @@ cites the Python code it mirrors:
 ```bash
 cd soloclef_api && go test ./...
 cd soloclef_api && go vet ./... && gofmt -l .
+
+# Every query is generated; change a .sql file and regenerate.
+cd soloclef_api && sqlc generate
+
+# Is internal/schema/schema.sql still what the migrations produce? Needs Docker
+# and soloclef-backend-fast:latest, and takes about 25 seconds, so it is opt-in.
+cd soloclef_api && SOLOCLEF_API_CHECK_SCHEMA_DRIFT=1 go test ./internal/schema/
+cd soloclef_api && internal/schema/dump_from_migrations.sh > internal/schema/schema.sql
 ```
 
 ## Do not
@@ -54,5 +66,11 @@ cd soloclef_api && go vet ./... && gofmt -l .
 - Do not invent an answer the Python tier would not have given — a refusal in
   different words, a 401 where it allowed, a guessed default. Where this tier
   cannot be sure, it forwards to the Python tier or it fails loudly.
+- Do not write a query by hand, and do not edit a `*.sql.go` file. A query goes
+  in the slice's `queries.sql` and comes back through `sqlc generate`.
+- Do not "tidy" a query into something the Python route does not ask. An added
+  `ORDER BY`, a `LIMIT`, a join where it runs two statements: each of those can
+  be a different answer in a different order. Mirror the question, not the
+  intent.
 - Do not give a setting that names a server a default. An unconfigured
   container must refuse to start.

@@ -13,6 +13,7 @@ const (
 	EnvQueues             = "SOLOCLEF_WORKER_QUEUES"
 	EnvQueueConcurrency   = "SOLOCLEF_WORKER_QUEUE_CONCURRENCY"
 	EnvTaskConcurrency    = "SOLOCLEF_WORKER_TASK_CONCURRENCY"
+	EnvTaskQueue          = "SOLOCLEF_WORKER_TASK_QUEUE"
 	EnvVisibilityWindow   = "SOLOCLEF_WORKER_VISIBILITY_WINDOW"
 	EnvRenewInterval      = "SOLOCLEF_WORKER_RENEW_INTERVAL"
 	EnvRestoreInterval    = "SOLOCLEF_WORKER_RESTORE_INTERVAL"
@@ -36,6 +37,9 @@ func LoadConfig(getenv func(string) string) (Config, error) {
 		return Config{}, err
 	}
 	if cfg.TaskConcurrency, err = parseLimits(getenv(EnvTaskConcurrency), EnvTaskConcurrency); err != nil {
+		return Config{}, err
+	}
+	if cfg.TaskQueue, err = parseRouting(getenv(EnvTaskQueue), EnvTaskQueue); err != nil {
 		return Config{}, err
 	}
 
@@ -91,4 +95,18 @@ func parseLimits(raw, name string) (map[string]int, error) {
 		limits[strings.TrimSpace(key)] = limit
 	}
 	return limits, nil
+}
+
+// parseRouting reads "task=queue" pairs: which queue carries each limited
+// class, mirroring task_routes.
+func parseRouting(raw, name string) (map[string]string, error) {
+	routing := map[string]string{}
+	for _, pair := range splitList(raw) {
+		task, queue, found := strings.Cut(pair, "=")
+		if !found {
+			return nil, fmt.Errorf("%s: %q is not task=queue", name, pair)
+		}
+		routing[strings.TrimSpace(task)] = strings.TrimSpace(queue)
+	}
+	return routing, nil
 }

@@ -25,6 +25,9 @@ create_default_roles_and_membership = importlib.import_module(
     "app.routes.workspaces_routes"
 ).create_default_roles_and_membership
 TEST_DATABASE_URL = importlib.import_module("tests.conftest").TEST_DATABASE_URL
+build_test_engine_connect_args = importlib.import_module(
+    "tests.integration.engine_connect_args"
+).build_test_engine_connect_args
 
 _EMBEDDING_DIM = app_config.embedding_model_instance.dimension
 
@@ -51,9 +54,10 @@ async def async_engine():
         TEST_DATABASE_URL,
         poolclass=NullPool,
         echo=False,
-        # Required for asyncpg + savepoints: disables prepared statement cache
-        # to prevent "another operation is in progress" errors during savepoint rollbacks.
-        connect_args={"prepared_statement_cache_size": 0},
+        connect_args=build_test_engine_connect_args(
+            database_url=TEST_DATABASE_URL,
+            pgbouncer_transaction_pooling=app_config.DB_PGBOUNCER_TRANSACTION_POOLING,
+        ),
     )
 
     async with engine.begin() as conn:
