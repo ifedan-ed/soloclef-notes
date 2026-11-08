@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"git.danvics.com/danvics/surfsense/soloclef_worker/internal/broker"
+	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/broker"
 )
 
 func TestTheDefaultsAreTheLimitsCeleryAlreadyEnforces(t *testing.T) {

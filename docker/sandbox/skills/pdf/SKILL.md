@@ -20,7 +20,7 @@ never run `pip install`, `npm install`, or download dependencies.
   Prefer Liberation Sans/Serif for office-style documents and Noto for broad
   Unicode coverage.
 - Do not embed page numbers, folios, `Page X of Y` labels, CSS page counters,
-  or numbered ReportLab footers. SurfSense's PDF viewer supplies its own page
+  or numbered ReportLab footers. Soloclef's PDF viewer supplies its own page
   indicator, so embedded numbering would duplicate the interface.
 
 Escape untrusted text before placing it in HTML.

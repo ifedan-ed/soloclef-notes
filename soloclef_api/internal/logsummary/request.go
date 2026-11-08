@@ -3,8 +3,8 @@ package logsummary
 import (
 	"net/url"
 
-	"git.danvics.com/danvics/surfsense/soloclef_api/internal/errorenvelope"
-	"git.danvics.com/danvics/surfsense/soloclef_api/internal/requestnumber"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/errorenvelope"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/requestnumber"
 )
 
 // defaultWindowHours is the Python route's `hours: int = 24`.

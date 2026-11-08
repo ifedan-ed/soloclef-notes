@@ -1,7 +1,9 @@
 package principal
 
 import (
+	"encoding/base64"
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -86,4 +88,53 @@ func TestSessionTokenSendsAForeignIssuerElsewhere(t *testing.T) {
 	if !errors.Is(err, ErrForeignIssuer) {
 		t.Errorf("got %v, want ErrForeignIssuer", err)
 	}
+}
+
+// Which tier can verify a token is decided by reading its issuer, and that read
+// has to agree with PyJWT's: a token it cannot read is not an agent's, and takes
+// the session path to the same 401. Each of these was found by asking both tiers
+// and comparing the bytes, not by reading the two libraries.
+func TestReadingTheIssuerAgreesWithPyJWTsOwnRead(t *testing.T) {
+	cases := map[string]struct {
+		token  string
+		issuer string
+	}{
+		"an identity provider's token": {tokenForeignIssuer, "https://sso.example.com/application/o/app/"},
+		"this application's own token": {tokenValid, ""},
+		"a header with no alg at all":  {withHeader(t, tokenForeignIssuer, `{"typ":"JWT"}`), "https://sso.example.com/application/o/app/"},
+		"a kid that is not a string":   {withHeader(t, tokenForeignIssuer, `{"alg":"RS256","kid":7}`), ""},
+		"a kid that is a string":       {withHeader(t, tokenForeignIssuer, `{"alg":"RS256","kid":"a"}`), "https://sso.example.com/application/o/app/"},
+		// PyJWT discards the junk and reads the token, so this tier does too:
+		// the signature is then checked properly, and refused, on the agent path.
+		"a signature padded out with junk":  {signatureOf(t, tokenForeignIssuer, "QUJD!!!"), "https://sso.example.com/application/o/app/"},
+		"a signature binascii will not pad": {signatureOf(t, tokenForeignIssuer, "QUJDRA!!"), ""},
+		"two segments":                      {"abc.def", ""},
+		"nothing that looks like a token":   {"nonsense", ""},
+	}
+	for name, test := range cases {
+		issuer, found := unverifiedIssuer(test.token)
+		if test.issuer == "" {
+			if found {
+				t.Errorf("%s: read %q, want nothing", name, issuer)
+			}
+			continue
+		}
+		if !found || issuer != test.issuer {
+			t.Errorf("%s: read %q/%v, want %q", name, issuer, found, test.issuer)
+		}
+	}
+}
+
+func withHeader(t *testing.T, token, header string) string {
+	t.Helper()
+	segments := strings.Split(token, ".")
+	segments[0] = base64.RawURLEncoding.EncodeToString([]byte(header))
+	return strings.Join(segments, ".")
+}
+
+func signatureOf(t *testing.T, token, signature string) string {
+	t.Helper()
+	segments := strings.Split(token, ".")
+	segments[2] = signature
+	return strings.Join(segments, ".")
 }

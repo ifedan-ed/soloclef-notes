@@ -3,7 +3,7 @@ package workspacemembers
 import (
 	"time"
 
-	"git.danvics.com/danvics/surfsense/soloclef_api/internal/pythonjson"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/pythonjson"
 )
 
 // Build renders the roster as the Python route's list[MembershipRead].

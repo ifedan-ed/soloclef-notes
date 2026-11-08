@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"git.danvics.com/danvics/surfsense/soloclef_worker/internal/celery"
+	"git.danvics.com/danvics/soloclef/soloclef_celery/celery"
 )
 
 // fakeChild writes a shell script that stands in for `python -m app.tasks.run`.

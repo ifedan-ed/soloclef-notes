@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"git.danvics.com/danvics/surfsense/soloclef_worker/internal/celery"
+	"git.danvics.com/danvics/soloclef/soloclef_celery/celery"
 )
 
 // MaxCredibleWait bounds a reported wait. A result row expires after 24h

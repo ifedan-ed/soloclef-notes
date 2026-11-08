@@ -1,0 +1,46 @@
+{
+ "route": "DELETE /api/v1/workspaces/{workspace_id}",
+ "why": "The second write that owes a message, and the one with a marker of its own: a name prefix in a column 100 characters wide, cut in characters and not in bytes, plus the refusal that nobody deletes their only workspace.",
+ "parameters": {
+  "workspace_id": 1
+ },
+ "tables": [
+  "workspaces"
+ ],
+ "queues": [
+  "surfsense"
+ ],
+ "matrices": [
+  "credentials",
+  "identifiers:workspace_id",
+  "cross_site"
+ ],
+ "cases": [
+  {
+   "label": "a workspace, by its owner",
+   "path": "/api/v1/workspaces/1"
+  },
+  {
+   "label": "a workspace already carrying the marker",
+   "path": "/api/v1/workspaces/3"
+  },
+  {
+   "label": "a workspace whose name fills the column",
+   "path": "/api/v1/workspaces/4"
+  },
+  {
+   "label": "the caller's only workspace",
+   "path": "/api/v1/workspaces/5",
+   "as": "sole"
+  },
+  {
+   "label": "a workspace the caller is not in",
+   "path": "/api/v1/workspaces/6"
+  },
+  {
+   "label": "a workspace a member's role may not delete",
+   "path": "/api/v1/workspaces/1",
+   "as": "scribe"
+  }
+ ]
+}

@@ -51,20 +51,32 @@ func (p Policy) Allows(origin string) bool {
 // Middleware adds the headers to an allowed cross-origin request's response. A
 // request with no Origin, or one from an origin that is not allowed, is served
 // without them, exactly as Starlette serves it.
+//
+// The headers are written when the response **starts**, not before the handler
+// runs, because whether they belong on it is not settled until then: a response
+// the Python tier would have written from outside its own CORS middleware
+// carries none, and the handler is what knows that (suppress.go). It also keeps
+// a forwarded response's headers the upstream's rather than doubling them.
 func (p Policy) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		origin := request.Header.Get("Origin")
-		if origin != "" {
+		request = request.WithContext(WithSuppression(request.Context()))
+		ctx := request.Context()
+
+		deferred := &deferredHeaders{ResponseWriter: response, add: func(header http.Header) {
+			if origin == "" || suppressed(ctx) {
+				return
+			}
 			// Starlette's simple_headers go on every request that carries an
 			// Origin, allowed or not; only the echoed origin and Vary are
 			// conditional (CORSMiddleware.send, allow_explicit_origin).
-			response.Header().Set("Access-Control-Allow-Credentials", "true")
-			response.Header().Set("Access-Control-Expose-Headers", exposedHeaders)
+			header.Set("Access-Control-Allow-Credentials", "true")
+			header.Set("Access-Control-Expose-Headers", exposedHeaders)
 			if p.Allows(origin) {
-				response.Header().Set("Access-Control-Allow-Origin", origin)
-				response.Header().Add("Vary", "Origin")
+				header.Set("Access-Control-Allow-Origin", origin)
+				header.Add("Vary", "Origin")
 			}
-		}
-		next.ServeHTTP(response, request)
+		}}
+		next.ServeHTTP(deferred, request)
 	})
 }

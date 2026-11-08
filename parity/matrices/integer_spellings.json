@@ -1,0 +1,22 @@
+{
+ "why": "Every spelling of a whole number pydantic will read out of a query parameter, and several it refuses. This matrix exists because a Go parser that matched `^[+-]?\\d+$` was 422 on seven already-ported routes where Python was 200: pydantic reads an underscore separator, surrounding whitespace and a trailing `.0`, and the regex read none of them.",
+ "target": "query",
+ "variants": [
+  {"label": "a plain number", "value": "24"},
+  {"label": "an underscore separator", "value": "1_000"},
+  {"label": "a leading plus", "value": "+24"},
+  {"label": "leading and trailing spaces", "value": " 24 "},
+  {"label": "a trailing decimal zero", "value": "24.0"},
+  {"label": "a decimal that is not whole", "value": "24.5"},
+  {"label": "scientific notation", "value": "2e3"},
+  {"label": "hexadecimal", "value": "0x18"},
+  {"label": "a boolean", "value": "true"},
+  {"label": "empty", "value": ""},
+  {"label": "zero", "value": "0"},
+  {"label": "negative", "value": "-24"},
+  {"label": "past int32", "value": "2147483648"},
+  {"label": "past int64", "value": "9223372036854775808"},
+  {"label": "an arabic-indic digit", "value": "٢٤"},
+  {"label": "a full-width digit", "value": "２４"}
+ ]
+}

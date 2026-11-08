@@ -27,7 +27,7 @@ readonly BACKEND_IMAGE="${SOLOCLEF_SCHEMA_BACKEND_IMAGE:-soloclef-backend-fast:l
 readonly EMBEDDING_MODEL="${SOLOCLEF_SCHEMA_EMBEDDING_MODEL:-litellm://openai/schema-dump-only}"
 readonly EMBEDDING_BASE_URL="${SOLOCLEF_SCHEMA_EMBEDDING_BASE_URL:-http://127.0.0.1:1}"
 
-readonly backend_source="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/surfsense_backend"
+readonly backend_source="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/soloclef_backend"
 # Not prefixed soloclef-: nothing this script makes is part of the running
 # stack, and a name that looks like one invites someone to leave it alone.
 readonly run_id="go-api-schema-dump-$$"
@@ -67,6 +67,14 @@ fi
 # The migrations run from this checkout, not from whatever the image was built
 # with, so the dump answers for the source the Go tier is committed beside.
 #
+# AUTH_TYPE=GOOGLE is set for one reason: app.db maps fastapi-users'
+# `oauth_account` table only under that setting, so the fast-forward path
+# (`Base.metadata.create_all`) leaves it out of the dump otherwise — while the
+# live database has it, every deployment's single sign-on writes to it, and
+# agent sign-in reads it (app/auth_oidc/account_link.py). It changes nothing
+# else: that setting guards one model, one relationship and one user-database
+# dependency, and only the first makes any DDL.
+#
 # Its output is held back and printed only if it fails: importing the Python
 # tier's settings writes a page of warnings about the model host it is told not
 # to reach, and those are not news.
@@ -77,6 +85,7 @@ if ! migration_output="$(docker run --rm --network "$run_id" \
 	--env EMBEDDING_BASE_URL="$EMBEDDING_BASE_URL" \
 	--env EMBEDDING_DIMENSION=1024 \
 	--env OPENAI_API_KEY=unused \
+	--env AUTH_TYPE=GOOGLE \
 	--entrypoint alembic "$BACKEND_IMAGE" upgrade head 2>&1)"; then
 	echo "$migration_output" >&2
 	echo "alembic upgrade head failed against the throwaway database" >&2

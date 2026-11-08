@@ -6,7 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"git.danvics.com/danvics/surfsense/soloclef_worker/internal/celery"
+	"git.danvics.com/danvics/soloclef/soloclef_celery/celery"
+
+	"git.danvics.com/danvics/soloclef/soloclef_celery/queues"
 )
 
 func envelopeFor(tag, queue string, priority int) []byte {
@@ -296,7 +298,7 @@ func TestDepthsSumEveryPriorityListOfAQueue(t *testing.T) {
 	if err := rdb.LPush(ctx, "probe.queue", "a", "b").Err(); err != nil {
 		t.Fatalf("seeding: %v", err)
 	}
-	if err := rdb.LPush(ctx, QueueKey("probe.queue", 6), "c").Err(); err != nil {
+	if err := rdb.LPush(ctx, queues.Key("probe.queue", 6), "c").Err(); err != nil {
 		t.Fatalf("seeding: %v", err)
 	}
 	if err := rdb.LPush(ctx, "probe.other", "d").Err(); err != nil {

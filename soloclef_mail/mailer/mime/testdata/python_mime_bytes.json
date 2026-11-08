@@ -1,0 +1,314 @@
+[
+  {
+    "name": "text_only",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "Reset your password",
+      "text_body": "Use the link to set a new password.\n"
+    },
+    "sender": "notes@queue.test",
+    "mime": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: Reset your password\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\nUse the link to set a new password.\r\n",
+    "data": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: Reset your password\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\nUse the link to set a new password.\r\n.\r\n"
+  },
+  {
+    "name": "text_and_html",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "You are invited",
+      "text_body": "Open the link.\n",
+      "html_body": "<p>Open the <a href=\"x\">link</a>.</p>"
+    },
+    "sender": "Soloclef Notes <notes@queue.test>",
+    "mime": "From: Soloclef Notes <notes@queue.test>\r\nTo: person@queue.test\r\nSubject: You are invited\r\nMIME-Version: 1.0\r\nContent-Type: multipart/alternative;\r\n boundary=\"BOUNDARY-0\"\r\n\r\n--BOUNDARY-0\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\n\r\nOpen the link.\r\n\r\n--BOUNDARY-0\r\nContent-Type: text/html; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\n<p>Open the <a href=\"x\">link</a>.</p>\r\n\r\n--BOUNDARY-0--\r\n",
+    "data": "From: Soloclef Notes <notes@queue.test>\r\nTo: person@queue.test\r\nSubject: You are invited\r\nMIME-Version: 1.0\r\nContent-Type: multipart/alternative;\r\n boundary=\"BOUNDARY-0\"\r\n\r\n--BOUNDARY-0\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\n\r\nOpen the link.\r\n\r\n--BOUNDARY-0\r\nContent-Type: text/html; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\n<p>Open the <a href=\"x\">link</a>.</p>\r\n\r\n--BOUNDARY-0--\r\n.\r\n"
+  },
+  {
+    "name": "reply_to_and_display_name",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "Billing receipt",
+      "text_body": "Thanks.",
+      "reply_to": "Soloclef Support <support@queue.test>"
+    },
+    "sender": "Soloclef Notes <notes@queue.test>",
+    "mime": "From: Soloclef Notes <notes@queue.test>\r\nTo: person@queue.test\r\nSubject: Billing receipt\r\nReply-To: Soloclef Support <support@queue.test>\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\nThanks.\r\n",
+    "data": "From: Soloclef Notes <notes@queue.test>\r\nTo: person@queue.test\r\nSubject: Billing receipt\r\nReply-To: Soloclef Support <support@queue.test>\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\nThanks.\r\n.\r\n"
+  },
+  {
+    "name": "non_ascii_subject",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "Résumé — über 漢字",
+      "text_body": "Plain ascii body.\n"
+    },
+    "sender": "notes@queue.test",
+    "mime": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: =?utf-8?b?UsOpc3Vtw6kg4oCUIMO8YmVyIOa8ouWtlw==?=\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\nPlain ascii body.\r\n",
+    "data": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: =?utf-8?b?UsOpc3Vtw6kg4oCUIMO8YmVyIOa8ouWtlw==?=\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\nPlain ascii body.\r\n.\r\n"
+  },
+  {
+    "name": "non_ascii_display_name",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "Invitation",
+      "text_body": "Plain ascii body.\n"
+    },
+    "sender": "Soloclef Nötes — Team <notes@queue.test>",
+    "mime": "From: Soloclef =?utf-8?q?N=C3=B6tes_=E2=80=94?= Team <notes@queue.test>\r\nTo: person@queue.test\r\nSubject: Invitation\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\nPlain ascii body.\r\n",
+    "data": "From: Soloclef =?utf-8?q?N=C3=B6tes_=E2=80=94?= Team <notes@queue.test>\r\nTo: person@queue.test\r\nSubject: Invitation\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\nPlain ascii body.\r\n.\r\n"
+  },
+  {
+    "name": "non_ascii_body",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "Grüße",
+      "text_body": "Grüße aus München.\n nbsp here\n"
+    },
+    "sender": "notes@queue.test",
+    "mime": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: =?utf-8?q?Gr=C3=BC=C3=9Fe?=\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 8bit\r\nMIME-Version: 1.0\r\n\r\nGrüße aus München.\r\n nbsp here\r\n",
+    "data": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: =?utf-8?q?Gr=C3=BC=C3=9Fe?=\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 8bit\r\nMIME-Version: 1.0\r\n\r\nGrüße aus München.\r\n nbsp here\r\n.\r\n"
+  },
+  {
+    "name": "emoji_subject",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "Done 😀 — ok",
+      "text_body": "x\n"
+    },
+    "sender": "notes@queue.test",
+    "mime": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: Done =?utf-8?b?8J+YgCDigJQ=?= ok\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\nx\r\n",
+    "data": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: Done =?utf-8?b?8J+YgCDigJQ=?= ok\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\nx\r\n.\r\n"
+  },
+  {
+    "name": "long_subject_folds",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "Your automation “Weekly reading digest for the research notebook” — 2026-11-08 finished, and this subject is long enough that a header has to fold it across several lines",
+      "text_body": "x\n"
+    },
+    "sender": "notes@queue.test",
+    "mime": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: Your automation =?utf-8?q?=E2=80=9CWeekly?= reading digest for the\r\n research =?utf-8?b?bm90ZWJvb2vigJ0g4oCU?= 2026-11-08 finished, and this\r\n subject is long enough that a header has to fold it across several lines\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\nx\r\n",
+    "data": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: Your automation =?utf-8?q?=E2=80=9CWeekly?= reading digest for the\r\n research =?utf-8?b?bm90ZWJvb2vigJ0g4oCU?= 2026-11-08 finished, and this\r\n subject is long enough that a header has to fold it across several lines\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\nx\r\n.\r\n"
+  },
+  {
+    "name": "long_non_ascii_subject_folds",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "Über Your automation “Weekly reading digest for the research notebook” — 2026-11-08 finished, and this subject is long enough that a header has to fold it across several lines",
+      "text_body": "x\n"
+    },
+    "sender": "notes@queue.test",
+    "mime": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: =?utf-8?q?=C3=9Cber_Your_automation_=E2=80=9CWeekly?= reading digest\r\n for the research =?utf-8?b?bm90ZWJvb2vigJ0g4oCU?= 2026-11-08 finished, and\r\n this subject is long enough that a header has to fold it across several lines\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\nx\r\n",
+    "data": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: =?utf-8?q?=C3=9Cber_Your_automation_=E2=80=9CWeekly?= reading digest\r\n for the research =?utf-8?b?bm90ZWJvb2vigJ0g4oCU?= 2026-11-08 finished, and\r\n this subject is long enough that a header has to fold it across several lines\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\nx\r\n.\r\n"
+  },
+  {
+    "name": "body_starting_with_a_dot",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "dots",
+      "text_body": ".dot first\nsecond\n.\n..double\nlast.\n"
+    },
+    "sender": "notes@queue.test",
+    "mime": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: dots\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\n.dot first\r\nsecond\r\n.\r\n..double\r\nlast.\r\n",
+    "data": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: dots\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\n..dot first\r\nsecond\r\n..\r\n...double\r\nlast.\r\n.\r\n"
+  },
+  {
+    "name": "body_with_crlf_already",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "crlf",
+      "text_body": "one\r\ntwo\r\n.\r\nthree\n"
+    },
+    "sender": "notes@queue.test",
+    "mime": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: crlf\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\none\r\ntwo\r\n.\r\nthree\r\n",
+    "data": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: crlf\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\none\r\ntwo\r\n..\r\nthree\r\n.\r\n"
+  },
+  {
+    "name": "body_with_a_very_long_line",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "long line",
+      "text_body": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nshort\n"
+    },
+    "sender": "notes@queue.test",
+    "mime": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: long line\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: quoted-printable\r\nMIME-Version: 1.0\r\n\r\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx=\r\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx=\r\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\r\nshort\r\n",
+    "data": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: long line\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: quoted-printable\r\nMIME-Version: 1.0\r\n\r\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx=\r\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx=\r\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\r\nshort\r\n.\r\n"
+  },
+  {
+    "name": "attachment",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "Your export",
+      "text_body": "Attached.\n",
+      "attachments": [
+        {
+          "filename": "export.txt",
+          "content_base64": "LS0tLS1CRUdJTiBGSUxFLS0tLS0KQ09OVFJBQ1QtQllURVMKLS0tLS1FTkQgRklMRS0tLS0tCg==",
+          "content_type": "application/octet-stream"
+        }
+      ]
+    },
+    "sender": "notes@queue.test",
+    "mime": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: Your export\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"BOUNDARY-0\"\r\n\r\n--BOUNDARY-0\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\n\r\nAttached.\r\n\r\n--BOUNDARY-0\r\nContent-Type: application/octet-stream\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: attachment; filename=\"export.txt\"\r\nMIME-Version: 1.0\r\n\r\nLS0tLS1CRUdJTiBGSUxFLS0tLS0KQ09OVFJBQ1QtQllURVMKLS0tLS1FTkQgRklMRS0tLS0tCg==\r\n\r\n--BOUNDARY-0--\r\n",
+    "data": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: Your export\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"BOUNDARY-0\"\r\n\r\n--BOUNDARY-0\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\n\r\nAttached.\r\n\r\n--BOUNDARY-0\r\nContent-Type: application/octet-stream\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: attachment; filename=\"export.txt\"\r\nMIME-Version: 1.0\r\n\r\nLS0tLS1CRUdJTiBGSUxFLS0tLS0KQ09OVFJBQ1QtQllURVMKLS0tLS1FTkQgRklMRS0tLS0tCg==\r\n\r\n--BOUNDARY-0--\r\n.\r\n"
+  },
+  {
+    "name": "html_and_two_attachments",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "Your export",
+      "text_body": "Attached.\n",
+      "html_body": "<p>Attached.</p>",
+      "attachments": [
+        {
+          "filename": "export é.txt",
+          "content_base64": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4v//4ARU5E",
+          "content_type": "application/octet-stream"
+        },
+        {
+          "filename": "tiny.png",
+          "content_base64": "iVBORw0KGgo=",
+          "content_type": "image/png"
+        }
+      ]
+    },
+    "sender": "notes@queue.test",
+    "mime": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: Your export\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"BOUNDARY-0\"\r\n\r\n--BOUNDARY-0\r\nContent-Type: multipart/alternative;\r\n boundary=\"BOUNDARY-1\"\r\n\r\n--BOUNDARY-1\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\n\r\nAttached.\r\n\r\n--BOUNDARY-1\r\nContent-Type: text/html; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\n<p>Attached.</p>\r\n\r\n--BOUNDARY-1--\r\n\r\n--BOUNDARY-0\r\nContent-Type: application/octet-stream\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: attachment; filename*=utf-8''export%20%C3%A9.txt\r\nMIME-Version: 1.0\r\n\r\nAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4v//4ARU5E\r\n\r\n--BOUNDARY-0\r\nContent-Type: image/png\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: attachment; filename=\"tiny.png\"\r\nMIME-Version: 1.0\r\n\r\niVBORw0KGgo=\r\n\r\n--BOUNDARY-0--\r\n",
+    "data": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: Your export\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"BOUNDARY-0\"\r\n\r\n--BOUNDARY-0\r\nContent-Type: multipart/alternative;\r\n boundary=\"BOUNDARY-1\"\r\n\r\n--BOUNDARY-1\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\n\r\nAttached.\r\n\r\n--BOUNDARY-1\r\nContent-Type: text/html; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\n<p>Attached.</p>\r\n\r\n--BOUNDARY-1--\r\n\r\n--BOUNDARY-0\r\nContent-Type: application/octet-stream\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: attachment; filename*=utf-8''export%20%C3%A9.txt\r\nMIME-Version: 1.0\r\n\r\nAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4v//4ARU5E\r\n\r\n--BOUNDARY-0\r\nContent-Type: image/png\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: attachment; filename=\"tiny.png\"\r\nMIME-Version: 1.0\r\n\r\niVBORw0KGgo=\r\n\r\n--BOUNDARY-0--\r\n.\r\n"
+  },
+  {
+    "name": "very_long_non_ascii_word_splits_the_encoded_word",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢漢",
+      "text_body": "x\n"
+    },
+    "sender": "notes@queue.test",
+    "mime": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: =?utf-8?b?5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi?=\r\n =?utf-8?b?5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi?=\r\n =?utf-8?b?5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi?=\r\n =?utf-8?b?5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi?=\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\nx\r\n",
+    "data": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: =?utf-8?b?5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi?=\r\n =?utf-8?b?5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi?=\r\n =?utf-8?b?5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi?=\r\n =?utf-8?b?5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi5ryi?=\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\nx\r\n.\r\n"
+  },
+  {
+    "name": "non_ascii_run_longer_than_a_line",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "Über München und Zürich München und Zürich München und Zürich München und Zürich München und Zürich München und Zürich ",
+      "text_body": "x\n"
+    },
+    "sender": "notes@queue.test",
+    "mime": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: =?utf-8?q?=C3=9Cber_M=C3=BCnchen_und_Z=C3=BCrich_M=C3=BCnchen_und_Z?=\r\n =?utf-8?b?w7xyaWNoIE3DvG5jaGVuIHVuZCBaw7xyaWNoIE3DvG5jaGVuIHVuZCBaw7xy?=\r\n =?utf-8?q?ich_M=C3=BCnchen_und_Z=C3=BCrich_M=C3=BCnchen_und_Z=C3=BCrich?= \r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\nx\r\n",
+    "data": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: =?utf-8?q?=C3=9Cber_M=C3=BCnchen_und_Z=C3=BCrich_M=C3=BCnchen_und_Z?=\r\n =?utf-8?b?w7xyaWNoIE3DvG5jaGVuIHVuZCBaw7xyaWNoIE3DvG5jaGVuIHVuZCBaw7xy?=\r\n =?utf-8?q?ich_M=C3=BCnchen_und_Z=C3=BCrich_M=C3=BCnchen_und_Z=C3=BCrich?= \r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\nx\r\n.\r\n"
+  },
+  {
+    "name": "subject_with_tabs_and_double_spaces",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "two  spaces\tand a tab é end",
+      "text_body": "x\n"
+    },
+    "sender": "notes@queue.test",
+    "mime": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: two  spaces\tand a tab =?utf-8?q?=C3=A9?= end\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\nx\r\n",
+    "data": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: two  spaces\tand a tab =?utf-8?q?=C3=A9?= end\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\nx\r\n.\r\n"
+  },
+  {
+    "name": "many_lines_with_one_long_one",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "many lines",
+      "text_body": "short line\nshort line\nshort line\nshort line\nshort line\nshort line\nshort line\nshort line\nshort line\nshort line\nshort line\nshort line\nshort line\nshort line\nshort line\nshort line\nshort line\nshort line\nshort line\nshort line\nyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\ntail\ntail\ntail\ntail\ntail\n"
+    },
+    "sender": "notes@queue.test",
+    "mime": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: many lines\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: quoted-printable\r\nMIME-Version: 1.0\r\n\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy=\r\nyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy=\r\nyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy=\r\nyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\r\ntail\r\ntail\r\ntail\r\ntail\r\ntail\r\n",
+    "data": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: many lines\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: quoted-printable\r\nMIME-Version: 1.0\r\n\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nshort line\r\nyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy=\r\nyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy=\r\nyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy=\r\nyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\r\ntail\r\ntail\r\ntail\r\ntail\r\ntail\r\n.\r\n"
+  },
+  {
+    "name": "non_ascii_body_with_a_long_line",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "long accented line",
+      "text_body": "Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße Grüße \nshort\n"
+    },
+    "sender": "notes@queue.test",
+    "mime": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: long accented line\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: base64\r\nMIME-Version: 1.0\r\n\r\nR3LDvMOfZSBHcsO8w59lIEdyw7zDn2UgR3LDvMOfZSBHcsO8w59lIEdyw7zDn2UgR3LDvMOfZSBH\r\ncsO8w59lIEdyw7zDn2UgR3LDvMOfZSBHcsO8w59lIEdyw7zDn2UgR3LDvMOfZSBHcsO8w59lIEdy\r\nw7zDn2UgR3LDvMOfZSBHcsO8w59lIEdyw7zDn2UgR3LDvMOfZSBHcsO8w59lIEdyw7zDn2UgR3LD\r\nvMOfZSBHcsO8w59lIEdyw7zDn2UgR3LDvMOfZSBHcsO8w59lIEdyw7zDn2UgR3LDvMOfZSBHcsO8\r\nw59lIEdyw7zDn2UgR3LDvMOfZSBHcsO8w59lIEdyw7zDn2UgR3LDvMOfZSBHcsO8w59lIEdyw7zD\r\nn2UgR3LDvMOfZSBHcsO8w59lIEdyw7zDn2UgR3LDvMOfZSAKc2hvcnQK\r\n",
+    "data": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: long accented line\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: base64\r\nMIME-Version: 1.0\r\n\r\nR3LDvMOfZSBHcsO8w59lIEdyw7zDn2UgR3LDvMOfZSBHcsO8w59lIEdyw7zDn2UgR3LDvMOfZSBH\r\ncsO8w59lIEdyw7zDn2UgR3LDvMOfZSBHcsO8w59lIEdyw7zDn2UgR3LDvMOfZSBHcsO8w59lIEdy\r\nw7zDn2UgR3LDvMOfZSBHcsO8w59lIEdyw7zDn2UgR3LDvMOfZSBHcsO8w59lIEdyw7zDn2UgR3LD\r\nvMOfZSBHcsO8w59lIEdyw7zDn2UgR3LDvMOfZSBHcsO8w59lIEdyw7zDn2UgR3LDvMOfZSBHcsO8\r\nw59lIEdyw7zDn2UgR3LDvMOfZSBHcsO8w59lIEdyw7zDn2UgR3LDvMOfZSBHcsO8w59lIEdyw7zD\r\nn2UgR3LDvMOfZSBHcsO8w59lIEdyw7zDn2UgR3LDvMOfZSAKc2hvcnQK\r\n.\r\n"
+  },
+  {
+    "name": "body_ending_without_a_newline",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "no trailing newline",
+      "text_body": "one\ntwo"
+    },
+    "sender": "notes@queue.test",
+    "mime": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: no trailing newline\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\none\r\ntwo\r\n",
+    "data": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: no trailing newline\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\none\r\ntwo\r\n.\r\n"
+  },
+  {
+    "name": "empty_body",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "empty",
+      "text_body": ""
+    },
+    "sender": "notes@queue.test",
+    "mime": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: empty\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\n\r\n",
+    "data": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: empty\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\nMIME-Version: 1.0\r\n\r\n\r\n.\r\n"
+  },
+  {
+    "name": "body_with_trailing_whitespace_on_a_long_line",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "trailing space",
+      "text_body": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz   \nnext\n"
+    },
+    "sender": "notes@queue.test",
+    "mime": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: trailing space\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: quoted-printable\r\nMIME-Version: 1.0\r\n\r\nzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz=\r\nzzzzzzzzzzzzzzzzzzzzzzz  =20\r\nnext\r\n",
+    "data": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: trailing space\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: quoted-printable\r\nMIME-Version: 1.0\r\n\r\nzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz=\r\nzzzzzzzzzzzzzzzzzzzzzzz  =20\r\nnext\r\n.\r\n"
+  },
+  {
+    "name": "large_attachment_spans_base64_lines",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "Your export",
+      "text_body": "Attached.\n",
+      "attachments": [
+        {
+          "filename": "big.bin",
+          "content_base64": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6e3x9fn+AgYKDhIWGh4iJiouMjY6PkJGSk5SVlpeYmZqbnJ2en6ChoqOkpaanqKmqq6ytrq+wsbKztLW2t7i5uru8vb6/wMHCw8TFxsfIycrLzM3Oz9DR0tPU1dbX2Nna29zd3t/g4eLj5OXm5+jp6uvs7e7v8PHy8/T19vf4+fr7/P3+/wABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj9AQUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVpbXF1eX2BhYmNkZWZnaGlqa2xtbm9wcXJzdHV2d3h5ent8fX5/gIGCg4SFhoeIiYqLjI2Oj5CRkpOUlZaXmJmam5ydnp+goaKjpKWmp6ipqqusra6vsLGys7S1tre4ubq7vL2+v8DBwsPExcbHyMnKy8zNzs/Q0dLT1NXW19jZ2tvc3d7f4OHi4+Tl5ufo6err7O3u7/Dx8vP09fb3+Pn6+/z9/v8AAQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqKywtLi8wMTIzNDU2Nzg5Ojs8PT4/QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl9gYWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXp7fH1+f4CBgoOEhYaHiImKi4yNjo+QkZKTlJWWl5iZmpucnZ6foKGio6SlpqeoqaqrrK2ur7CxsrO0tba3uLm6u7y9vr/AwcLDxMXGx8jJysvMzc7P0NHS09TV1tfY2drb3N3e3+Dh4uPk5ebn6Onq6+zt7u/w8fLz9PX29/j5+vv8/f7/",
+          "content_type": "application/octet-stream"
+        }
+      ]
+    },
+    "sender": "notes@queue.test",
+    "mime": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: Your export\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"BOUNDARY-0\"\r\n\r\n--BOUNDARY-0\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\n\r\nAttached.\r\n\r\n--BOUNDARY-0\r\nContent-Type: application/octet-stream\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: attachment; filename=\"big.bin\"\r\nMIME-Version: 1.0\r\n\r\nAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4\r\nOTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiY2RlZmdoaWprbG1ub3Bx\r\ncnN0dXZ3eHl6e3x9fn+AgYKDhIWGh4iJiouMjY6PkJGSk5SVlpeYmZqbnJ2en6ChoqOkpaanqKmq\r\nq6ytrq+wsbKztLW2t7i5uru8vb6/wMHCw8TFxsfIycrLzM3Oz9DR0tPU1dbX2Nna29zd3t/g4eLj\r\n5OXm5+jp6uvs7e7v8PHy8/T19vf4+fr7/P3+/wABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhsc\r\nHR4fICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj9AQUJDREVGR0hJSktMTU5PUFFSU1RV\r\nVldYWVpbXF1eX2BhYmNkZWZnaGlqa2xtbm9wcXJzdHV2d3h5ent8fX5/gIGCg4SFhoeIiYqLjI2O\r\nj5CRkpOUlZaXmJmam5ydnp+goaKjpKWmp6ipqqusra6vsLGys7S1tre4ubq7vL2+v8DBwsPExcbH\r\nyMnKy8zNzs/Q0dLT1NXW19jZ2tvc3d7f4OHi4+Tl5ufo6err7O3u7/Dx8vP09fb3+Pn6+/z9/v8A\r\nAQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqKywtLi8wMTIzNDU2Nzg5\r\nOjs8PT4/QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl9gYWJjZGVmZ2hpamtsbW5vcHFy\r\nc3R1dnd4eXp7fH1+f4CBgoOEhYaHiImKi4yNjo+QkZKTlJWWl5iZmpucnZ6foKGio6Slpqeoqaqr\r\nrK2ur7CxsrO0tba3uLm6u7y9vr/AwcLDxMXGx8jJysvMzc7P0NHS09TV1tfY2drb3N3e3+Dh4uPk\r\n5ebn6Onq6+zt7u/w8fLz9PX29/j5+vv8/f7/\r\n\r\n--BOUNDARY-0--\r\n",
+    "data": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: Your export\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"BOUNDARY-0\"\r\n\r\n--BOUNDARY-0\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\n\r\nAttached.\r\n\r\n--BOUNDARY-0\r\nContent-Type: application/octet-stream\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: attachment; filename=\"big.bin\"\r\nMIME-Version: 1.0\r\n\r\nAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4\r\nOTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiY2RlZmdoaWprbG1ub3Bx\r\ncnN0dXZ3eHl6e3x9fn+AgYKDhIWGh4iJiouMjY6PkJGSk5SVlpeYmZqbnJ2en6ChoqOkpaanqKmq\r\nq6ytrq+wsbKztLW2t7i5uru8vb6/wMHCw8TFxsfIycrLzM3Oz9DR0tPU1dbX2Nna29zd3t/g4eLj\r\n5OXm5+jp6uvs7e7v8PHy8/T19vf4+fr7/P3+/wABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhsc\r\nHR4fICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj9AQUJDREVGR0hJSktMTU5PUFFSU1RV\r\nVldYWVpbXF1eX2BhYmNkZWZnaGlqa2xtbm9wcXJzdHV2d3h5ent8fX5/gIGCg4SFhoeIiYqLjI2O\r\nj5CRkpOUlZaXmJmam5ydnp+goaKjpKWmp6ipqqusra6vsLGys7S1tre4ubq7vL2+v8DBwsPExcbH\r\nyMnKy8zNzs/Q0dLT1NXW19jZ2tvc3d7f4OHi4+Tl5ufo6err7O3u7/Dx8vP09fb3+Pn6+/z9/v8A\r\nAQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqKywtLi8wMTIzNDU2Nzg5\r\nOjs8PT4/QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl9gYWJjZGVmZ2hpamtsbW5vcHFy\r\nc3R1dnd4eXp7fH1+f4CBgoOEhYaHiImKi4yNjo+QkZKTlJWWl5iZmpucnZ6foKGio6Slpqeoqaqr\r\nrK2ur7CxsrO0tba3uLm6u7y9vr/AwcLDxMXGx8jJysvMzc7P0NHS09TV1tfY2drb3N3e3+Dh4uPk\r\n5ebn6Onq6+zt7u/w8fLz9PX29/j5+vv8/f7/\r\n\r\n--BOUNDARY-0--\r\n.\r\n"
+  },
+  {
+    "name": "attachment_with_quotes_in_the_name",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "odd name",
+      "text_body": "x\n",
+      "attachments": [
+        {
+          "filename": "reçu 2026.pdf",
+          "content_base64": "JVBERi0xLjQK",
+          "content_type": "application/pdf"
+        }
+      ]
+    },
+    "sender": "notes@queue.test",
+    "mime": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: odd name\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"BOUNDARY-0\"\r\n\r\n--BOUNDARY-0\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\n\r\nx\r\n\r\n--BOUNDARY-0\r\nContent-Type: application/pdf\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: attachment; filename*=utf-8''re%C3%A7u%202026.pdf\r\nMIME-Version: 1.0\r\n\r\nJVBERi0xLjQK\r\n\r\n--BOUNDARY-0--\r\n",
+    "data": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: odd name\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"BOUNDARY-0\"\r\n\r\n--BOUNDARY-0\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\n\r\nx\r\n\r\n--BOUNDARY-0\r\nContent-Type: application/pdf\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: attachment; filename*=utf-8''re%C3%A7u%202026.pdf\r\nMIME-Version: 1.0\r\n\r\nJVBERi0xLjQK\r\n\r\n--BOUNDARY-0--\r\n.\r\n"
+  },
+  {
+    "name": "html_only_body_is_still_an_alternative",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "html",
+      "text_body": "plain\n",
+      "html_body": "<p>xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</p>"
+    },
+    "sender": "notes@queue.test",
+    "mime": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: html\r\nMIME-Version: 1.0\r\nContent-Type: multipart/alternative;\r\n boundary=\"BOUNDARY-0\"\r\n\r\n--BOUNDARY-0\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\n\r\nplain\r\n\r\n--BOUNDARY-0\r\nContent-Type: text/html; charset=\"utf-8\"\r\nContent-Transfer-Encoding: quoted-printable\r\nMIME-Version: 1.0\r\n\r\n<p>xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx=\r\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx=\r\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</p>\r\n\r\n--BOUNDARY-0--\r\n",
+    "data": "From: notes@queue.test\r\nTo: person@queue.test\r\nSubject: html\r\nMIME-Version: 1.0\r\nContent-Type: multipart/alternative;\r\n boundary=\"BOUNDARY-0\"\r\n\r\n--BOUNDARY-0\r\nContent-Type: text/plain; charset=\"utf-8\"\r\nContent-Transfer-Encoding: 7bit\r\n\r\nplain\r\n\r\n--BOUNDARY-0\r\nContent-Type: text/html; charset=\"utf-8\"\r\nContent-Transfer-Encoding: quoted-printable\r\nMIME-Version: 1.0\r\n\r\n<p>xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx=\r\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx=\r\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</p>\r\n\r\n--BOUNDARY-0--\r\n.\r\n"
+  }
+]

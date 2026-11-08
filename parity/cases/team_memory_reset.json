@@ -1,0 +1,125 @@
+{
+ "route": "POST /api/v1/workspaces/{workspace_id}/memory/reset",
+ "why": "The team document emptied, which is the same write gated differently.",
+ "parameters": {
+  "workspace_id": 1
+ },
+ "tables": [
+  "workspaces"
+ ],
+ "mint": true,
+ "matrices": [
+  "credentials",
+  "identifiers:workspace_id",
+  "cross_site"
+ ],
+ "cases": [
+  {
+   "label": "reset the team memory",
+   "as": "owner",
+   "path": "/api/v1/workspaces/1/memory/reset",
+   "tables": [
+    "workspaces"
+   ]
+  },
+  {
+   "label": "csrf: reset the team memory by cookie from a foreign origin",
+   "as": "cookie_owner",
+   "path": "/api/v1/workspaces/1/memory/reset",
+   "headers": {
+    "Origin": "https://attacker.example.invalid"
+   },
+   "tables": [
+    "workspaces"
+   ]
+  },
+  {
+   "label": "csrf: reset the team memory by cookie from an allowed origin",
+   "as": "cookie_owner",
+   "path": "/api/v1/workspaces/1/memory/reset",
+   "headers": {
+    "Origin": "https://notes.example.invalid"
+   },
+   "tables": [
+    "workspaces"
+   ]
+  },
+  {
+   "label": "POST the team reset",
+   "as": "owner",
+   "path": "/api/v1/workspaces/1/memory/reset",
+   "headers": {
+    "Content-Type": "application/json"
+   },
+   "tables": [
+    "workspaces"
+   ]
+  },
+  {
+   "label": "POST the team reset as a plain member",
+   "as": "scribe",
+   "path": "/api/v1/workspaces/1/memory/reset",
+   "headers": {
+    "Content-Type": "application/json"
+   },
+   "tables": [
+    "workspaces"
+   ]
+  },
+  {
+   "label": "POST the team reset as an outsider",
+   "as": "outsider",
+   "path": "/api/v1/workspaces/1/memory/reset",
+   "headers": {
+    "Content-Type": "application/json"
+   },
+   "tables": [
+    "workspaces"
+   ]
+  },
+  {
+   "label": "POST the team reset on a workspace that is not there",
+   "as": "owner",
+   "path": "/api/v1/workspaces/999/memory/reset",
+   "headers": {
+    "Content-Type": "application/json"
+   },
+   "tables": [
+    "workspaces"
+   ]
+  },
+  {
+   "label": "POST the team reset with workspace_id=abc",
+   "as": "owner",
+   "path": "/api/v1/workspaces/abc/memory/reset",
+   "headers": {
+    "Content-Type": "application/json"
+   },
+   "tables": [
+    "workspaces"
+   ]
+  },
+  {
+   "label": "POST the team reset past int32",
+   "as": "owner",
+   "path": "/api/v1/workspaces/2200000000/memory/reset",
+   "headers": {
+    "Content-Type": "application/json"
+   },
+   "tables": [
+    "workspaces"
+   ]
+  },
+  {
+   "label": "POST the team reset with an API key on a gated workspace",
+   "as": "key_owner",
+   "path": "/api/v1/workspaces/1/memory/reset",
+   "headers": {
+    "Content-Type": "application/json"
+   },
+   "tables": [
+    "workspaces"
+   ]
+  }
+ ]
+}

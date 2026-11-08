@@ -1,0 +1,1 @@
+  A paragraph wrapped in the control characters Python counts as whitespace and Go does not.  

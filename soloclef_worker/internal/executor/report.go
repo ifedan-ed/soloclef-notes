@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	"git.danvics.com/danvics/surfsense/soloclef_worker/internal/celery"
+	"git.danvics.com/danvics/soloclef/soloclef_celery/celery"
 )
 
 // Report is what the task process writes on stdout, and the body's own word on

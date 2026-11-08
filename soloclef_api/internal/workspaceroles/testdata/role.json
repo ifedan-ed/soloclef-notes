@@ -1,0 +1,1 @@
+{"name":"Role Wrangler","description":"May write roles","permissions":["roles:create","roles:read","roles:update","roles:delete","members:view"],"is_default":false,"id":3,"workspace_id":1,"is_system_role":false,"created_at":"2026-10-02T00:00:00Z"}

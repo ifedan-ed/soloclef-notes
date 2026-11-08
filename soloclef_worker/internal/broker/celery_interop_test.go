@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"git.danvics.com/danvics/surfsense/soloclef_worker/internal/celery"
+	"git.danvics.com/danvics/soloclef/soloclef_celery/celery"
 )
 
 // These tests are the ones that decide whether phase 4 can be gradual: they
@@ -46,7 +46,7 @@ def _stamp_enqueue_time(headers=None, **_kwargs):
         headers["surfsense.enqueued_at_ns"] = str(time.monotonic_ns())
 
 QUEUE = "probe.interop"
-app = Celery("surfsense", broker=os.environ["BROKER_URL"])
+app = Celery("soloclef", broker=os.environ["BROKER_URL"])
 assert app.conf.broker_url == os.environ["BROKER_URL"], (
     "broker_url resolved to %r, not the test broker" % (app.conf.broker_url,))
 app.conf.update(

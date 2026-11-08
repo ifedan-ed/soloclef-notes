@@ -5,17 +5,46 @@ import (
 	"fmt"
 	"time"
 
-	"git.danvics.com/danvics/surfsense/soloclef_worker/internal/broker"
-	"git.danvics.com/danvics/surfsense/soloclef_worker/internal/celery"
+	"git.danvics.com/danvics/soloclef/soloclef_celery/celery"
+	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/broker"
 )
 
 // Config is how this worker runs a task body. Nothing here is discovered at
 // runtime: the command, the limits and the worker's own name are given, so a
 // process that cannot run a body says so at startup rather than per message.
 type Config struct {
-	// Command runs one task body, with the task name appended as its last
-	// argument: `python -m app.tasks.run` in surfsense_backend.
+	// Command runs task bodies. With PoolSize set it is the warm server,
+	// which takes job after job on stdin and names no task of its own
+	// (`python -m app.tasks.serve`); with no pool it is the one-shot
+	// entrypoint, which has the task name appended per job
+	// (`python -m app.tasks.run`). A command that does not match the mode
+	// never says it is ready, and the worker says so rather than running
+	// anything.
 	Command []string
+
+	// PoolSize is how many warm task processes may exist at once. Nothing
+	// means a process per job, which is phase 3's shape: correct, simple to
+	// debug, and 27-33s of this app's imports before every body starts. The
+	// deployed worker sets this (custom/docs/go-worker.md).
+	PoolSize int
+
+	// MaxJobsPerChild retires a warm process after that many bodies, as
+	// Celery's worker_max_tasks_per_child does for a prefork child: a leak in
+	// a body, or a library that holds something per call, then costs one
+	// process rather than the worker's whole uptime. Nothing means never.
+	MaxJobsPerChild int
+
+	// MaxChildRSS retires a warm process whose resident memory is past this
+	// between jobs. A healthy child is roughly what a Celery prefork child is
+	// on this host, so the ceiling catches a leak rather than a load. Nothing
+	// means no ceiling. The figure that used to be quoted here included torch,
+	// which this image no longer carries, so re-measure before trusting a
+	// number rather than the shape.
+	MaxChildRSS uint64
+
+	// ChildReadyTimeout is how long a warm process has to import this app and
+	// say it is ready for work.
+	ChildReadyTimeout time.Duration
 
 	// Dir is where the command runs; empty means this process's directory.
 	Dir string
@@ -43,6 +72,11 @@ type Config struct {
 	StartFailureDelay time.Duration
 }
 
+// CeleryMaxJobsPerChild is worker_max_tasks_per_child in app/celery_app.py:
+// how many bodies a prefork child runs before Celery replaces it. The same
+// number here for the same reason.
+const CeleryMaxJobsPerChild = 1000
+
 // DefaultConfig is every limit Celery already enforces on these tasks, and
 // nothing that names a command: a config with no command runs nothing.
 func DefaultConfig() Config {
@@ -53,6 +87,15 @@ func DefaultConfig() Config {
 		// hold or mark a row failed, short enough that a shutdown ends.
 		KillGrace:         20 * time.Second,
 		StartFailureDelay: 5 * time.Second,
+
+		// A process per job unless a pool is asked for: the one-shot shape is
+		// the one that needs nothing of the backend but app/tasks/run.py.
+		PoolSize:        0,
+		MaxJobsPerChild: CeleryMaxJobsPerChild,
+		MaxChildRSS:     2 << 30,
+		// Two minutes for an import graph measured at 27-33s, so a host under
+		// load does not lose a warm process it was about to get.
+		ChildReadyTimeout: 2 * time.Minute,
 	}
 }
 
@@ -80,6 +123,15 @@ func (c Config) Validate() error {
 	}
 	if c.StartFailureDelay < 0 {
 		return errors.New("executor: start failure delay must not be negative")
+	}
+	if c.PoolSize < 0 {
+		return fmt.Errorf("executor: pool size %d is not a number of processes", c.PoolSize)
+	}
+	if c.MaxJobsPerChild < 0 {
+		return fmt.Errorf("executor: max jobs per child %d is not a number of jobs", c.MaxJobsPerChild)
+	}
+	if c.PoolSize > 0 && c.ChildReadyTimeout <= 0 {
+		return errors.New("executor: a warm process needs a ready timeout, or a failed start would never be noticed")
 	}
 	return nil
 }

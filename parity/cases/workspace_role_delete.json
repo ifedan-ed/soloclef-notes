@@ -1,0 +1,256 @@
+{
+ "route": "DELETE /api/v1/workspaces/{workspace_id}/roles/{role_id}",
+ "why": "The write with a foreign key behind it: a role somebody holds, a role nobody holds, the default role, and a system role.",
+ "parameters": {
+  "workspace_id": 1,
+  "role_id": 4
+ },
+ "tables": [
+  "workspace_roles",
+  "workspace_memberships"
+ ],
+ "matrices": [
+  "credentials",
+  "identifiers:workspace_id",
+  "identifiers:role_id",
+  "cross_site"
+ ],
+ "cases": [
+  {
+   "label": "a role a member holds",
+   "path": "/api/v1/workspaces/1/roles/3"
+  },
+  {
+   "label": "the default role",
+   "path": "/api/v1/workspaces/1/roles/2"
+  },
+  {
+   "label": "a system role",
+   "path": "/api/v1/workspaces/1/roles/1"
+  },
+  {
+   "label": "a role of another workspace",
+   "path": "/api/v1/workspaces/1/roles/6"
+  },
+  {
+   "label": "a role nobody holds",
+   "path": "/api/v1/workspaces/1/roles/4"
+  },
+  {
+   "label": "delete a role",
+   "as": "owner",
+   "path": "/api/v1/workspaces/1/roles/4",
+   "tables": [
+    "workspace_roles"
+   ]
+  },
+  {
+   "label": "csrf: delete a role by cookie from a foreign origin",
+   "as": "cookie_owner",
+   "path": "/api/v1/workspaces/1/roles/4",
+   "headers": {
+    "Origin": "https://attacker.example.invalid"
+   },
+   "tables": [
+    "workspace_roles"
+   ]
+  },
+  {
+   "label": "csrf: delete a role by cookie from an allowed origin",
+   "as": "cookie_owner",
+   "path": "/api/v1/workspaces/1/roles/4",
+   "headers": {
+    "Origin": "https://notes.example.invalid"
+   },
+   "tables": [
+    "workspace_roles"
+   ]
+  },
+  {
+   "label": "a custom role nobody holds",
+   "as": "owner",
+   "path": "/api/v1/workspaces/1/roles/4",
+   "tables": [
+    "workspace_roles",
+    "workspace_memberships"
+   ]
+  },
+  {
+   "label": "a custom role a membership points at",
+   "as": "owner",
+   "path": "/api/v1/workspaces/1/roles/3",
+   "tables": [
+    "workspace_roles",
+    "workspace_memberships"
+   ]
+  },
+  {
+   "label": "the default role (2)",
+   "as": "owner",
+   "path": "/api/v1/workspaces/1/roles/2",
+   "tables": [
+    "workspace_roles",
+    "workspace_memberships"
+   ]
+  },
+  {
+   "label": "a system role (2)",
+   "as": "owner",
+   "path": "/api/v1/workspaces/1/roles/1",
+   "tables": [
+    "workspace_roles",
+    "workspace_memberships"
+   ]
+  },
+  {
+   "label": "a role of another workspace (2)",
+   "as": "owner",
+   "path": "/api/v1/workspaces/1/roles/6",
+   "tables": [
+    "workspace_roles",
+    "workspace_memberships"
+   ]
+  },
+  {
+   "label": "a role that is not there",
+   "as": "owner",
+   "path": "/api/v1/workspaces/1/roles/999",
+   "tables": [
+    "workspace_roles",
+    "workspace_memberships"
+   ]
+  },
+  {
+   "label": "as a member with roles:delete who is not the owner",
+   "as": "scribe",
+   "path": "/api/v1/workspaces/1/roles/4",
+   "tables": [
+    "workspace_roles",
+    "workspace_memberships"
+   ]
+  },
+  {
+   "label": "as a member with no role",
+   "as": "bare",
+   "path": "/api/v1/workspaces/1/roles/4",
+   "tables": [
+    "workspace_roles",
+    "workspace_memberships"
+   ]
+  },
+  {
+   "label": "as an outsider",
+   "as": "outsider",
+   "path": "/api/v1/workspaces/1/roles/4",
+   "tables": [
+    "workspace_roles",
+    "workspace_memberships"
+   ]
+  },
+  {
+   "label": "a workspace that does not exist",
+   "as": "owner",
+   "path": "/api/v1/workspaces/999/roles/4",
+   "tables": [
+    "workspace_roles",
+    "workspace_memberships"
+   ]
+  },
+  {
+   "label": "an API key against a gated workspace",
+   "as": "key_owner",
+   "path": "/api/v1/workspaces/1/roles/4",
+   "tables": [
+    "workspace_roles",
+    "workspace_memberships"
+   ]
+  },
+  {
+   "label": "no credential",
+   "as": "none",
+   "path": "/api/v1/workspaces/1/roles/4",
+   "tables": [
+    "workspace_roles",
+    "workspace_memberships"
+   ]
+  },
+  {
+   "label": "an inactive account",
+   "as": "inactive",
+   "path": "/api/v1/workspaces/1/roles/4",
+   "tables": [
+    "workspace_roles",
+    "workspace_memberships"
+   ]
+  },
+  {
+   "label": "role_id=abc",
+   "as": "owner",
+   "path": "/api/v1/workspaces/1/roles/abc",
+   "tables": [
+    "workspace_roles",
+    "workspace_memberships"
+   ]
+  },
+  {
+   "label": "role_id past int32",
+   "as": "owner",
+   "path": "/api/v1/workspaces/1/roles/2200000000",
+   "tables": [
+    "workspace_roles",
+    "workspace_memberships"
+   ]
+  },
+  {
+   "label": "role_id past int64",
+   "as": "owner",
+   "path": "/api/v1/workspaces/1/roles/99999999999999999999",
+   "tables": [
+    "workspace_roles",
+    "workspace_memberships"
+   ]
+  },
+  {
+   "label": "role_id 0",
+   "as": "owner",
+   "path": "/api/v1/workspaces/1/roles/0",
+   "tables": [
+    "workspace_roles",
+    "workspace_memberships"
+   ]
+  },
+  {
+   "label": "role_id -1",
+   "as": "owner",
+   "path": "/api/v1/workspaces/1/roles/-1",
+   "tables": [
+    "workspace_roles",
+    "workspace_memberships"
+   ]
+  },
+  {
+   "label": "the delete with an Origin header",
+   "as": "owner",
+   "path": "/api/v1/workspaces/1/roles/4",
+   "headers": {
+    "Origin": "https://notes.example.invalid"
+   },
+   "tables": [
+    "workspace_roles",
+    "workspace_memberships"
+   ]
+  },
+  {
+   "label": "roles: a role of the open workspace by API key",
+   "as": "key_owner",
+   "path": "/api/v1/workspaces/2/roles/6",
+   "headers": {
+    "Content-Type": "application/json"
+   },
+   "tables": [
+    "workspace_roles",
+    "workspace_memberships"
+   ]
+  }
+ ]
+}

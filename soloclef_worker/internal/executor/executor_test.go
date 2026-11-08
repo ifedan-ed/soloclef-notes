@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"git.danvics.com/danvics/surfsense/soloclef_worker/internal/celery"
+	"git.danvics.com/danvics/soloclef/soloclef_celery/celery"
 )
 
 // The whole seam in one test: the task name reaches the process as its

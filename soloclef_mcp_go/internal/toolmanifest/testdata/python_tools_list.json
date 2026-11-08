@@ -1,0 +1,2524 @@
+[
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "List the Soloclef Notes workspaces (search spaces) the account can access.\n\n        Use this to discover which workspaces exist before selecting one, or\n        when the user asks what search spaces they have. Returns each\n        workspace's name, id, description, ownership, and member count, and\n        marks the currently active one.\n        ",
+    "inputSchema": {
+      "properties": {
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        }
+      },
+      "title": "list_workspacesArguments",
+      "type": "object"
+    },
+    "name": "soloclef_list_workspaces",
+    "title": "List workspaces"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Set the active workspace (search space) that later tools default to.\n\n        Use this when the user says which search space to work in (\"use my\n        Research space\"), or after soloclef_list_workspaces when several\n        exist. Once set, workspace-scoped tools use it unless given a\n        different 'workspace'. Do NOT call it before every tool — once per\n        session is enough.\n        ",
+    "inputSchema": {
+      "properties": {
+        "workspace": {
+          "description": "Workspace name or numeric id; matching is case-insensitive and a unique partial name works. Example: 'Research'.",
+          "title": "Workspace",
+          "type": "string"
+        }
+      },
+      "required": [
+        "workspace"
+      ],
+      "title": "select_workspaceArguments",
+      "type": "object"
+    },
+    "name": "soloclef_select_workspace",
+    "title": "Select active workspace"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    },
+    "description": "Fetch specific web pages and return their cleaned content as markdown.\n\n        Use this to read a page the user names, or to spider a site from a\n        starting URL. Do NOT use it to find pages on a topic — use\n        soloclef_google_search for discovery. Returns one item per crawled\n        page: url, title, and the page text as markdown.\n        Example: start_urls=['https://blog.example.com'], max_crawl_depth=1,\n        include_url_patterns=['/2026/'].\n        ",
+    "inputSchema": {
+      "properties": {
+        "exclude_url_patterns": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Regexes; discovered links matching one are skipped.",
+          "title": "Exclude Url Patterns"
+        },
+        "include_url_patterns": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Regexes; only discovered links matching one are followed, e.g. ['/docs/.*'].",
+          "title": "Include Url Patterns"
+        },
+        "max_crawl_depth": {
+          "default": 0,
+          "description": "Link-hops to follow from start_urls within the same site. 0 fetches only start_urls.",
+          "minimum": 0,
+          "title": "Max Crawl Depth",
+          "type": "integer"
+        },
+        "max_crawl_pages": {
+          "default": 10,
+          "description": "Stop after this many pages in total.",
+          "minimum": 1,
+          "title": "Max Crawl Pages",
+          "type": "integer"
+        },
+        "max_length": {
+          "default": 50000,
+          "description": "Max characters kept per page.",
+          "minimum": 1,
+          "title": "Max Length",
+          "type": "integer"
+        },
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        },
+        "start_urls": {
+          "description": "Full URLs to fetch, e.g. ['https://example.com/blog/post'].",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Start Urls",
+          "type": "array"
+        },
+        "workspace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Workspace name or id, e.g. 'Research' or '3'. Omit to use the active workspace (set with soloclef_select_workspace).",
+          "title": "Workspace"
+        }
+      },
+      "required": [
+        "start_urls"
+      ],
+      "title": "web_crawlArguments",
+      "type": "object"
+    },
+    "name": "soloclef_web_crawl",
+    "title": "Crawl web pages"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    },
+    "description": "Scrape Google Search result pages for one or more queries.\n\n        Use this to discover pages on the open web by topic; follow up with\n        soloclef_web_crawl to read a result in full. Do NOT use it for\n        Reddit, YouTube, or Google Maps research — the dedicated tools return\n        richer data. Returns each query's parsed results: title, url, and\n        snippet per organic result.\n        Example: queries=['notebooklm review'], site='news.ycombinator.com'.\n        ",
+    "inputSchema": {
+      "properties": {
+        "country_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Two-letter country to search from, e.g. 'us'.",
+          "title": "Country Code"
+        },
+        "language_code": {
+          "default": "",
+          "description": "Results language, e.g. 'en'. Empty for default.",
+          "title": "Language Code",
+          "type": "string"
+        },
+        "max_pages_per_query": {
+          "default": 1,
+          "description": "Result pages to fetch per query.",
+          "minimum": 1,
+          "title": "Max Pages Per Query",
+          "type": "integer"
+        },
+        "queries": {
+          "description": "Search terms or full Google Search URLs, e.g. ['best rss readers 2026'].",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Queries",
+          "type": "array"
+        },
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        },
+        "site": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Restrict results to one domain, e.g. 'example.com'.",
+          "title": "Site"
+        },
+        "workspace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Workspace name or id, e.g. 'Research' or '3'. Omit to use the active workspace (set with soloclef_select_workspace).",
+          "title": "Workspace"
+        }
+      },
+      "required": [
+        "queries"
+      ],
+      "title": "google_searchArguments",
+      "type": "object"
+    },
+    "name": "soloclef_google_search",
+    "title": "Scrape Google Search"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    },
+    "description": "Search or scrape Reddit: posts, comments, subreddits, and users.\n\n        Use this for ANY Reddit research — finding relevant subreddits or\n        communities for a topic, top posts, or discussions — instead of a\n        generic web search. Returns posts (title, text, score, subreddit, url)\n        with comment threads unless skip_comments is set. Every post carries\n        its subreddit, so to find communities for a topic, search posts and\n        aggregate their subreddits.\n        Example: search_queries=['NotebookLM'], sort='top', time_filter='month'.\n        ",
+    "inputSchema": {
+      "properties": {
+        "community": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Restrict a search to one subreddit, name without 'r/', e.g. 'ArtificialInteligence'.",
+          "title": "Community"
+        },
+        "max_items": {
+          "default": 10,
+          "description": "Maximum posts to return.",
+          "minimum": 1,
+          "title": "Max Items",
+          "type": "integer"
+        },
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        },
+        "search_queries": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Terms to search Reddit for, e.g. ['NotebookLM alternatives']. Provide search_queries OR urls.",
+          "title": "Search Queries"
+        },
+        "skip_comments": {
+          "default": false,
+          "description": "True fetches posts only (faster); False also fetches each post's comment thread.",
+          "title": "Skip Comments",
+          "type": "boolean"
+        },
+        "sort": {
+          "default": "new",
+          "description": "Post ordering.",
+          "enum": [
+            "relevance",
+            "hot",
+            "top",
+            "new",
+            "rising",
+            "comments"
+          ],
+          "title": "Sort",
+          "type": "string"
+        },
+        "time_filter": {
+          "anyOf": [
+            {
+              "enum": [
+                "hour",
+                "day",
+                "week",
+                "month",
+                "year",
+                "all"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Time window; only valid with sort='top'.",
+          "title": "Time Filter"
+        },
+        "urls": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Reddit URLs: a post, a subreddit like 'https://reddit.com/r/LocalLLaMA', a user page, or a search URL. Provide urls OR search_queries.",
+          "title": "Urls"
+        },
+        "workspace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Workspace name or id, e.g. 'Research' or '3'. Omit to use the active workspace (set with soloclef_select_workspace).",
+          "title": "Workspace"
+        }
+      },
+      "title": "reddit_scrapeArguments",
+      "type": "object"
+    },
+    "name": "soloclef_reddit_scrape",
+    "title": "Search or scrape Reddit"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    },
+    "description": "Search or scrape YouTube videos, optionally with transcripts.\n\n        Use this for YouTube research: finding videos on a topic, or reading a\n        video's details or transcript. For a video's comment section use\n        soloclef_youtube_comments instead. Returns per-video metadata (title,\n        channel, views, description, url) and, if requested, the transcript.\n        Example: search_queries=['NotebookLM tutorial'], download_subtitles=True.\n        ",
+    "inputSchema": {
+      "properties": {
+        "download_subtitles": {
+          "default": false,
+          "description": "True also fetches each video's transcript.",
+          "title": "Download Subtitles",
+          "type": "boolean"
+        },
+        "max_results": {
+          "default": 10,
+          "description": "Maximum videos to return.",
+          "minimum": 1,
+          "title": "Max Results",
+          "type": "integer"
+        },
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        },
+        "search_queries": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Terms to search YouTube for, e.g. ['NotebookLM tutorial']. Provide search_queries OR urls.",
+          "title": "Search Queries"
+        },
+        "subtitles_language": {
+          "default": "en",
+          "description": "Transcript language code, e.g. 'en'.",
+          "title": "Subtitles Language",
+          "type": "string"
+        },
+        "urls": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "YouTube URLs: video, channel, playlist, shorts, or hashtag pages. Provide urls OR search_queries.",
+          "title": "Urls"
+        },
+        "workspace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Workspace name or id, e.g. 'Research' or '3'. Omit to use the active workspace (set with soloclef_select_workspace).",
+          "title": "Workspace"
+        }
+      },
+      "title": "youtube_scrapeArguments",
+      "type": "object"
+    },
+    "name": "soloclef_youtube_scrape",
+    "title": "Search or scrape YouTube"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    },
+    "description": "Fetch the comments (and replies) on one or more YouTube videos.\n\n        Use this when the user wants a video's discussion or audience reaction\n        rather than the video itself; get video URLs from\n        soloclef_youtube_scrape if you only have a topic. Returns comment\n        text, author, likes, and replies.\n        Example: urls=['https://www.youtube.com/watch?v=abc123'], max_comments=50.\n        ",
+    "inputSchema": {
+      "properties": {
+        "max_comments": {
+          "default": 20,
+          "description": "Maximum comments per video, counting top-level comments and replies together.",
+          "minimum": 1,
+          "title": "Max Comments",
+          "type": "integer"
+        },
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        },
+        "sort_by": {
+          "default": "NEWEST_FIRST",
+          "description": "Comment ordering.",
+          "enum": [
+            "TOP_COMMENTS",
+            "NEWEST_FIRST"
+          ],
+          "title": "Sort By",
+          "type": "string"
+        },
+        "urls": {
+          "description": "YouTube video URLs, e.g. ['https://www.youtube.com/watch?v=abc123'].",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Urls",
+          "type": "array"
+        },
+        "workspace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Workspace name or id, e.g. 'Research' or '3'. Omit to use the active workspace (set with soloclef_select_workspace).",
+          "title": "Workspace"
+        }
+      },
+      "required": [
+        "urls"
+      ],
+      "title": "youtube_commentsArguments",
+      "type": "object"
+    },
+    "name": "soloclef_youtube_comments",
+    "title": "Fetch YouTube comments"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    },
+    "description": "Scrape public Instagram posts or reels from URLs or search queries.\n\n        Use this for Instagram content research: a creator's recent posts, a\n        single post/reel, or public posts and reels found by keyword. For a\n        profile's metadata use soloclef_instagram_details. Returns per-item\n        caption, likes, comments count, media URLs, and owner. Anonymous-only:\n        hashtag/place feeds and comment threads are login-walled and unavailable.\n        Example: urls=['https://www.instagram.com/natgeo/'], result_type='reels'.\n        ",
+    "inputSchema": {
+      "properties": {
+        "max_items": {
+          "default": 10,
+          "description": "Maximum items to return across sources.",
+          "minimum": 1,
+          "title": "Max Items",
+          "type": "integer"
+        },
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        },
+        "result_type": {
+          "default": "posts",
+          "description": "Which feed to return: 'posts' or 'reels'.",
+          "enum": [
+            "posts",
+            "reels"
+          ],
+          "title": "Result Type",
+          "type": "string"
+        },
+        "search_queries": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Search words. One word that names an account returns that account's latest posts; anything else is searched via Google for posts, reels and profiles. Google-backed discovery is slow (~30-60s per query), so start with at most 3 queries and expand only if nothing significant is found. Provide search_queries OR urls.",
+          "title": "Search Queries"
+        },
+        "search_type": {
+          "default": "profile",
+          "description": "Discovery kind (profile-only).",
+          "enum": [
+            "profile",
+            "user"
+          ],
+          "title": "Search Type",
+          "type": "string"
+        },
+        "urls": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Instagram URLs: a profile, post (/p/), or reel (/reel/). Hashtag/place URLs are unsupported (login-walled). Provide urls OR search_queries.",
+          "title": "Urls"
+        },
+        "workspace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Workspace name or id, e.g. 'Research' or '3'. Omit to use the active workspace (set with soloclef_select_workspace).",
+          "title": "Workspace"
+        }
+      },
+      "title": "instagram_scrapeArguments",
+      "type": "object"
+    },
+    "name": "soloclef_instagram_scrape",
+    "title": "Scrape Instagram posts or reels"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    },
+    "description": "Fetch Instagram profile metadata.\n\n        Use this for entity lookups: a profile's follower/post counts and bio.\n        For a feed of posts use soloclef_instagram_scrape instead. Each item\n        carries a detailKind field (always \"profile\"). Anonymous-only: hashtag\n        and place details are login-walled and unavailable.\n        Example: urls=['https://www.instagram.com/natgeo/'].\n        ",
+    "inputSchema": {
+      "properties": {
+        "max_items": {
+          "default": 10,
+          "description": "Max detail items to return.",
+          "minimum": 1,
+          "title": "Max Items",
+          "type": "integer"
+        },
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        },
+        "search_queries": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Terms to discover public profiles for. Google-backed discovery is slow (~30-60s per query), so start with at most 3 queries and expand only if nothing significant is found. Provide search_queries OR urls.",
+          "title": "Search Queries"
+        },
+        "search_type": {
+          "default": "profile",
+          "description": "Discovery kind (profile-only).",
+          "enum": [
+            "profile",
+            "user"
+          ],
+          "title": "Search Type",
+          "type": "string"
+        },
+        "urls": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Profile URLs (or bare profile IDs). Provide urls OR search_queries.",
+          "title": "Urls"
+        },
+        "workspace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Workspace name or id, e.g. 'Research' or '3'. Omit to use the active workspace (set with soloclef_select_workspace).",
+          "title": "Workspace"
+        }
+      },
+      "title": "instagram_detailsArguments",
+      "type": "object"
+    },
+    "name": "soloclef_instagram_details",
+    "title": "Fetch Instagram profile details"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    },
+    "description": "Scrape public TikTok videos by hashtag, profile, or URL.\n\n        Use for TikTok video research — a creator's videos, a hashtag feed, or a\n        specific video/profile/hashtag URL — instead of a generic web search.\n        Returns videos with text, author, stats, music, and the web URL. There is\n        no keyword-video search; for accounts by keyword use\n        soloclef_tiktok_user_search. Example: hashtags=['food'], max_items=20.\n        ",
+    "inputSchema": {
+      "properties": {
+        "hashtags": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Hashtag names to scrape, without the '#', e.g. ['food'].",
+          "title": "Hashtags"
+        },
+        "max_items": {
+          "default": 10,
+          "description": "Maximum videos to return in total.",
+          "minimum": 1,
+          "title": "Max Items",
+          "type": "integer"
+        },
+        "profiles": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Profile usernames to scrape, with or without a leading '@', e.g. ['nasa'].",
+          "title": "Profiles"
+        },
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        },
+        "results_per_page": {
+          "default": 10,
+          "description": "Max videos per profile/hashtag target.",
+          "minimum": 1,
+          "title": "Results Per Page",
+          "type": "integer"
+        },
+        "urls": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "TikTok URLs: a video, a profile ('https://www.tiktok.com/@nasa'), a hashtag ('https://www.tiktok.com/tag/food'), or a search URL. Provide urls OR profiles/hashtags.",
+          "title": "Urls"
+        },
+        "workspace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Workspace name or id, e.g. 'Research' or '3'. Omit to use the active workspace (set with soloclef_select_workspace).",
+          "title": "Workspace"
+        }
+      },
+      "title": "tiktok_scrapeArguments",
+      "type": "object"
+    },
+    "name": "soloclef_tiktok_scrape",
+    "title": "Scrape TikTok videos"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    },
+    "description": "Scrape the public comments of TikTok videos.\n\n        Returns each comment's text, author, like count, and reply count (replies\n        carry the parent comment id). Example: video_urls=['https://www.tiktok.com/\n        @nasa/video/123'], max_items=50.\n        ",
+    "inputSchema": {
+      "properties": {
+        "comments_per_video": {
+          "default": 20,
+          "description": "Max comments to return per video.",
+          "minimum": 1,
+          "title": "Comments Per Video",
+          "type": "integer"
+        },
+        "max_items": {
+          "default": 20,
+          "description": "Maximum comments to return in total.",
+          "minimum": 1,
+          "title": "Max Items",
+          "type": "integer"
+        },
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        },
+        "video_urls": {
+          "description": "TikTok video URLs ('https://www.tiktok.com/@user/video/123') to pull comments from.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Video Urls",
+          "type": "array"
+        },
+        "workspace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Workspace name or id, e.g. 'Research' or '3'. Omit to use the active workspace (set with soloclef_select_workspace).",
+          "title": "Workspace"
+        }
+      },
+      "required": [
+        "video_urls"
+      ],
+      "title": "tiktok_commentsArguments",
+      "type": "object"
+    },
+    "name": "soloclef_tiktok_comments",
+    "title": "Scrape TikTok comments"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    },
+    "description": "Find public TikTok accounts by keyword.\n\n        Returns matching profiles with name, followers, bio, and verification —\n        the reliable account-discovery path (video search is login-walled).\n        Example: queries=['space agency'], max_items=20.\n        ",
+    "inputSchema": {
+      "properties": {
+        "max_items": {
+          "default": 10,
+          "description": "Maximum accounts to return in total.",
+          "minimum": 1,
+          "title": "Max Items",
+          "type": "integer"
+        },
+        "queries": {
+          "description": "Keywords to find TikTok accounts by, e.g. ['nasa', 'cooking'].",
+          "items": {
+            "type": "string"
+          },
+          "title": "Queries",
+          "type": "array"
+        },
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        },
+        "results_per_query": {
+          "default": 10,
+          "description": "Max accounts to return per query.",
+          "minimum": 1,
+          "title": "Results Per Query",
+          "type": "integer"
+        },
+        "workspace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Workspace name or id, e.g. 'Research' or '3'. Omit to use the active workspace (set with soloclef_select_workspace).",
+          "title": "Workspace"
+        }
+      },
+      "required": [
+        "queries"
+      ],
+      "title": "tiktok_user_searchArguments",
+      "type": "object"
+    },
+    "name": "soloclef_tiktok_user_search",
+    "title": "Search TikTok accounts"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    },
+    "description": "Get the current trending TikTok videos from the Explore feed.\n\n        No input needed beyond how many to return; each video comes with caption,\n        author, stats, music, and its web URL. Example: max_items=30.\n        ",
+    "inputSchema": {
+      "properties": {
+        "max_items": {
+          "default": 20,
+          "description": "Max trending videos to return from Explore.",
+          "minimum": 1,
+          "title": "Max Items",
+          "type": "integer"
+        },
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        },
+        "workspace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Workspace name or id, e.g. 'Research' or '3'. Omit to use the active workspace (set with soloclef_select_workspace).",
+          "title": "Workspace"
+        }
+      },
+      "title": "tiktok_trendingArguments",
+      "type": "object"
+    },
+    "name": "soloclef_tiktok_trending",
+    "title": "Get trending TikTok videos"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    },
+    "description": "Find places on Google Maps by search, URL, or place id.\n\n        Use this for local-business and location research: names, addresses,\n        ratings, categories, coordinates, place ids. For a place's customer\n        reviews use soloclef_google_maps_reviews instead.\n        Example: search_queries=['ramen'], location='Osaka, Japan', max_places=5.\n        ",
+    "inputSchema": {
+      "properties": {
+        "include_details": {
+          "default": false,
+          "description": "True adds opening hours and extra contact info (slower).",
+          "title": "Include Details",
+          "type": "boolean"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Geographic scope for a search, e.g. 'Seattle, USA'.",
+          "title": "Location"
+        },
+        "max_places": {
+          "default": 10,
+          "description": "Maximum places to return.",
+          "minimum": 1,
+          "title": "Max Places",
+          "type": "integer"
+        },
+        "place_ids": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Google place ids, e.g. ['ChIJj61dQgK6j4AR...'].",
+          "title": "Place Ids"
+        },
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        },
+        "search_queries": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Place searches, e.g. ['coffee shops']. Provide search_queries OR urls OR place_ids.",
+          "title": "Search Queries"
+        },
+        "urls": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Google Maps URLs of specific places.",
+          "title": "Urls"
+        },
+        "workspace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Workspace name or id, e.g. 'Research' or '3'. Omit to use the active workspace (set with soloclef_select_workspace).",
+          "title": "Workspace"
+        }
+      },
+      "title": "google_maps_scrapeArguments",
+      "type": "object"
+    },
+    "name": "soloclef_google_maps_scrape",
+    "title": "Find places on Google Maps"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    },
+    "description": "Fetch customer reviews for Google Maps places by URL or place id.\n\n        Use this to read feedback on specific places; get urls or place_ids\n        from soloclef_google_maps_scrape first if you only have a name.\n        Returns review text, rating, author, and date per review.\n        Example: place_ids=['ChIJj61dQgK6j4AR...'], sort_by='newest'.\n        ",
+    "inputSchema": {
+      "properties": {
+        "language": {
+          "default": "en",
+          "description": "Reviews language code, e.g. 'en'.",
+          "title": "Language",
+          "type": "string"
+        },
+        "max_reviews": {
+          "default": 20,
+          "description": "Maximum reviews per place.",
+          "minimum": 1,
+          "title": "Max Reviews",
+          "type": "integer"
+        },
+        "place_ids": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Google place ids from soloclef_google_maps_scrape.",
+          "title": "Place Ids"
+        },
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        },
+        "sort_by": {
+          "default": "newest",
+          "description": "Review ordering.",
+          "enum": [
+            "newest",
+            "mostRelevant",
+            "highestRanking",
+            "lowestRanking"
+          ],
+          "title": "Sort By",
+          "type": "string"
+        },
+        "start_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ISO date like '2026-01-01'; keeps only reviews on or after that day.",
+          "title": "Start Date"
+        },
+        "urls": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Google Maps URLs of places. Provide urls OR place_ids.",
+          "title": "Urls"
+        },
+        "workspace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Workspace name or id, e.g. 'Research' or '3'. Omit to use the active workspace (set with soloclef_select_workspace).",
+          "title": "Workspace"
+        }
+      },
+      "title": "google_maps_reviewsArguments",
+      "type": "object"
+    },
+    "name": "soloclef_google_maps_reviews",
+    "title": "Fetch Google Maps reviews"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    },
+    "description": "Search or scrape public Indeed job postings.\n\n        Use this for ANY Indeed job research — openings for a role, who is hiring\n        at a company, salaries for a title in a location, or remote roles —\n        instead of a generic web search. Returns jobs with title, company,\n        location, salary, job types, and description; set scrape_job_details for\n        the full description per job.\n        Example: search_queries=['data analyst'], location='Remote', max_items=30.\n        ",
+    "inputSchema": {
+      "properties": {
+        "country": {
+          "default": "us",
+          "description": "Country code selecting the Indeed domain, e.g. 'us', 'gb'.",
+          "title": "Country",
+          "type": "string"
+        },
+        "from_days": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Only return jobs posted within the last N days.",
+          "title": "From Days"
+        },
+        "job_type": {
+          "anyOf": [
+            {
+              "enum": [
+                "fulltime",
+                "parttime",
+                "contract",
+                "internship",
+                "temporary",
+                "permanent",
+                "seasonal",
+                "freelance"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Employment type filter.",
+          "title": "Job Type"
+        },
+        "level": {
+          "anyOf": [
+            {
+              "enum": [
+                "entry_level",
+                "mid_level",
+                "senior_level"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Experience level filter.",
+          "title": "Level"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Where to search, e.g. 'Remote', 'New York, NY'.",
+          "title": "Location"
+        },
+        "max_items": {
+          "default": 25,
+          "description": "Maximum jobs to return in total.",
+          "minimum": 1,
+          "title": "Max Items",
+          "type": "integer"
+        },
+        "max_items_per_query": {
+          "default": 25,
+          "description": "Max jobs per search/company target.",
+          "minimum": 0,
+          "title": "Max Items Per Query",
+          "type": "integer"
+        },
+        "radius": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Search radius in miles/km around location.",
+          "title": "Radius"
+        },
+        "remote": {
+          "anyOf": [
+            {
+              "enum": [
+                "remote",
+                "hybrid"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Work model filter: remote or hybrid.",
+          "title": "Remote"
+        },
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        },
+        "scrape_job_details": {
+          "default": false,
+          "description": "True fetches each job's detail page for the full description (slower); False returns the listing snippet only.",
+          "title": "Scrape Job Details",
+          "type": "boolean"
+        },
+        "search_queries": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Job search terms, e.g. ['data analyst', 'ml engineer']. Provide search_queries OR urls.",
+          "title": "Search Queries"
+        },
+        "sort": {
+          "default": "relevance",
+          "description": "Result ordering: relevance or date.",
+          "enum": [
+            "relevance",
+            "date"
+          ],
+          "title": "Sort",
+          "type": "string"
+        },
+        "urls": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Indeed URLs: a search page ('https://www.indeed.com/jobs?q=data+analyst'), a company jobs page ('/cmp/<slug>/jobs'), or a single job ('/viewjob?jk=...'). Provide urls OR search_queries.",
+          "title": "Urls"
+        },
+        "workspace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Workspace name or id, e.g. 'Research' or '3'. Omit to use the active workspace (set with soloclef_select_workspace).",
+          "title": "Workspace"
+        }
+      },
+      "title": "indeed_scrapeArguments",
+      "type": "object"
+    },
+    "name": "soloclef_indeed_scrape",
+    "title": "Search or scrape Indeed jobs"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    },
+    "description": "Scrape public Amazon product data by URL or search term.\n\n        Use this for product research: title, price, list price, rating and\n        review breakdown, availability, images, features, best-seller ranks,\n        marketplace offers, sellers, and on-page reviews. Only public,\n        anonymous data — no login. Provide search_terms to discover products\n        or urls to target specific products, searches, categories, or\n        best-seller pages.\n        Example: search_terms=['mechanical keyboard'], domain='www.amazon.com',\n        max_items=5, max_offers=3.\n        ",
+    "inputSchema": {
+      "properties": {
+        "country_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Two-letter delivery country for localized pricing, e.g. 'us'.",
+          "title": "Country Code"
+        },
+        "domain": {
+          "default": "www.amazon.com",
+          "description": "Amazon marketplace domain, e.g. 'www.amazon.com', 'www.amazon.co.uk'.",
+          "title": "Domain",
+          "type": "string"
+        },
+        "include_details": {
+          "default": true,
+          "description": "Fetch full product detail pages. False returns faster card-only results from search/category listings.",
+          "title": "Include Details",
+          "type": "boolean"
+        },
+        "include_sellers": {
+          "default": false,
+          "description": "Enrich the featured product and each offer with the seller's public profile summary.",
+          "title": "Include Sellers",
+          "type": "boolean"
+        },
+        "include_variant_prices": {
+          "default": false,
+          "description": "Attach per-variant prices (one extra request per variant).",
+          "title": "Include Variant Prices",
+          "type": "boolean"
+        },
+        "language": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Content language for the domain, e.g. 'en'.",
+          "title": "Language"
+        },
+        "max_items": {
+          "default": 10,
+          "description": "Max products per search term or category/best-seller URL.",
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Max Items",
+          "type": "integer"
+        },
+        "max_offers": {
+          "default": 0,
+          "description": "Extra marketplace offers to fetch per product. 0 returns the featured offer only.",
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Max Offers",
+          "type": "integer"
+        },
+        "max_variants": {
+          "default": 0,
+          "description": "Product variants (e.g. colors, sizes) to return as separate results. 0 disables variant expansion.",
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Max Variants",
+          "type": "integer"
+        },
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        },
+        "search_terms": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Search phrases run on the Amazon domain, e.g. ['wireless earbuds']. Provide search_terms OR urls.",
+          "title": "Search Terms"
+        },
+        "urls": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Amazon product, search, category, best-seller, or short (a.co / amzn.to) URLs. Provide urls OR search_terms.",
+          "title": "Urls"
+        },
+        "workspace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Workspace name or id, e.g. 'Research' or '3'. Omit to use the active workspace (set with soloclef_select_workspace).",
+          "title": "Workspace"
+        },
+        "zip_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Delivery ZIP/postal code for localized availability and pricing, e.g. '10001'.",
+          "title": "Zip Code"
+        }
+      },
+      "title": "amazon_scrapeArguments",
+      "type": "object"
+    },
+    "name": "soloclef_amazon_scrape",
+    "title": "Scrape Amazon products"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    },
+    "description": "Scrape public Walmart product data by URL or search term.\n\n        Use this for product research: title, price, list price, rating and\n        review count, availability, seller (Walmart 1P vs marketplace), images,\n        description, variants, and a sample of on-page reviews. Only public,\n        anonymous data — no login. For a product's full review history use\n        soloclef_walmart_reviews instead.\n        Example: search_terms=['air fryer'], max_items=5.\n        ",
+    "inputSchema": {
+      "properties": {
+        "include_details": {
+          "default": true,
+          "description": "Fetch full product detail pages. False returns faster card-only results from listings.",
+          "title": "Include Details",
+          "type": "boolean"
+        },
+        "include_reviews_sample": {
+          "default": true,
+          "description": "Include the free on-page review sample (rating distribution, aspects, top reviews) on detail pages.",
+          "title": "Include Reviews Sample",
+          "type": "boolean"
+        },
+        "max_items": {
+          "default": 10,
+          "description": "Max products per search term or listing URL.",
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Max Items",
+          "type": "integer"
+        },
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        },
+        "search_terms": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Search phrases run on walmart.com, e.g. ['air fryer']. Provide search_terms OR urls.",
+          "title": "Search Terms"
+        },
+        "urls": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Walmart product (/ip/), search (/search), category (/cp/), or browse (/browse/) URLs. Provide urls OR search_terms.",
+          "title": "Urls"
+        },
+        "workspace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Workspace name or id, e.g. 'Research' or '3'. Omit to use the active workspace (set with soloclef_select_workspace).",
+          "title": "Workspace"
+        }
+      },
+      "title": "walmart_scrapeArguments",
+      "type": "object"
+    },
+    "name": "soloclef_walmart_scrape",
+    "title": "Scrape Walmart products"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    },
+    "description": "Fetch deep paginated customer reviews for Walmart products.\n\n        Use this to read the full review history on specific products; get urls\n        or item_ids from soloclef_walmart_scrape first if you only have a name.\n        Returns rating, title, text, author, verified-purchase flag, images, and\n        seller response per review.\n        Example: item_ids=['212092810'], sort_by='most-helpful', max_reviews=100.\n        ",
+    "inputSchema": {
+      "properties": {
+        "item_ids": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Walmart numeric item ids (usItemId) from soloclef_walmart_scrape.",
+          "title": "Item Ids"
+        },
+        "max_reviews": {
+          "default": 200,
+          "description": "Max reviews per product (10 per page).",
+          "maximum": 5000,
+          "minimum": 1,
+          "title": "Max Reviews",
+          "type": "integer"
+        },
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        },
+        "sort_by": {
+          "default": "most-recent",
+          "description": "Review ordering.",
+          "enum": [
+            "most-recent",
+            "most-helpful",
+            "rating-high",
+            "rating-low"
+          ],
+          "title": "Sort By",
+          "type": "string"
+        },
+        "urls": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Walmart product URLs (/ip/...). Provide urls OR item_ids.",
+          "title": "Urls"
+        },
+        "workspace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Workspace name or id, e.g. 'Research' or '3'. Omit to use the active workspace (set with soloclef_select_workspace).",
+          "title": "Workspace"
+        }
+      },
+      "title": "walmart_reviewsArguments",
+      "type": "object"
+    },
+    "name": "soloclef_walmart_reviews",
+    "title": "Fetch Walmart reviews"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "List recent scraper runs in the workspace, newest first.\n\n        Use this to find the run_id of an earlier scrape — for example when an\n        inline result was truncated — then fetch it in full with\n        soloclef_get_scraper_run. Returns each run's id, capability, status,\n        item count, and creation time.\n        Example: capability='reddit.scrape', status='success'.\n        ",
+    "inputSchema": {
+      "properties": {
+        "capability": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Filter by capability slug, e.g. 'web.crawl' or 'reddit.scrape'.",
+          "title": "Capability"
+        },
+        "limit": {
+          "default": 20,
+          "description": "Maximum runs to list.",
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Filter by run status: 'success' or 'error'.",
+          "title": "Status"
+        },
+        "workspace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Workspace name or id, e.g. 'Research' or '3'. Omit to use the active workspace (set with soloclef_select_workspace).",
+          "title": "Workspace"
+        }
+      },
+      "title": "list_scraper_runsArguments",
+      "type": "object"
+    },
+    "name": "soloclef_list_scraper_runs",
+    "title": "List past scraper runs"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Fetch a single scraper run in full, including its stored output.\n\n        Use this to retrieve the complete, untruncated result of an earlier\n        scrape. Do NOT re-run a scraper just to recover a truncated result —\n        fetch the stored run instead.\n        ",
+    "inputSchema": {
+      "properties": {
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        },
+        "run_id": {
+          "description": "Run id from soloclef_list_scraper_runs or a prior scrape's output.",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "workspace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Workspace name or id, e.g. 'Research' or '3'. Omit to use the active workspace (set with soloclef_select_workspace).",
+          "title": "Workspace"
+        }
+      },
+      "required": [
+        "run_id"
+      ],
+      "title": "get_scraper_runArguments",
+      "type": "object"
+    },
+    "name": "soloclef_get_scraper_run",
+    "title": "Fetch one scraper run in full"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Search the workspace's knowledge base by meaning and keywords.\n\n        Use this FIRST when a question might be answered by content already\n        stored in Soloclef Notes — notes, uploaded files, saved pages, past\n        research. Do NOT use it to fetch new data from the web; use the\n        scraper tools for that. Returns the most relevant documents with the\n        passages that matched, ranked by relevance score.\n        Example: query='pricing feedback', top_k=5.\n        ",
+    "inputSchema": {
+      "properties": {
+        "document_types": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Restrict to these document types, e.g. ['FILE', 'CRAWLED_URL', 'YOUTUBE_VIDEO']. Omit for all types.",
+          "title": "Document Types"
+        },
+        "query": {
+          "description": "Natural-language search, e.g. 'notebooklm user complaints'.",
+          "minLength": 1,
+          "title": "Query",
+          "type": "string"
+        },
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        },
+        "top_k": {
+          "default": 5,
+          "description": "Maximum documents to return.",
+          "maximum": 20,
+          "minimum": 1,
+          "title": "Top K",
+          "type": "integer"
+        },
+        "workspace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Workspace name or id, e.g. 'Research' or '3'. Omit to use the active workspace (set with soloclef_select_workspace).",
+          "title": "Workspace"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "title": "search_knowledge_baseArguments",
+      "type": "object"
+    },
+    "name": "soloclef_search_knowledge_base",
+    "title": "Search knowledge base"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "List documents in the workspace's knowledge base, newest first.\n\n        Use this to browse or inventory what is stored; to find documents\n        about a topic, prefer soloclef_search_knowledge_base. Returns each\n        document's title, id, type, and update time, plus a has_more flag —\n        request the next page by increasing page.\n        Example: document_types=['FILE'], page=0, page_size=20.\n        ",
+    "inputSchema": {
+      "properties": {
+        "document_types": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Restrict to these document types, e.g. ['FILE', 'CRAWLED_URL', 'YOUTUBE_VIDEO']. Omit for all types.",
+          "title": "Document Types"
+        },
+        "folder_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Only documents in this folder. Omit for all.",
+          "title": "Folder Id"
+        },
+        "page": {
+          "default": 0,
+          "description": "Zero-based page number.",
+          "minimum": 0,
+          "title": "Page",
+          "type": "integer"
+        },
+        "page_size": {
+          "default": 20,
+          "description": "Documents per page.",
+          "minimum": 1,
+          "title": "Page Size",
+          "type": "integer"
+        },
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        },
+        "workspace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Workspace name or id, e.g. 'Research' or '3'. Omit to use the active workspace (set with soloclef_select_workspace).",
+          "title": "Workspace"
+        }
+      },
+      "title": "list_documentsArguments",
+      "type": "object"
+    },
+    "name": "soloclef_list_documents",
+    "title": "List documents"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Read one document's full content and metadata by id.\n\n        Use this after soloclef_search_knowledge_base or\n        soloclef_list_documents to open a specific document — search results\n        only include the matching passages, this returns the whole text.\n        The markdown form is an Open Knowledge Format (OKF) concept: a YAML\n        frontmatter block (type, title, tags, resource, timestamp) followed by\n        the document body.\n        ",
+    "inputSchema": {
+      "properties": {
+        "document_id": {
+          "description": "Document id from soloclef_search_knowledge_base or soloclef_list_documents results.",
+          "title": "Document Id",
+          "type": "integer"
+        },
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        }
+      },
+      "required": [
+        "document_id"
+      ],
+      "title": "get_documentArguments",
+      "type": "object"
+    },
+    "name": "soloclef_get_document",
+    "title": "Read one document"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Save a text or markdown note into the workspace's knowledge base.\n\n        Use this to store notes, summaries, or findings so they become\n        searchable later — e.g. after finishing a piece of research. For files\n        on disk use soloclef_upload_file instead. Indexing is asynchronous,\n        so the note may take a moment to appear in search.\n        Example: title='NotebookLM subreddits', content='- r/notebooklm ...'.\n        ",
+    "inputSchema": {
+      "properties": {
+        "content": {
+          "description": "The note's body; plain text or markdown.",
+          "minLength": 1,
+          "title": "Content",
+          "type": "string"
+        },
+        "source_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Where the text came from, if anywhere.",
+          "title": "Source Url"
+        },
+        "title": {
+          "description": "Short descriptive title for the note.",
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "workspace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Workspace name or id, e.g. 'Research' or '3'. Omit to use the active workspace (set with soloclef_select_workspace).",
+          "title": "Workspace"
+        }
+      },
+      "required": [
+        "title",
+        "content"
+      ],
+      "title": "add_documentArguments",
+      "type": "object"
+    },
+    "name": "soloclef_add_document",
+    "title": "Add a note"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Upload a local file (PDF, docx, markdown, etc.) into the knowledge base.\n\n        Use this to ingest a file from disk so its content becomes searchable;\n        for text you already have in hand use soloclef_add_document instead.\n        The file is parsed, chunked, and indexed asynchronously. Duplicate\n        files are detected and skipped.\n        Example: file_path='C:/Users/me/report.pdf'.\n        ",
+    "inputSchema": {
+      "properties": {
+        "file_path": {
+          "description": "Path to a local file, e.g. 'C:/Users/me/report.pdf' or '~/notes/summary.md'.",
+          "title": "File Path",
+          "type": "string"
+        },
+        "use_vision_llm": {
+          "default": false,
+          "description": "True reads scanned or image-heavy files with a vision model (slower).",
+          "title": "Use Vision Llm",
+          "type": "boolean"
+        },
+        "workspace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Workspace name or id, e.g. 'Research' or '3'. Omit to use the active workspace (set with soloclef_select_workspace).",
+          "title": "Workspace"
+        }
+      },
+      "required": [
+        "file_path"
+      ],
+      "title": "upload_fileArguments",
+      "type": "object"
+    },
+    "name": "soloclef_upload_file",
+    "title": "Upload a file"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Replace a document's stored content by id.\n\n        Use this to correct or rewrite a document's text. The new content\n        REPLACES the old entirely — to append, read the document first with\n        soloclef_get_document and resend the combined text. The document\n        re-indexes in the background afterwards.\n        ",
+    "inputSchema": {
+      "properties": {
+        "content": {
+          "description": "New full text; replaces the existing content entirely.",
+          "minLength": 1,
+          "title": "Content",
+          "type": "string"
+        },
+        "document_id": {
+          "description": "Document id from soloclef_search_knowledge_base or soloclef_list_documents results.",
+          "title": "Document Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "document_id",
+        "content"
+      ],
+      "title": "update_documentArguments",
+      "type": "object"
+    },
+    "name": "soloclef_update_document",
+    "title": "Replace a document's content"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Permanently delete a document from the knowledge base by id.\n\n        Use this only when the user explicitly asks to remove a document —\n        deletion cannot be undone. The document stops appearing in searches\n        immediately.\n        ",
+    "inputSchema": {
+      "properties": {
+        "document_id": {
+          "description": "Document id from soloclef_search_knowledge_base or soloclef_list_documents results.",
+          "title": "Document Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "document_id"
+      ],
+      "title": "delete_documentArguments",
+      "type": "object"
+    },
+    "name": "soloclef_delete_document",
+    "title": "Delete a document"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Search PubMed (biomedical literature) by keyword.\n\n        Returns, per paper: title, authors, year, journal, PMID/PMCID/DOI, the\n        PubMed URL, and an abstract (or a full-text excerpt when\n        full_text=True and the paper is in PMC's open-access subset).\n        Example: query='bronchiolitis high flow nasal cannula', since=2018.\n        ",
+    "inputSchema": {
+      "properties": {
+        "full_text": {
+          "default": false,
+          "description": "When true, read PMC open-access full text for the top hits (where available) and return an excerpt instead of just the abstract.",
+          "title": "Full Text",
+          "type": "boolean"
+        },
+        "max_results": {
+          "default": 10,
+          "description": "Maximum papers to return.",
+          "maximum": 30,
+          "minimum": 1,
+          "title": "Max Results",
+          "type": "integer"
+        },
+        "query": {
+          "description": "Search query.",
+          "minLength": 1,
+          "title": "Query",
+          "type": "string"
+        },
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        },
+        "since": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Earliest publication year, inclusive.",
+          "title": "Since"
+        },
+        "until": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Latest publication year, inclusive.",
+          "title": "Until"
+        },
+        "workspace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Workspace name or id, e.g. 'Research' or '3'. Omit to use the active workspace (set with soloclef_select_workspace).",
+          "title": "Workspace"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "title": "pubmed_searchArguments",
+      "type": "object"
+    },
+    "name": "soloclef_pubmed_search",
+    "title": "Search PubMed"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Search arXiv (preprints: physics, CS, math, stats, and more).\n\n        Returns, per paper: title, authors, year, arXiv id, DOI/journal-ref\n        when published, the arXiv URL, and the abstract.\n        Example: query='transformer attention mechanism'.\n        ",
+    "inputSchema": {
+      "properties": {
+        "max_results": {
+          "default": 10,
+          "description": "Maximum papers to return.",
+          "maximum": 30,
+          "minimum": 1,
+          "title": "Max Results",
+          "type": "integer"
+        },
+        "query": {
+          "description": "Search query.",
+          "minLength": 1,
+          "title": "Query",
+          "type": "string"
+        },
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        },
+        "workspace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Workspace name or id, e.g. 'Research' or '3'. Omit to use the active workspace (set with soloclef_select_workspace).",
+          "title": "Workspace"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "title": "arxiv_searchArguments",
+      "type": "object"
+    },
+    "name": "soloclef_arxiv_search",
+    "title": "Search arXiv"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Search medRxiv (health sciences) or bioRxiv (biology) preprints.\n\n        These are NOT peer reviewed. Returns, per preprint: title, authors,\n        year, DOI, the landing-page URL, and the abstract.\n        Example: query='pediatric asthma exacerbation', server='medrxiv'.\n        ",
+    "inputSchema": {
+      "properties": {
+        "max_results": {
+          "default": 10,
+          "description": "Maximum papers to return.",
+          "maximum": 30,
+          "minimum": 1,
+          "title": "Max Results",
+          "type": "integer"
+        },
+        "query": {
+          "description": "Search query.",
+          "minLength": 1,
+          "title": "Query",
+          "type": "string"
+        },
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        },
+        "server": {
+          "description": "Which preprint server to search.",
+          "enum": [
+            "medrxiv",
+            "biorxiv"
+          ],
+          "title": "Server",
+          "type": "string"
+        },
+        "workspace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Workspace name or id, e.g. 'Research' or '3'. Omit to use the active workspace (set with soloclef_select_workspace).",
+          "title": "Workspace"
+        }
+      },
+      "required": [
+        "query",
+        "server"
+      ],
+      "title": "preprint_searchArguments",
+      "type": "object"
+    },
+    "name": "soloclef_preprint_search",
+    "title": "Search medRxiv / bioRxiv"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Search Google Scholar across disciplines and publishers.\n\n        Broadest coverage, but the least structured result (no reliable\n        abstract or full text — only the search snippet). Prefer\n        soloclef_pubmed_search, soloclef_arxiv_search or\n        soloclef_preprint_search when the topic fits one of them.\n        Returns, per hit: title, authors/venue/year line, URL, cited-by count\n        when shown, and the snippet.\n        Example: query='pediatric sepsis early recognition'.\n        ",
+    "inputSchema": {
+      "properties": {
+        "max_results": {
+          "default": 10,
+          "description": "Maximum papers to return.",
+          "maximum": 30,
+          "minimum": 1,
+          "title": "Max Results",
+          "type": "integer"
+        },
+        "query": {
+          "description": "Search query.",
+          "minLength": 1,
+          "title": "Query",
+          "type": "string"
+        },
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        },
+        "workspace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Workspace name or id, e.g. 'Research' or '3'. Omit to use the active workspace (set with soloclef_select_workspace).",
+          "title": "Workspace"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "title": "scholar_searchArguments",
+      "type": "object"
+    },
+    "name": "soloclef_scholar_search",
+    "title": "Search Google Scholar"
+  }
+]

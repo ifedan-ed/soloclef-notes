@@ -1,7 +1,6 @@
 package executor
 
 import (
-	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"slices"
-	"strings"
 	"sync"
 	"time"
 )
@@ -21,13 +19,6 @@ const (
 	// it all would make the task's fault the worker's.
 	reportLimit = 1 << 20
 
-	// stderrTailLines are kept for the row a process that died without
-	// reporting gets, so an OOM kill is readable from AsyncResult.
-	stderrTailLines = 20
-
-	// logLineLimit bounds one line of a child's logs.
-	logLineLimit = 64 << 10
-
 	// drainGrace bounds the wait for a dead process's output: something that
 	// escaped the process group could hold the pipe open indefinitely.
 	drainGrace = 2 * time.Second
@@ -37,13 +28,13 @@ const (
 // its logs in this worker's logs, and its stdout kept for the one line it
 // reports.
 type child struct {
-	cmd  *exec.Cmd
-	log  *slog.Logger
-	done chan struct{}
+	cmd      *exec.Cmd
+	log      *slog.Logger
+	finished chan struct{}
+	logs     taskLogs
 
 	mu     sync.Mutex
 	stdout []byte
-	tail   []string
 
 	waitErr  error
 	stopOnce sync.Once
@@ -92,7 +83,7 @@ func startChild(cfg Config, task string, call Call, log *slog.Logger) (*child, e
 	// reads below from ever seeing the end of its output.
 	closeAll(stdoutWrite, stderrWrite)
 
-	c := &child{cmd: cmd, log: log, done: make(chan struct{})}
+	c := &child{cmd: cmd, log: log, finished: make(chan struct{})}
 
 	// Written on a goroutine because a body that never reads its call, with a
 	// payload past the pipe buffer, would otherwise block here forever.
@@ -106,10 +97,10 @@ func startChild(cfg Config, task string, call Call, log *slog.Logger) (*child, e
 	var reading sync.WaitGroup
 	reading.Add(2)
 	go func() { defer reading.Done(); c.collectReport(stdoutRead) }()
-	go func() { defer reading.Done(); c.streamLogs(stderrRead) }()
+	go func() { defer reading.Done(); c.logs.stream(stderrRead, log) }()
 
 	go func() {
-		defer close(c.done)
+		defer close(c.finished)
 		c.waitErr = cmd.Wait()
 		drained := make(chan struct{})
 		go func() { reading.Wait(); close(drained) }()
@@ -123,6 +114,12 @@ func startChild(cfg Config, task string, call Call, log *slog.Logger) (*child, e
 
 	return c, nil
 }
+
+// done closes once the process has gone and its output has been read.
+func (c *child) done() <-chan struct{} { return c.finished }
+
+// release has nothing to give up: the process ran this job and no other.
+func (c *child) release() {}
 
 func (c *child) pid() int {
 	if c.cmd.Process == nil {
@@ -145,7 +142,7 @@ func (c *child) stopGroup(grace time.Duration) {
 	timer := time.NewTimer(grace)
 	defer timer.Stop()
 	select {
-	case <-c.done:
+	case <-c.finished:
 		return
 	case <-timer.C:
 	}
@@ -158,39 +155,14 @@ func (c *child) stopGroup(grace time.Duration) {
 	}
 }
 
-// conclude decides what happened. The body's own report wins whenever there is
-// one: a task that caught a soft limit and returned a value succeeded, here as
-// in Celery. fallback is what the worker decided -- a limit or a shutdown --
-// and stands in when the process never said anything usable.
+// conclude decides what happened, by the rule both execution shapes share.
 func (c *child) conclude(fallback *outcome) outcome {
-	report, err := parseReport(c.report())
-	switch {
-	case err == nil:
-		return report.outcome()
-	case fallback != nil:
-		return fallback.withLogs(c.logTail())
-	case !errors.Is(err, errNoReport):
-		return workerFailure(excUnreadable, err).withLogs(c.logTail())
-	default:
-		return c.exitOutcome().withLogs(c.logTail())
-	}
+	return concludeFrom(c.report(), c.logs.text(), c.exitOutcome, fallback)
 }
 
 // exitOutcome reads the failure out of how the process ended.
 func (c *child) exitOutcome() outcome {
-	if number, name, killed := terminationSignal(c.cmd.ProcessState); killed {
-		// Celery's own wording for a prefork child that disappeared, and what
-		// an OOM kill looks like: nothing of the body's own ran, so nothing
-		// released whatever it was holding.
-		return workerFailure(excWorkerLost,
-			fmt.Errorf("worker exited prematurely: signal %d (%s)", number, name))
-	}
-	code := c.cmd.ProcessState.ExitCode()
-	if code == 0 {
-		return workerFailure(excUnreadable, errNoReport)
-	}
-	return workerFailure(excWorkerLost,
-		fmt.Errorf("worker exited prematurely: exitcode %d: %v", code, c.waitErr))
+	return exitOutcomeOf(c.cmd.ProcessState, c.waitErr)
 }
 
 func (c *child) collectReport(stdout io.Reader) {
@@ -203,39 +175,10 @@ func (c *child) collectReport(stdout io.Reader) {
 	c.mu.Unlock()
 }
 
-// streamLogs puts the task's own logging in this worker's logs as it happens,
-// and keeps the last lines for a process that dies without reporting.
-func (c *child) streamLogs(stderr io.Reader) {
-	lines := bufio.NewScanner(stderr)
-	lines.Buffer(make([]byte, 0, 4096), logLineLimit)
-	for lines.Scan() {
-		line := lines.Text()
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		c.log.Info("task", "line", line)
-		c.mu.Lock()
-		c.tail = append(c.tail, line)
-		if len(c.tail) > stderrTailLines {
-			c.tail = c.tail[len(c.tail)-stderrTailLines:]
-		}
-		c.mu.Unlock()
-	}
-	if err := lines.Err(); err != nil && !errors.Is(err, os.ErrClosed) {
-		c.log.Warn("stopped reading the task process's logs", "error", err)
-	}
-}
-
 func (c *child) report() []byte {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.stdout
-}
-
-func (c *child) logTail() string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return strings.Join(c.tail, "\n")
 }
 
 func closeAll(files ...*os.File) {

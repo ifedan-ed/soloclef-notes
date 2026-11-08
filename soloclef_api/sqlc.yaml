@@ -67,3 +67,59 @@ sql:
         <<: *slice_go
         package: workspacemembers
         out: internal/workspacemembers
+  - <<: *slice
+    queries: internal/agentsignin/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: agentsignin
+        out: internal/agentsignin
+  - <<: *slice
+    queries: internal/workspaceroles/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: workspaceroles
+        out: internal/workspaceroles
+  - <<: *slice
+    queries: internal/accesstokens/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: accesstokens
+        out: internal/accesstokens
+  - <<: *slice
+    queries: internal/documentdeletion/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: documentdeletion
+        out: internal/documentdeletion
+  - <<: *slice
+    queries: internal/workspacedeletion/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: workspacedeletion
+        out: internal/workspacedeletion
+  - <<: *slice
+    queries: internal/workspacelogs/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: workspacelogs
+        out: internal/workspacelogs
+  - <<: *slice
+    queries: internal/markdownmemory/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: markdownmemory
+        out: internal/markdownmemory
+  - <<: *slice
+    queries: internal/folders/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: folders
+        out: internal/folders

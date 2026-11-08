@@ -5,16 +5,17 @@ import (
 	"log/slog"
 	"net/http"
 
-	"git.danvics.com/danvics/surfsense/soloclef_api/internal/errorenvelope"
-	"git.danvics.com/danvics/surfsense/soloclef_api/internal/requestcontext"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/errorenvelope"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/requestcontext"
 )
 
 // Gate authenticates every request before a route sees it.
 //
-// There are exactly three outcomes, and each is one the Python tier also
+// There are exactly four outcomes, and each is one the Python tier also
 // produces for the same request: the caller is known and the route runs; the
 // credential is one only the Python tier can check, so the request goes there
-// unchanged; or nothing identified the caller and it is the same 401.
+// unchanged; the credential was checked here and refused, in that tier's own
+// status and words; or nothing identified the caller and it is the same 401.
 type Gate struct {
 	Resolver Resolver
 	Errors   errorenvelope.Writer
@@ -26,6 +27,7 @@ type Gate struct {
 func (g Gate) Wrap(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		caller, err := g.Resolver.Resolve(request.Context(), request)
+		var refusal Refusal
 		switch {
 		case err == nil:
 			next.ServeHTTP(response, request.WithContext(WithPrincipal(request.Context(), caller)))
@@ -33,6 +35,8 @@ func (g Gate) Wrap(next http.Handler) http.Handler {
 			g.PythonTier.ServeHTTP(response, request)
 		case errors.Is(err, ErrUnauthorized):
 			g.Errors.Write(response, http.StatusUnauthorized, "Unauthorized", requestcontext.IDFrom(request))
+		case errors.As(err, &refusal):
+			g.Errors.Write(response, refusal.Status, refusal.Message, requestcontext.IDFrom(request))
 		default:
 			// A database that cannot answer "is this account active" is a 500
 			// here exactly as it is there, and the reason stays in the log.

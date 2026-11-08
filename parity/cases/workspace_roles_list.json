@@ -1,0 +1,19 @@
+{
+ "route": "GET /api/v1/workspaces/{workspace_id}/roles",
+ "why": "The role editor's list read. Its query has no ORDER BY on either tier, so the two agree by asking the same unordered question of the same rows at the same moment and nothing stronger is true.",
+ "parameters": {
+  "workspace_id": 1
+ },
+ "matrices": [
+  "credentials",
+  "identifiers:workspace_id",
+  "origins"
+ ],
+ "cases": [
+  {
+   "label": "the role list",
+   "as": "owner",
+   "path": "/api/v1/workspaces/1/roles"
+  }
+ ]
+}

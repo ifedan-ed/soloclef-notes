@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"git.danvics.com/danvics/surfsense/soloclef_worker/internal/celery"
+	"git.danvics.com/danvics/soloclef/soloclef_celery/celery"
 )
 
 // outcome is what this worker concludes about one task process, and the row it

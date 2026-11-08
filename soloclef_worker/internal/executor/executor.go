@@ -2,7 +2,7 @@
 // and reports what happened where Celery's clients read it. It is the half of
 // the tier that stays Python: Go owns scheduling, limits, cancellation and the
 // result rows, while the body itself is the same function a Celery worker
-// would have called (surfsense_backend/app/tasks/run.py).
+// would have called (soloclef_backend/app/tasks/run.py).
 package executor
 
 import (
@@ -12,8 +12,8 @@ import (
 	"log/slog"
 	"time"
 
-	"git.danvics.com/danvics/surfsense/soloclef_worker/internal/broker"
-	"git.danvics.com/danvics/surfsense/soloclef_worker/internal/celery"
+	"git.danvics.com/danvics/soloclef/soloclef_celery/celery"
+	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/broker"
 )
 
 const (
@@ -31,10 +31,11 @@ type Rows interface {
 	Write(ctx context.Context, row celery.Result) error
 }
 
-// Executor is a broker.Runner: one message in, one task process run, one
-// terminal row out.
+// Executor is a broker.Runner: one message in, one task body run, one terminal
+// row out.
 type Executor struct {
 	cfg  Config
+	jobs jobStarter
 	rows Rows
 	log  *slog.Logger
 }
@@ -47,8 +48,30 @@ func New(cfg Config, rows Rows) (*Executor, error) {
 	if rows == nil {
 		return nil, errors.New("executor: no result backend, so nothing could read a task's outcome")
 	}
-	return &Executor{cfg: cfg, rows: rows, log: slog.Default().With("worker", cfg.Worker)}, nil
+	log := slog.Default().With("worker", cfg.Worker)
+	return &Executor{cfg: cfg, jobs: starterFor(cfg, log), rows: rows, log: log}, nil
 }
+
+// starterFor picks how bodies run. A pool size of nothing is one process per
+// job, which costs this app's whole import graph per job (27-33s on this
+// host); anything more is warm processes that have already paid it.
+func starterFor(cfg Config, log *slog.Logger) jobStarter {
+	if cfg.PoolSize <= 0 {
+		log.Warn("running each task body in a process of its own, so every job pays this app's imports",
+			"pool_size", cfg.PoolSize)
+		return oneShot{cfg: cfg}
+	}
+	return newPool(cfg, log)
+}
+
+// Warm readies the task processes before the first job arrives, so the imports
+// are paid at startup rather than by whoever enqueues first.
+func (e *Executor) Warm(ctx context.Context) error { return e.jobs.warm(ctx) }
+
+// Close stops the task processes this executor still owns. A worker that
+// returned from its consumer loop without this would leave warm Python
+// processes behind.
+func (e *Executor) Close() { e.jobs.close() }
 
 // Run runs one task body to its end. Only a message that was never run comes
 // back: anything the body did, including failing, is finished work.
@@ -56,12 +79,12 @@ func (e *Executor) Run(ctx context.Context, msg *celery.Message) error {
 	lim := e.cfg.limitsFor(msg)
 	log := e.log.With("task", msg.Task, "id", msg.ID)
 
-	process, err := startChild(e.cfg, msg.Task, callFor(msg, e.cfg.Worker, lim), log)
+	process, err := e.jobs.start(ctx, msg.Task, callFor(msg, e.cfg.Worker, lim), log)
 	if err != nil {
 		// The body never ran, so the message is still work: hand it back
 		// rather than turn a worker-side fault into a failed job. The wait is
 		// what keeps a worker that can start nothing from spinning the queue.
-		log.Error("could not start a task process", "error", err)
+		log.Error("could not start a task body", "error", err)
 		e.waitBeforeHandingBack(ctx)
 		return fmt.Errorf("%w: %w", broker.ErrRequeue, err)
 	}
@@ -72,13 +95,14 @@ func (e *Executor) Run(ctx context.Context, msg *celery.Message) error {
 	e.write(ctx, msg, startedRow(msg, e.cfg.Worker, process.pid()), log)
 
 	out := e.supervise(ctx, process, lim, log)
+	process.release()
 	e.write(ctx, msg, out.row(msg, e.cfg.Worker), log)
 	return out.err
 }
 
 // supervise watches one process against its deadlines and the worker's own
 // lifetime, and decides what the task's outcome was.
-func (e *Executor) supervise(ctx context.Context, process *child, lim limits, log *slog.Logger) outcome {
+func (e *Executor) supervise(ctx context.Context, process job, lim limits, log *slog.Logger) outcome {
 	// A nil channel never fires, which is how a message with no soft limit
 	// runs with no soft limit.
 	var softLimit <-chan time.Time
@@ -93,7 +117,7 @@ func (e *Executor) supervise(ctx context.Context, process *child, lim limits, lo
 	var decided *outcome
 	for {
 		select {
-		case <-process.done:
+		case <-process.done():
 			return process.conclude(decided)
 
 		case <-softLimit:
@@ -120,11 +144,11 @@ func (e *Executor) supervise(ctx context.Context, process *child, lim limits, lo
 // awaitEnd waits for a process that has been told to stop. A merely stubborn
 // process group ends at the SIGKILL; one stuck in the kernel is reported
 // without being waited out, because the client is owed an answer either way.
-func (e *Executor) awaitEnd(process *child, decided outcome, log *slog.Logger) outcome {
+func (e *Executor) awaitEnd(process job, decided outcome, log *slog.Logger) outcome {
 	limit := time.NewTimer(e.cfg.KillGrace + killConfirmGrace + drainGrace)
 	defer limit.Stop()
 	select {
-	case <-process.done:
+	case <-process.done():
 		return process.conclude(&decided)
 	case <-limit.C:
 		log.Error("a killed task process has not ended; reporting the task without it", "pid", process.pid())

@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"github.com/redis/go-redis/v9"
+
+	"git.danvics.com/danvics/soloclef/soloclef_celery/queues"
 )
 
 // Depths is how much work is waiting on each queue: the sum of its priority
@@ -13,11 +15,11 @@ import (
 //
 // It is the one number `celery_heavy` never had: a fifth podcast request used
 // to wait with nothing reporting that it was waiting.
-func Depths(ctx context.Context, rdb redis.UniversalClient, queues []string) (map[string]int64, error) {
+func Depths(ctx context.Context, rdb redis.UniversalClient, wanted []string) (map[string]int64, error) {
 	pipe := rdb.Pipeline()
-	lengths := make(map[string][]*redis.IntCmd, len(queues))
-	for _, queue := range queues {
-		for _, key := range QueueKeys(queue) {
+	lengths := make(map[string][]*redis.IntCmd, len(wanted))
+	for _, queue := range wanted {
+		for _, key := range queues.Keys(queue) {
 			lengths[queue] = append(lengths[queue], pipe.LLen(ctx, key))
 		}
 	}
@@ -25,7 +27,7 @@ func Depths(ctx context.Context, rdb redis.UniversalClient, queues []string) (ma
 		return nil, fmt.Errorf("broker: reading queue depth: %w", err)
 	}
 
-	depths := make(map[string]int64, len(queues))
+	depths := make(map[string]int64, len(wanted))
 	for queue, commands := range lengths {
 		for _, command := range commands {
 			depths[queue] += command.Val()

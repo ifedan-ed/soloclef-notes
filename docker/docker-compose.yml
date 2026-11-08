@@ -2,24 +2,41 @@
 # Soloclef Notes — Docker Compose
 # =============================================================================
 # Every app image is built here from this checkout; none is pulled from
-# upstream SurfSense. Nothing in this file names a server: the address,
-# contact and sign-in come from docker/.env
-# (surfsense_web/content/docs/self-hosting.mdx). Add your own host's ports,
-# networks or volumes in a separate override file.
+# upstream SurfSense. docker-compose.override.yml holds one host's shape
+# (loopback proxy port, log rotation, LiteLLM and MCP networks); on any other
+# host pass `-f docker-compose.yml` (plus your own override) so Compose does
+# not read it. Nothing in this file names a server: the address, contact and
+# sign-in come from docker/.env (soloclef_web/content/docs/self-hosting.mdx).
 #
-#   docker build -t soloclef-backend-src:latest --target production ../surfsense_backend
+#   docker build -t soloclef-backend-src:latest --target production ../soloclef_backend
 #   docker build -t soloclef-backend-fast:latest ../custom
-#   docker compose -f docker-compose.yml build
-#   docker compose -f docker-compose.yml up -d
-# Name docker-compose.yml explicitly (`-f`) so a local override is not
-# picked up by accident.
+#   docker compose -f docker-compose.yml -f docker-compose.override.yml build sandbox-image frontend
+#   python3 ../soloclef_backend/scripts/deploy_gate.py --wait && \
+#     docker compose -f docker-compose.yml -f docker-compose.override.yml up -d
 # =============================================================================
 
 name: soloclef
 
-# Postgres and Redis are reached by their Compose service names, so the stack
-# works under any project name. If you join these services to another network
-# that also has a "db" or "redis", set DB_HOST/REDIS_URL explicitly.
+# Postgres and Redis are reached by CONTAINER name (soloclef-db-1,
+# soloclef-redis-1), never by the bare service names "db" and "redis": an
+# override may join the backend and Celery to a LiteLLM network (this host's
+# does), where LiteLLM's own Postgres and Redis answer to "db" and "redis". A bare name
+# resolved there on 2026-09-26 and the app tried LiteLLM's database.
+
+# Every app process reaches Postgres through pgbouncer (docker/pgbouncer/, and
+# custom/README.md "pgbouncer"). `migrations` and `zero-cache` are the two
+# exceptions and keep the direct DATABASE_URL below: Alembic takes session
+# advisory locks and runs DDL, and zero-cache needs logical replication, which
+# transaction pooling cannot carry.
+#
+# To bypass the pooler, set DATABASE_URL_DIRECT in docker/.env to the direct
+# URL and DB_PGBOUNCER_TRANSACTION_POOLING=FALSE. Both have to move together:
+# pgbouncer closes the connection if asyncpg asks for
+# idle_in_transaction_session_timeout in the startup packet, and a direct
+# Postgres leaves the app with no idle-transaction reaper if it does not.
+x-pooled-database: &pooled-database
+  DATABASE_URL: ${DATABASE_URL_DIRECT:-postgresql+asyncpg://${DB_USER:-surfsense}:${DB_PASSWORD:-surfsense}@${DB_POOLER_HOST:-soloclef-pgbouncer-1}:${DB_POOLER_PORT:-6432}/${DB_NAME:-surfsense}}
+  DB_PGBOUNCER_TRANSACTION_POOLING: ${DB_PGBOUNCER_TRANSACTION_POOLING:-TRUE}
 
 services:
   db:
@@ -39,6 +56,53 @@ services:
       timeout: 5s
       retries: 5
 
+  # The app's connection multiplexer. In transaction pooling mode a client
+  # connection only holds a Postgres connection for the length of a
+  # transaction, so the API's idle pooled connections (one pool per uvicorn
+  # worker, DB_POOL_SIZE + DB_MAX_OVERFLOW each, plus the LangGraph
+  # checkpointer's) and every short-lived Celery connection share far fewer
+  # than the server's 200. That is what lets this stack run more API replicas.
+  # Pool sizes, timeouts and the reasoning are in pgbouncer.ini.template;
+  # render-config.sh fills it in from these settings at start, so no credential
+  # is in the repository and none is in the rendered config either.
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.26.1-p0
+    expose:
+      - "6432"
+    volumes:
+      - ./pgbouncer/pgbouncer.ini.template:/etc/pgbouncer/pgbouncer.ini.template:ro
+      - ./pgbouncer/render-config.sh:/usr/local/bin/render-pgbouncer-config:ro
+    entrypoint: ["/usr/local/bin/render-pgbouncer-config"]
+    environment:
+      DB_HOST: ${DB_HOST:-soloclef-db-1}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-surfsense}
+      DB_USER: ${DB_USER:-surfsense}
+      DB_PASSWORD: ${DB_PASSWORD:-surfsense}
+      PGBOUNCER_PORT: "6432"
+    # max_client_conn 1000 needs ~1130 descriptors; the stock 1024 soft limit
+    # would have pgbouncer refusing clients at the top of a burst.
+    ulimits:
+      nofile:
+        soft: 8192
+        hard: 8192
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    # End to end on purpose: a pooler that answers but cannot reach Postgres
+    # (a restarted `db` with a new address, say) is not healthy. It recovers on
+    # its own within server_login_retry once the database is back.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - PGPASSWORD="$$DB_PASSWORD" PGCONNECT_TIMEOUT=3 psql -h 127.0.0.1 -p 6432
+          -U "$$DB_USER" -d "$$DB_NAME" -At --no-password -c 'SELECT 1' > /dev/null
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   # Short-lived schema runner. Executes `alembic upgrade head` and verifies
   # that the `zero_publication` Postgres logical-replication publication
   # matches the canonical shape, then exits 0. Downstream services gate on this
@@ -49,7 +113,7 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://${DB_USER:-surfsense}:${DB_PASSWORD:-surfsense}@${DB_HOST:-db}:${DB_PORT:-5432}/${DB_NAME:-surfsense}}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://${DB_USER:-surfsense}:${DB_PASSWORD:-surfsense}@${DB_HOST:-soloclef-db-1}:${DB_PORT:-5432}/${DB_NAME:-surfsense}}
       PYTHONPATH: /app
       SERVICE_ROLE: migrate
       MIGRATION_TIMEOUT: ${MIGRATION_TIMEOUT:-900}
@@ -115,7 +179,7 @@ services:
       replicas: 0
 
   # Single public entry point for the Docker stack. Comment this service out
-  # only if you front SurfSense with your own reverse proxy.
+  # only if you front Soloclef with your own reverse proxy.
   proxy:
     image: caddy:2-alpine
     # For DNS-01/wildcard certificates, replace image with:
@@ -129,12 +193,12 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     environment:
-      SURFSENSE_SITE_ADDRESS: ${SURFSENSE_SITE_ADDRESS:-:80}
+      SOLOCLEF_SITE_ADDRESS: ${SOLOCLEF_SITE_ADDRESS:-:80}
       CERT_EMAIL: ${CERT_EMAIL:-}
       CERT_ACME_CA: ${CERT_ACME_CA:-https://acme-v02.api.letsencrypt.org/directory}
       CERT_ACME_DNS: ${CERT_ACME_DNS:-}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-0.0.0.0/0}
-      SURFSENSE_MAX_BODY_SIZE: ${SURFSENSE_MAX_BODY_SIZE:-5GB}
+      SOLOCLEF_MAX_BODY_SIZE: ${SOLOCLEF_MAX_BODY_SIZE:-5GB}
     depends_on:
       frontend:
         condition: service_started
@@ -155,17 +219,17 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://${DB_USER:-surfsense}:${DB_PASSWORD:-surfsense}@${DB_HOST:-db}:${DB_PORT:-5432}/${DB_NAME:-surfsense}}
-      CELERY_BROKER_URL: ${REDIS_URL:-redis://redis:6379/0}
-      CELERY_RESULT_BACKEND: ${REDIS_URL:-redis://redis:6379/0}
-      REDIS_APP_URL: ${REDIS_URL:-redis://redis:6379/0}
+      <<: *pooled-database
+      CELERY_BROKER_URL: ${REDIS_URL:-redis://soloclef-redis-1:6379/0}
+      CELERY_RESULT_BACKEND: ${REDIS_URL:-redis://soloclef-redis-1:6379/0}
+      REDIS_APP_URL: ${REDIS_URL:-redis://soloclef-redis-1:6379/0}
       CELERY_TASK_DEFAULT_QUEUE: surfsense
       PYTHONPATH: /app
       UVICORN_LOOP: asyncio
       UNSTRUCTURED_HAS_PATCHED_LOOP: "1"
       FILE_STORAGE_LOCAL_PATH: /app/.local_object_store
-      NEXT_FRONTEND_URL: ${NEXT_FRONTEND_URL:-${SURFSENSE_PUBLIC_URL:-http://localhost:${LISTEN_HTTP_PORT:-3929}}}
-      BACKEND_URL: ${BACKEND_URL:-${SURFSENSE_PUBLIC_URL:-http://localhost:${LISTEN_HTTP_PORT:-3929}}}
+      NEXT_FRONTEND_URL: ${NEXT_FRONTEND_URL:-${SOLOCLEF_PUBLIC_URL:-http://localhost:${LISTEN_HTTP_PORT:-3929}}}
+      BACKEND_URL: ${BACKEND_URL:-${SOLOCLEF_PUBLIC_URL:-http://localhost:${LISTEN_HTTP_PORT:-3929}}}
       SEARXNG_URL: ${SEARXNG_URL:-http://searxng:8080}
       MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-500}
       SANDBOX_ENABLED: ${SANDBOX_ENABLED:-TRUE}
@@ -176,6 +240,8 @@ services:
       SERVICE_ROLE: api
     depends_on:
       db:
+        condition: service_healthy
+      pgbouncer:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -199,10 +265,10 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://${DB_USER:-surfsense}:${DB_PASSWORD:-surfsense}@${DB_HOST:-db}:${DB_PORT:-5432}/${DB_NAME:-surfsense}}
-      CELERY_BROKER_URL: ${REDIS_URL:-redis://redis:6379/0}
-      CELERY_RESULT_BACKEND: ${REDIS_URL:-redis://redis:6379/0}
-      REDIS_APP_URL: ${REDIS_URL:-redis://redis:6379/0}
+      <<: *pooled-database
+      CELERY_BROKER_URL: ${REDIS_URL:-redis://soloclef-redis-1:6379/0}
+      CELERY_RESULT_BACKEND: ${REDIS_URL:-redis://soloclef-redis-1:6379/0}
+      REDIS_APP_URL: ${REDIS_URL:-redis://soloclef-redis-1:6379/0}
       CELERY_TASK_DEFAULT_QUEUE: surfsense
       PYTHONPATH: /app
       FILE_STORAGE_LOCAL_PATH: /app/.local_object_store
@@ -219,6 +285,8 @@ services:
       CELERY_MIN_WORKERS: ${CELERY_FAST_MIN_WORKERS:-2}
     depends_on:
       db:
+        condition: service_healthy
+      pgbouncer:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -241,10 +309,10 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://${DB_USER:-surfsense}:${DB_PASSWORD:-surfsense}@${DB_HOST:-db}:${DB_PORT:-5432}/${DB_NAME:-surfsense}}
-      CELERY_BROKER_URL: ${REDIS_URL:-redis://redis:6379/0}
-      CELERY_RESULT_BACKEND: ${REDIS_URL:-redis://redis:6379/0}
-      REDIS_APP_URL: ${REDIS_URL:-redis://redis:6379/0}
+      <<: *pooled-database
+      CELERY_BROKER_URL: ${REDIS_URL:-redis://soloclef-redis-1:6379/0}
+      CELERY_RESULT_BACKEND: ${REDIS_URL:-redis://soloclef-redis-1:6379/0}
+      REDIS_APP_URL: ${REDIS_URL:-redis://soloclef-redis-1:6379/0}
       CELERY_TASK_DEFAULT_QUEUE: surfsense
       PYTHONPATH: /app
       FILE_STORAGE_LOCAL_PATH: /app/.local_object_store
@@ -261,6 +329,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      pgbouncer:
+        condition: service_healthy
       redis:
         condition: service_healthy
       migrations:
@@ -269,19 +339,115 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # The Go worker tier for the heavy queue (custom/docs/go-worker.md).
+  # Replaces celery_heavy as the CONSUMER of surfsense.heavy; the producer is
+  # still Celery's Python client, so handing the queue back is this service
+  # stopping and celery_heavy starting again. Both can consume it at once --
+  # the ack registry is kombu's own -- so the step is reversible throughout.
+  #
+  # Cut over at celery_heavy's own concurrency. Warm processes do not fork, so
+  # they share almost no pages: four of them is ~2.9 GiB resident against
+  # celery_heavy's 789 MiB for the same four. Raise it only after watching RSS.
+  go_worker_heavy:
+    image: soloclef-worker:latest
+    volumes:
+      - shared_temp:/shared_tmp
+      - object_store:/app/.local_object_store
+    env_file:
+      - .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      <<: *pooled-database
+      CELERY_BROKER_URL: ${REDIS_URL:-redis://soloclef-redis-1:6379/0}
+      CELERY_RESULT_BACKEND: ${REDIS_URL:-redis://soloclef-redis-1:6379/0}
+      REDIS_APP_URL: ${REDIS_URL:-redis://soloclef-redis-1:6379/0}
+      CELERY_TASK_DEFAULT_QUEUE: surfsense
+      PYTHONPATH: /app
+      FILE_STORAGE_LOCAL_PATH: /app/.local_object_store
+      SEARXNG_URL: ${SEARXNG_URL:-http://searxng:8080}
+      SANDBOX_ENABLED: ${SANDBOX_ENABLED:-TRUE}
+      SANDBOX_PROVIDER: ${SANDBOX_PROVIDER:-opensandbox}
+      OPENSANDBOX_DOMAIN: ${OPENSANDBOX_DOMAIN:-opensandbox-server:8080}
+      OPENSANDBOX_API_KEY: ${OPENSANDBOX_API_KEY:-surfsense-dev-sandbox}
+      SANDBOX_IMAGE: ${SANDBOX_IMAGE:-soloclef-sandbox-local:latest}
+      SERVICE_ROLE: worker
+
+      # Nothing here is defaulted: a worker told no queues consumes none, and
+      # one told no broker refuses to start rather than guessing one.
+      SOLOCLEF_WORKER_REDIS_URL: ${REDIS_URL:-redis://soloclef-redis-1:6379/0}
+      SOLOCLEF_WORKER_QUEUES: surfsense.heavy
+      SOLOCLEF_WORKER_QUEUE_CONCURRENCY: surfsense.heavy=4
+      # Each class is 1 so the four of them sum to the queue's own limit; a
+      # queue limit below that sum is refused at startup.
+      SOLOCLEF_WORKER_TASK_CONCURRENCY: >-
+        podcast.draft_transcript=1,podcast.render_audio=1,
+        generate_video_presentation=1,deliverables.execute_queued=1
+      SOLOCLEF_WORKER_TASK_QUEUE: >-
+        podcast.draft_transcript=surfsense.heavy,podcast.render_audio=surfsense.heavy,
+        generate_video_presentation=surfsense.heavy,deliverables.execute_queued=surfsense.heavy
+
+      # The warm server: four processes that have already paid the 27-33s of
+      # imports, replaced after 1000 jobs or 2 GiB.
+      SOLOCLEF_WORKER_TASK_COMMAND: python -m app.tasks.serve
+      SOLOCLEF_WORKER_TASK_DIR: /app
+      SOLOCLEF_WORKER_TASK_POOL_SIZE: "4"
+      SOLOCLEF_WORKER_TASK_MAX_JOBS_PER_CHILD: "1000"
+      SOLOCLEF_WORKER_TASK_MAX_CHILD_RSS_MIB: "2048"
+      SOLOCLEF_WORKER_TASK_READY_TIMEOUT: 3m
+      # Beat stays with celery_beat for now: nothing can stop that scheduler
+      # from firing, so the Go beat would double every scheduled task.
+      SOLOCLEF_WORKER_METRICS_ADDR: ":9464"
+    depends_on:
+      db:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
+      backend:
+        condition: service_healthy
+    # Longer than the worker's own ShutdownGrace, so its shutdown is what ends
+    # the work rather than docker's SIGKILL landing mid-way. Not a drain: a
+    # restart still goes behind deploy_gate.py --wait.
+    stop_grace_period: 60s
+    restart: unless-stopped
+
+  # Delivers queued email (app/mail_queue, custom/docs/mail-queue.md):
+  # MAIL_SENDERS senders over MAIL_TRANSPORT, both required in .env. Exactly
+  # one of these runs; it restarts without touching chat or generation.
+  mail_sender:
+    image: soloclef-backend-fast:latest
+    env_file:
+      - .env
+    environment:
+      <<: *pooled-database
+      REDIS_APP_URL: ${REDIS_URL:-redis://soloclef-redis-1:6379/0}
+      PYTHONPATH: /app
+      SERVICE_ROLE: mail
+    depends_on:
+      redis:
+        condition: service_healthy
+    stop_grace_period: 60s
+    restart: unless-stopped
+
   celery_beat:
     image: soloclef-backend-fast:latest
     env_file:
       - .env
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://${DB_USER:-surfsense}:${DB_PASSWORD:-surfsense}@${DB_HOST:-db}:${DB_PORT:-5432}/${DB_NAME:-surfsense}}
-      CELERY_BROKER_URL: ${REDIS_URL:-redis://redis:6379/0}
-      CELERY_RESULT_BACKEND: ${REDIS_URL:-redis://redis:6379/0}
+      <<: *pooled-database
+      CELERY_BROKER_URL: ${REDIS_URL:-redis://soloclef-redis-1:6379/0}
+      CELERY_RESULT_BACKEND: ${REDIS_URL:-redis://soloclef-redis-1:6379/0}
       CELERY_TASK_DEFAULT_QUEUE: surfsense
       PYTHONPATH: /app
       SERVICE_ROLE: beat
     depends_on:
       db:
+        condition: service_healthy
+      pgbouncer:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -298,9 +464,9 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
-      ZERO_UPSTREAM_DB: ${ZERO_UPSTREAM_DB:-postgresql://${DB_USER:-surfsense}:${DB_PASSWORD:-surfsense}@${DB_HOST:-db}:${DB_PORT:-5432}/${DB_NAME:-surfsense}?sslmode=${DB_SSLMODE:-disable}}
-      ZERO_CVR_DB: ${ZERO_CVR_DB:-postgresql://${DB_USER:-surfsense}:${DB_PASSWORD:-surfsense}@${DB_HOST:-db}:${DB_PORT:-5432}/${DB_NAME:-surfsense}?sslmode=${DB_SSLMODE:-disable}}
-      ZERO_CHANGE_DB: ${ZERO_CHANGE_DB:-postgresql://${DB_USER:-surfsense}:${DB_PASSWORD:-surfsense}@${DB_HOST:-db}:${DB_PORT:-5432}/${DB_NAME:-surfsense}?sslmode=${DB_SSLMODE:-disable}}
+      ZERO_UPSTREAM_DB: ${ZERO_UPSTREAM_DB:-postgresql://${DB_USER:-surfsense}:${DB_PASSWORD:-surfsense}@${DB_HOST:-soloclef-db-1}:${DB_PORT:-5432}/${DB_NAME:-surfsense}?sslmode=${DB_SSLMODE:-disable}}
+      ZERO_CVR_DB: ${ZERO_CVR_DB:-postgresql://${DB_USER:-surfsense}:${DB_PASSWORD:-surfsense}@${DB_HOST:-soloclef-db-1}:${DB_PORT:-5432}/${DB_NAME:-surfsense}?sslmode=${DB_SSLMODE:-disable}}
+      ZERO_CHANGE_DB: ${ZERO_CHANGE_DB:-postgresql://${DB_USER:-surfsense}:${DB_PASSWORD:-surfsense}@${DB_HOST:-soloclef-db-1}:${DB_PORT:-5432}/${DB_NAME:-surfsense}?sslmode=${DB_SSLMODE:-disable}}
       ZERO_REPLICA_FILE: /data/zero.db
       ZERO_ADMIN_PASSWORD: ${ZERO_ADMIN_PASSWORD:-surfsense-zero-admin}
       ZERO_APP_PUBLICATIONS: ${ZERO_APP_PUBLICATIONS:-zero_publication}
@@ -339,17 +505,17 @@ services:
   mcp:
     image: soloclef-mcp-local:latest
     build:
-      context: ../surfsense_mcp
+      context: ../soloclef_mcp
       target: production
     expose:
       - "8080"
     environment:
-      SURFSENSE_BASE_URL: http://backend:8000
-      SURFSENSE_PUBLIC_URL: ${SURFSENSE_PUBLIC_URL:-}
+      SOLOCLEF_BASE_URL: http://backend:8000
+      SOLOCLEF_PUBLIC_URL: ${SOLOCLEF_PUBLIC_URL:-}
       MCP_OAUTH_ISSUER: ${MCP_OAUTH_ISSUER:-}
-      # Optional; empty keeps the defaults in surfsense_mcp/mcp_server/config.py
-      # (${SURFSENSE_PUBLIC_URL}/mcp; openid email profile offline_access).
-      SURFSENSE_MCP_PUBLIC_URL: ${SURFSENSE_MCP_PUBLIC_URL:-}
+      # Optional; empty keeps the defaults in soloclef_mcp/mcp_server/config.py
+      # (${SOLOCLEF_PUBLIC_URL}/mcp; openid email profile offline_access).
+      SOLOCLEF_MCP_PUBLIC_URL: ${SOLOCLEF_MCP_PUBLIC_URL:-}
       MCP_OAUTH_SCOPES: ${MCP_OAUTH_SCOPES:-}
     depends_on:
       backend:
@@ -364,14 +530,14 @@ services:
   frontend:
     image: soloclef-web-local:latest
     build:
-      context: ../surfsense_web
+      context: ../soloclef_web
       dockerfile: Dockerfile
       target: runner
-      # Printed into the prerendered public pages (surfsense_web/Dockerfile):
+      # Printed into the prerendered public pages (soloclef_web/Dockerfile):
       # the site's address, its contact and the docs' sign-in wording, from
       # the same docker/.env lines the backend reads. Rebuild after changing.
       args:
-        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-${SURFSENSE_PUBLIC_URL:-}}
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-${SOLOCLEF_PUBLIC_URL:-}}
         NEXT_PUBLIC_SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
         NEXT_PUBLIC_OIDC_ENABLED: ${OIDC_ENABLED:-FALSE}
         NEXT_PUBLIC_OIDC_BUTTON_LABEL: ${OIDC_BUTTON_LABEL:-}
@@ -379,7 +545,7 @@ services:
         NEXT_PUBLIC_OIDC_AUTOCREATE_DOMAINS: ${OIDC_AUTOCREATE_DOMAINS:-}
         NEXT_PUBLIC_OIDC_ALLOW_SIGNUP: ${OIDC_ALLOW_SIGNUP:-FALSE}
         # Create an account (true) or Request access (anything else) on the
-        # website (surfsense_web/lib/signups.ts). The backend reads the same
+        # website (soloclef_web/lib/signups.ts). The backend reads the same
         # line through env_file for GET /api/v1/sign-in-options, which the
         # phone app follows, so both offer the same thing.
         NEXT_PUBLIC_SIGNUPS_OPEN: ${NEXT_PUBLIC_SIGNUPS_OPEN:-}
@@ -389,13 +555,13 @@ services:
       AUTH_TYPE: ${AUTH_TYPE:-LOCAL}
       # The upload dialog's file list until GET /api/v1/etl/capabilities answers,
       # from the same parser lines the backend reads through env_file
-      # (surfsense_web/lib/etl/fallback-service.ts). ETL_SERVICE is deprecated
+      # (soloclef_web/lib/etl/fallback-service.ts). ETL_SERVICE is deprecated
       # and counts only while ETL_CLOUD_SERVICE is unset.
       ETL_DEFAULT_PARSER: ${ETL_DEFAULT_PARSER:-}
       ETL_CLOUD_SERVICE: ${ETL_CLOUD_SERVICE:-}
       ETL_SERVICE: ${ETL_SERVICE:-}
       DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-self-hosted}
-      SURFSENSE_BACKEND_INTERNAL_URL: http://backend:8000
+      SOLOCLEF_BACKEND_INTERNAL_URL: http://backend:8000
       MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-500}
       # The "single sign-on" button on /login. The backend reads the same
       # OIDC_ENABLED (and the rest of OIDC_*) from .env; keep them together.
@@ -410,13 +576,24 @@ services:
 
 volumes:
   postgres_data:
+    name: soloclef-postgres
   redis_data:
+    name: soloclef-redis
   shared_temp:
+    name: soloclef-shared-temp
   object_store:
+    name: soloclef-object-store
   zero_cache_data:
+    name: soloclef-zero-cache
   caddy_data:
+    name: soloclef-caddy-data
   caddy_config:
+    name: soloclef-caddy-config
   opensandbox_data:
+    name: soloclef-opensandbox
 
+# The network has a fixed name: the Nextcloud folder uploader
+# (../../nextcloud-surfsense) joins it from its own compose project.
 networks:
   default:
+    name: soloclef_default

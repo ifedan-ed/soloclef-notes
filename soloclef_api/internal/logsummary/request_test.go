@@ -5,8 +5,8 @@ import (
 	"net/url"
 	"testing"
 
-	"git.danvics.com/danvics/surfsense/soloclef_api/internal/errorenvelope"
-	"git.danvics.com/danvics/surfsense/soloclef_api/internal/requestnumber"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/errorenvelope"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/requestnumber"
 )
 
 func TestReadParametersDefaultsTheWindowToTwentyFourHours(t *testing.T) {
@@ -48,10 +48,15 @@ func TestReadParametersReportsThePathBeforeTheQuery(t *testing.T) {
 }
 
 func TestReadParametersAcceptsSignsAndRefusesEverythingElse(t *testing.T) {
-	if _, failures, _ := readParameters("+12", url.Values{"hours": {"-5"}}); len(failures) > 0 {
-		t.Errorf("got %+v", failures)
+	// "1.0" and " 12" were refused here until 2026-11-08 and should not have
+	// been: pydantic reads both, and internal/requestnumber now does
+	// (TestParseReadsWhatPydanticReadsFromAString).
+	for _, text := range []string{"+12", "1.0", " 12", "1_2"} {
+		if _, failures, _ := readParameters(text, url.Values{"hours": {"-5"}}); len(failures) > 0 {
+			t.Errorf("%q: got %+v", text, failures)
+		}
 	}
-	for _, text := range []string{"1.0", "1e3", " 12", "0x10", "١٢"} {
+	for _, text := range []string{"1e3", "0x10", "١٢"} {
 		if _, failures, _ := readParameters(text, url.Values{}); len(failures) != 1 {
 			t.Errorf("%q: want one failure, got %+v", text, failures)
 		}

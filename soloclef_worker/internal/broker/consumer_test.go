@@ -9,8 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"git.danvics.com/danvics/surfsense/soloclef_worker/internal/celery"
+	"git.danvics.com/danvics/soloclef/soloclef_celery/celery"
 	"github.com/redis/go-redis/v9"
+
+	"git.danvics.com/danvics/soloclef/soloclef_celery/monotonic"
 )
 
 const testQueue = "probe.queue"
@@ -399,7 +401,7 @@ func TestSnapshotReportsDepthInFlightAndTrueQueueWait(t *testing.T) {
 		return nil
 	}))
 
-	stamp, err := ReadMonotonic()
+	stamp, err := monotonic.Read()
 	if err != nil {
 		t.Fatalf("ReadMonotonic: %v", err)
 	}

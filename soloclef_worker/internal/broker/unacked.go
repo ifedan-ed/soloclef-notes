@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"git.danvics.com/danvics/surfsense/soloclef_worker/internal/celery"
+	"git.danvics.com/danvics/soloclef/soloclef_celery/celery"
 	"github.com/redis/go-redis/v9"
 )
 

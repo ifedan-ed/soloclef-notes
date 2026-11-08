@@ -1,0 +1,216 @@
+{
+ "why": "One case per bug this comparison has already caught, named after the bug. Each of these shipped, or nearly shipped, and none of them was found by reading code or by a Go unit test — they were found by asking both tiers the same question and looking at the bytes. A failure here is a bug coming back, and the label says which one.",
+ "elsewhere": {
+  "why": "Two of the divergences the comparison found are not in this tier at all: they were found between the Python and Go MCP servers, which speak JSON-RPC over stdio rather than HTTP and have no route to ask. They are pinned where they live, and are listed here so the record of what this comparison has caught stays in one place.",
+  "tools_list_ordering": "soloclef_mcp_go/internal/mcpserver/list_order.go and its tests",
+  "unknown_tool_handling": "soloclef_mcp_go/internal/mcpserver/unknown_tool.go and its tests",
+  "timelimit_field_order_unit_test": "soloclef_celery/celery/message_test.go, \"timelimit is not [hard, soft]\" — the envelope comparison below is the same bug asked end to end",
+  "unmatched_paths": "A path or method no ported route answers is not compared: the proxy's matchers are anchored regexes that match exactly the routes in parity/routes.json, so such a request never reaches the Go tier, and its 404 there is text/plain where Starlette's is JSON. custom/docs/go-api-tier.md records that as an open question with a known answer (forward it), and a suite that compared it would fail on a request neither tier is asked."
+ },
+ "cases": [
+  {
+   "label": "timelimit_is_hard_then_soft: a delete's envelope carries Celery's own [hard, soft] order",
+   "method": "DELETE",
+   "path": "/api/v1/documents/1",
+   "as": "owner",
+   "tables": [
+    "documents"
+   ],
+   "queues": [
+    "surfsense"
+   ]
+  },
+  {
+   "label": "timelimit_is_hard_then_soft: a workspace delete's envelope, the same way",
+   "method": "DELETE",
+   "path": "/api/v1/workspaces/1",
+   "as": "owner",
+   "tables": [
+    "workspaces"
+   ],
+   "queues": [
+    "surfsense"
+   ]
+  },
+  {
+   "label": "lenient_integer_spellings: ?hours=1_000 is a number to pydantic",
+   "method": "GET",
+   "path": "/api/v1/logs/workspaces/1/summary?hours=1_000",
+   "as": "owner"
+  },
+  {
+   "label": "lenient_integer_spellings: ?hours= with surrounding spaces",
+   "method": "GET",
+   "path": "/api/v1/logs/workspaces/1/summary?hours=%201%20",
+   "as": "owner"
+  },
+  {
+   "label": "lenient_integer_spellings: ?hours=24.0 is a whole number to pydantic",
+   "method": "GET",
+   "path": "/api/v1/logs/workspaces/1/summary?hours=24.0",
+   "as": "owner"
+  },
+  {
+   "label": "lenient_integer_spellings: a log id spelled with an underscore",
+   "method": "GET",
+   "path": "/api/v1/logs/1_000",
+   "as": "owner"
+  },
+  {
+   "label": "lenient_integer_spellings: a workspace id spelled with an underscore",
+   "method": "GET",
+   "path": "/api/v1/workspaces/1_000/members",
+   "as": "owner"
+  },
+  {
+   "label": "lenient_integer_spellings: a role id spelled with an underscore",
+   "method": "GET",
+   "path": "/api/v1/workspaces/1/roles/1_000",
+   "as": "owner"
+  },
+  {
+   "label": "lenient_integer_spellings: a key id spelled with an underscore",
+   "method": "DELETE",
+   "path": "/api/v1/pats/1_000",
+   "as": "owner",
+   "tables": [
+    "personal_access_tokens"
+   ]
+  },
+  {
+   "label": "lenient_integer_spellings: a document id spelled with an underscore",
+   "method": "DELETE",
+   "path": "/api/v1/documents/1_000",
+   "as": "owner",
+   "tables": [
+    "documents"
+   ],
+   "queues": [
+    "surfsense"
+   ]
+  },
+  {
+   "label": "lenient_integer_spellings: a workspace id with a leading plus",
+   "method": "GET",
+   "path": "/api/v1/workspaces/+1/my-access",
+   "as": "owner"
+  },
+  {
+   "label": "csrf_origin_check_exists: a write by cookie from a foreign origin",
+   "method": "POST",
+   "path": "/api/v1/logs",
+   "as": "cookie_owner",
+   "headers": {
+    "Content-Type": "application/json",
+    "Origin": "https://attacker.example.invalid"
+   },
+   "body": "{\"level\":\"INFO\",\"status\":\"SUCCESS\",\"message\":\"cross-site\",\"workspace_id\":1}",
+   "tables": [
+    "logs"
+   ],
+   "mint": true
+  },
+  {
+   "label": "csrf_origin_check_exists: a delete by cookie from a foreign origin",
+   "method": "DELETE",
+   "path": "/api/v1/logs/1",
+   "as": "cookie_owner",
+   "headers": {
+    "Origin": "https://attacker.example.invalid"
+   },
+   "tables": [
+    "logs"
+   ]
+  },
+  {
+   "label": "csrf_origin_check_exists: the same write from the site's own origin is allowed",
+   "method": "POST",
+   "path": "/api/v1/logs",
+   "as": "cookie_owner",
+   "headers": {
+    "Content-Type": "application/json",
+    "Origin": "https://notes.example.invalid"
+   },
+   "body": "{\"level\":\"INFO\",\"status\":\"SUCCESS\",\"message\":\"same site\",\"workspace_id\":1}",
+   "tables": [
+    "logs"
+   ],
+   "mint": true
+  },
+  {
+   "label": "csrf_origin_check_exists: a read by cookie from a foreign origin is allowed",
+   "method": "GET",
+   "path": "/api/v1/workspaces/1/my-access",
+   "as": "cookie_owner",
+   "headers": {
+    "Origin": "https://attacker.example.invalid"
+   }
+  },
+  {
+   "label": "cors_headers_written_once: a forwarded request from an allowed origin",
+   "method": "GET",
+   "path": "/api/v1/workspaces/1/my-access",
+   "as": "agent_foreign_issuer",
+   "headers": {
+    "Origin": "https://notes.example.invalid"
+   }
+  },
+  {
+   "label": "cors_headers_written_once: a forwarded write from an allowed origin",
+   "method": "POST",
+   "path": "/api/v1/logs",
+   "as": "agent_foreign_issuer",
+   "headers": {
+    "Content-Type": "application/json",
+    "Origin": "https://notes.example.invalid"
+   },
+   "body": "{\"level\":\"INFO\",\"status\":\"SUCCESS\",\"message\":\"forwarded\",\"workspace_id\":1}",
+   "tables": [
+    "logs"
+   ],
+   "mint": true
+  },
+  {
+   "label": "cors_headers_written_once: an answered request from an allowed origin",
+   "method": "GET",
+   "path": "/api/v1/permissions",
+   "as": "owner",
+   "headers": {
+    "Origin": "https://notes.example.invalid"
+   }
+  },
+  {
+   "label": "cors_headers_written_once: a refusal from an allowed origin",
+   "method": "GET",
+   "path": "/api/v1/workspaces/1/my-access",
+   "as": "none",
+   "headers": {
+    "Origin": "https://notes.example.invalid"
+   }
+  },
+  {
+   "label": "isoformat_microseconds: a route with no response model renders +00:00",
+   "method": "GET",
+   "path": "/api/v1/logs/2",
+   "as": "owner"
+  },
+  {
+   "label": "isoformat_microseconds: a route with a response model renders Z and six digits",
+   "method": "GET",
+   "path": "/api/v1/workspaces/1/members",
+   "as": "owner"
+  },
+  {
+   "label": "isoformat_microseconds: a timestamp with no fractional part at all",
+   "method": "GET",
+   "path": "/api/v1/logs/1",
+   "as": "owner"
+  },
+  {
+   "label": "isoformat_microseconds: a timestamp whose fraction is one microsecond",
+   "method": "GET",
+   "path": "/api/v1/logs/8",
+   "as": "owner"
+  }
+ ]
+}

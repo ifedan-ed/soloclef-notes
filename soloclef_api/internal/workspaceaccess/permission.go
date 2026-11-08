@@ -17,8 +17,17 @@ import (
 // FullAccess is Permission.FULL_ACCESS: the wildcard a role can hold.
 const FullAccess = "*"
 
+// LogsCreate is Permission.LOGS_CREATE.
+const LogsCreate = "logs:create"
+
 // LogsRead is Permission.LOGS_READ.
 const LogsRead = "logs:read"
+
+// LogsUpdate is Permission.LOGS_UPDATE.
+const LogsUpdate = "logs:update"
+
+// LogsDelete is Permission.LOGS_DELETE.
+const LogsDelete = "logs:delete"
 
 // MembersView is Permission.MEMBERS_VIEW.
 const MembersView = "members:view"

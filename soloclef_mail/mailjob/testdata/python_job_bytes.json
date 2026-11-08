@@ -1,0 +1,104 @@
+[
+  {
+    "name": "ascii_text_only",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "Reset your password",
+      "text_body": "Use the link.\n"
+    },
+    "job": {
+      "kind": "password_reset",
+      "ref": "41",
+      "not_after": null,
+      "attempt": 0,
+      "id": "0123456789abcdef0123456789abcdef",
+      "enqueued_at": 1762608000.123456
+    },
+    "expected": "{\"id\":\"0123456789abcdef0123456789abcdef\",\"kind\":\"password_reset\",\"ref\":\"41\",\"not_after\":null,\"attempt\":0,\"enqueued_at\":1762608000.123456,\"message\":{\"to\":\"person@queue.test\",\"subject\":\"Reset your password\",\"text_body\":\"Use the link.\\n\",\"html_body\":null,\"sender\":null,\"reply_to\":null,\"idempotency_key\":null,\"attachments\":[]}}"
+  },
+  {
+    "name": "non_ascii_subject_and_display_name",
+    "message": {
+      "to": "rené@queue.test",
+      "subject": "Résumé — über 漢字 😀",
+      "text_body": "Grüße\n ends with nbsp",
+      "html_body": "<p>Grüße &amp; —</p>",
+      "sender": "Soloclef Nötes <notes@queue.test>",
+      "reply_to": "support@queue.test",
+      "idempotency_key": "idem-é-1"
+    },
+    "job": {
+      "kind": "invite",
+      "ref": null,
+      "not_after": 1762608600.0,
+      "attempt": 0,
+      "id": "ffffffffffffffffffffffffffffffff",
+      "enqueued_at": 1762608000.0
+    },
+    "expected": "{\"id\":\"ffffffffffffffffffffffffffffffff\",\"kind\":\"invite\",\"ref\":null,\"not_after\":1762608600.0,\"attempt\":0,\"enqueued_at\":1762608000.0,\"message\":{\"to\":\"ren\\u00e9@queue.test\",\"subject\":\"R\\u00e9sum\\u00e9 \\u2014 \\u00fcber \\u6f22\\u5b57 \\ud83d\\ude00\",\"text_body\":\"Gr\\u00fc\\u00dfe\\n\\u00a0ends with nbsp\",\"html_body\":\"<p>Gr\\u00fc\\u00dfe &amp; \\u2014</p>\",\"sender\":\"Soloclef N\\u00f6tes <notes@queue.test>\",\"reply_to\":\"support@queue.test\",\"idempotency_key\":\"idem-\\u00e9-1\",\"attachments\":[]}}"
+  },
+  {
+    "name": "attachment_binary",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "Your export",
+      "text_body": "Attached.",
+      "attachments": [
+        {
+          "filename": "export é.txt",
+          "content_base64": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh///gBDT05UUkFDVA==",
+          "content_type": "application/octet-stream"
+        },
+        {
+          "filename": "b.bin",
+          "content_base64": "",
+          "content_type": "image/png"
+        }
+      ]
+    },
+    "job": {
+      "kind": "automation_result",
+      "ref": "9",
+      "not_after": null,
+      "attempt": 3,
+      "id": "aaaabbbbccccddddeeeeffff00001111",
+      "enqueued_at": 1762608000.5
+    },
+    "expected": "{\"id\":\"aaaabbbbccccddddeeeeffff00001111\",\"kind\":\"automation_result\",\"ref\":\"9\",\"not_after\":null,\"attempt\":3,\"enqueued_at\":1762608000.5,\"message\":{\"to\":\"person@queue.test\",\"subject\":\"Your export\",\"text_body\":\"Attached.\",\"html_body\":null,\"sender\":null,\"reply_to\":null,\"idempotency_key\":null,\"attachments\":[{\"filename\":\"export \\u00e9.txt\",\"content\":\"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh///gBDT05UUkFDVA==\",\"content_type\":\"application/octet-stream\"},{\"filename\":\"b.bin\",\"content\":\"\",\"content_type\":\"image/png\"}]}}"
+  },
+  {
+    "name": "control_characters_and_dot_lines",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "tab\there \"quoted\" back\\slash \u0001 ",
+      "text_body": ".dot first\r\nsecond\n.\n..double\n",
+      "html_body": null
+    },
+    "job": {
+      "kind": "burst",
+      "ref": "0",
+      "not_after": 1e+16,
+      "attempt": 0,
+      "id": "11112222333344445555666677778888",
+      "enqueued_at": 1.5e-05
+    },
+    "expected": "{\"id\":\"11112222333344445555666677778888\",\"kind\":\"burst\",\"ref\":\"0\",\"not_after\":1e+16,\"attempt\":0,\"enqueued_at\":1.5e-05,\"message\":{\"to\":\"person@queue.test\",\"subject\":\"tab\\there \\\"quoted\\\" back\\\\slash \\u0001 \\u007f\",\"text_body\":\".dot first\\r\\nsecond\\n.\\n..double\\n\",\"html_body\":null,\"sender\":null,\"reply_to\":null,\"idempotency_key\":null,\"attachments\":[]}}"
+  },
+  {
+    "name": "integral_and_extreme_floats",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "floats",
+      "text_body": "x"
+    },
+    "job": {
+      "kind": "floats",
+      "ref": "r",
+      "not_after": 1000000000000000.0,
+      "attempt": 6,
+      "id": "99998888777766665555444433332222",
+      "enqueued_at": 0.0001
+    },
+    "expected": "{\"id\":\"99998888777766665555444433332222\",\"kind\":\"floats\",\"ref\":\"r\",\"not_after\":1000000000000000.0,\"attempt\":6,\"enqueued_at\":0.0001,\"message\":{\"to\":\"person@queue.test\",\"subject\":\"floats\",\"text_body\":\"x\",\"html_body\":null,\"sender\":null,\"reply_to\":null,\"idempotency_key\":null,\"attachments\":[]}}"
+  }
+]

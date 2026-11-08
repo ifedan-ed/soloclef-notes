@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"git.danvics.com/danvics/surfsense/soloclef_api/internal/pythonjson"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/pythonjson"
 )
 
 // Row is one logs row, as the Python route's query returns it.

@@ -63,21 +63,6 @@ func (s SessionToken) UserID(token string) (string, error) {
 	return userID, nil
 }
 
-// unverifiedIssuer reads the iss claim without checking the signature. Reading
-// a claim off an unverified token is only ever used to decide that this tier is
-// not the one that can verify it.
-func unverifiedIssuer(token string) (string, bool) {
-	claims := jwt.MapClaims{}
-	if _, _, err := jwt.NewParser().ParseUnverified(token, claims); err != nil {
-		return "", false
-	}
-	issuer, err := claims.GetIssuer()
-	if err != nil || issuer == "" {
-		return "", false
-	}
-	return issuer, true
-}
-
 // canonicalUUID accepts what Python's uuid.UUID() accepts — hyphenated, bare,
 // braced or urn-prefixed — and returns the hyphenated form, so a token minted
 // by the Python tier resolves to the same row here.

@@ -1,20 +1,20 @@
 # =============================================================================
-# SurfSense — isolated full stack for the web Playwright suite
+# Soloclef — isolated full stack for the web Playwright suite
 # =============================================================================
 # A second, throwaway copy of the whole app — Postgres, Redis, the E2E backend
 # (fake LLM/embeddings, the /__e2e__ token mint), a Celery worker and beat, zero-cache,
 # the frontend built from THIS checkout, and the same Caddy routing the live
 # stack uses — under its own compose project and on its own loopback port.
 #
-# It never touches the live stack: different project name (surfsense-web-e2e),
+# It never touches the live stack: different project name (soloclef-web-e2e),
 # no named external volumes, Postgres on tmpfs, nothing published but
 # 127.0.0.1:${E2E_WEB_PORT:-3940}.
 #
-# Do not run this by hand; use surfsense_web/scripts/e2e-stack.sh (up|down|
+# Do not run this by hand; use soloclef_web/scripts/e2e-stack.sh (up|down|
 # status|logs), which builds the images and seeds the e2e user.
 # =============================================================================
 
-name: surfsense-web-e2e
+name: soloclef-web-e2e
 
 x-backend-env: &backend-env
   DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/surfsense_e2e  # pragma: allowlist secret
@@ -26,7 +26,7 @@ x-backend-env: &backend-env
   AUTH_TYPE: LOCAL
   REGISTRATION_ENABLED: "TRUE"
   ETL_DEFAULT_PARSER: LOCAL
-  EMBEDDING_MODEL: sentence-transformers/all-MiniLM-L6-v2
+  EMBEDDING_MODEL: fake-embeddings://384
   NEXT_FRONTEND_URL: http://127.0.0.1:${E2E_WEB_PORT:-3940}
   BACKEND_URL: http://127.0.0.1:${E2E_WEB_PORT:-3940}
   PYTHONPATH: /app
@@ -55,7 +55,6 @@ x-backend-env: &backend-env
   # The stand-in speaks plain HTTP inside the internal network.
   OAUTHLIB_INSECURE_TRANSPORT: "1"
   HF_HUB_OFFLINE: "1"
-  TRANSFORMERS_OFFLINE: "1"
   SANDBOX_ENABLED: "FALSE"
   # Lets an Audio Overview be queued (so Studio's success path is testable);
   # the run then fails offline, no speech is ever synthesised.
@@ -101,14 +100,14 @@ services:
 
   backend:
     build:
-      context: ../surfsense_backend
+      context: ../soloclef_backend
       dockerfile: Dockerfile
       target: e2e
       additional_contexts:
-        tests-source: ../surfsense_backend/tests
+        tests-source: ../soloclef_backend/tests
       args:
-        EMBEDDING_MODEL: sentence-transformers/all-MiniLM-L6-v2
-    image: surfsense-web-e2e-backend:local
+        EMBEDDING_MODEL: fake-embeddings://384
+    image: soloclef-web-e2e-backend:local
     environment:
       <<: *backend-env
       SERVICE_ROLE: api
@@ -136,7 +135,7 @@ services:
     networks: [internal]
 
   celery_worker:
-    image: surfsense-web-e2e-backend:local
+    image: soloclef-web-e2e-backend:local
     pull_policy: never
     environment:
       <<: *backend-env
@@ -149,7 +148,7 @@ services:
 
   # Fires scheduled automations (the schedule selector ticks every minute).
   celery_beat:
-    image: surfsense-web-e2e-backend:local
+    image: soloclef-web-e2e-backend:local
     pull_policy: never
     environment:
       <<: *backend-env
@@ -161,7 +160,7 @@ services:
   # Nextcloud's Login Flow, OCS and WebDAV, faked; the browser reaches its
   # sign-in page through the proxy at /__nextcloud__/.
   nextcloud-stub:
-    image: surfsense-web-e2e-backend:local
+    image: soloclef-web-e2e-backend:local
     pull_policy: never
     entrypoint: ["python", "/app/tests/e2e/fakes/nextcloud_server.py"]
     environment:
@@ -174,7 +173,7 @@ services:
   # Google's consent page, token and revoke endpoints and the Drive v3 calls,
   # faked; the browser reaches the consent page through the proxy at /__google__/.
   google-stub:
-    image: surfsense-web-e2e-backend:local
+    image: soloclef-web-e2e-backend:local
     pull_policy: never
     entrypoint: ["python", "/app/tests/e2e/fakes/google_server.py"]
     environment:
@@ -209,7 +208,7 @@ services:
 
   frontend:
     build:
-      context: ../surfsense_web
+      context: ../soloclef_web
       dockerfile: Dockerfile
       target: runner
       # The public pages' own address and contact, as docker-compose.yml
@@ -217,12 +216,12 @@ services:
       args:
         NEXT_PUBLIC_SITE_URL: https://notes.example.test
         NEXT_PUBLIC_SUPPORT_EMAIL: help@notes.example.test
-    image: surfsense-web-e2e-frontend:local
+    image: soloclef-web-e2e-frontend:local
     environment:
       AUTH_TYPE: LOCAL
       ETL_DEFAULT_PARSER: LOCAL
       DEPLOYMENT_MODE: self-hosted
-      SURFSENSE_BACKEND_INTERNAL_URL: http://backend:8000
+      SOLOCLEF_BACKEND_INTERNAL_URL: http://backend:8000
       # Cloudflare's always-pass test site key: the browser loads the real
       # widget from challenges.cloudflare.com and gets a dummy token.
       TURNSTILE_SITE_KEY: 1x00000000000000000000AA

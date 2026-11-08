@@ -1,0 +1,13 @@
+{
+ "why": "The origins a browser puts on a request. Two things read them and both are a client-visible part of the answer: the CORS policy, which decides the headers, and the CSRF origin check, which decides whether a cookie-authenticated write happens at all. A foreign origin is also the only way to see a response whose CORS headers are written twice.",
+ "target": "headers",
+ "variants": [
+  {"label": "no origin, as a server-to-server call has none", "headers": {}},
+  {"label": "the site's own origin", "headers": {"Origin": "https://notes.example.invalid"}},
+  {"label": "the local development origin", "headers": {"Origin": "http://localhost:3000"}},
+  {"label": "a foreign origin", "headers": {"Origin": "https://attacker.example.invalid"}},
+  {"label": "a null origin, as a sandboxed frame sends", "headers": {"Origin": "null"}},
+  {"label": "an origin that is the site's with another port", "headers": {"Origin": "https://notes.example.invalid:8443"}},
+  {"label": "a foreign origin with a matching referer", "headers": {"Origin": "https://attacker.example.invalid", "Referer": "https://attacker.example.invalid/page"}}
+ ]
+}

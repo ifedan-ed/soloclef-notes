@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
+	"git.danvics.com/danvics/soloclef/soloclef_celery/queues"
 )
 
 // markRedelivered stamps an envelope that is about to go back on its queue,
@@ -59,7 +61,7 @@ func restoreKey(routingKey string, priority int) (string, error) {
 	if routingKey == "" {
 		return "", errors.New("broker: message has no routing key to be restored to")
 	}
-	return QueueKey(routingKey, priority), nil
+	return queues.Key(routingKey, priority), nil
 }
 
 func objectField(parent map[string]json.RawMessage, name string) (map[string]json.RawMessage, error) {

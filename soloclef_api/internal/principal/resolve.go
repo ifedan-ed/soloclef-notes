@@ -33,10 +33,25 @@ type Directory interface {
 	TouchPersonalAccessToken(tokenID int64)
 }
 
+// Agents verifies an AI agent's access token from the identity provider. It is
+// an interface so that the resolution order does not depend on the provider
+// being reachable, and so a deployment with no agent provider configured simply
+// has none (internal/agentsignin).
+type Agents interface {
+	// OwnsIssuer reports whether a token claiming this issuer is one this
+	// verifier is for, as is_agent_token does before anything is checked.
+	OwnsIssuer(issuer string) bool
+	// Resolve verifies the token and returns the account it acts as. It returns
+	// a Refusal for a verdict it reached, and ErrServedByPythonTier for a token
+	// it could not judge.
+	Resolve(ctx context.Context, token string) (string, error)
+}
+
 // Resolver answers who a request is, in app.users.get_auth_context's order.
 type Resolver struct {
 	SessionTokens     SessionToken
 	Directory         Directory
+	Agents            Agents
 	SessionCookieName string
 	Now               func() time.Time
 }
@@ -75,7 +90,12 @@ func (r Resolver) Resolve(ctx context.Context, request *http.Request) (Principal
 			userID, err := r.SessionTokens.UserID(token)
 			switch {
 			case errors.Is(err, ErrForeignIssuer):
-				return Principal{}, ErrServedByPythonTier
+				// A token claiming an issuer is never one of this
+				// application's own, so from here it is either an agent's
+				// sign-in or a credential this tier cannot judge. Either way
+				// it never falls through to the session check, exactly as
+				// get_auth_context never does.
+				return r.resolveAgent(ctx, token)
 			case err == nil:
 				active, err := r.Directory.UserIsActive(ctx, userID)
 				if err != nil {
@@ -104,4 +124,23 @@ func (r Resolver) Resolve(ctx context.Context, request *http.Request) (Principal
 	}
 
 	return Principal{}, ErrUnauthorized
+}
+
+// resolveAgent is get_auth_context's agent branch: a token the agent verifier
+// owns becomes an agent principal or a refusal, and anything else goes to the
+// tier that can check it.
+//
+// Reading the issuer here can only cost a hop, never a wrong verdict: a token
+// whose issuer this tier fails to read is forwarded, and the Python tier reads
+// it again with its own parser.
+func (r Resolver) resolveAgent(ctx context.Context, token string) (Principal, error) {
+	issuer, _ := unverifiedIssuer(token)
+	if r.Agents == nil || !r.Agents.OwnsIssuer(issuer) {
+		return Principal{}, ErrServedByPythonTier
+	}
+	userID, err := r.Agents.Resolve(ctx, token)
+	if err != nil {
+		return Principal{}, err
+	}
+	return Principal{UserID: userID, Method: MethodAgent}, nil
 }

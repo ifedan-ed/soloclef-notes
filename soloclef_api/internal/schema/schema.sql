@@ -1878,6 +1878,22 @@ ALTER SEQUENCE public.notifications_id_seq OWNED BY public.notifications.id;
 
 
 --
+-- Name: oauth_account; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.oauth_account (
+    id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    oauth_name character varying(100) NOT NULL,
+    access_token character varying(1024) NOT NULL,
+    expires_at integer,
+    refresh_token character varying(1024),
+    account_id character varying(320) NOT NULL,
+    account_email character varying(320) NOT NULL
+);
+
+
+--
 -- Name: personal_access_tokens; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3313,6 +3329,14 @@ ALTER TABLE ONLY public.document_versions
 
 
 --
+-- Name: documents documents_id_workspace_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.documents
+    ADD CONSTRAINT documents_id_workspace_id_key UNIQUE (id, workspace_id);
+
+
+--
 -- Name: documents documents_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3462,6 +3486,14 @@ ALTER TABLE ONLY public.notebooks
 
 ALTER TABLE ONLY public.notifications
     ADD CONSTRAINT notifications_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: oauth_account oauth_account_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_account
+    ADD CONSTRAINT oauth_account_pkey PRIMARY KEY (id);
 
 
 --
@@ -5191,6 +5223,20 @@ CREATE INDEX ix_notifications_workspace_id ON public.notifications USING btree (
 
 
 --
+-- Name: ix_oauth_account_account_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_oauth_account_account_id ON public.oauth_account USING btree (account_id);
+
+
+--
+-- Name: ix_oauth_account_oauth_name; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_oauth_account_oauth_name ON public.oauth_account USING btree (oauth_name);
+
+
+--
 -- Name: ix_personal_access_tokens_created_at; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -5772,6 +5818,13 @@ CREATE UNIQUE INDEX uq_deliverable_jobs_workspace_kind_tool_call ON public.deliv
 
 
 --
+-- Name: uq_folder_space_parent_name; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_folder_space_parent_name ON public.folders USING btree (workspace_id, COALESCE(parent_id, 0), name);
+
+
+--
 -- Name: uq_new_chat_messages_thread_turn_role; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6046,6 +6099,14 @@ ALTER TABLE ONLY public.chat_session_state
 
 ALTER TABLE ONLY public.chunks
     ADD CONSTRAINT chunks_document_id_fkey FOREIGN KEY (document_id) REFERENCES public.documents(id) ON DELETE CASCADE;
+
+
+--
+-- Name: chunks chunks_document_workspace_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.chunks
+    ADD CONSTRAINT chunks_document_workspace_fkey FOREIGN KEY (document_id, workspace_id) REFERENCES public.documents(id, workspace_id) ON UPDATE CASCADE ON DELETE CASCADE;
 
 
 --
@@ -6526,6 +6587,14 @@ ALTER TABLE ONLY public.notifications
 
 ALTER TABLE ONLY public.notifications
     ADD CONSTRAINT notifications_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
+
+
+--
+-- Name: oauth_account oauth_account_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_account
+    ADD CONSTRAINT oauth_account_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
 
 
 --

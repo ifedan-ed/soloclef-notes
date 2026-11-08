@@ -1,0 +1,9 @@
+[
+  "# Quarterly notes\n\nThe first paragraph is long enough to be cut on its own, and it keeps going so\nthat the recursive chunker has to reach past the paragraph level before it can\n",
+  "fit anything into five hundred and twelve characters. Filler sentence that pads the paragraph out. Filler sentence that pads the paragraph out. Filler sentence that pads the paragraph out. Filler sentence that pads the paragraph out. Filler sentence that pads the paragraph out. Filler sentence that pads the paragraph out. Filler sentence that pads the paragraph out. Filler sentence that pads the paragraph out. Filler sentence that pads the paragraph out. Filler sentence that pads the paragraph out. ",
+  "Filler sentence that pads the paragraph out. Filler sentence that pads the paragraph out.",
+  "| Column one | Column two | Column three |\n|---|---|---|\n| 1 | 2 | 3 |\n| 4 | 5 | 6 |",
+  "Prose after the table, short.",
+  "| an indented table | second |\n\t|---|---|",
+  "Trailing prose that ends without a newline."
+]

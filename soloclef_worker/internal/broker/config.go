@@ -100,7 +100,20 @@ type Config struct {
 	ETAHoldHorizon time.Duration
 
 	// ShutdownGrace is how long in-flight work is given to finish before the
-	// worker stops waiting for it.
+	// worker stops waiting for it — a backstop for a deploy that reached this
+	// process while it was working, not a way to drain one.
+	//
+	// It cannot be a drain strategy. A podcast, a video or a deliverable runs
+	// for minutes to hours, so no grace this process could wait out would see
+	// one finish: at the end of it the job is killed and written FAILURE, with
+	// its billing hold held until the stale sweep, its row left GENERATING and
+	// its sandbox still rendering for nobody. Draining is the deploy gate's
+	// job, and it is required rather than conventional:
+	//
+	//	python3 soloclef_backend/scripts/deploy_gate.py --wait
+	//
+	// (see custom/docs/go-worker.md, "Restarting this worker"). The grace is
+	// what bounds the damage when the gate was skipped or failed.
 	ShutdownGrace time.Duration
 
 	// Name identifies this worker in the result rows it writes.
@@ -123,7 +136,11 @@ func DefaultConfig() Config {
 		PopTimeout:         time.Second,
 		DeferredRetryDelay: time.Second,
 		ETAHoldHorizon:     5 * time.Minute,
-		ShutdownGrace:      30 * time.Second,
+		// Thirty seconds is long enough for a job that was about to finish
+		// and short enough that a stop ends. It is deliberately nowhere near
+		// long enough to drain this tier's work: see ShutdownGrace above, and
+		// run the deploy gate before every restart.
+		ShutdownGrace: 30 * time.Second,
 	}
 }
 

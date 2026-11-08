@@ -26,3 +26,9 @@ Makefile text eol=lf
 *.woff2 binary
 *.ttf binary
 *.eot binary
+
+# The chunker's fixture documents are compared byte for byte against what the
+# Python chunker cut from them, so their line endings are part of the fixture:
+# normalising the CRLF one to LF would make it test a document it does not
+# contain.
+soloclef_chunker/testdata/documents/** -text

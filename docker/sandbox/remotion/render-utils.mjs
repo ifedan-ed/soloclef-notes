@@ -77,6 +77,32 @@ export function scenePreviewFrames(durations) {
   });
 }
 
+// Each scene's animated head and the frame whose still carries the rest of it.
+// The backend asks for a window; a scene shorter than its window is animated
+// end to end and its still is the last frame it would have shown.
+export function sceneEntranceWindows(durations, requested) {
+  if (requested.length !== durations.length) {
+    throw new Error("one entrance window per scene is required");
+  }
+  const starts = cumulativeStartFrames(durations);
+  return durations.map((duration, index) => {
+    if (!Number.isInteger(duration) || duration <= 0) {
+      throw new Error(`sceneDurations[${index}] must be a positive integer`);
+    }
+    const window = requested[index];
+    if (!Number.isInteger(window) || window <= 0) {
+      throw new Error(`entrance window ${index} must be a positive integer`);
+    }
+    const entranceFrames = Math.min(window, duration);
+    const start = starts[index];
+    return {
+      start,
+      entranceFrames,
+      stillFrame: Math.min(start + entranceFrames, start + duration - 1),
+    };
+  });
+}
+
 export function assertDurationLimit(composition, maxDurationSeconds = 600) {
   const durationSeconds = composition.durationInFrames / composition.fps;
   if (durationSeconds > maxDurationSeconds) {

@@ -9,8 +9,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"git.danvics.com/danvics/surfsense/soloclef_worker/internal/celery"
+	"git.danvics.com/danvics/soloclef/soloclef_celery/celery"
 	"github.com/redis/go-redis/v9"
+
+	"git.danvics.com/danvics/soloclef/soloclef_celery/queues"
+
+	"git.danvics.com/danvics/soloclef/soloclef_celery/monotonic"
 )
 
 // Runner runs one task body. Phase 3 implements it; phase 2 only decides when
@@ -76,7 +80,7 @@ func NewConsumer(rdb redis.UniversalClient, cfg Config, runner Runner) (*Consume
 		claims:    newClaimSet(),
 		metrics:   newMetrics(),
 		cycle:     newQueueCycle(cfg.Queues),
-		clock:     ReadMonotonic,
+		clock:     monotonic.Read,
 		log:       slog.Default().With("worker", cfg.Name),
 		coolUntil: map[string]time.Time{},
 	}, nil
@@ -151,18 +155,18 @@ func (c *Consumer) poll(ctx, runCtx context.Context) {
 		if !taken {
 			continue
 		}
-		c.dispatch(runCtx, msg, QueueOfKey(key))
+		c.dispatch(runCtx, msg, queues.QueueOf(key))
 	}
 }
 
 // take blocks on the queues given until one has a message. The BRPOP itself
 // is deliberately not cancellable: a cancelled pop can take a message off
 // Redis and lose it, so shutdown is noticed between polls instead.
-func (c *Consumer) take(ctx context.Context, queues []string) (*celery.Message, string, bool, error) {
+func (c *Consumer) take(ctx context.Context, wanted []string) (*celery.Message, string, bool, error) {
 	popCtx, done := context.WithTimeout(context.WithoutCancel(ctx), c.cfg.PopTimeout+5*time.Second)
 	defer done()
 
-	popped, err := c.rdb.BRPop(popCtx, c.cfg.PopTimeout, popKeys(queues)...).Result()
+	popped, err := c.rdb.BRPop(popCtx, c.cfg.PopTimeout, popKeys(wanted)...).Result()
 	if errors.Is(err, redis.Nil) {
 		return nil, "", false, nil
 	}
@@ -178,7 +182,7 @@ func (c *Consumer) take(ctx context.Context, queues []string) (*celery.Message, 
 	if err != nil {
 		// Nothing can run it and putting it back only means reading it again.
 		c.metrics.count(&c.metrics.unreadable, 1)
-		c.log.Error("dropping a message this worker cannot read", "queue", QueueOfKey(key), "error", err)
+		c.log.Error("dropping a message this worker cannot read", "queue", queues.QueueOf(key), "error", err)
 		return nil, "", false, nil
 	}
 	c.metrics.count(&c.metrics.taken, 1)

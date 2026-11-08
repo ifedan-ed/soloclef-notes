@@ -1,4 +1,4 @@
-./surfsense_backend/podcasts/
+./soloclef_backend/podcasts/
 .env
 node_modules/
 .ruff_cache/
@@ -12,14 +12,14 @@ references
 specs/
 
 # Source/tests packages: exempt from the broad "references" scratch-folder ignore above.
-!surfsense_backend/app/agents/chat/runtime/references/
-!surfsense_backend/tests/unit/agents/chat/runtime/references/
+!soloclef_backend/app/agents/chat/runtime/references/
+!soloclef_backend/tests/unit/agents/chat/runtime/references/
 
 # Playwright (E2E test artifacts)
-surfsense_web/playwright/.auth/
-surfsense_web/playwright-report/
-surfsense_web/test-results/
-surfsense_web/blob-report/
+soloclef_web/playwright/.auth/
+soloclef_web/playwright-report/
+soloclef_web/test-results/
+soloclef_web/blob-report/
 
 # Local Remotion harness fixtures and tests
 docker/sandbox/remotion/fixtures/
@@ -34,6 +34,7 @@ browserbase-key.txt
 oidc-client-secret.txt
 surfsense-litellm-key.txt
 plans/**/__pycache__/
+parity/comparison/__pycache__/
 
 # Timestamped copies of docker/.env hold every secret the live one does.
 .env.backup-*

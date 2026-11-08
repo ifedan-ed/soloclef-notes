@@ -32,7 +32,7 @@ shortening them. The selected composition must also be at most 600 seconds.
 - Everything is on screen by two seconds in and stays to the end. Use
   `stagger` for entrances only and never fade elements out: scenes cut to the
   next, and the still review reads each scene's last frame.
-- The harness supplies sequencing, narration audio, and the SurfSense
+- The harness supplies sequencing, narration audio, and the Soloclef
   watermark. Do not add another watermark or audio element.
 - Use only these system-installed font families: `Inter` for normal text,
   `Lora` for editorial titles or quotes, and `JetBrains Mono` for code and

@@ -14,6 +14,8 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/corsmirror"
 )
 
 // hopHeader marks a request this tier has already forwarded. A deployment that
@@ -46,6 +48,8 @@ func New(upstream string, logger *slog.Logger, onError func(http.ResponseWriter,
 		ErrorHandler: func(response http.ResponseWriter, request *http.Request, err error) {
 			logger.Error("could not reach the Python tier",
 				slog.String("path", request.URL.Path), slog.String("error", err.Error()))
+			// This tier is answering after all, so its own CORS headers apply.
+			corsmirror.Allow(request.Context())
 			onError(response, request, err)
 		},
 	}
@@ -57,6 +61,25 @@ func New(upstream string, logger *slog.Logger, onError func(http.ResponseWriter,
 			onError(response, request, ErrLoop)
 			return
 		}
+		// A forwarded response's CORS headers are the **upstream's**, because
+		// the upstream is the tier that answered. Suppressing here keeps
+		// internal/corsmirror from adding this tier's when the response
+		// starts, so the upstream's are the only ones; the ErrorHandler above
+		// allows them again, because on an unreachable upstream it is this
+		// tier that answers after all.
+		//
+		// Two things made this necessary rather than cosmetic. Until
+		// 2026-11-08 internal/corsmirror wrote its headers *before* the
+		// handler ran, and net/http adds rather than replaces, so a forwarded
+		// cross-origin response carried each of them **twice** — and a browser
+		// rejects a response with two Access-Control-Allow-Origin values
+		// outright, which made the whole delegation path unusable from the web
+		// app from phase 2 onward. And keeping this tier's instead of the
+		// upstream's would still have been wrong: Starlette answers a 500 its
+		// route did not catch from *outside* its CORS middleware and so sends
+		// no CORS headers at all, and a body only the Python tier's parser can
+		// place is exactly such a 500.
+		corsmirror.Suppress(request.Context())
 		proxy.ServeHTTP(response, request)
 	}), nil
 }

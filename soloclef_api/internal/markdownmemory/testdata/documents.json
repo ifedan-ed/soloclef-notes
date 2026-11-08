@@ -1,0 +1,770 @@
+[
+ {
+  "name": "a plain document",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- 2026-01-01: plain",
+  "answered": "## H\n- 2026-01-01: plain",
+  "refusal": ""
+ },
+ {
+  "name": "an ISO week date",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- 2026-W01-1: week date",
+  "answered": "## H\n- 2025-12-29: week date",
+  "refusal": ""
+ },
+ {
+  "name": "week 53 of a long year",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- 2026-W53-7: week 53",
+  "answered": "## H\n- 2027-01-03: week 53",
+  "refusal": ""
+ },
+ {
+  "name": "a week date of a short year",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- 2025-W53-1: short year",
+  "answered": "## H\n- 2025-W53-1: short year",
+  "refusal": ""
+ },
+ {
+  "name": "week zero",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- 2026-W00-1: week zero",
+  "answered": "## H\n- 2026-W00-1: week zero",
+  "refusal": ""
+ },
+ {
+  "name": "weekday zero",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- 2026-W01-0: weekday zero",
+  "answered": "## H\n- 2026-W01-0: weekday zero",
+  "refusal": ""
+ },
+ {
+  "name": "weekday eight",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- 2026-W01-8: weekday eight",
+  "answered": "## H\n- 2026-W01-8: weekday eight",
+  "refusal": ""
+ },
+ {
+  "name": "a lowercase week marker",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- 2026-w01-1: lowercase w",
+  "answered": "## H\n- 2026-w01-1: lowercase w",
+  "refusal": ""
+ },
+ {
+  "name": "a legacy fact bullet",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- (2026-01-01) [fact] legacy",
+  "answered": "## H\n- 2026-01-01: legacy",
+  "refusal": ""
+ },
+ {
+  "name": "a legacy pref bullet",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- (2026-01-01) [pref] legacy",
+  "answered": "## H\n- 2026-01-01: legacy",
+  "refusal": ""
+ },
+ {
+  "name": "a legacy instr bullet",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- (2026-01-01) [instr] legacy",
+  "answered": "## H\n- 2026-01-01: legacy",
+  "refusal": ""
+ },
+ {
+  "name": "a legacy bullet with an unknown marker",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- (2026-01-01) [other] legacy",
+  "answered": "## H\n- (2026-01-01) [other] legacy",
+  "refusal": ""
+ },
+ {
+  "name": "a legacy bullet exactly twenty characters",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "- (2026-01-01) [fact] ",
+  "answered": "## Preferences\n- 2026-01-02: prefers short answers",
+  "refusal": "Memory must be markdown with at least one ## heading."
+ },
+ {
+  "name": "a legacy bullet one character short",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- (2026-01-01) [fact]x",
+  "answered": "## H\n- (2026-01-01) [fact]x",
+  "refusal": ""
+ },
+ {
+  "name": "a legacy marker with no closing bracket",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- (2026-01-01) [fact x",
+  "answered": "## H\n- (2026-01-01) [fact x",
+  "refusal": ""
+ },
+ {
+  "name": "a legacy bullet whose text is only spaces",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- (2026-01-01) [fact]    ",
+  "answered": "## H\n- (2026-01-01) [fact]",
+  "refusal": ""
+ },
+ {
+  "name": "a compact date",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- 20260101: compact",
+  "answered": "## H\n- 20260101: compact",
+  "refusal": ""
+ },
+ {
+  "name": "a preamble before the first heading",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "preamble\n## H\n- 2026-01-01: x",
+  "answered": "## H\n- 2026-01-01: x",
+  "refusal": ""
+ },
+ {
+  "name": "two preamble lines",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "one\ntwo\n## H\n- 2026-01-01: x",
+  "answered": "## H\n- 2026-01-01: x",
+  "refusal": ""
+ },
+ {
+  "name": "a bullet before the first heading is dropped",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "- 2026-01-01: dropped\n## H\n- 2026-01-02: kept",
+  "answered": "## H\n- 2026-01-02: kept",
+  "refusal": ""
+ },
+ {
+  "name": "bullets with no heading at all",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "- 2026-01-01: no heading\n- 2026-01-02: second",
+  "answered": "## Memory\n- 2026-01-01: no heading\n- 2026-01-02: second",
+  "refusal": ""
+ },
+ {
+  "name": "short prose with no heading",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "short prose",
+  "answered": "## Preferences\n- 2026-01-02: prefers short answers",
+  "refusal": "Memory must be markdown with at least one ## heading."
+ },
+ {
+  "name": "long prose with no heading",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "this is a long piece of prose with no heading at all and more than forty characters",
+  "answered": "## Preferences\n- 2026-01-02: prefers short answers",
+  "refusal": "Memory must be markdown with at least one ## heading."
+ },
+ {
+  "name": "exactly forty characters of prose",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "1234567890123456789012345678901234567890",
+  "answered": "## Preferences\n- 2026-01-02: prefers short answers",
+  "refusal": "Memory must be markdown with at least one ## heading."
+ },
+ {
+  "name": "forty-one characters of prose",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "12345678901234567890123456789012345678901",
+  "answered": "## Preferences\n- 2026-01-02: prefers short answers",
+  "refusal": "Memory must be markdown with at least one ## heading."
+ },
+ {
+  "name": "a file separator inside a heading line",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\u001c- 2026-01-01: separator line",
+  "answered": "## H\n- 2026-01-01: separator line",
+  "refusal": ""
+ },
+ {
+  "name": "a document wrapped in file separators",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "\u001c## H\u001c",
+  "answered": "## H",
+  "refusal": ""
+ },
+ {
+  "name": "the unit separator is whitespace but not a line boundary",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\u001f- 2026-01-01: unit sep",
+  "answered": "## H\u001f- 2026-01-01: unit sep",
+  "refusal": ""
+ },
+ {
+  "name": "U+2028 as a line boundary",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H - 2026-01-01: u2028",
+  "answered": "## H\n- 2026-01-01: u2028",
+  "refusal": ""
+ },
+ {
+  "name": "U+2029 as a line boundary",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H - 2026-01-01: u2029",
+  "answered": "## H\n- 2026-01-01: u2029",
+  "refusal": ""
+ },
+ {
+  "name": "the next line character",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H- 2026-01-01: nel",
+  "answered": "## H\n- 2026-01-01: nel",
+  "refusal": ""
+ },
+ {
+  "name": "a vertical tab",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\u000b- 2026-01-01: vt",
+  "answered": "## H\n- 2026-01-01: vt",
+  "refusal": ""
+ },
+ {
+  "name": "a form feed",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\f- 2026-01-01: ff",
+  "answered": "## H\n- 2026-01-01: ff",
+  "refusal": ""
+ },
+ {
+  "name": "CRLF",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\r\n- 2026-01-01: crlf",
+  "answered": "## H\n- 2026-01-01: crlf",
+  "refusal": ""
+ },
+ {
+  "name": "a lone carriage return",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\r- 2026-01-01: cr",
+  "answered": "## H\n- 2026-01-01: cr",
+  "refusal": ""
+ },
+ {
+  "name": "a trailing line boundary",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- 2026-01-01: x\n",
+  "answered": "## H\n- 2026-01-01: x",
+  "refusal": ""
+ },
+ {
+  "name": "a bullet with no text",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- 2026-01-01:",
+  "answered": "## H\n- 2026-01-01:",
+  "refusal": ""
+ },
+ {
+  "name": "a bullet with only spaces after the colon",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- 2026-01-01:   ",
+  "answered": "## H\n- 2026-01-01:",
+  "refusal": ""
+ },
+ {
+  "name": "an indented bullet with padded text",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n  - 2026-01-01:   spaced   ",
+  "answered": "## H\n- 2026-01-01: spaced",
+  "refusal": ""
+ },
+ {
+  "name": "a tab-indented bullet",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n\t- 2026-01-01: tabbed",
+  "answered": "## H\n- 2026-01-01: tabbed",
+  "refusal": ""
+ },
+ {
+  "name": "a bullet with a tab after the colon",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- 2026-01-01:\tx",
+  "answered": "## H\n- 2026-01-01:\tx",
+  "refusal": ""
+ },
+ {
+  "name": "a bullet with no space after the colon",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- 2026-01-01:x",
+  "answered": "## H\n- 2026-01-01:x",
+  "refusal": ""
+ },
+ {
+  "name": "a bullet with two colons",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- 2026-01-01: : x",
+  "answered": "## H\n- 2026-01-01: : x",
+  "refusal": ""
+ },
+ {
+  "name": "a list marker with no space",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n-2026-01-01: x",
+  "answered": "## H\n-2026-01-01: x",
+  "refusal": ""
+ },
+ {
+  "name": "an asterisk list marker",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n* 2026-01-01: x",
+  "answered": "## H\n* 2026-01-01: x",
+  "refusal": ""
+ },
+ {
+  "name": "a bad day of the month",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- 2026-02-30: bad day",
+  "answered": "## H\n- 2026-02-30: bad day",
+  "refusal": ""
+ },
+ {
+  "name": "a bad month",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- 2026-13-01: bad month",
+  "answered": "## H\n- 2026-13-01: bad month",
+  "refusal": ""
+ },
+ {
+  "name": "a leap day that exists",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- 2024-02-29: leap",
+  "answered": "## H\n- 2024-02-29: leap",
+  "refusal": ""
+ },
+ {
+  "name": "a leap day that does not",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- 2026-02-29: not leap",
+  "answered": "## H\n- 2026-02-29: not leap",
+  "refusal": ""
+ },
+ {
+  "name": "a century leap year",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- 2000-02-29: leap century",
+  "answered": "## H\n- 2000-02-29: leap century",
+  "refusal": ""
+ },
+ {
+  "name": "a non-leap century",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- 1900-02-29: not leap",
+  "answered": "## H\n- 1900-02-29: not leap",
+  "refusal": ""
+ },
+ {
+  "name": "the earliest date",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- 0001-01-01: earliest",
+  "answered": "## H\n- 0001-01-01: earliest",
+  "refusal": ""
+ },
+ {
+  "name": "the latest date",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- 9999-12-31: latest",
+  "answered": "## H\n- 9999-12-31: latest",
+  "refusal": ""
+ },
+ {
+  "name": "year zero",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- 0000-01-01: year zero",
+  "answered": "## H\n- 0000-01-01: year zero",
+  "refusal": ""
+ },
+ {
+  "name": "Arabic-Indic digits in the date",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- ٢٠٢٦-٠١-٠١: arabic",
+  "answered": "## H\n- ٢٠٢٦-٠١-٠١: arabic",
+  "refusal": ""
+ },
+ {
+  "name": "a deeper heading is a plain line",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\nplain line\n### deeper\n- 2026-01-01: x",
+  "answered": "## H\nplain line\n### deeper\n- 2026-01-01: x",
+  "refusal": ""
+ },
+ {
+  "name": "a heading that is only hashes",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "##\n- 2026-01-01: x",
+  "answered": "## Memory\n- 2026-01-01: x",
+  "refusal": ""
+ },
+ {
+  "name": "four hashes",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "#### H\n- 2026-01-01: x",
+  "answered": "## Memory\n- 2026-01-01: x",
+  "refusal": ""
+ },
+ {
+  "name": "a heading with no space after the hashes",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "##H\n- 2026-01-01: x",
+  "answered": "## Memory\n- 2026-01-01: x",
+  "refusal": ""
+ },
+ {
+  "name": "two sections with the same heading",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## A\n\n## A\n- 2026-01-01: x",
+  "answered": "## A\n\n## A\n- 2026-01-01: x",
+  "refusal": ""
+ },
+ {
+  "name": "an empty section between two full ones",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## A\n- 2026-01-01: x\n## B\n## C\n- 2026-01-02: y",
+  "answered": "## A\n- 2026-01-01: x\n\n## B\n\n## C\n- 2026-01-02: y",
+  "refusal": ""
+ },
+ {
+  "name": "many blank lines between sections",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## A\n- 2026-01-01: a\n\n\n\n## B\n- 2026-01-02: b",
+  "answered": "## A\n- 2026-01-01: a\n\n## B\n- 2026-01-02: b",
+  "refusal": ""
+ },
+ {
+  "name": "a document that is only a heading",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H",
+  "answered": "## H",
+  "refusal": ""
+ },
+ {
+  "name": "a heading whose text is only spaces",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "##  \n- 2026-01-01: x",
+  "answered": "## Memory\n- 2026-01-01: x",
+  "refusal": ""
+ },
+ {
+  "name": "a heading with trailing spaces",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H  \n- 2026-01-01: x  ",
+  "answered": "## H\n- 2026-01-01: x",
+  "refusal": ""
+ },
+ {
+  "name": "a non-breaking space inside a heading",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H K\n- 2026-01-01: x",
+  "answered": "## H K\n- 2026-01-01: x",
+  "refusal": ""
+ },
+ {
+  "name": "the awkward characters in a bullet",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- 2026-01-01: a < b & c — “q”",
+  "answered": "## H\n- 2026-01-01: a < b & c — “q”",
+  "refusal": ""
+ },
+ {
+  "name": "an astral character in a bullet",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- 2026-01-01: 😀",
+  "answered": "## H\n- 2026-01-01: 😀",
+  "refusal": ""
+ },
+ {
+  "name": "multi-byte text before the colon",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## H\n- 2026-01-01: ééé",
+  "answered": "## H\n- 2026-01-01: ééé",
+  "refusal": ""
+ },
+ {
+  "name": "the no-update sentinel",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "NO_UPDATE",
+  "answered": "## Preferences\n- 2026-01-02: prefers short answers",
+  "refusal": ""
+ },
+ {
+  "name": "the no-update sentinel in lower case",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "no_update",
+  "answered": "## Preferences\n- 2026-01-02: prefers short answers",
+  "refusal": ""
+ },
+ {
+  "name": "the no-change sentinel with a space",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "no change",
+  "answered": "## Preferences\n- 2026-01-02: prefers short answers",
+  "refusal": ""
+ },
+ {
+  "name": "the sentinel padded with spaces",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "   no update   ",
+  "answered": "## Preferences\n- 2026-01-02: prefers short answers",
+  "refusal": ""
+ },
+ {
+  "name": "the sentinel with a trailing newline",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "NO UPDATE\n",
+  "answered": "## Preferences\n- 2026-01-02: prefers short answers",
+  "refusal": ""
+ },
+ {
+  "name": "a sentinel after a preamble",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "preamble\nNO_UPDATE",
+  "answered": "## Preferences\n- 2026-01-02: prefers short answers",
+  "refusal": "Memory must be markdown with at least one ## heading."
+ },
+ {
+  "name": "a sentinel in mixed case",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "nO_cHaNgE",
+  "answered": "## Preferences\n- 2026-01-02: prefers short answers",
+  "refusal": ""
+ },
+ {
+  "name": "a sentinel wrapped in separators",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "\u001cNO_UPDATE\u001c",
+  "answered": "## Preferences\n- 2026-01-02: prefers short answers",
+  "refusal": ""
+ },
+ {
+  "name": "a near-sentinel",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "NO_UPDATED",
+  "answered": "## Preferences\n- 2026-01-02: prefers short answers",
+  "refusal": "Memory must be markdown with at least one ## heading."
+ },
+ {
+  "name": "the sentinel as a heading",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "## NO_UPDATE",
+  "answered": "## NO_UPDATE",
+  "refusal": ""
+ },
+ {
+  "name": "an empty document",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "",
+  "answered": "",
+  "refusal": ""
+ },
+ {
+  "name": "a document of only whitespace",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "   \n\t  ",
+  "answered": "",
+  "refusal": ""
+ },
+ {
+  "name": "a document of only separators",
+  "scope": "user",
+  "stored": "## Preferences\n- 2026-01-02: prefers short answers",
+  "sent": "\u001c\u001d\u001e",
+  "answered": "",
+  "refusal": ""
+ },
+ {
+  "name": "a plain team document",
+  "scope": "team",
+  "stored": "## Team notes\n- 2026-01-01: the comparison workspace",
+  "sent": "## Team notes\n- 2026-01-01: x",
+  "answered": "## Team notes\n- 2026-01-01: x",
+  "refusal": ""
+ },
+ {
+  "name": "a new personal heading",
+  "scope": "team",
+  "stored": "## Team notes\n- 2026-01-01: the comparison workspace",
+  "sent": "## Preferences\n- 2026-01-01: x",
+  "answered": "## Team notes\n- 2026-01-01: the comparison workspace",
+  "refusal": "Team memory cannot introduce personal headings: preferences. Use team-safe headings instead."
+ },
+ {
+  "name": "a new instructions heading",
+  "scope": "team",
+  "stored": "## Team notes\n- 2026-01-01: the comparison workspace",
+  "sent": "## Instructions\n- 2026-01-01: x",
+  "answered": "## Team notes\n- 2026-01-01: the comparison workspace",
+  "refusal": "Team memory cannot introduce personal headings: instructions. Use team-safe headings instead."
+ },
+ {
+  "name": "a new personal notes heading",
+  "scope": "team",
+  "stored": "## Team notes\n- 2026-01-01: the comparison workspace",
+  "sent": "## Personal Notes\n- 2026-01-01: x",
+  "answered": "## Team notes\n- 2026-01-01: the comparison workspace",
+  "refusal": "Team memory cannot introduce personal headings: personal notes. Use team-safe headings instead."
+ },
+ {
+  "name": "a new personal instructions heading",
+  "scope": "team",
+  "stored": "## Team notes\n- 2026-01-01: the comparison workspace",
+  "sent": "## personal   instructions!\n- 2026-01-01: x",
+  "answered": "## Team notes\n- 2026-01-01: the comparison workspace",
+  "refusal": "Team memory cannot introduce personal headings: personal instructions. Use team-safe headings instead."
+ },
+ {
+  "name": "two new personal headings",
+  "scope": "team",
+  "stored": "## Team notes\n- 2026-01-01: the comparison workspace",
+  "sent": "## Instructions\n- 2026-01-01: a\n## Preferences\n- 2026-01-01: b",
+  "answered": "## Team notes\n- 2026-01-01: the comparison workspace",
+  "refusal": "Team memory cannot introduce personal headings: instructions, preferences. Use team-safe headings instead."
+ },
+ {
+  "name": "a personal heading written with punctuation",
+  "scope": "team",
+  "stored": "## Team notes\n- 2026-01-01: the comparison workspace",
+  "sent": "## Pre-fer-ences\n- 2026-01-01: x",
+  "answered": "## Pre-fer-ences\n- 2026-01-01: x",
+  "refusal": ""
+ },
+ {
+  "name": "a personal heading in a bullets-only document",
+  "scope": "team",
+  "stored": "## Team notes\n- 2026-01-01: the comparison workspace",
+  "sent": "- 2026-01-01: x",
+  "answered": "## Memory\n- 2026-01-01: x",
+  "refusal": ""
+ },
+ {
+  "name": "grandfathered: keeps the forbidden heading it already had",
+  "scope": "team",
+  "stored": "## Preferences\n- 2026-01-01: seeded",
+  "sent": "## Preferences\n- 2026-01-02: kept",
+  "answered": "## Preferences\n- 2026-01-02: kept",
+  "refusal": ""
+ },
+ {
+  "name": "grandfathered: adds a second forbidden heading",
+  "scope": "team",
+  "stored": "## Preferences\n- 2026-01-01: seeded",
+  "sent": "## Preferences\n- 2026-01-02: kept\n## Instructions\n- 2026-01-03: new",
+  "answered": "## Preferences\n- 2026-01-01: seeded",
+  "refusal": "Team memory cannot introduce personal headings: instructions. Use team-safe headings instead."
+ },
+ {
+  "name": "grandfathered: drops it and adds another",
+  "scope": "team",
+  "stored": "## Preferences\n- 2026-01-01: seeded",
+  "sent": "## Instructions\n- 2026-01-02: new",
+  "answered": "## Preferences\n- 2026-01-01: seeded",
+  "refusal": "Team memory cannot introduce personal headings: instructions. Use team-safe headings instead."
+ },
+ {
+  "name": "grandfathered: the stored heading normalised differently",
+  "scope": "team",
+  "stored": "## PREFERENCES!!\n- 2026-01-01: seeded",
+  "sent": "## Preferences\n- 2026-01-02: kept",
+  "answered": "## Preferences\n- 2026-01-02: kept",
+  "refusal": ""
+ },
+ {
+  "name": "grandfathered: the stored document has no explicit heading",
+  "scope": "team",
+  "stored": "- 2026-01-01: bullet only",
+  "sent": "## Preferences\n- 2026-01-02: new",
+  "answered": "- 2026-01-01: bullet only",
+  "refusal": "Team memory cannot introduce personal headings: preferences. Use team-safe headings instead."
+ },
+ {
+  "name": "grandfathered: both already stored",
+  "scope": "team",
+  "stored": "## Preferences\n- 2026-01-01: a\n## Instructions\n- 2026-01-02: b",
+  "sent": "## Preferences\n- 2026-01-03: a\n## Instructions\n- 2026-01-04: b",
+  "answered": "## Preferences\n- 2026-01-03: a\n\n## Instructions\n- 2026-01-04: b",
+  "refusal": ""
+ }
+]

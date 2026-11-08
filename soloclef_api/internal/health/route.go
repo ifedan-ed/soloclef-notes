@@ -13,9 +13,9 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
-	"git.danvics.com/danvics/surfsense/soloclef_api/internal/humawriter"
-	"git.danvics.com/danvics/surfsense/soloclef_api/internal/pythonjson"
-	"git.danvics.com/danvics/surfsense/soloclef_api/internal/requestcontext"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/humawriter"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/pythonjson"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/requestcontext"
 )
 
 // Path is where the probe answers.

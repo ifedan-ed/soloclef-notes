@@ -53,6 +53,12 @@ func write(b *strings.Builder, v any) error {
 			return err
 		}
 		b.WriteString(text)
+	case PydanticFloat:
+		text, err := formatPydanticFloat(float64(value))
+		if err != nil {
+			return err
+		}
+		b.WriteString(text)
 	case []any:
 		b.WriteByte('[')
 		for i, item := range value {

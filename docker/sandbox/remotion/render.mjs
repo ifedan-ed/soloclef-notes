@@ -16,6 +16,7 @@ import {promisify} from "node:util";
 import {bundle} from "@remotion/bundler";
 import {
   makeCancelSignal,
+  openBrowser,
   renderMedia,
   renderStill,
   selectComposition,
@@ -25,6 +26,7 @@ import {
   atomicWriteJson,
   cleanupSceneModules,
   inputHash,
+  sceneEntranceWindows,
   scenePreviewFrames,
   validateInputProps,
   validateSceneModules,
@@ -195,6 +197,11 @@ async function renderVideo({
     );
     const segmentPath = path.join(workDir, `segment-${index}.mp4`);
     const segmentStartedAt = Date.now();
+    // Chromium screenshotting and ffmpeg encoding overlap inside renderMedia,
+    // so the only split it can report is where the last screenshot lands: up
+    // to it is frame rendering, after it is the encoder draining.
+    const segmentFrames = end - start + 1;
+    let framesDoneAt;
     await cancellation.withSignal((cancelSignal) =>
       renderMedia({
         composition,
@@ -207,8 +214,11 @@ async function renderVideo({
         chromiumOptions: {enableMultiProcessOnLinux: true},
         timeoutInMilliseconds: configuredTimeout,
         cancelSignal,
-        onProgress: ({progress: segmentProgress}) => {
+        onProgress: ({progress: segmentProgress, renderedFrames}) => {
           cancellation.poll();
+          if (framesDoneAt === undefined && renderedFrames >= segmentFrames) {
+            framesDoneAt = Date.now();
+          }
           progress.write({
             phase: "render",
             progress: (index + segmentProgress) / segmentCount,
@@ -218,13 +228,25 @@ async function renderVideo({
         },
       }),
     );
+    const segmentEndedAt = Date.now();
     console.log(
-      `SURFSENSE_SEGMENT_SECONDS=${(Date.now() - segmentStartedAt) / 1000}`,
+      `SOLOCLEF_SEGMENT_SECONDS=${(segmentEndedAt - segmentStartedAt) / 1000}`,
+    );
+    console.log(
+      `SOLOCLEF_SEGMENT_FRAME_SECONDS=${
+        ((framesDoneAt ?? segmentEndedAt) - segmentStartedAt) / 1000
+      }`,
+    );
+    console.log(
+      `SOLOCLEF_SEGMENT_ENCODE_SECONDS=${
+        (segmentEndedAt - (framesDoneAt ?? segmentEndedAt)) / 1000
+      }`,
     );
     segmentPaths.push(segmentPath);
     segmentDurations.push((end - start + 1) / composition.fps);
   }
 
+  const muxStartedAt = Date.now();
   if (segmentPaths.length === 1) {
     await execFileAsync("ffmpeg", [
       "-y",
@@ -262,6 +284,7 @@ async function renderVideo({
       outputPath,
     ]);
   }
+  console.log(`SOLOCLEF_MUX_SECONDS=${(Date.now() - muxStartedAt) / 1000}`);
   await writeFile(
     `${outputPath}.segments.json`,
     JSON.stringify({
@@ -272,26 +295,131 @@ async function renderVideo({
     }),
     "utf8",
   );
-  console.log(`SURFSENSE_SEGMENT_COUNT=${segmentCount}`);
+  console.log(`SOLOCLEF_SEGMENT_COUNT=${segmentCount}`);
+}
+
+// The pieces the backend needs to assemble a video without screenshotting
+// every frame: each scene's entrance as real video, and the one still that
+// carries the rest of it. One browser serves them all; launching Chromium per
+// call costs more than the frames do.
+async function renderSceneParts({
+  cancellation,
+  composition,
+  serveUrl,
+  inputProps,
+  outputDir,
+  entranceRequest,
+  progress,
+}) {
+  const sceneDurations = composition.props.sceneDurations;
+  if (!Array.isArray(sceneDurations)) {
+    throw new Error("calculateMetadata did not return sceneDurations");
+  }
+  const windows = sceneEntranceWindows(sceneDurations, entranceRequest);
+  await mkdir(outputDir, {recursive: true});
+  const startedAt = Date.now();
+  const browser = await openBrowser("chrome", {
+    chromiumOptions: {enableMultiProcessOnLinux: true},
+  });
+  const parts = [];
+  let entranceSeconds = 0;
+  let stillSeconds = 0;
+  try {
+    for (const [index, scene] of inputProps.scenes.entries()) {
+      const {start, entranceFrames, stillFrame} = windows[index];
+      const entrancePath = path.join(
+        outputDir,
+        `entrance-${scene.slide_number}.mp4`,
+      );
+      const stillPath = path.join(outputDir, `still-${scene.slide_number}.png`);
+      const entranceStartedAt = Date.now();
+      await cancellation.withSignal((cancelSignal) =>
+        renderMedia({
+          composition,
+          serveUrl,
+          codec: "h264",
+          outputLocation: entrancePath,
+          inputProps,
+          frameRange: [start, start + entranceFrames - 1],
+          muted: true,
+          crf: 18,
+          x264Preset: "veryfast",
+          pixelFormat: "yuv420p",
+          ...(renderConcurrency ? {concurrency: renderConcurrency} : {}),
+          puppeteerInstance: browser,
+          timeoutInMilliseconds: configuredTimeout,
+          cancelSignal,
+          onProgress: () => {
+            cancellation.poll();
+          },
+        }),
+      );
+      const stillStartedAt = Date.now();
+      entranceSeconds += (stillStartedAt - entranceStartedAt) / 1000;
+      await cancellation.withSignal((cancelSignal) =>
+        renderStill({
+          composition,
+          serveUrl,
+          output: stillPath,
+          frame: stillFrame,
+          inputProps,
+          puppeteerInstance: browser,
+          timeoutInMilliseconds: configuredTimeout,
+          cancelSignal,
+        }),
+      );
+      stillSeconds += (Date.now() - stillStartedAt) / 1000;
+      parts.push({
+        slide_number: scene.slide_number,
+        scene_frames: sceneDurations[index],
+        entrance_frames: entranceFrames,
+        entrance_video: entrancePath,
+        still_image: stillPath,
+        still_frame: stillFrame,
+      });
+      progress.write({
+        phase: "scene_parts",
+        progress: (index + 1) / inputProps.scenes.length,
+        scene: scene.slide_number,
+      });
+    }
+  } finally {
+    await browser.close({silent: true});
+  }
+  const manifest = {fps: composition.fps, parts};
+  await atomicWriteJson(path.join(outputDir, "parts.json"), manifest);
+  console.log(`SOLOCLEF_SCENE_PARTS_ENTRANCE_SECONDS=${entranceSeconds}`);
+  console.log(`SOLOCLEF_SCENE_PARTS_STILL_SECONDS=${stillSeconds}`);
+  console.log(
+    `SOLOCLEF_SCENE_PARTS_SECONDS=${(Date.now() - startedAt) / 1000}`,
+  );
+  console.log(
+    `SOLOCLEF_SCENE_PARTS_FRAMES=${parts.reduce(
+      (total, part) => total + part.entrance_frames,
+      0,
+    )}`,
+  );
+  return manifest;
 }
 
 export async function render(argv = process.argv.slice(2)) {
-  const mode =
-    argv[0] === "--preflight"
-      ? "preflight"
-      : argv[0] === "--stills"
-        ? "stills"
-        : "render";
+  const flags = {
+    "--preflight": {mode: "preflight", argumentCount: 2},
+    "--stills": {mode: "stills", argumentCount: 3},
+    "--scene-parts": {mode: "scene_parts", argumentCount: 4},
+  };
+  const flag = flags[argv[0]];
+  const mode = flag ? flag.mode : "render";
   const propsArg = mode === "render" ? argv[0] : argv[1];
   const outputArg = mode === "render" ? argv[1] : argv[2];
-  const expectedArguments = mode === "preflight" ? 2 : mode === "stills" ? 3 : 2;
+  const expectedArguments = flag ? flag.argumentCount : 2;
   if (
     !propsArg ||
     (mode !== "preflight" && !outputArg) ||
     argv.length !== expectedArguments
   ) {
     throw new Error(
-      "Usage: node render.mjs --preflight props.json | --stills props.json outdir | props.json out.mp4",
+      "Usage: node render.mjs --preflight props.json | --stills props.json outdir | --scene-parts props.json outdir entrance.json | props.json out.mp4",
     );
   }
 
@@ -312,7 +440,7 @@ export async function render(argv = process.argv.slice(2)) {
     if (error && typeof error === "object") error.diagnostic = diagnostic;
     throw error;
   }
-  const temporaryDir = await mkdtemp(path.join(tmpdir(), "surfsense-remotion-"));
+  const temporaryDir = await mkdtemp(path.join(tmpdir(), "soloclef-remotion-"));
   const progress = createProgressWriter();
   const cancellation = createCancellation();
   let phase = "write";
@@ -353,6 +481,26 @@ export async function render(argv = process.argv.slice(2)) {
       await progress.flush();
       console.log(JSON.stringify(result));
       return result;
+    }
+
+    if (mode === "scene_parts") {
+      phase = "scene_parts";
+      progress.write({phase, progress: 0});
+      const entranceRequest = JSON.parse(
+        await readFile(path.resolve(argv[3]), "utf8"),
+      );
+      const manifest = await renderSceneParts({
+        cancellation,
+        composition,
+        serveUrl,
+        inputProps,
+        outputDir: outputPath,
+        entranceRequest,
+        progress,
+      });
+      progress.write({phase, progress: 1});
+      await progress.flush();
+      return manifest;
     }
 
     if (mode === "stills") {

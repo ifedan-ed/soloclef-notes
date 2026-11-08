@@ -73,26 +73,26 @@ RUN set -euo pipefail \
     && npx remotion bundle src/index.ts --out-dir bundle
 
 # ---- Baked fonts: the ONLY families scene code may use (offline) ----
-COPY remotion/fonts/ /usr/share/fonts/truetype/surfsense/
+COPY remotion/fonts/ /usr/share/fonts/truetype/soloclef/
 RUN set -euo pipefail \
     && fc-cache -f \
     && for family in Inter Lora "JetBrains Mono"; do \
         fc-list : family | grep -Fqi "${family}"; \
     done
 
-# The base image also ships skills. Replace the formats SurfSense owns in one
+# The base image also ships skills. Replace the formats Soloclef owns in one
 # layer so OverlayFS records removed base-image files as deletions.
-COPY skills /tmp/surfsense-skills
+COPY skills /tmp/soloclef-skills
 RUN set -euo pipefail \
     && mkdir -p /opt/skills \
-    && for skill in /tmp/surfsense-skills/*; do \
+    && for skill in /tmp/soloclef-skills/*; do \
         test -f "${skill}/SKILL.md" || continue; \
         name="${skill##*/}"; \
         rm -rf "/opt/skills/${name}"; \
         cp -a "${skill}" "/opt/skills/${name}"; \
         rm -rf "/opt/skills/${name}/scripts"; \
-        cat /tmp/surfsense-skills/frontend-design/DESIGN.md >> "/opt/skills/${name}/SKILL.md"; \
+        cat /tmp/soloclef-skills/frontend-design/DESIGN.md >> "/opt/skills/${name}/SKILL.md"; \
     done \
-    && rm -rf /tmp/surfsense-skills
+    && rm -rf /tmp/soloclef-skills
 
 ENTRYPOINT ["/opt/code-interpreter/code-interpreter.sh"]

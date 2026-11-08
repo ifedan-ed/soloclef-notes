@@ -1,0 +1,176 @@
+[
+ {
+  "label": "a ready document, by its owner",
+  "request": {
+   "method": "DELETE",
+   "path": "/api/v1/documents/1",
+   "as": "owner"
+  },
+  "status": 200,
+  "body": "{\"message\":\"Document deleted successfully\"}",
+  "queued": [
+   {
+    "queue": "surfsense",
+    "envelope": "{\"body\": \"W1sxXSwge30sIHsiY2FsbGJhY2tzIjogbnVsbCwgImVycmJhY2tzIjogbnVsbCwgImNoYWluIjogbnVsbCwgImNob3JkIjogbnVsbH1d\", \"content-encoding\": \"utf-8\", \"content-type\": \"application/json\", \"headers\": {\"lang\": \"py\", \"task\": \"delete_document_background\", \"id\": \"<id>\", \"shadow\": null, \"eta\": null, \"expires\": null, \"group\": null, \"group_index\": null, \"retries\": 0, \"timelimit\": [null, null], \"root_id\": \"<root_id>\", \"parent_id\": null, \"argsrepr\": \"(1,)\", \"kwargsrepr\": \"{}\", \"origin\": \"<origin>\", \"ignore_result\": false, \"replaced_task_nesting\": 0, \"stamped_headers\": null, \"stamps\": {}, \"soloclef_log_context\": {\"request_id\": \"<request_id>\", \"user_id\": \"11111111-1111-4111-8111-111111111111\"}, \"surfsense.enqueued_at_ns\": \"<enqueued_at>\"}, \"properties\": {\"correlation_id\": \"<correlation_id>\", \"reply_to\": \"<reply_to>\", \"delivery_mode\": 2, \"delivery_info\": {\"exchange\": \"\", \"routing_key\": \"surfsense\"}, \"priority\": 0, \"body_encoding\": \"base64\", \"delivery_tag\": \"<delivery_tag>\"}}"
+   }
+  ]
+ },
+ {
+  "label": "a ready document, by a member whose role may delete",
+  "request": {
+   "method": "DELETE",
+   "path": "/api/v1/documents/1",
+   "as": "remover"
+  },
+  "status": 200,
+  "body": "{\"message\":\"Document deleted successfully\"}",
+  "queued": [
+   {
+    "queue": "surfsense",
+    "envelope": "{\"body\": \"W1sxXSwge30sIHsiY2FsbGJhY2tzIjogbnVsbCwgImVycmJhY2tzIjogbnVsbCwgImNoYWluIjogbnVsbCwgImNob3JkIjogbnVsbH1d\", \"content-encoding\": \"utf-8\", \"content-type\": \"application/json\", \"headers\": {\"lang\": \"py\", \"task\": \"delete_document_background\", \"id\": \"<id>\", \"shadow\": null, \"eta\": null, \"expires\": null, \"group\": null, \"group_index\": null, \"retries\": 0, \"timelimit\": [null, null], \"root_id\": \"<root_id>\", \"parent_id\": null, \"argsrepr\": \"(1,)\", \"kwargsrepr\": \"{}\", \"origin\": \"<origin>\", \"ignore_result\": false, \"replaced_task_nesting\": 0, \"stamped_headers\": null, \"stamps\": {}, \"soloclef_log_context\": {\"request_id\": \"<request_id>\", \"user_id\": \"44444444-4444-4444-8444-444444444444\"}, \"surfsense.enqueued_at_ns\": \"<enqueued_at>\"}, \"properties\": {\"correlation_id\": \"<correlation_id>\", \"reply_to\": \"<reply_to>\", \"delivery_mode\": 2, \"delivery_info\": {\"exchange\": \"\", \"routing_key\": \"surfsense\"}, \"priority\": 0, \"body_encoding\": \"base64\", \"delivery_tag\": \"<delivery_tag>\"}}"
+   }
+  ]
+ },
+ {
+  "label": "a document being processed",
+  "request": {
+   "method": "DELETE",
+   "path": "/api/v1/documents/2",
+   "as": "owner"
+  },
+  "status": 409,
+  "body": "{\"error\":{\"code\":\"CONFLICT\",\"message\":\"Cannot delete document while it is pending or being processed. Please wait for processing to complete.\",\"status\":409,\"request_id\": \"<rid>\",\"timestamp\": \"<ts>\",\"report_url\":\"https://notes.example.invalid/contact\"},\"detail\":\"Cannot delete document while it is pending or being processed. Please wait for processing to complete.\"}",
+  "queued": []
+ },
+ {
+  "label": "a document still pending",
+  "request": {
+   "method": "DELETE",
+   "path": "/api/v1/documents/3",
+   "as": "owner"
+  },
+  "status": 409,
+  "body": "{\"error\":{\"code\":\"CONFLICT\",\"message\":\"Cannot delete document while it is pending or being processed. Please wait for processing to complete.\",\"status\":409,\"request_id\": \"<rid>\",\"timestamp\": \"<ts>\",\"report_url\":\"https://notes.example.invalid/contact\"},\"detail\":\"Cannot delete document while it is pending or being processed. Please wait for processing to complete.\"}",
+  "queued": []
+ },
+ {
+  "label": "a document already being deleted",
+  "request": {
+   "method": "DELETE",
+   "path": "/api/v1/documents/4",
+   "as": "owner"
+  },
+  "status": 409,
+  "body": "{\"error\":{\"code\":\"CONFLICT\",\"message\":\"Document is already being deleted.\",\"status\":409,\"request_id\": \"<rid>\",\"timestamp\": \"<ts>\",\"report_url\":\"https://notes.example.invalid/contact\"},\"detail\":\"Document is already being deleted.\"}",
+  "queued": []
+ },
+ {
+  "label": "a document whose status holds no state",
+  "request": {
+   "method": "DELETE",
+   "path": "/api/v1/documents/5",
+   "as": "owner"
+  },
+  "status": 200,
+  "body": "{\"message\":\"Document deleted successfully\"}",
+  "queued": [
+   {
+    "queue": "surfsense",
+    "envelope": "{\"body\": \"W1s1XSwge30sIHsiY2FsbGJhY2tzIjogbnVsbCwgImVycmJhY2tzIjogbnVsbCwgImNoYWluIjogbnVsbCwgImNob3JkIjogbnVsbH1d\", \"content-encoding\": \"utf-8\", \"content-type\": \"application/json\", \"headers\": {\"lang\": \"py\", \"task\": \"delete_document_background\", \"id\": \"<id>\", \"shadow\": null, \"eta\": null, \"expires\": null, \"group\": null, \"group_index\": null, \"retries\": 0, \"timelimit\": [null, null], \"root_id\": \"<root_id>\", \"parent_id\": null, \"argsrepr\": \"(5,)\", \"kwargsrepr\": \"{}\", \"origin\": \"<origin>\", \"ignore_result\": false, \"replaced_task_nesting\": 0, \"stamped_headers\": null, \"stamps\": {}, \"soloclef_log_context\": {\"request_id\": \"<request_id>\", \"user_id\": \"11111111-1111-4111-8111-111111111111\"}, \"surfsense.enqueued_at_ns\": \"<enqueued_at>\"}, \"properties\": {\"correlation_id\": \"<correlation_id>\", \"reply_to\": \"<reply_to>\", \"delivery_mode\": 2, \"delivery_info\": {\"exchange\": \"\", \"routing_key\": \"surfsense\"}, \"priority\": 0, \"body_encoding\": \"base64\", \"delivery_tag\": \"<delivery_tag>\"}}"
+   }
+  ]
+ },
+ {
+  "label": "a document that does not exist",
+  "request": {
+   "method": "DELETE",
+   "path": "/api/v1/documents/9999",
+   "as": "owner"
+  },
+  "status": 404,
+  "body": "{\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Document with id 9999 not found\",\"status\":404,\"request_id\": \"<rid>\",\"timestamp\": \"<ts>\",\"report_url\":\"https://notes.example.invalid/contact\"},\"detail\":\"Document with id 9999 not found\"}",
+  "queued": []
+ },
+ {
+  "label": "a document in a workspace the caller is not in",
+  "request": {
+   "method": "DELETE",
+   "path": "/api/v1/documents/6",
+   "as": "owner"
+  },
+  "status": 403,
+  "body": "{\"error\":{\"code\":\"FORBIDDEN\",\"message\":\"You don't have access to this workspace\",\"status\":403,\"request_id\": \"<rid>\",\"timestamp\": \"<ts>\",\"report_url\":\"https://notes.example.invalid/contact\"},\"detail\":\"You don't have access to this workspace\"}",
+  "queued": []
+ },
+ {
+  "label": "a document a member's role may not delete",
+  "request": {
+   "method": "DELETE",
+   "path": "/api/v1/documents/1",
+   "as": "member"
+  },
+  "status": 403,
+  "body": "{\"error\":{\"code\":\"FORBIDDEN\",\"message\":\"You don't have permission to delete documents in this workspace\",\"status\":403,\"request_id\": \"<rid>\",\"timestamp\": \"<ts>\",\"report_url\":\"https://notes.example.invalid/contact\"},\"detail\":\"You don't have permission to delete documents in this workspace\"}",
+  "queued": []
+ },
+ {
+  "label": "a document, by a stranger to every workspace",
+  "request": {
+   "method": "DELETE",
+   "path": "/api/v1/documents/1",
+   "as": "stranger"
+  },
+  "status": 403,
+  "body": "{\"error\":{\"code\":\"FORBIDDEN\",\"message\":\"You don't have access to this workspace\",\"status\":403,\"request_id\": \"<rid>\",\"timestamp\": \"<ts>\",\"report_url\":\"https://notes.example.invalid/contact\"},\"detail\":\"You don't have access to this workspace\"}",
+  "queued": []
+ },
+ {
+  "label": "a document, with no credential at all",
+  "request": {
+   "method": "DELETE",
+   "path": "/api/v1/documents/1",
+   "as": null
+  },
+  "status": 401,
+  "body": "{\"error\":{\"code\":\"UNAUTHORIZED\",\"message\":\"Unauthorized\",\"status\":401,\"request_id\": \"<rid>\",\"timestamp\": \"<ts>\",\"report_url\":\"https://notes.example.invalid/contact\"},\"detail\":\"Unauthorized\"}",
+  "queued": []
+ },
+ {
+  "label": "a document id that is not a number",
+  "request": {
+   "method": "DELETE",
+   "path": "/api/v1/documents/abc",
+   "as": "owner"
+  },
+  "status": 422,
+  "body": "{\"error\":{\"code\":\"VALIDATION_ERROR\",\"message\":\"Validation failed: path -> document_id: Input should be a valid integer, unable to parse string as an integer\",\"status\":422,\"request_id\": \"<rid>\",\"timestamp\": \"<ts>\",\"report_url\":\"https://notes.example.invalid/contact\",\"fields\":[{\"loc\":[\"path\",\"document_id\"],\"msg\":\"Input should be a valid integer, unable to parse string as an integer\"}]},\"detail\":\"Validation failed: path -> document_id: Input should be a valid integer, unable to parse string as an integer\"}",
+  "queued": []
+ },
+ {
+  "label": "a document id wider than the column",
+  "request": {
+   "method": "DELETE",
+   "path": "/api/v1/documents/99999999999999999999",
+   "as": "owner"
+  },
+  "status": 500,
+  "body": "{\"error\":{\"code\":\"INTERNAL_ERROR\",\"message\":\"An internal error occurred. Please try again or report this issue if it persists.\",\"status\":500,\"request_id\": \"<rid>\",\"timestamp\": \"<ts>\",\"report_url\":\"https://notes.example.invalid/contact\"},\"detail\":\"An internal error occurred. Please try again or report this issue if it persists.\"}",
+  "queued": []
+ },
+ {
+  "label": "the same document twice",
+  "request": {
+   "method": "DELETE",
+   "path": "/api/v1/documents/1",
+   "as": "owner"
+  },
+  "status": 409,
+  "body": "{\"error\":{\"code\":\"CONFLICT\",\"message\":\"Document is already being deleted.\",\"status\":409,\"request_id\": \"<rid>\",\"timestamp\": \"<ts>\",\"report_url\":\"https://notes.example.invalid/contact\"},\"detail\":\"Document is already being deleted.\"}",
+  "queued": [
+   {
+    "queue": "surfsense",
+    "envelope": "{\"body\": \"W1sxXSwge30sIHsiY2FsbGJhY2tzIjogbnVsbCwgImVycmJhY2tzIjogbnVsbCwgImNoYWluIjogbnVsbCwgImNob3JkIjogbnVsbH1d\", \"content-encoding\": \"utf-8\", \"content-type\": \"application/json\", \"headers\": {\"lang\": \"py\", \"task\": \"delete_document_background\", \"id\": \"<id>\", \"shadow\": null, \"eta\": null, \"expires\": null, \"group\": null, \"group_index\": null, \"retries\": 0, \"timelimit\": [null, null], \"root_id\": \"<root_id>\", \"parent_id\": null, \"argsrepr\": \"(1,)\", \"kwargsrepr\": \"{}\", \"origin\": \"<origin>\", \"ignore_result\": false, \"replaced_task_nesting\": 0, \"stamped_headers\": null, \"stamps\": {}, \"soloclef_log_context\": {\"request_id\": \"<request_id>\", \"user_id\": \"11111111-1111-4111-8111-111111111111\"}, \"surfsense.enqueued_at_ns\": \"<enqueued_at>\"}, \"properties\": {\"correlation_id\": \"<correlation_id>\", \"reply_to\": \"<reply_to>\", \"delivery_mode\": 2, \"delivery_info\": {\"exchange\": \"\", \"routing_key\": \"surfsense\"}, \"priority\": 0, \"body_encoding\": \"base64\", \"delivery_tag\": \"<delivery_tag>\"}}"
+   }
+  ]
+ }
+]

@@ -4,8 +4,8 @@
 package myaccess
 
 import (
-	"git.danvics.com/danvics/surfsense/soloclef_api/internal/pythonjson"
-	"git.danvics.com/danvics/surfsense/soloclef_api/internal/workspaceaccess"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/pythonjson"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/workspaceaccess"
 )
 
 // Build renders the Python route's UserWorkspaceAccess, key for key and in

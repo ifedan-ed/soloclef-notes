@@ -13,11 +13,14 @@ use_default_settings:
 
 server:
   secret_key: "override-me-via-env"
-  # Only shapes the links the HTML UI prints; the backend calls JSON at
-  # http://searxng:8080 and is unaffected.
-  base_url: "http://localhost:8080/"
+  # Temporary for owner testing, added 2026-09-27: the UI is also published at
+  # https://search.danvics.com behind the Soloclef SSO (Caddy forward_auth).
+  # base_url only shapes the links the HTML UI prints; the backend's JSON
+  # calls to http://searxng:8080 are unaffected.
+  base_url: "https://search.danvics.com/"
   public_instance: false
-  # Off: the backend's research calls must not be throttled.
+  # Stays off: the only public door is behind the SSO, and the backend's
+  # research calls must never be throttled.
   limiter: false
   image_proxy: false
   method: "GET"
@@ -53,13 +56,18 @@ outgoing:
   enable_http2: true
   extra_proxy_timeout: 10
   retries: 1
-  # Optional: route search-engine requests through a proxy.
-  # proxies:
-  #   all://:
-  #     - http://user:pass@proxy.example.com:8080
+  # Uncomment and set your residential proxy URL to route search engine requests through it.
+  # Format: http://<username>:<base64_password>@<hostname>:<port>/
+  #
+  # Home connection (cachyos-dell-desktop, tinyproxy over Tailscale): the
+  # server's own address is walled by DuckDuckGo, Startpage and Brave.
+  proxies:
+    all://:
+      - http://100.78.100.92:8888
 
 engines:
-  # Off by default: use the other engines unless you need Google.
+  # Off on purpose: this instance only runs after Google walled us, and would
+  # query it from the same address.
   - name: google
     disabled: true
   - name: duckduckgo
@@ -70,7 +78,8 @@ engines:
     disabled: false
     weight: 1.0
     retry_on_http_error: [429, 503]
-  # Off by default; bing images stays on.
+  # Off since 2026-09-27: through the proxy its web results were unrelated
+  # to the query (Steam, radio and YouTube help pages). bing images stays on.
   - name: bing
     disabled: true
     weight: 0.9
@@ -78,7 +87,9 @@ engines:
   - name: wikipedia
     disabled: false
     weight: 0.8
-  # Yandex is useful when other engines rate-limit.
+  # On since 2026-09-27: through the proxy it was the only web engine giving
+  # relevant results (duckduckgo/startpage CAPTCHA, brave 429, yahoo protocol
+  # error, bing answering with unrelated pages).
   - name: yandex
     disabled: false
     weight: 1.0
@@ -97,8 +108,10 @@ engines:
   - name: ddg definitions
     disabled: false
 
-  # Image search. Each returns the original full-size image URL; the backend's
-  # research queries ask for categories=general, so these are only for the UI.
+  # Image search (added 2026-09-27 for owner testing of search.danvics.com).
+  # Every one of these returns the original full-size image URL, which the UI
+  # shows as the image's own link in the result detail view. The backend's
+  # research queries ask for categories=general, so none of these touch it.
   - name: google images
     disabled: true
   - name: yandex images

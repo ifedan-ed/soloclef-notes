@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"time"
 
-	"git.danvics.com/danvics/surfsense/soloclef_api/internal/pythonjson"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/pythonjson"
 )
 
 // Writer holds what the envelope needs that is deployment-specific.

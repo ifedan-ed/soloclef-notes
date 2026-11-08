@@ -1,0 +1,100 @@
+{
+ "route": "GET /api/v1/users/me/memory",
+ "why": "A markdown document rendered from a text column, which is where the heading parser and the date lines are observable.",
+ "matrices": [
+  "credentials",
+  "origins"
+ ],
+ "cases": [
+  {
+   "label": "read the caller's memory",
+   "as": "owner",
+   "path": "/api/v1/users/me/memory"
+  },
+  {
+   "label": "a foreign-issuer token on the memory read with no origin",
+   "as": "agent_foreign_issuer",
+   "path": "/api/v1/users/me/memory"
+  },
+  {
+   "label": "a foreign-issuer token on the memory read with an allowed origin",
+   "as": "agent_foreign_issuer",
+   "path": "/api/v1/users/me/memory",
+   "headers": {
+    "Origin": "https://notes.example.invalid"
+   }
+  },
+  {
+   "label": "a foreign-issuer token on the memory read with a foreign origin",
+   "as": "agent_foreign_issuer",
+   "path": "/api/v1/users/me/memory",
+   "headers": {
+    "Origin": "https://attacker.example.invalid"
+   }
+  },
+  {
+   "label": "a foreign-issuer token on the memory read with a loopback origin",
+   "as": "agent_foreign_issuer",
+   "path": "/api/v1/users/me/memory",
+   "headers": {
+    "Origin": "http://localhost:3000"
+   }
+  },
+  {
+   "label": "GET the caller's own memory",
+   "as": "owner",
+   "path": "/api/v1/users/me/memory",
+   "headers": {
+    "Content-Type": "application/json"
+   }
+  },
+  {
+   "label": "GET an account whose memory is empty",
+   "as": "scribe",
+   "path": "/api/v1/users/me/memory",
+   "headers": {
+    "Content-Type": "application/json"
+   }
+  },
+  {
+   "label": "GET an account whose memory column is NULL",
+   "as": "bare",
+   "path": "/api/v1/users/me/memory",
+   "headers": {
+    "Content-Type": "application/json"
+   }
+  },
+  {
+   "label": "GET with an API key",
+   "as": "key_owner",
+   "path": "/api/v1/users/me/memory",
+   "headers": {
+    "Content-Type": "application/json"
+   }
+  },
+  {
+   "label": "GET with no credential",
+   "as": "none",
+   "path": "/api/v1/users/me/memory",
+   "headers": {
+    "Content-Type": "application/json"
+   }
+  },
+  {
+   "label": "GET an inactive account",
+   "as": "inactive",
+   "path": "/api/v1/users/me/memory",
+   "headers": {
+    "Content-Type": "application/json"
+   }
+  },
+  {
+   "label": "GET the caller's own memory with an Origin header",
+   "as": "owner",
+   "path": "/api/v1/users/me/memory",
+   "headers": {
+    "Origin": "https://notes.example.invalid"
+   }
+  }
+ ]
+}

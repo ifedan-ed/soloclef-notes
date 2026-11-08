@@ -1,17 +1,17 @@
 # =============================================================================
-# SurfSense — Dependencies only (no backend / frontend / Celery images)
+# Soloclef — Dependencies only (no backend / frontend / Celery images)
 # =============================================================================
 # Postgres, Redis, pgAdmin, Zero — run API + Next + Celery on the host.
-# Celery is not Dockerized here: use `uv run` from surfsense_backend/ (no extra
+# Celery is not Dockerized here: use `uv run` from soloclef_backend/ (no extra
 # backend image build just for workers).
 #
-# From repo root (SurfSense/):
+# From repo root (Soloclef/):
 #   docker compose -f docker/docker-compose.deps-only.yml up -d
 #
 # Compose variable substitution uses `docker/.env` (copy from .env.example).
 # Bind mounts use ./postgresql.conf in this directory.
 #
-# Local Celery (from surfsense_backend/, after Redis is up):
+# Local Celery (from soloclef_backend/, after Redis is up):
 #   uv run celery -A celery_worker.celery_app worker --loglevel=info --concurrency=1 --pool=solo --queues=surfsense,surfsense.connectors
 #   uv run celery -A celery_worker.celery_app beat --loglevel=info
 #
@@ -27,13 +27,13 @@
 #   `Unknown or invalid publications. Specified: [zero_publication]`.
 #
 #   First-time / after-pull:
-#     cd surfsense_backend && uv run alembic upgrade head
+#     cd soloclef_backend && uv run alembic upgrade head
 #
 #   The other compose files (docker-compose.yml, docker-compose.dev.yml)
 #   handle this automatically via a dedicated `migrations` service.
 # =============================================================================
 
-name: surfsense-deps
+name: soloclef-deps
 
 services:
   db:
@@ -98,7 +98,7 @@ services:
   # NOTE: zero-cache requires the `zero_publication` Postgres publication to
   # exist before it starts. In this deps-only stack there is no backend
   # container to run migrations, so you must run `uv run alembic upgrade head`
-  # from `surfsense_backend/` on the host BEFORE `docker compose up -d`.
+  # from `soloclef_backend/` on the host BEFORE `docker compose up -d`.
   zero-cache:
     image: rocicorp/zero:1.6.0
     ports:
@@ -163,12 +163,12 @@ services:
 
 volumes:
   postgres_data:
-    name: surfsense-deps-postgres
+    name: soloclef-deps-postgres
   pgadmin_data:
-    name: surfsense-deps-pgadmin
+    name: soloclef-deps-pgadmin
   redis_data:
-    name: surfsense-deps-redis
+    name: soloclef-deps-redis
   zero_cache_data:
-    name: surfsense-deps-zero-cache
+    name: soloclef-deps-zero-cache
   opensandbox_data:
-    name: surfsense-deps-opensandbox
+    name: soloclef-deps-opensandbox

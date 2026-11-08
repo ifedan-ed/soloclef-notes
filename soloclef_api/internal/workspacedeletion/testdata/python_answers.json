@@ -1,0 +1,154 @@
+[
+ {
+  "label": "a workspace, by its owner",
+  "request": {
+   "method": "DELETE",
+   "path": "/api/v1/workspaces/1",
+   "as": "owner"
+  },
+  "status": 200,
+  "body": "{\"message\":\"Workspace deleted successfully\"}",
+  "queued": [
+   {
+    "queue": "surfsense",
+    "envelope": "{\"body\": \"W1sxXSwge30sIHsiY2FsbGJhY2tzIjogbnVsbCwgImVycmJhY2tzIjogbnVsbCwgImNoYWluIjogbnVsbCwgImNob3JkIjogbnVsbH1d\", \"content-encoding\": \"utf-8\", \"content-type\": \"application/json\", \"headers\": {\"lang\": \"py\", \"task\": \"delete_search_space_background\", \"id\": \"<id>\", \"shadow\": null, \"eta\": null, \"expires\": null, \"group\": null, \"group_index\": null, \"retries\": 0, \"timelimit\": [null, null], \"root_id\": \"<root_id>\", \"parent_id\": null, \"argsrepr\": \"(1,)\", \"kwargsrepr\": \"{}\", \"origin\": \"<origin>\", \"ignore_result\": false, \"replaced_task_nesting\": 0, \"stamped_headers\": null, \"stamps\": {}, \"soloclef_log_context\": {\"request_id\": \"<request_id>\", \"user_id\": \"11111111-1111-4111-8111-111111111111\", \"workspace_id\": \"1\"}, \"surfsense.enqueued_at_ns\": \"<enqueued_at>\"}, \"properties\": {\"correlation_id\": \"<correlation_id>\", \"reply_to\": \"<reply_to>\", \"delivery_mode\": 2, \"delivery_info\": {\"exchange\": \"\", \"routing_key\": \"surfsense\"}, \"priority\": 0, \"body_encoding\": \"base64\", \"delivery_tag\": \"<delivery_tag>\"}}"
+   }
+  ]
+ },
+ {
+  "label": "a workspace already being deleted",
+  "request": {
+   "method": "DELETE",
+   "path": "/api/v1/workspaces/4",
+   "as": "owner"
+  },
+  "status": 409,
+  "body": "{\"error\":{\"code\":\"CONFLICT\",\"message\":\"Workspace is already being deleted.\",\"status\":409,\"request_id\": \"<rid>\",\"timestamp\": \"<ts>\",\"report_url\":\"https://notes.example.invalid/contact\"},\"detail\":\"Workspace is already being deleted.\"}",
+  "queued": []
+ },
+ {
+  "label": "a workspace whose name fills the column",
+  "request": {
+   "method": "DELETE",
+   "path": "/api/v1/workspaces/5",
+   "as": "owner"
+  },
+  "status": 200,
+  "body": "{\"message\":\"Workspace deleted successfully\"}",
+  "queued": [
+   {
+    "queue": "surfsense",
+    "envelope": "{\"body\": \"W1s1XSwge30sIHsiY2FsbGJhY2tzIjogbnVsbCwgImVycmJhY2tzIjogbnVsbCwgImNoYWluIjogbnVsbCwgImNob3JkIjogbnVsbH1d\", \"content-encoding\": \"utf-8\", \"content-type\": \"application/json\", \"headers\": {\"lang\": \"py\", \"task\": \"delete_search_space_background\", \"id\": \"<id>\", \"shadow\": null, \"eta\": null, \"expires\": null, \"group\": null, \"group_index\": null, \"retries\": 0, \"timelimit\": [null, null], \"root_id\": \"<root_id>\", \"parent_id\": null, \"argsrepr\": \"(5,)\", \"kwargsrepr\": \"{}\", \"origin\": \"<origin>\", \"ignore_result\": false, \"replaced_task_nesting\": 0, \"stamped_headers\": null, \"stamps\": {}, \"soloclef_log_context\": {\"request_id\": \"<request_id>\", \"user_id\": \"11111111-1111-4111-8111-111111111111\", \"workspace_id\": \"5\"}, \"surfsense.enqueued_at_ns\": \"<enqueued_at>\"}, \"properties\": {\"correlation_id\": \"<correlation_id>\", \"reply_to\": \"<reply_to>\", \"delivery_mode\": 2, \"delivery_info\": {\"exchange\": \"\", \"routing_key\": \"surfsense\"}, \"priority\": 0, \"body_encoding\": \"base64\", \"delivery_tag\": \"<delivery_tag>\"}}"
+   }
+  ]
+ },
+ {
+  "label": "a workspace the caller is not in",
+  "request": {
+   "method": "DELETE",
+   "path": "/api/v1/workspaces/3",
+   "as": "owner"
+  },
+  "status": 403,
+  "body": "{\"error\":{\"code\":\"FORBIDDEN\",\"message\":\"You don't have access to this workspace\",\"status\":403,\"request_id\": \"<rid>\",\"timestamp\": \"<ts>\",\"report_url\":\"https://notes.example.invalid/contact\"},\"detail\":\"You don't have access to this workspace\"}",
+  "queued": []
+ },
+ {
+  "label": "a workspace the caller also belongs to another of",
+  "request": {
+   "method": "DELETE",
+   "path": "/api/v1/workspaces/3",
+   "as": "member"
+  },
+  "status": 200,
+  "body": "{\"message\":\"Workspace deleted successfully\"}",
+  "queued": [
+   {
+    "queue": "surfsense",
+    "envelope": "{\"body\": \"W1szXSwge30sIHsiY2FsbGJhY2tzIjogbnVsbCwgImVycmJhY2tzIjogbnVsbCwgImNoYWluIjogbnVsbCwgImNob3JkIjogbnVsbH1d\", \"content-encoding\": \"utf-8\", \"content-type\": \"application/json\", \"headers\": {\"lang\": \"py\", \"task\": \"delete_search_space_background\", \"id\": \"<id>\", \"shadow\": null, \"eta\": null, \"expires\": null, \"group\": null, \"group_index\": null, \"retries\": 0, \"timelimit\": [null, null], \"root_id\": \"<root_id>\", \"parent_id\": null, \"argsrepr\": \"(3,)\", \"kwargsrepr\": \"{}\", \"origin\": \"<origin>\", \"ignore_result\": false, \"replaced_task_nesting\": 0, \"stamped_headers\": null, \"stamps\": {}, \"soloclef_log_context\": {\"request_id\": \"<request_id>\", \"user_id\": \"22222222-2222-4222-8222-222222222222\", \"workspace_id\": \"3\"}, \"surfsense.enqueued_at_ns\": \"<enqueued_at>\"}, \"properties\": {\"correlation_id\": \"<correlation_id>\", \"reply_to\": \"<reply_to>\", \"delivery_mode\": 2, \"delivery_info\": {\"exchange\": \"\", \"routing_key\": \"surfsense\"}, \"priority\": 0, \"body_encoding\": \"base64\", \"delivery_tag\": \"<delivery_tag>\"}}"
+   }
+  ]
+ },
+ {
+  "label": "the caller's only workspace, their other being deleted",
+  "request": {
+   "method": "DELETE",
+   "path": "/api/v1/workspaces/6",
+   "as": "sole"
+  },
+  "status": 409,
+  "body": "{\"error\":{\"code\":\"CONFLICT\",\"message\":\"This is your only workspace, so it can't be deleted. Create another workspace first, then delete this one.\",\"status\":409,\"request_id\": \"<rid>\",\"timestamp\": \"<ts>\",\"report_url\":\"https://notes.example.invalid/contact\"},\"detail\":\"This is your only workspace, so it can't be deleted. Create another workspace first, then delete this one.\"}",
+  "queued": []
+ },
+ {
+  "label": "a workspace already being deleted, by its only owner",
+  "request": {
+   "method": "DELETE",
+   "path": "/api/v1/workspaces/7",
+   "as": "sole"
+  },
+  "status": 409,
+  "body": "{\"error\":{\"code\":\"CONFLICT\",\"message\":\"Workspace is already being deleted.\",\"status\":409,\"request_id\": \"<rid>\",\"timestamp\": \"<ts>\",\"report_url\":\"https://notes.example.invalid/contact\"},\"detail\":\"Workspace is already being deleted.\"}",
+  "queued": []
+ },
+ {
+  "label": "a workspace that does not exist",
+  "request": {
+   "method": "DELETE",
+   "path": "/api/v1/workspaces/9999",
+   "as": "owner"
+  },
+  "status": 403,
+  "body": "{\"error\":{\"code\":\"FORBIDDEN\",\"message\":\"You don't have access to this workspace\",\"status\":403,\"request_id\": \"<rid>\",\"timestamp\": \"<ts>\",\"report_url\":\"https://notes.example.invalid/contact\"},\"detail\":\"You don't have access to this workspace\"}",
+  "queued": []
+ },
+ {
+  "label": "a workspace a member's role may not delete",
+  "request": {
+   "method": "DELETE",
+   "path": "/api/v1/workspaces/1",
+   "as": "member"
+  },
+  "status": 403,
+  "body": "{\"error\":{\"code\":\"FORBIDDEN\",\"message\":\"You don't have permission to delete this workspace\",\"status\":403,\"request_id\": \"<rid>\",\"timestamp\": \"<ts>\",\"report_url\":\"https://notes.example.invalid/contact\"},\"detail\":\"You don't have permission to delete this workspace\"}",
+  "queued": []
+ },
+ {
+  "label": "a workspace, with no credential at all",
+  "request": {
+   "method": "DELETE",
+   "path": "/api/v1/workspaces/1",
+   "as": null
+  },
+  "status": 401,
+  "body": "{\"error\":{\"code\":\"UNAUTHORIZED\",\"message\":\"Unauthorized\",\"status\":401,\"request_id\": \"<rid>\",\"timestamp\": \"<ts>\",\"report_url\":\"https://notes.example.invalid/contact\"},\"detail\":\"Unauthorized\"}",
+  "queued": []
+ },
+ {
+  "label": "a workspace id that is not a number",
+  "request": {
+   "method": "DELETE",
+   "path": "/api/v1/workspaces/abc",
+   "as": "owner"
+  },
+  "status": 422,
+  "body": "{\"error\":{\"code\":\"VALIDATION_ERROR\",\"message\":\"Validation failed: path -> workspace_id: Input should be a valid integer, unable to parse string as an integer\",\"status\":422,\"request_id\": \"<rid>\",\"timestamp\": \"<ts>\",\"report_url\":\"https://notes.example.invalid/contact\",\"fields\":[{\"loc\":[\"path\",\"workspace_id\"],\"msg\":\"Input should be a valid integer, unable to parse string as an integer\"}]},\"detail\":\"Validation failed: path -> workspace_id: Input should be a valid integer, unable to parse string as an integer\"}",
+  "queued": []
+ },
+ {
+  "label": "the same workspace twice",
+  "request": {
+   "method": "DELETE",
+   "path": "/api/v1/workspaces/1",
+   "as": "owner"
+  },
+  "status": 409,
+  "body": "{\"error\":{\"code\":\"CONFLICT\",\"message\":\"Workspace is already being deleted.\",\"status\":409,\"request_id\": \"<rid>\",\"timestamp\": \"<ts>\",\"report_url\":\"https://notes.example.invalid/contact\"},\"detail\":\"Workspace is already being deleted.\"}",
+  "queued": [
+   {
+    "queue": "surfsense",
+    "envelope": "{\"body\": \"W1sxXSwge30sIHsiY2FsbGJhY2tzIjogbnVsbCwgImVycmJhY2tzIjogbnVsbCwgImNoYWluIjogbnVsbCwgImNob3JkIjogbnVsbH1d\", \"content-encoding\": \"utf-8\", \"content-type\": \"application/json\", \"headers\": {\"lang\": \"py\", \"task\": \"delete_search_space_background\", \"id\": \"<id>\", \"shadow\": null, \"eta\": null, \"expires\": null, \"group\": null, \"group_index\": null, \"retries\": 0, \"timelimit\": [null, null], \"root_id\": \"<root_id>\", \"parent_id\": null, \"argsrepr\": \"(1,)\", \"kwargsrepr\": \"{}\", \"origin\": \"<origin>\", \"ignore_result\": false, \"replaced_task_nesting\": 0, \"stamped_headers\": null, \"stamps\": {}, \"soloclef_log_context\": {\"request_id\": \"<request_id>\", \"user_id\": \"11111111-1111-4111-8111-111111111111\", \"workspace_id\": \"1\"}, \"surfsense.enqueued_at_ns\": \"<enqueued_at>\"}, \"properties\": {\"correlation_id\": \"<correlation_id>\", \"reply_to\": \"<reply_to>\", \"delivery_mode\": 2, \"delivery_info\": {\"exchange\": \"\", \"routing_key\": \"surfsense\"}, \"priority\": 0, \"body_encoding\": \"base64\", \"delivery_tag\": \"<delivery_tag>\"}}"
+   }
+  ]
+ }
+]

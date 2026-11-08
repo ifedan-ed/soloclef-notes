@@ -2,7 +2,7 @@
 // and the check that it is still the schema Soloclef's migrations produce.
 //
 // There is no schema file and no model file in this repository: the schema
-// lives in surfsense_backend/alembic, as a chain of migrations. sqlc needs one
+// lives in soloclef_backend/alembic, as a chain of migrations. sqlc needs one
 // file, so schema.sql is produced from those migrations by
 // dump_from_migrations.sh and committed — which means it is a copy, and a copy
 // goes stale silently. drift_test.go is what stops that: it produces the schema

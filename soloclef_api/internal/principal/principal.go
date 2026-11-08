@@ -16,6 +16,9 @@ const (
 	MethodSession Method = "session"
 	// MethodPersonalAccessToken is an ss_pat_ API key.
 	MethodPersonalAccessToken Method = "pat"
+	// MethodAgent is an AI agent's access token from the identity provider,
+	// verified by internal/agentsignin.
+	MethodAgent Method = "agent"
 )
 
 // Principal is the resolved caller.
@@ -27,5 +30,12 @@ type Principal struct {
 // IsGated reports whether this principal only sees workspaces that have API
 // access switched on, matching AuthContext.is_gated.
 func (p Principal) IsGated() bool {
-	return p.Method == MethodPersonalAccessToken
+	return p.Method == MethodPersonalAccessToken || p.Method == MethodAgent
+}
+
+// IsSession reports whether an interactive session proved this request, matching
+// AuthContext.is_session. The routes behind require_session_context refuse
+// everything else, so an API key is told so rather than let through.
+func (p Principal) IsSession() bool {
+	return p.Method == MethodSession
 }

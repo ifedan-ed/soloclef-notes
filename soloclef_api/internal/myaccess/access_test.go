@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"git.danvics.com/danvics/surfsense/soloclef_api/internal/pythonjson"
-	"git.danvics.com/danvics/surfsense/soloclef_api/internal/workspaceaccess"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/pythonjson"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/workspaceaccess"
 )
 
 // testdata/access.json is four requests to the running Python tier: the rows

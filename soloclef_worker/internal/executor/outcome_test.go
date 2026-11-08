@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"git.danvics.com/danvics/surfsense/soloclef_worker/internal/broker"
-	"git.danvics.com/danvics/surfsense/soloclef_worker/internal/celery"
+	"git.danvics.com/danvics/soloclef/soloclef_celery/celery"
+	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/broker"
 )
 
 // A failure the body raised must read back as that exception, not as a worker

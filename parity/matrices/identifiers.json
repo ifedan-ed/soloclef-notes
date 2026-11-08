@@ -1,0 +1,50 @@
+{
+ "why": "Every id a path parameter can carry that is not a row. Malformed, absent, outside the column, and the spellings pydantic accepts where a regex would not — which is the shape of the parser divergence this suite has a named regression for. An empty id is not here on purpose: the proxy's matchers are `[^/]+` per parameter, so `/api/v1/logs/` never reaches the Go tier at all and comparing it would compare a request neither tier is asked (custom/docs/go-api-tier.md, \"The wildcards that do not work\"). A percent-encoded slash is not here either, and that one is a finding rather than a decision: `/api/v1/pats/..%2F..%2Fpats` is a 404 on the Python tier and a 422 here, because uvicorn unescapes the path before Starlette routes it while Go's ServeMux keeps the escaped segment as one path parameter. Whether such a request ever reaches this tier is the proxy's answer and not ours — Caddy normalises a path before its matchers see it, and this suite has no proxy in it to ask. custom/docs/go-api-tier.md records it.",
+ "target": "path",
+ "variants": [
+  {
+   "label": "an id no row has",
+   "value": "4242"
+  },
+  {
+   "label": "an id that is not a number",
+   "value": "abc"
+  },
+  {
+   "label": "zero",
+   "value": "0"
+  },
+  {
+   "label": "a negative id",
+   "value": "-1"
+  },
+  {
+   "label": "a decimal point",
+   "value": "1.0"
+  },
+  {
+   "label": "a leading plus",
+   "value": "+1"
+  },
+  {
+   "label": "an underscore separator, which pydantic accepts",
+   "value": "1_000"
+  },
+  {
+   "label": "surrounding spaces, which pydantic strips",
+   "value": "%201%20"
+  },
+  {
+   "label": "past int32",
+   "value": "2147483648"
+  },
+  {
+   "label": "past int64",
+   "value": "9223372036854775808"
+  },
+  {
+   "label": "twenty digits",
+   "value": "99999999999999999999"
+  }
+ ]
+}

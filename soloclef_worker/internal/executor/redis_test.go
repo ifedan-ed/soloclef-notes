@@ -17,7 +17,7 @@ const (
 	EnvTestRedis = "SOLOCLEF_WORKER_TEST_REDIS"
 
 	// EnvPythonContainer is a container running *this checkout's*
-	// surfsense_backend, which the live backend container is not: the task
+	// soloclef_backend, which the live backend container is not: the task
 	// entrypoint is new here. The worker test starts task processes in it.
 	EnvPythonContainer = "SOLOCLEF_WORKER_TEST_PYTHON_CONTAINER"
 

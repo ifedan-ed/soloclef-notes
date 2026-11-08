@@ -171,3 +171,66 @@ func TestADatabaseFailureIsNotMistakenForARefusal(t *testing.T) {
 		t.Errorf("got %v, want the database failure", err)
 	}
 }
+
+// foreignIssuer is the issuer tokenForeignIssuer claims.
+const foreignIssuer = "https://sso.example.com/application/o/app/"
+
+// fakeAgents is an agent verifier that owns one issuer, so the branch can be
+// tested without a provider.
+type fakeAgents struct {
+	issuer  string
+	account string
+	err     error
+	asked   int
+}
+
+func (a *fakeAgents) OwnsIssuer(issuer string) bool { return issuer == a.issuer }
+
+func (a *fakeAgents) Resolve(context.Context, string) (string, error) {
+	a.asked++
+	return a.account, a.err
+}
+
+// An agent's token no longer costs a second hop: when the verifier owns the
+// issuer it is resolved here, and when it does not the request still goes to the
+// tier that can check it.
+func TestAnAgentsTokenIsVerifiedHereWhenThisTierOwnsTheIssuer(t *testing.T) {
+	agents := &fakeAgents{
+		issuer:  foreignIssuer,
+		account: "11111111-1111-1111-1111-111111111111",
+	}
+	resolver := resolverFor(directoryWithLiveKey())
+	resolver.Agents = agents
+
+	caller, err := resolver.Resolve(context.Background(), requestWith("Bearer "+tokenForeignIssuer, ""))
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if caller.UserID != agents.account || caller.Method != MethodAgent {
+		t.Errorf("got %v, want the agent's account", caller)
+	}
+	if !caller.IsGated() {
+		t.Error("an agent sees every workspace; it must be gated like an API key")
+	}
+
+	// A token from some other issuer is still the Python tier's to judge.
+	agents.issuer = "https://elsewhere.example.invalid/"
+	if _, err := resolver.Resolve(context.Background(), requestWith("Bearer "+tokenForeignIssuer, "")); !errors.Is(err, ErrServedByPythonTier) {
+		t.Errorf("got %v, want ErrServedByPythonTier", err)
+	}
+}
+
+// A refusal the verifier reached is answered here, in its own status and words,
+// and never falls through to the session check or to the Python tier.
+func TestAnAgentsRefusalIsNotAFallThrough(t *testing.T) {
+	refusal := Refusal{Status: http.StatusForbidden, Message: "This sign-in may not use Soloclef Notes"}
+	resolver := resolverFor(directoryWithLiveKey())
+	resolver.Agents = &fakeAgents{issuer: foreignIssuer, err: refusal}
+
+	_, err := resolver.Resolve(context.Background(),
+		requestWith("Bearer "+tokenForeignIssuer, tokenValid))
+	var got Refusal
+	if !errors.As(err, &got) || got != refusal {
+		t.Fatalf("got %v, want the verifier's own refusal", err)
+	}
+}

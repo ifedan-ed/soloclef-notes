@@ -1,0 +1,209 @@
+{
+ "route": "DELETE /api/v1/logs/{log_id}",
+ "why": "The one single-log route that always asked for its own permission (logs:delete, where the create and the update asked for logs:read until 2026-11-08). Like them it loaded the row before authorising, so the rows a caller may not touch are asked for here: one of another workspace, and one that is not there, which now answer the same way.",
+ "parameters": {
+  "log_id": 1
+ },
+ "tables": [
+  "logs"
+ ],
+ "matrices": [
+  "credentials",
+  "identifiers:log_id",
+  "cross_site"
+ ],
+ "cases": [
+  {
+   "label": "a log of another workspace, which answers as one that is not there",
+   "path": "/api/v1/logs/6"
+  },
+  {
+   "label": "the same log twice",
+   "path": "/api/v1/logs/1"
+  },
+  {
+   "label": "delete a log",
+   "as": "owner",
+   "path": "/api/v1/logs/5",
+   "tables": [
+    "logs"
+   ]
+  },
+  {
+   "label": "csrf: delete a log by cookie from a foreign origin",
+   "as": "cookie_owner",
+   "path": "/api/v1/logs/1",
+   "headers": {
+    "Origin": "https://attacker.example.invalid"
+   },
+   "tables": [
+    "logs"
+   ]
+  },
+  {
+   "label": "csrf: delete a log by cookie from an allowed origin",
+   "as": "cookie_owner",
+   "path": "/api/v1/logs/1",
+   "headers": {
+    "Origin": "https://notes.example.invalid"
+   },
+   "tables": [
+    "logs"
+   ]
+  },
+  {
+   "label": "DELETE a log of the caller's workspace",
+   "as": "owner",
+   "path": "/api/v1/logs/1",
+   "headers": {
+    "Content-Type": "application/json"
+   },
+   "tables": [
+    "logs"
+   ]
+  },
+  {
+   "label": "DELETE as a member whose role has logs:delete",
+   "as": "scribe",
+   "path": "/api/v1/logs/1",
+   "headers": {
+    "Content-Type": "application/json"
+   },
+   "tables": [
+    "logs"
+   ]
+  },
+  {
+   "label": "DELETE as a member whose role lacks logs:delete",
+   "as": "bare",
+   "path": "/api/v1/logs/1",
+   "headers": {
+    "Content-Type": "application/json"
+   },
+   "tables": [
+    "logs"
+   ]
+  },
+  {
+   "label": "DELETE as an outsider",
+   "as": "outsider",
+   "path": "/api/v1/logs/1",
+   "headers": {
+    "Content-Type": "application/json"
+   },
+   "tables": [
+    "logs"
+   ]
+  },
+  {
+   "label": "DELETE a log of a workspace the caller cannot see",
+   "as": "scribe",
+   "path": "/api/v1/logs/6",
+   "headers": {
+    "Content-Type": "application/json"
+   },
+   "tables": [
+    "logs"
+   ]
+  },
+  {
+   "label": "DELETE a log that is not there",
+   "as": "owner",
+   "path": "/api/v1/logs/999",
+   "headers": {
+    "Content-Type": "application/json"
+   },
+   "tables": [
+    "logs"
+   ]
+  },
+  {
+   "label": "DELETE no credential",
+   "as": "none",
+   "path": "/api/v1/logs/1",
+   "headers": {
+    "Content-Type": "application/json"
+   },
+   "tables": [
+    "logs"
+   ]
+  },
+  {
+   "label": "DELETE an inactive account",
+   "as": "inactive",
+   "path": "/api/v1/logs/1",
+   "headers": {
+    "Content-Type": "application/json"
+   },
+   "tables": [
+    "logs"
+   ]
+  },
+  {
+   "label": "DELETE an API key against a gated workspace",
+   "as": "key_owner",
+   "path": "/api/v1/logs/1",
+   "headers": {
+    "Content-Type": "application/json"
+   },
+   "tables": [
+    "logs"
+   ]
+  },
+  {
+   "label": "DELETE log_id=abc",
+   "as": "owner",
+   "path": "/api/v1/logs/abc",
+   "headers": {
+    "Content-Type": "application/json"
+   },
+   "tables": [
+    "logs"
+   ]
+  },
+  {
+   "label": "DELETE log_id past int32",
+   "as": "owner",
+   "path": "/api/v1/logs/2200000000",
+   "headers": {
+    "Content-Type": "application/json"
+   },
+   "tables": [
+    "logs"
+   ]
+  },
+  {
+   "label": "DELETE log_id past int64",
+   "as": "owner",
+   "path": "/api/v1/logs/99999999999999999999",
+   "headers": {
+    "Content-Type": "application/json"
+   },
+   "tables": [
+    "logs"
+   ]
+  },
+  {
+   "label": "DELETE log_id 0",
+   "as": "owner",
+   "path": "/api/v1/logs/0",
+   "headers": {
+    "Content-Type": "application/json"
+   },
+   "tables": [
+    "logs"
+   ]
+  },
+  {
+   "label": "DELETE with an Origin header",
+   "as": "owner",
+   "path": "/api/v1/logs/1",
+   "headers": {
+    "Origin": "https://notes.example.invalid"
+   },
+   "tables": [
+    "logs"
+   ]
+  }
+ ]
+}

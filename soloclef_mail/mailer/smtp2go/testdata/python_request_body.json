@@ -1,0 +1,91 @@
+[
+  {
+    "name": "text_only",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "Reset your password",
+      "text_body": "Use the link.\n"
+    },
+    "sender": "notes@queue.test",
+    "expected": "{\"sender\":\"notes@queue.test\",\"to\":[\"person@queue.test\"],\"subject\":\"Reset your password\",\"text_body\":\"Use the link.\\n\"}",
+    "content_type": "application/json",
+    "content_length": "118"
+  },
+  {
+    "name": "html_and_reply_to",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "You are invited",
+      "text_body": "Open the link.",
+      "html_body": "<p>a &amp; b</p>",
+      "reply_to": "support@queue.test"
+    },
+    "sender": "Soloclef Notes <notes@queue.test>",
+    "expected": "{\"sender\":\"Soloclef Notes <notes@queue.test>\",\"to\":[\"person@queue.test\"],\"subject\":\"You are invited\",\"text_body\":\"Open the link.\",\"html_body\":\"<p>a &amp; b</p>\",\"custom_headers\":[{\"header\":\"Reply-To\",\"value\":\"support@queue.test\"}]}",
+    "content_type": "application/json",
+    "content_length": "231"
+  },
+  {
+    "name": "non_ascii_subject_and_display_name",
+    "message": {
+      "to": "rené@queue.test",
+      "subject": "Résumé — über 漢字 😀",
+      "text_body": "Grüße\n ends with nbsp",
+      "html_body": "<p>Grüße &amp; —  </p>",
+      "reply_to": "René <support@queue.test>",
+      "idempotency_key": "idem-1"
+    },
+    "sender": "Soloclef Nötes <notes@queue.test>",
+    "expected": "{\"sender\":\"Soloclef Nötes <notes@queue.test>\",\"to\":[\"rené@queue.test\"],\"subject\":\"Résumé — über 漢字 😀\",\"text_body\":\"Grüße\\n ends with nbsp\",\"html_body\":\"<p>Grüße &amp; —  </p>\",\"custom_headers\":[{\"header\":\"Reply-To\",\"value\":\"René <support@queue.test>\"}]}",
+    "content_type": "application/json",
+    "content_length": "277"
+  },
+  {
+    "name": "long_subject_that_would_need_folding",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "Your automation “Weekly reading digest for the research notebook” — 2026-11-08 finished and here is the very long line a header would have to fold",
+      "text_body": "x"
+    },
+    "sender": "notes@queue.test",
+    "expected": "{\"sender\":\"notes@queue.test\",\"to\":[\"person@queue.test\"],\"subject\":\"Your automation “Weekly reading digest for the research notebook” — 2026-11-08 finished and here is the very long line a header would have to fold\",\"text_body\":\"x\"}",
+    "content_type": "application/json",
+    "content_length": "237"
+  },
+  {
+    "name": "attachments",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "Your export",
+      "text_body": "Attached.",
+      "attachments": [
+        {
+          "filename": "export é.txt",
+          "content_base64": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh///gBDT05UUkFDVA==",
+          "content_type": "application/octet-stream"
+        },
+        {
+          "filename": "b.bin",
+          "content_base64": "",
+          "content_type": "image/png"
+        }
+      ]
+    },
+    "sender": "notes@queue.test",
+    "expected": "{\"sender\":\"notes@queue.test\",\"to\":[\"person@queue.test\"],\"subject\":\"Your export\",\"text_body\":\"Attached.\",\"attachments\":[{\"filename\":\"export é.txt\",\"fileblob\":\"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh///gBDT05UUkFDVA==\",\"mimetype\":\"application/octet-stream\"},{\"filename\":\"b.bin\",\"fileblob\":\"\",\"mimetype\":\"image/png\"}]}",
+    "content_type": "application/json",
+    "content_length": "319"
+  },
+  {
+    "name": "body_with_dot_lines_and_crlf",
+    "message": {
+      "to": "person@queue.test",
+      "subject": "dots",
+      "text_body": ".dot first\r\nsecond\n.\n..double\n\ttab"
+    },
+    "sender": "notes@queue.test",
+    "expected": "{\"sender\":\"notes@queue.test\",\"to\":[\"person@queue.test\"],\"subject\":\"dots\",\"text_body\":\".dot first\\r\\nsecond\\n.\\n..double\\n\\ttab\"}",
+    "content_type": "application/json",
+    "content_length": "128"
+  }
+]

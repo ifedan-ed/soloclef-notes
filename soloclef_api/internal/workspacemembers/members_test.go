@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"git.danvics.com/danvics/surfsense/soloclef_api/internal/pythonjson"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/pythonjson"
 )
 
 // The two fixtures are one request to the running Python tier:

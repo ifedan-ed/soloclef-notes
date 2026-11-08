@@ -5,7 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"git.danvics.com/danvics/surfsense/soloclef_worker/internal/celery"
+	"git.danvics.com/danvics/soloclef/soloclef_celery/celery"
+
+	"git.danvics.com/danvics/soloclef/soloclef_celery/monotonic"
 )
 
 func stampedAt(monotonicNs int64) *celery.Message {
@@ -58,7 +60,7 @@ func TestQueueWaitRefusesAStampFromAnotherClock(t *testing.T) {
 // The real clock must be readable and must move forward; everything above is
 // meaningless if it is not.
 func TestMonotonicClockIsReadableAndAdvances(t *testing.T) {
-	first, err := ReadMonotonic()
+	first, err := monotonic.Read()
 	if err != nil {
 		t.Fatalf("ReadMonotonic: %v", err)
 	}
@@ -66,7 +68,7 @@ func TestMonotonicClockIsReadableAndAdvances(t *testing.T) {
 		t.Fatalf("ReadMonotonic = %v", first)
 	}
 	time.Sleep(2 * time.Millisecond)
-	second, err := ReadMonotonic()
+	second, err := monotonic.Read()
 	if err != nil {
 		t.Fatalf("ReadMonotonic: %v", err)
 	}
