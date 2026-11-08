@@ -2,6 +2,12 @@
 
 A sender owns one mailer, so its SMTP session (or HTTP client) stays open
 from one message to the next.
+
+Before a message is given to the mail server the sender claims the attempt,
+and once the mail server has taken it the sender marks it sent
+(``dedupe/handover_guard.py``). That is what stops a message put back by a
+restart from going out twice, and the attempt in the key is what keeps a
+retry sending.
 """
 
 from __future__ import annotations
@@ -18,6 +24,7 @@ from app.mailer.protocol import (
     MailerUnavailableError,
 )
 
+from .dedupe.handover_guard import HandoverGuard
 from .job import MailJob
 from .queue_store import QueueStore
 from .retry_policy import retry_delay
@@ -34,11 +41,13 @@ class MailSender:
         index: int,
         store: QueueStore,
         mailer: Mailer,
+        guard: HandoverGuard,
         clock: Callable[[], float] = time.time,
     ) -> None:
         self.index = index
         self._store = store
         self._mailer = mailer
+        self._guard = guard
         self._clock = clock
 
     async def run(self, stop: asyncio.Event) -> None:
@@ -65,6 +74,14 @@ class MailSender:
             await self._store.done(self.index, raw)
             return "expired"
 
+        handed_over = await self._guard.claim(job.id, job.attempt)
+        if handed_over is not None:
+            logger.warning(
+                "%s not sent again: this attempt was already %s", tag, handed_over
+            )
+            await self._store.done(self.index, raw)
+            return "duplicate"
+
         started = time.monotonic()
         try:
             await self._mailer.send(job.message)
@@ -83,6 +100,10 @@ class MailSender:
             await self._store.done(self.index, raw)
             return "failed"
 
+        # Marked before the queue entry is dropped, so a death between the
+        # two leaves a message that is put back and then refused, rather than
+        # one put back and sent again.
+        await self._guard.mark_sent(job.id, job.attempt)
         await self._store.done(self.index, raw)
         logger.info("%s sent in %.0f ms", tag, (time.monotonic() - started) * 1000)
         return "sent"

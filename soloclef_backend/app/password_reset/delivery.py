@@ -17,6 +17,7 @@ import asyncio
 import hashlib
 import logging
 import time
+from dataclasses import replace
 
 from app.config import config
 from app.mail_queue import MailQueueUnavailableError, enqueue_email
@@ -29,6 +30,22 @@ logger = logging.getLogger(__name__)
 _WINDOW_SECONDS = 3600
 # Strong references: a bare create_task may be collected before it runs.
 _pending: set[asyncio.Task] = set()
+
+
+def reset_mail_key(token: str) -> str:
+    """What identifies this reset email: the token the link in it carries.
+
+    The same token is the same email, so a request answered twice -- a retried
+    POST, a double-submitted form -- mails once. A fresh request mints a fresh
+    token, and a second reset email is exactly what the person asking for one
+    wants, so the token and not the account is what goes in the key. Hashed:
+    the key is kept in Redis and the token is not ours to leave lying about.
+
+    fastapi-users puts a freshly salted password hash in every token, so two
+    separate requests never share one: this collapses the same token queued
+    twice, and nothing else.
+    """
+    return f"password_reset:{hashlib.sha256(token.encode('utf-8')).hexdigest()}"
 
 
 def _address_key(email: str) -> str:
@@ -71,7 +88,10 @@ async def send_reset_email(user_id: object, email: str, token: str) -> bool:
         return False
     try:
         await enqueue_email(
-            build_reset_email(to=email, token=token),
+            replace(
+                build_reset_email(to=email, token=token),
+                idempotency_key=reset_mail_key(token),
+            ),
             kind="password_reset",
             ref=user_id,
             not_after=time.time() + config.PASSWORD_RESET_TOKEN_LIFETIME_SECONDS,

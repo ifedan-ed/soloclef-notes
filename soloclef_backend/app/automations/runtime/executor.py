@@ -443,6 +443,7 @@ async def _maybe_email_result(
         return
     await send_run_result_email(
         session,
+        run_id=facts.run_id,
         owner_user_id=facts.owner_user_id,
         automation_id=facts.automation_id,
         automation_name=facts.automation_name,

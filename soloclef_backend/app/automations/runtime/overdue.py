@@ -162,6 +162,7 @@ async def _email_if_recent(
     try:
         await send_run_result_email(
             session,
+            run_id=run.id,
             owner_user_id=automation.created_by_user_id,
             automation_id=automation.id,
             automation_name=automation.name,

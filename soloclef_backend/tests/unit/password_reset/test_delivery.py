@@ -78,3 +78,25 @@ def test_the_cap_counts_per_address_case_insensitively():
         "a@example.com"
     )
     assert "a@example.com" not in delivery._address_key("a@example.com")
+
+
+async def test_the_mail_is_identified_by_the_token_it_carries(outbox):
+    assert await delivery.send_reset_email("u1", "a@example.com", "tok-one")
+    assert await delivery.send_reset_email("u1", "a@example.com", "tok-one")
+    assert await delivery.send_reset_email("u1", "a@example.com", "tok-two")
+    first, again, second = (m.idempotency_key for m in outbox.sent)
+    assert first == again
+    assert first != second
+
+
+async def test_the_token_is_not_in_the_key_that_identifies_the_mail(outbox):
+    assert await delivery.send_reset_email("u1", "a@example.com", "tok-secret-123")
+    key = outbox.sent[0].idempotency_key
+    assert key.startswith("password_reset:")
+    assert "tok-secret-123" not in key
+
+
+async def test_two_accounts_asking_at_once_are_two_different_mails(outbox):
+    assert await delivery.send_reset_email("u1", "a@example.com", "tok-a")
+    assert await delivery.send_reset_email("u2", "b@example.com", "tok-b")
+    assert outbox.sent[0].idempotency_key != outbox.sent[1].idempotency_key

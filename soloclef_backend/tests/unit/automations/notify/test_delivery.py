@@ -45,6 +45,7 @@ async def test_success_email_goes_to_the_owner_with_the_output(outbox):
     user = SimpleNamespace(id=uuid.uuid4(), email="owner@example.com")
     await delivery.send_run_result_email(
         _Session(user),
+        run_id=11,
         owner_user_id=user.id,
         automation_name="Weekly digest",
         status="succeeded",
@@ -61,6 +62,7 @@ async def test_failure_email_carries_the_reason(outbox):
     user = SimpleNamespace(id=uuid.uuid4(), email="owner@example.com")
     await delivery.send_run_result_email(
         _Session(user),
+        run_id=11,
         owner_user_id=user.id,
         automation_name="Weekly digest",
         status="failed",
@@ -75,6 +77,7 @@ async def test_needs_attention_email_carries_the_reason(outbox):
     user = SimpleNamespace(id=uuid.uuid4(), email="owner@example.com")
     await delivery.send_run_result_email(
         _Session(user),
+        run_id=11,
         owner_user_id=user.id,
         automation_name="Weekly digest",
         status="needs_attention",
@@ -90,6 +93,7 @@ async def test_nothing_is_sent_when_mail_is_off(outbox, monkeypatch):
     user = SimpleNamespace(id=uuid.uuid4(), email="owner@example.com")
     await delivery.send_run_result_email(
         _Session(user),
+        run_id=11,
         owner_user_id=user.id,
         automation_name="Weekly digest",
         status="succeeded",
@@ -101,6 +105,7 @@ async def test_nothing_is_sent_when_mail_is_off(outbox, monkeypatch):
 async def test_nothing_is_sent_without_an_owner(outbox):
     await delivery.send_run_result_email(
         _Session(None),
+        run_id=11,
         owner_user_id=None,
         automation_name="Weekly digest",
         status="succeeded",
@@ -112,6 +117,7 @@ async def test_nothing_is_sent_without_an_owner(outbox):
 async def test_a_missing_owner_account_sends_nothing(outbox):
     await delivery.send_run_result_email(
         _Session(None),
+        run_id=11,
         owner_user_id=uuid.uuid4(),
         automation_name="Weekly digest",
         status="succeeded",
@@ -130,6 +136,7 @@ async def test_a_queue_failure_is_swallowed(outbox, monkeypatch):
     user = SimpleNamespace(id=uuid.uuid4(), email="owner@example.com")
     await delivery.send_run_result_email(
         _Session(user),
+        run_id=11,
         owner_user_id=user.id,
         automation_name="Weekly digest",
         status="succeeded",
@@ -142,6 +149,7 @@ async def test_a_queued_email_is_logged_without_the_address(outbox, caplog):
     with caplog.at_level("INFO", logger=delivery.logger.name):
         await delivery.send_run_result_email(
             _Session(user),
+            run_id=11,
             owner_user_id=user.id,
             automation_id=3,
             automation_name="Weekly digest",
@@ -164,6 +172,7 @@ async def test_mail_off_is_logged_not_silent(outbox, monkeypatch, caplog):
     with caplog.at_level("WARNING", logger=delivery.logger.name):
         await delivery.send_run_result_email(
             _Session(user),
+            run_id=11,
             owner_user_id=user.id,
             automation_id=3,
             automation_name="Weekly digest",
@@ -187,6 +196,7 @@ async def test_a_message_that_cannot_be_built_is_swallowed_and_logged(
     with caplog.at_level("ERROR", logger=delivery.logger.name):
         await delivery.send_run_result_email(
             _Session(user),
+            run_id=11,
             owner_user_id=user.id,
             automation_id=3,
             automation_name="Weekly digest",
@@ -195,3 +205,56 @@ async def test_a_message_that_cannot_be_built_is_swallowed_and_logged(
         )  # does not raise
     assert "could not be built: ValueError" in caplog.text
     assert outbox.sent == []
+
+
+async def test_one_run_result_is_one_mail(outbox):
+    user = SimpleNamespace(id=uuid.uuid4(), email="owner@example.com")
+    for _ in range(2):
+        await delivery.send_run_result_email(
+            _Session(user),
+            run_id=42,
+            owner_user_id=user.id,
+            automation_id=3,
+            automation_name="Weekly digest",
+            status="succeeded",
+            result={"final_message": "x"},
+        )
+    assert outbox.sent[0].idempotency_key == outbox.sent[1].idempotency_key
+    assert "42" in outbox.sent[0].idempotency_key
+
+
+async def test_another_run_of_the_same_automation_is_its_own_mail(outbox):
+    user = SimpleNamespace(id=uuid.uuid4(), email="owner@example.com")
+    for run_id in (42, 43):
+        await delivery.send_run_result_email(
+            _Session(user),
+            run_id=run_id,
+            owner_user_id=user.id,
+            automation_id=3,
+            automation_name="Weekly digest",
+            status="succeeded",
+            result={"final_message": "x"},
+        )
+    assert outbox.sent[0].idempotency_key != outbox.sent[1].idempotency_key
+
+
+async def test_a_run_that_ends_a_second_way_is_not_swallowed(outbox):
+    """The timed-out sweep and the executor race for the same run.
+
+    Only one of them writes the terminal status, so only one should mail; but
+    if both ever did, the two mails say different things, and a key that
+    swallowed the second would hide that rather than fix it.
+    """
+    user = SimpleNamespace(id=uuid.uuid4(), email="owner@example.com")
+    for status in ("succeeded", "timed_out"):
+        await delivery.send_run_result_email(
+            _Session(user),
+            run_id=42,
+            owner_user_id=user.id,
+            automation_id=3,
+            automation_name="Weekly digest",
+            status=status,
+            result={"final_message": "x"},
+            error={"message": "ran out of time"},
+        )
+    assert outbox.sent[0].idempotency_key != outbox.sent[1].idempotency_key

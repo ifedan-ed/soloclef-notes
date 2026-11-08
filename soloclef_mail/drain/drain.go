@@ -9,6 +9,11 @@
 //
 // One sender owns one mailer, so its session stays open from one message to
 // the next.
+//
+// Before a message is given to the mail server the sender claims the attempt,
+// and once the mail server has taken it the sender marks it sent (package
+// dedupe). That is what stops a message put back by a restart from going out
+// twice, and the attempt in the key is what keeps a retry sending.
 package drain
 
 import (
@@ -41,6 +46,16 @@ type Store interface {
 	RetryLater(ctx context.Context, sender int, raw, next string, due float64) error
 }
 
+// Guard is the send guard as one sender uses it: dedupe.HandoverGuard.
+type Guard interface {
+	// Claim takes this attempt to send it. It returns "" when this sender may
+	// send, and otherwise what is already recorded (dedupe.Claimed or
+	// dedupe.Sent), in which case the message must not be sent.
+	Claim(ctx context.Context, mailID string, attempt int) (string, error)
+	// MarkSent records that the mail server took it.
+	MarkSent(ctx context.Context, mailID string, attempt int) error
+}
+
 // Outcome is what was decided about one message. The words are the ones
 // sender.py returns, so the two senders' logs read the same.
 type Outcome string
@@ -52,6 +67,7 @@ const (
 	GaveUp     Outcome = "gave_up"
 	Expired    Outcome = "expired"
 	Unreadable Outcome = "unreadable"
+	Duplicate  Outcome = "duplicate"
 )
 
 // Sender is one mail sender.
@@ -59,6 +75,7 @@ type Sender struct {
 	Index  int
 	Store  Store
 	Mailer mailer.Mailer
+	Guard  Guard
 	// Clock is time.time(): the wall clock the expiry and the retry time are
 	// in. The monotonic clock times the send; these two are not the same clock
 	// and a retry due time written in the monotonic one is a message that never
@@ -118,10 +135,25 @@ func (s Sender) Handle(ctx context.Context, raw string) (Outcome, error) {
 		return Expired, s.Store.Done(ctx, s.Index, raw)
 	}
 
+	handedOver, err := s.Guard.Claim(ctx, job.ID, job.Attempt)
+	if err != nil {
+		return "", err
+	}
+	if handedOver != "" {
+		log.Warn("mail not sent again: this attempt was already handed over", "state", handedOver)
+		return Duplicate, s.Store.Done(ctx, s.Index, raw)
+	}
+
 	started := time.Now()
 	err = s.Mailer.Send(ctx, message(job))
 	switch {
 	case err == nil:
+		// Marked before the queue entry is dropped, so a death between the two
+		// leaves a message that is put back and then refused, rather than one
+		// put back and sent again.
+		if err := s.Guard.MarkSent(ctx, job.ID, job.Attempt); err != nil {
+			return Sent, err
+		}
 		if err := s.Store.Done(ctx, s.Index, raw); err != nil {
 			return Sent, err
 		}

@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"git.danvics.com/danvics/soloclef/soloclef_mail/dedupe"
+	"git.danvics.com/danvics/soloclef/soloclef_mail/dedupestore"
 	"git.danvics.com/danvics/soloclef/soloclef_mail/enqueue"
 	"git.danvics.com/danvics/soloclef/soloclef_mail/mailer"
 	"git.danvics.com/danvics/soloclef/soloclef_mail/mailer/smtp"
@@ -99,6 +101,7 @@ func goSettings(t *testing.T, env stackEnv, store queuestore.Store, senders int)
 			return m, err
 		},
 		Store: store,
+		Guard: dedupe.HandoverGuard{Keys: dedupestore.Keys{Redis: store.Redis}},
 	}
 }
 
@@ -109,7 +112,7 @@ func TestAGoSenderDeliversABurstQueuedByTheGoProducer(t *testing.T) {
 	ctx := context.Background()
 
 	const burst = 60
-	producer := enqueue.Producer{Broker: pushBroker{store}}
+	producer := enqueue.Producer{Broker: pushBroker{store, dedupestore.Keys{Redis: store.Redis}}}
 	queueingStarted := time.Now()
 	for n := range burst {
 		if _, err := producer.Queue(ctx, enqueue.Request{
@@ -175,7 +178,7 @@ func TestThePythonSenderDeliversWhatTheGoProducerQueued(t *testing.T) {
 	store, _ := newStore(t, env)
 	ctx := context.Background()
 
-	producer := enqueue.Producer{Broker: pushBroker{store}}
+	producer := enqueue.Producer{Broker: pushBroker{store, dedupestore.Keys{Redis: store.Redis}}}
 	if _, err := producer.Queue(ctx, enqueue.Request{
 		Message: mailjob.Message{
 			To:       "person@queue.test",
@@ -232,7 +235,7 @@ func TestAnExpiredCodeEmailIsNeverSent(t *testing.T) {
 	store, _ := newStore(t, env)
 	ctx := context.Background()
 
-	producer := enqueue.Producer{Broker: pushBroker{store}}
+	producer := enqueue.Producer{Broker: pushBroker{store, dedupestore.Keys{Redis: store.Redis}}}
 	for _, c := range []struct {
 		subject  string
 		notAfter time.Time
@@ -263,7 +266,7 @@ func TestATemporaryFailureComesBackAndIsDelivered(t *testing.T) {
 	store, client := newStore(t, env)
 	ctx := context.Background()
 
-	producer := enqueue.Producer{Broker: pushBroker{store}}
+	producer := enqueue.Producer{Broker: pushBroker{store, dedupestore.Keys{Redis: store.Redis}}}
 	if _, err := producer.Queue(ctx, enqueue.Request{
 		Message: mailjob.Message{To: "person@queue.test", Subject: "retried", TextBody: "x\n"},
 		Kind:    "retry",
@@ -315,8 +318,12 @@ func (f *flakyOnce) Send(ctx context.Context, message mailer.Message) error {
 
 func (f *flakyOnce) Close() error { return f.inner.Close() }
 
+// pushBroker is the Broker a producer in this test uses: the push goes onto
+// the real queue and the dedupe keys into the real Redis, so what the Go
+// producer refuses is what the Python producer would have refused.
 type pushBroker struct {
 	store queuestore.Store
+	dedupestore.Keys
 }
 
 func (b pushBroker) LPush(ctx context.Context, key, value string) error {
@@ -341,21 +348,32 @@ func drainWithGo(t *testing.T, env stackEnv, store queuestore.Store, senders, ex
 
 func pythonEnqueue(t *testing.T, env stackEnv, subject string) {
 	t.Helper()
-	payload := map[string]any{
+	pythonEnqueueKeyed(t, env, subject, "ffffffffffffffffffffffffffffffff", "")
+}
+
+// pythonEnqueueKeyed queues through the app's own enqueue_email, with the id
+// pinned and the caller's identity given: the half of the dedupe that lives on
+// the producer side.
+func pythonEnqueueKeyed(t *testing.T, env stackEnv, subject, id, idempotencyKey string) {
+	t.Helper()
+	message := map[string]any{
+		"to":          "person@queue.test",
+		"subject":     subject,
+		"text_body":   "queued by python\n",
+		"attachments": []any{},
+	}
+	if idempotencyKey != "" {
+		message["idempotency_key"] = idempotencyKey
+	}
+	runInImage(t, env, "python_enqueue_push.py", map[string]any{
 		"redis_url":   env.redisFromImage,
-		"id":          "ffffffffffffffffffffffffffffffff",
+		"id":          id,
 		"enqueued_at": 1762608000.123456,
 		"kind":        "invite",
 		"ref":         "7",
 		"not_after":   nil,
-		"message": map[string]any{
-			"to":          "person@queue.test",
-			"subject":     subject,
-			"text_body":   "queued by python\n",
-			"attachments": []any{},
-		},
-	}
-	runInImage(t, env, "python_enqueue_push.py", payload)
+		"message":     message,
+	})
 }
 
 func pythonDrain(t *testing.T, env stackEnv, senders, seconds int) {
@@ -439,5 +457,143 @@ func awaitSink(t *testing.T, env stackEnv, expect int, within time.Duration) []s
 			return subjects
 		}
 		time.Sleep(200 * time.Millisecond)
+	}
+}
+
+// The dedupe across the two languages.
+//
+// During a cutover one sender is running and both tiers may be queueing, so a
+// key one side writes has to be the key the other side reads -- otherwise the
+// dedupe quietly stops working exactly when the two are mixed, which is the
+// one moment it matters most.
+
+func TestAMailPythonQueuedTwiceIsSentOnceByTheGoSender(t *testing.T) {
+	env := stackSettings(t)
+	if env.image == "" || env.network == "" || env.redisFromImage == "" {
+		t.Skip("set SOLOCLEF_MAIL_TEST_IMAGE, _NETWORK and _REDIS_FROM_CONTAINER for the Python half")
+	}
+	clearSink(t, env)
+	store, client := newStore(t, env)
+	ctx := context.Background()
+
+	const key = "invite:7:1762608000.0"
+	pythonEnqueueKeyed(t, env, "python once", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", key)
+	pythonEnqueueKeyed(t, env, "python once", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", key)
+
+	if depth, err := client.LLen(ctx, queuekeys.Ready).Result(); err != nil || depth != 1 {
+		t.Fatalf("Python queued %d copies of one mail, %v", depth, err)
+	}
+	if subjects := drainWithGo(t, env, store, 2, 1); len(subjects) != 1 {
+		t.Errorf("delivered %q", subjects)
+	}
+}
+
+func TestTheGoProducerRefusesAMailPythonAlreadyQueued(t *testing.T) {
+	env := stackSettings(t)
+	if env.image == "" || env.network == "" || env.redisFromImage == "" {
+		t.Skip("set SOLOCLEF_MAIL_TEST_IMAGE, _NETWORK and _REDIS_FROM_CONTAINER for the Python half")
+	}
+	clearSink(t, env)
+	store, client := newStore(t, env)
+	ctx := context.Background()
+
+	const key = "automation_result:42:succeeded"
+	pythonEnqueueKeyed(t, env, "queued by python", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", key)
+
+	producer := enqueue.Producer{Broker: pushBroker{store, dedupestore.Keys{Redis: store.Redis}}}
+	message := mailjob.Message{To: "person@queue.test", Subject: "queued by go", TextBody: "x\n"}
+	message.IdempotencyKey = key
+	if _, err := producer.Queue(ctx, enqueue.Request{Message: message, Kind: "automation_result"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if depth, err := client.LLen(ctx, queuekeys.Ready).Result(); err != nil || depth != 1 {
+		t.Fatalf("%d on the queue, %v: the two producers do not share one key", depth, err)
+	}
+	subjects := drainWithGo(t, env, store, 2, 1)
+	if len(subjects) != 1 || subjects[0] != "queued by python" {
+		t.Errorf("delivered %q; the Go push should have been refused", subjects)
+	}
+}
+
+func TestThePythonProducerRefusesAMailTheGoProducerAlreadyQueued(t *testing.T) {
+	env := stackSettings(t)
+	if env.image == "" || env.network == "" || env.redisFromImage == "" {
+		t.Skip("set SOLOCLEF_MAIL_TEST_IMAGE, _NETWORK and _REDIS_FROM_CONTAINER for the Python half")
+	}
+	clearSink(t, env)
+	store, client := newStore(t, env)
+	ctx := context.Background()
+
+	const key = "password_reset:9f86d081884c7d659a2feaa0c55ad015"
+	producer := enqueue.Producer{Broker: pushBroker{store, dedupestore.Keys{Redis: store.Redis}}}
+	message := mailjob.Message{To: "person@queue.test", Subject: "queued by go", TextBody: "x\n"}
+	message.IdempotencyKey = key
+	if _, err := producer.Queue(ctx, enqueue.Request{Message: message, Kind: "password_reset"}); err != nil {
+		t.Fatal(err)
+	}
+
+	pythonEnqueueKeyed(t, env, "queued by python", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", key)
+
+	if depth, err := client.LLen(ctx, queuekeys.Ready).Result(); err != nil || depth != 1 {
+		t.Fatalf("%d on the queue, %v: the two producers do not share one key", depth, err)
+	}
+	subjects := drainWithGo(t, env, store, 2, 1)
+	if len(subjects) != 1 || subjects[0] != "queued by go" {
+		t.Errorf("delivered %q; the Python push should have been refused", subjects)
+	}
+}
+
+func TestTheGoSenderDoesNotSendAgainWhatThePythonSenderMarkedSent(t *testing.T) {
+	env := stackSettings(t)
+	if env.image == "" || env.network == "" || env.redisFromImage == "" || env.smtpFromImage == "" {
+		t.Skip("set SOLOCLEF_MAIL_TEST_IMAGE, _NETWORK, _REDIS_FROM_CONTAINER and _SMTP_FROM_CONTAINER for the Python half")
+	}
+	clearSink(t, env)
+	store, client := newStore(t, env)
+	ctx := context.Background()
+
+	producer := enqueue.Producer{Broker: pushBroker{store, dedupestore.Keys{Redis: store.Redis}}}
+	id, err := producer.Queue(ctx, enqueue.Request{
+		Message: mailjob.Message{To: "person@queue.test", Subject: "sent by python", TextBody: "x\n"},
+		Kind:    "invite",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := client.LIndex(ctx, queuekeys.Ready, 0).Result()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The Python sender delivers it and records the handover.
+	pythonDrain(t, env, 1, 6)
+	if subjects := sinkSubjects(t, env); len(subjects) != 1 {
+		t.Fatalf("the Python sender delivered %q", subjects)
+	}
+	if mark, err := client.Get(ctx, dedupe.HandoverKey(id, 0)).Result(); err != nil || mark != dedupe.Sent {
+		t.Fatalf("Python recorded %q %v, not %q", mark, err, dedupe.Sent)
+	}
+
+	// Now the same entry is held by a run that stopped before it could drop
+	// it -- the failure the queue's own notes admit. A Go sender recovers it.
+	if err := client.LPush(ctx, queuekeys.Sending(3), raw).Err(); err != nil {
+		t.Fatal(err)
+	}
+	goCtx, cancel := context.WithCancel(ctx)
+	settings := goSettings(t, env, store, 1)
+	done := make(chan error, 1)
+	go func() { done <- service.Run(goCtx, settings) }()
+	time.Sleep(4 * time.Second)
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+
+	if subjects := sinkSubjects(t, env); len(subjects) != 1 {
+		t.Errorf("the Go sender sent it again: %q", subjects)
+	}
+	if held, _ := client.LLen(ctx, queuekeys.Sending(3)).Result(); held != 0 {
+		t.Errorf("%d still held", held)
 	}
 }

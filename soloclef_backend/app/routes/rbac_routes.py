@@ -842,7 +842,9 @@ async def _email_invite(invite: WorkspaceInvite, inviter: User | None) -> bool:
         invite_code=invite.invite_code,
         expires_at=invite.expires_at,
     )
-    return await send_invite_email(invite.id, message, invite.expires_at)
+    return await send_invite_email(
+        invite.id, message, invite.expires_at, sent_at=invite.last_sent_at
+    )
 
 
 async def _resolve_invite_role(

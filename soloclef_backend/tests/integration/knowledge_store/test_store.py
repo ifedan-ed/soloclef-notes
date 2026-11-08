@@ -13,7 +13,7 @@ from app.knowledge_store.locks import (
 
 pytestmark = pytest.mark.integration
 
-AUTHOR = "SurfSense <1@users.surfsense>"
+AUTHOR = "Soloclef <1@users.soloclef>"
 
 
 @pytest.fixture

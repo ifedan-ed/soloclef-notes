@@ -15,7 +15,7 @@ from app.knowledge_store.exceptions import GitPushError
 
 pytestmark = pytest.mark.unit
 
-AUTHOR = "SurfSense <1@users.surfsense>"
+AUTHOR = "Soloclef <1@users.soloclef>"
 
 
 class TestRecord:
@@ -316,6 +316,31 @@ class TestWorkingCopies:
         writes, removes = engine.diff_working_copy("turn-1")
         assert writes == {"edit.xml": b"e2", "sub/new.xml": b"n"}
         assert removes == ["gone.xml"]
+
+    def test_a_same_size_edit_the_index_stat_cannot_see_is_still_reported(self, engine):
+        """The bug the test above only caught when the clock cooperated.
+
+        dulwich skips reading a tracked file whose size and whole-second mtime
+        match the index, and unlike git it has no racily-clean re-check. Here
+        the stat is forced to match exactly, so a diff that trusts it reports
+        nothing and the user's edit is lost without an error.
+        """
+        engine.record(
+            writes={"edit.xml": b"e1"}, removes=[], message="seed", author=AUTHOR
+        )
+        copy = engine.open_working_copy("turn-1")
+        file = copy.path / "edit.xml"
+        before = file.stat()
+
+        file.write_bytes(b"e2")  # same length as b"e1"
+        os.utime(file, ns=(before.st_atime_ns, before.st_mtime_ns))
+        after = file.stat()
+        assert after.st_size == before.st_size
+        assert int(after.st_mtime) == int(before.st_mtime)
+
+        writes, removes = engine.diff_working_copy("turn-1")
+        assert writes == {"edit.xml": b"e2"}
+        assert removes == []
 
     def test_diff_on_empty_base_reports_every_file_as_write(self, engine):
         copy = engine.open_working_copy("turn-1")

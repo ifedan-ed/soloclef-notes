@@ -46,3 +46,24 @@ docker/backups/
 # Any copy of an env file holds secrets (backups, pre-rotation snapshots).
 .env.*
 !.env.example
+
+# Build output and caches, matched anywhere rather than per module. Each
+# module carries its own .gitignore, which is why these were never here --
+# and why a `git add -A` from the root once committed 8,614 files of
+# surfsense_web/.next, __pycache__ and 170 stored documents out of the
+# pre-rename directories, which had lost their .gitignore in the rename.
+# Anchored patterns cannot protect a directory that no longer exists in
+# the layout; these can.
+__pycache__/
+*.py[cod]
+*.egg-info/
+.next/
+.source/
+next-env.d.ts
+*.tsbuildinfo
+.ruff_cache/
+.pytest_cache/
+
+# Documents a dev run stored on the host. The deployed app keeps these in
+# a docker volume; a checkout should never carry anyone's uploads.
+.local_object_store/

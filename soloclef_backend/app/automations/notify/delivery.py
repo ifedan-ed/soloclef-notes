@@ -16,6 +16,7 @@ sender's; the address itself never is.
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
@@ -45,9 +46,23 @@ def _error_reason(error: dict[str, Any] | None) -> str | None:
     return message if isinstance(message, str) and message.strip() else None
 
 
+def run_result_mail_key(run_id: int, status: str) -> str:
+    """What identifies this result email: the run that ended, and how.
+
+    One run gets one result email, so the run is the key -- the executor and
+    the overdue sweep both mail from the end of the same run and only one of
+    them writes its terminal status. The status is in it as well because the
+    two endings read differently, and a key that swallowed the second would
+    hide the race rather than settle it; the run id alone already stops the
+    duplicate this is for.
+    """
+    return f"automation_result:{run_id}:{status}"
+
+
 async def send_run_result_email(
     session: AsyncSession,
     *,
+    run_id: int,
     owner_user_id: UUID | None,
     automation_id: int | None = None,
     automation_name: str,
@@ -102,7 +117,9 @@ async def send_run_result_email(
                 reason=_error_reason(error),
             )
         mail_id = await enqueue_email(
-            message, kind="automation_result", ref=automation_id
+            replace(message, idempotency_key=run_result_mail_key(run_id, status)),
+            kind="automation_result",
+            ref=automation_id,
         )
     except MailQueueUnavailableError as exc:
         logger.error(

@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"git.danvics.com/danvics/soloclef/soloclef_mail/dedupe"
+	"git.danvics.com/danvics/soloclef/soloclef_mail/dedupe/dedupetest"
 	"git.danvics.com/danvics/soloclef/soloclef_mail/drain"
 	"git.danvics.com/danvics/soloclef/soloclef_mail/mailer"
 	"git.danvics.com/danvics/soloclef/soloclef_mail/mailjob"
@@ -83,7 +85,11 @@ func aJob(t *testing.T, change func(*mailjob.Job)) (mailjob.Job, string) {
 }
 
 func aSender(store drain.Store, m mailer.Mailer) drain.Sender {
-	return drain.Sender{Index: 2, Store: store, Mailer: m, Clock: func() float64 { return now }}
+	return guardedSender(store, m, dedupe.HandoverGuard{Keys: dedupetest.NewMemory()}, 2)
+}
+
+func guardedSender(store drain.Store, m mailer.Mailer, guard drain.Guard, index int) drain.Sender {
+	return drain.Sender{Index: index, Store: store, Mailer: m, Guard: guard, Clock: func() float64 { return now }}
 }
 
 func TestASentMessageIsFinishedWith(t *testing.T) {
@@ -245,5 +251,133 @@ func TestTheMailerIsLetGoWhenTheSenderStops(t *testing.T) {
 	}
 	if !post.closed {
 		t.Error("the connection was left open")
+	}
+}
+
+// The send guard: a message handed over once is not handed over twice.
+//
+// This is the failure the queue could not fix at the push, because the message
+// was queued exactly once -- a sender dies between giving the message to the
+// mail server and dropping it from its held list, and the next run puts it
+// back. The trap it must not fall into is the retry, which re-queues the same
+// mail id at the next attempt.
+
+func TestASentMessageIsMarkedAsHandedOver(t *testing.T) {
+	guard := dedupe.HandoverGuard{Keys: dedupetest.NewMemory()}
+	job, raw := aJob(t, nil)
+	ctx := context.Background()
+
+	if _, err := guardedSender(&fakeStore{}, &fakeMailer{}, guard, 2).Handle(ctx, raw); err != nil {
+		t.Fatal(err)
+	}
+
+	if held, _ := guard.Claim(ctx, job.ID, job.Attempt); held != dedupe.Sent {
+		t.Errorf("the mail server took it and nothing recorded that: %q", held)
+	}
+}
+
+func TestTheSameAttemptPutBackByARestartIsNotSentAgain(t *testing.T) {
+	guard := dedupe.HandoverGuard{Keys: dedupetest.NewMemory()}
+	store := &fakeStore{}
+	post := &fakeMailer{}
+	_, raw := aJob(t, nil)
+	sender := guardedSender(store, post, guard, 2)
+	ctx := context.Background()
+
+	if outcome, err := sender.Handle(ctx, raw); err != nil || outcome != drain.Sent {
+		t.Fatalf("got %q %v", outcome, err)
+	}
+	outcome, err := sender.Handle(ctx, raw)
+	if err != nil || outcome != drain.Duplicate {
+		t.Fatalf("got %q %v", outcome, err)
+	}
+	if post.sendCall != 1 {
+		t.Errorf("the mail went out %d times", post.sendCall)
+	}
+	if len(store.moves) != 2 || store.moves[1].what != "done" {
+		t.Errorf("the duplicate was not finished with: %+v", store.moves)
+	}
+}
+
+func TestARetryOfAFailedJobStillSends(t *testing.T) {
+	guard := dedupe.HandoverGuard{Keys: dedupetest.NewMemory()}
+	job, raw := aJob(t, nil)
+	ctx := context.Background()
+
+	failing := guardedSender(&fakeStore{}, &fakeMailer{err: fmt.Errorf("%w: 451 later", mailer.ErrUnavailable)}, guard, 0)
+	if outcome, err := failing.Handle(ctx, raw); err != nil || outcome != drain.Retry {
+		t.Fatalf("got %q %v", outcome, err)
+	}
+
+	next, err := job.NextAttempt().Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	working := &fakeMailer{}
+	if outcome, err := guardedSender(&fakeStore{}, working, guard, 1).Handle(ctx, next); err != nil || outcome != drain.Sent {
+		t.Fatalf("a legitimate retry was swallowed: %q %v", outcome, err)
+	}
+	if working.sendCall != 1 {
+		t.Errorf("the retry reached the mail server %d times", working.sendCall)
+	}
+}
+
+func TestTwoSendersRacingOneMessageSendItOnce(t *testing.T) {
+	guard := dedupe.HandoverGuard{Keys: dedupetest.NewMemory()}
+	_, raw := aJob(t, nil)
+	one, two := &fakeMailer{}, &fakeMailer{}
+	ctx := context.Background()
+
+	outcomes := make(chan drain.Outcome, 2)
+	for i, post := range []*fakeMailer{one, two} {
+		go func(index int, post *fakeMailer) {
+			outcome, _ := guardedSender(&fakeStore{}, post, guard, index).Handle(ctx, raw)
+			outcomes <- outcome
+		}(i, post)
+	}
+	seen := map[drain.Outcome]int{}
+	for range 2 {
+		seen[<-outcomes]++
+	}
+
+	if one.sendCall+two.sendCall != 1 {
+		t.Errorf("one message reached the mail server %d times", one.sendCall+two.sendCall)
+	}
+	if seen[drain.Sent] != 1 || seen[drain.Duplicate] != 1 {
+		t.Errorf("outcomes %v", seen)
+	}
+}
+
+func TestAMessageWhoseClaimWasReleasedIsSentAgain(t *testing.T) {
+	guard := dedupe.HandoverGuard{Keys: dedupetest.NewMemory()}
+	job, raw := aJob(t, nil)
+	ctx := context.Background()
+	if _, err := guard.Claim(ctx, job.ID, job.Attempt); err != nil {
+		t.Fatal(err)
+	}
+	if err := guard.Release(ctx, job.ID, job.Attempt); err != nil {
+		t.Fatal(err)
+	}
+
+	post := &fakeMailer{}
+	if outcome, err := guardedSender(&fakeStore{}, post, guard, 2).Handle(ctx, raw); err != nil || outcome != drain.Sent {
+		t.Fatalf("got %q %v", outcome, err)
+	}
+	if post.sendCall != 1 {
+		t.Errorf("sent %d times", post.sendCall)
+	}
+}
+
+func TestAnExpiredMessageNeverTakesAClaim(t *testing.T) {
+	guard := dedupe.HandoverGuard{Keys: dedupetest.NewMemory()}
+	deadline := now - 1
+	job, raw := aJob(t, func(j *mailjob.Job) { j.NotAfter = &deadline })
+	ctx := context.Background()
+
+	if outcome, _ := guardedSender(&fakeStore{}, &fakeMailer{}, guard, 2).Handle(ctx, raw); outcome != drain.Expired {
+		t.Fatalf("got %q", outcome)
+	}
+	if held, _ := guard.Claim(ctx, job.ID, job.Attempt); held != "" {
+		t.Errorf("a message dropped unsent took a claim: %q", held)
 	}
 }

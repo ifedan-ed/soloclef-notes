@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from app.mail_queue.dedupe.handover_guard import HandoverGuard
 from app.mail_queue.job import MailJob
 from app.mail_queue.retry_policy import MAX_ATTEMPTS, RETRY_DELAYS_SECONDS
 from app.mail_queue.sender import MailSender
@@ -13,6 +14,7 @@ from app.mailer.protocol import (
     MailerUnavailableError,
     OutboundEmail,
 )
+from tests.unit.mail_queue.fake_redis import FakeRedis
 
 pytestmark = pytest.mark.unit
 
@@ -58,9 +60,10 @@ def _raw(**overrides) -> str:
     return MailJob(**fields).to_json()
 
 
-def _sender(mailer) -> tuple[MailSender, _Store]:
+def _sender(mailer, guard=None) -> tuple[MailSender, _Store]:
     store = _Store()
-    return MailSender(0, store, mailer, clock=lambda: NOW), store
+    guard = guard if guard is not None else HandoverGuard(FakeRedis())
+    return MailSender(0, store, mailer, guard, clock=lambda: NOW), store
 
 
 async def test_sends_and_marks_done():

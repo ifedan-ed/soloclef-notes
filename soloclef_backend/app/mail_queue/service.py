@@ -1,8 +1,11 @@
 """The mail_sender process: ``MAIL_SENDERS`` senders and the retry clock.
 
 Run exactly one of these per deployment (compose service ``mail_sender``):
-at start it puts back whatever the previous run's senders held, which is
-only safe when no other copy is sending.
+at start it puts back whatever the previous run's senders held and drops the
+claims those senders were holding, which is only safe when no other copy is
+sending. The senders inside one process are safe against each other -- two
+cannot hand the same attempt over -- but two processes are not, because
+neither can tell the other's live claim from a dead one.
 """
 
 from __future__ import annotations
@@ -18,6 +21,8 @@ import redis.asyncio as aioredis
 from app.config import config
 from app.mailer import build_mailer, is_mail_enabled
 
+from . import recovery
+from .dedupe.handover_guard import HandoverGuard
 from .queue_store import QueueStore
 from .sender import MailSender
 
@@ -51,14 +56,15 @@ async def _retry_clock(store: QueueStore, stop: asyncio.Event) -> None:
 async def run_senders(client: aioredis.Redis, count: int, stop: asyncio.Event) -> None:
     """Run ``count`` senders until ``stop`` is set; each finishes its message."""
     store = QueueStore(client)
-    held = await store.requeue_held()
+    guard = HandoverGuard(client)
+    held = await recovery.requeue_held(store, guard)
     if held:
         logger.warning(
             "Mail queue: %s messages from a stopped run put back in line", held
         )
     # Every mailer is built before any sender starts, so bad settings stop
     # the service at once instead of failing each message.
-    senders = [MailSender(i, store, build_mailer()) for i in range(count)]
+    senders = [MailSender(i, store, build_mailer(), guard) for i in range(count)]
     logger.info(
         "Mail sender: %s senders over %s; queue %s",
         count,

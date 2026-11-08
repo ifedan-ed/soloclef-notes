@@ -2,9 +2,10 @@
 // MAIL_TRANSPORT, and the clock that puts due retries back in line.
 //
 // It is the Go half of app/mail_queue's sender, and it drains the same Redis
-// keys the Python mail_sender drains. Run one sender process, not both: at
-// start each puts back whatever a stopped run was holding, and two of them
-// doing that at once is how a message in flight goes out twice.
+// keys the Python mail_sender drains, including the dedupe keys. Run one
+// sender process, not both: at start each puts back whatever a stopped run was
+// holding and drops its claims, and two of them doing that at once is how a
+// message in flight goes out twice.
 //
 // Restarting it touches nothing that is generating, so it needs no deploy
 // gate. See custom/docs/go-mail.md.
@@ -18,6 +19,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"git.danvics.com/danvics/soloclef/soloclef_mail/dedupe"
+	"git.danvics.com/danvics/soloclef/soloclef_mail/dedupestore"
 	"git.danvics.com/danvics/soloclef/soloclef_mail/queuestore"
 	"git.danvics.com/danvics/soloclef/soloclef_mail/service"
 	"github.com/redis/go-redis/v9"
@@ -60,6 +63,7 @@ func run() error {
 		Transport:   cfg.transport,
 		BuildMailer: cfg.buildMailer,
 		Store:       queuestore.Store{Redis: client},
+		Guard:       dedupe.HandoverGuard{Keys: dedupestore.Keys{Redis: client}},
 	})
 }
 

@@ -6,6 +6,11 @@
 // loses nothing; a retry is written and the held copy dropped in one
 // transaction; and the due retries are promoted by the same Lua script, so two
 // senders promoting at once cannot promote the same message twice.
+//
+// What a stopped run was holding is put back by package recovery, which reads
+// each held message through NewestHeld before PutBack moves it: a message the
+// mail server already took must not go out again, and only the send guard
+// knows which those are.
 package queuestore
 
 import (
@@ -87,37 +92,48 @@ func (s Store) PromoteDue(ctx context.Context, now float64) (int, error) {
 	return moved, nil
 }
 
-// RequeueHeld puts back everything a previous run's senders were holding.
-//
-// Only safe when no other copy is sending, which is why exactly one mail
-// sender process runs. It is the reason a crash mid-send loses nothing, and
-// also the reason such a message may go out twice -- see AGENTS.md, "What does
-// not dedupe".
-func (s Store) RequeueHeld(ctx context.Context) (int, error) {
-	moved := 0
+// HeldKeys is every sender's held list, this run's and a stopped run's alike.
+func (s Store) HeldKeys(ctx context.Context) ([]string, error) {
+	var keys []string
 	var cursor uint64
 	for {
-		keys, next, err := s.Redis.Scan(ctx, cursor, queuekeys.SendingPattern, 100).Result()
+		page, next, err := s.Redis.Scan(ctx, cursor, queuekeys.SendingPattern, 100).Result()
 		if err != nil {
-			return moved, err
+			return nil, err
 		}
-		for _, key := range keys {
-			for {
-				_, err := s.Redis.LMove(ctx, key, queuekeys.Ready, "RIGHT", "RIGHT").Result()
-				if err == redis.Nil {
-					break
-				}
-				if err != nil {
-					return moved, err
-				}
-				moved++
-			}
-		}
+		keys = append(keys, page...)
 		if next == 0 {
-			return moved, nil
+			return keys, nil
 		}
 		cursor = next
 	}
+}
+
+// NewestHeld is the entry PutBack would move next, without moving it. The run
+// that recovers held mail reads a message before it moves it, because what it
+// has to do about that message depends on what the message is (package
+// recovery).
+func (s Store) NewestHeld(ctx context.Context, key string) (string, bool, error) {
+	raw, err := s.Redis.LIndex(ctx, key, -1).Result()
+	if err == redis.Nil {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return raw, true, nil
+}
+
+// PutBack moves one held message to the end of the line.
+func (s Store) PutBack(ctx context.Context, key string) (bool, error) {
+	_, err := s.Redis.LMove(ctx, key, queuekeys.Ready, "RIGHT", "RIGHT").Result()
+	if err == redis.Nil {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // Depth is what the queue is carrying, for the line the service logs at start.

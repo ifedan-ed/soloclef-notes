@@ -14,7 +14,7 @@ from app.knowledge_store.engines.git import GitContentEngine
 pytestmark = pytest.mark.unit
 
 WORKSPACE_ID = 7
-AUTHOR = "SurfSense <1@users.surfsense>"
+AUTHOR = "Soloclef <1@users.soloclef>"
 
 
 class _RuntimeStub:

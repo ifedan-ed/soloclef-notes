@@ -2,9 +2,12 @@
 // app/mail_queue/service.py is.
 //
 // Exactly one of these runs per deployment, as exactly one Python mail_sender
-// did. At start it puts back whatever the previous run's senders were holding,
-// which is only safe when no other copy is sending -- and during a cutover
-// that means one of the two senders, not both.
+// does. At start it puts back whatever the previous run's senders were holding
+// and drops the claims those senders held, which is only safe when no other
+// copy is sending -- and during a cutover that means one of the two senders,
+// not both. The senders inside one process are safe against each other (two
+// cannot hand the same attempt over); two processes are not, because neither
+// can tell the other's live claim from a dead one.
 package service
 
 import (
@@ -13,9 +16,11 @@ import (
 	"log/slog"
 	"time"
 
+	"git.danvics.com/danvics/soloclef/soloclef_mail/dedupe"
 	"git.danvics.com/danvics/soloclef/soloclef_mail/drain"
 	"git.danvics.com/danvics/soloclef/soloclef_mail/mailer"
 	"git.danvics.com/danvics/soloclef/soloclef_mail/queuestore"
+	"git.danvics.com/danvics/soloclef/soloclef_mail/recovery"
 )
 
 // retryClock is RETRY_CLOCK_SECONDS: how often the due retries are put back in
@@ -29,7 +34,10 @@ type Settings struct {
 	Transport   string
 	BuildMailer func() (mailer.Mailer, error)
 	Store       queuestore.Store
-	Log         *slog.Logger
+	// Guard is the send guard every sender shares, and whose stale claims
+	// recovery drops at start.
+	Guard dedupe.HandoverGuard
+	Log   *slog.Logger
 }
 
 // Run starts the senders and the retry clock, and returns when ctx is done and
@@ -43,7 +51,7 @@ func Run(ctx context.Context, settings Settings) error {
 		log = slog.Default()
 	}
 
-	held, err := settings.Store.RequeueHeld(ctx)
+	held, err := recovery.RequeueHeld(ctx, settings.Store, settings.Guard)
 	if err != nil {
 		return err
 	}
@@ -66,6 +74,7 @@ func Run(ctx context.Context, settings Settings) error {
 			Index:  i,
 			Store:  settings.Store,
 			Mailer: built,
+			Guard:  settings.Guard,
 			Log:    log,
 		})
 	}

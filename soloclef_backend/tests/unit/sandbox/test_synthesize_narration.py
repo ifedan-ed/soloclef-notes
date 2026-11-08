@@ -11,6 +11,7 @@ import pytest
 from app.agents.chat.multi_agent_chat.subagents.builtins.deliverables.tools import (
     synthesize_narration as narration_tool,
 )
+from app.deliverables.jobs.policy import VIDEO_SPEC
 from tests.utils.fake_sandbox import FakeSandboxSession
 
 pytestmark = pytest.mark.unit
@@ -178,8 +179,6 @@ async def test_mock_tts_output_is_nonempty_measurable_audio(monkeypatch):
 async def test_exact_narration_duration_boundary(monkeypatch, over, rejected):
     # The cap is the video policy's, not a number of this test's own; it was
     # raised from 300 to 600 s and this test kept asserting 300.
-    from app.deliverables.jobs.policy import VIDEO_SPEC
-
     limit = VIDEO_SPEC.max_duration_seconds
     duration = limit + over
     session = FakeSandboxSession({})
@@ -269,11 +268,14 @@ async def test_unsafe_workdir_is_rejected_before_tts_or_sandbox_access(
             "duplicate",
         ),
         (
+            # One past the spec's own limit, derived from it: hardcoding the
+            # number let the limit rise from 12 to 20 while the case stayed at
+            # 13, so the slides validated and the tool made a real TTS call.
             [
                 {"slide_number": number, "transcript": "narration"}
-                for number in range(1, 14)
+                for number in range(1, VIDEO_SPEC.max_scenes + 2)
             ],
-            "12-scene",
+            f"{VIDEO_SPEC.max_scenes}-scene",
         ),
     ],
 )

@@ -433,6 +433,38 @@ services:
     stop_grace_period: 60s
     restart: unless-stopped
 
+  # The Go mail sender, replacing mail_sender rather than joining it: two
+  # senders both recovering held mail at start is how a message in flight
+  # goes out twice. Hence no `restart: unless-stopped` and no depends_on
+  # chain that would start it with the stack -- it is started by hand, after
+  # the Python sender is stopped and soloclef:mail:sending:* is empty
+  # (custom/docs/go-mail.md, "What a cutover needs").
+  #
+  # No pooled database: this tier never opens Postgres. It reads a Redis
+  # list and opens a socket or makes an HTTPS request, which is why the
+  # image is 31.7 MB against the 5.5 GB one it replaces.
+  go_mail_sender:
+    image: soloclef-mail-sender:latest
+    env_file:
+      - .env
+    environment:
+      # Required rather than defaulted, as it is for the worker tier: a
+      # sender told no broker refuses to start rather than guessing one.
+      REDIS_APP_URL: ${REDIS_URL:-redis://soloclef-redis-1:6379/0}
+      # What goes in EHLO. smtplib used socket.getfqdn(), which inside a
+      # container is the container id; smtp2go does not check it, but a
+      # relay that does should see the mail domain.
+      SMTP_HELO_NAME: ${SMTP_HELO_NAME:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+    # Long enough to finish the message in hand: the handover guard is
+    # marked after the mail server has taken it, so a kill mid-send is the
+    # one window where a message can be sent without being marked.
+    stop_grace_period: 60s
+    profiles:
+      - manual
+
   celery_beat:
     image: soloclef-backend-fast:latest
     env_file:

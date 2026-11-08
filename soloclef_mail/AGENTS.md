@@ -45,33 +45,57 @@ one, and the sender process lives with the code it is.
 | `mailer/smtp` | The SMTP transport: the security modes, the kept session, and which step was refused. |
 | `mailer/smtp2go` | The smtp2go HTTP API transport. |
 | `drain` | One sender's loop: `sender.py`. |
+| `dedupe` | Not sending the same mail twice: the keys, the window, and the two guards. `app/mail_queue/dedupe/`. No I/O. |
+| `dedupe/dedupetest` | The in-memory `dedupe.Keys` every package above it tests against. |
+| `dedupestore` | Those keys in Redis, with go-redis behind them. |
 | `queuestore` | The moves between the keys: `queue_store.py`, including its Lua script. |
+| `recovery` | Putting back what a stopped run held, and dropping its claims: `recovery.py`. |
 | `service` | The senders and the retry clock: `service.py`. |
 | `cmd/mail_sender` | The process, and the settings it reads. |
 | `scripts` | The Python that generates every reference fixture, out of the app's own code. |
 
-## What does not dedupe
+## How it dedupes
 
-**Nothing does, and that was not changed here.**
+Two failures, two guards, both in `dedupe` and both the same keys, window and
+decisions as `app/mail_queue/dedupe/`. `custom/docs/mail-queue.md` argues the
+choices; this is what the code here does.
 
-`idempotency_key` travels on the message and in the job, and is read by nothing:
-not the queue, not `smtp.py`, not `smtp2go_api.py`, and not this module. Every
-`enqueue_email` makes a fresh uuid, so queueing the same mail twice sends it
-twice, and a retry re-pushes the same job with `attempt + 1`, which is not a
-dedupe either.
+- **The same mail queued twice** is refused at the push. A producer whose
+  `Message.IdempotencyKey` is already held by a mail queued in the last day
+  pushes nothing and hands back that mail's id, so the caller still truthfully
+  reports that the email is on its way. The three callers' keys are the reset
+  token's hash, the invite and its `last_sent_at`, and the run and its status.
+  An empty key is queued every time.
+- **A message already handed to the mail server** is refused at the send.
+  `drain.Sender` claims `soloclef:mail:handover:<id>:<attempt>` before it calls
+  `Send`, marks it `sent` once the mail server has taken it, and only then
+  drops the queue entry. `recovery.RequeueHeld` puts held mail back and drops
+  the *claims* of the senders that held it -- a claim whose sender is gone
+  cannot be told from a live one -- but never a `sent` mark.
 
-So one send is one push, and one drain is one `Send`. The places that can
-double-send are the ones that could before:
+**A retry always sends.** The attempt is in the handover key, and a failed job
+is written straight onto the retry set rather than pushed again, so neither
+guard sees it.
 
-- `RequeueHeld` at the start of a sender process puts back whatever a stopped
-  run was holding, including a message that was already handed to the mail
-  server. **Run one sender process.** During a cutover that means one of the
-  two, never both.
-- A message sent but whose `Done` did not land stays held and goes out again on
-  the next start.
+**The mark is after the send, not before.** A process that dies between the
+mail server's acceptance and the mark sends that message twice; one that died
+after a mark placed before the send would never send it at all. Never-sent is
+worse than twice-sent for a password reset, so the window left is one Redis
+`SET` rather than the whole SMTP conversation. The queue stays **at least
+once**: nothing is acknowledged before dispatch.
 
-Adding a dedupe is a product decision about what a mail id means, not part of a
-port. Do not add one here without Daniel.
+**The window is 24 hours**, `dedupe.Window`, a constant and not a setting: the
+two senders drain the same Redis and two different numbers would be a duplicate
+nobody can see. `dedupe/testdata/python_dedupe_keys.json` is generated out of
+the Python's own code and compared key for key, as every other spelling in this
+module is.
+
+**Still run one sender process.** The senders inside one process are safe
+against each other -- two cannot claim the same attempt -- but two processes
+are not, because each recovers the other's held mail and drops its claims at
+start. During a cutover that means one of the two, never both. Making two
+processes safe needs per-sender leases, so only a sender whose lease expired
+has its mail recovered; that is not here.
 
 ## Do not
 
@@ -106,6 +130,10 @@ port. Do not add one here without Daniel.
   recipient.
 - Do not run the three interop packages in parallel. They share one Mailpit
   and each clears it, so `-p 1` is part of the command, not a precaution.
+- Do not point the Python half at an image built before the checkout under
+  test. The interop tests run the app's own `enqueue_email` and `service`
+  inside `SOLOCLEF_MAIL_TEST_IMAGE`, so an older image is an older queue and
+  the failure reads as a parity bug.
 - Do not point a test at `soloclef-redis-1` or at a real mail server. The
   interop tests empty the Redis they are given and send only into a throwaway
   Mailpit; the smtp2go tests answer themselves.
@@ -143,8 +171,15 @@ docker run -d --name go-mail-test-redis --network danvics_litellm \
 docker run -d --name go-mail-test-mailpit --network danvics_litellm \
   -p 127.0.0.1:21026:1025 -p 127.0.0.1:28026:8025 axllent/mailpit:v1.21
 
+# The Python half runs this checkout's app, so the image has to carry it.
+# From the repository root, which is the build context:
+docker build -t soloclef-mail-interop:latest -f - . <<'DOCKERFILE'
+FROM soloclef-backend-fast:latest
+COPY soloclef_backend/app /app/app
+DOCKERFILE
+
 cd soloclef_mail && \
-  SOLOCLEF_MAIL_TEST_IMAGE=soloclef-backend-fast:latest \
+  SOLOCLEF_MAIL_TEST_IMAGE=soloclef-mail-interop:latest \
   SOLOCLEF_MAIL_TEST_NETWORK=danvics_litellm \
   SOLOCLEF_MAIL_TEST_REDIS=redis://127.0.0.1:39742/0 \
   SOLOCLEF_MAIL_TEST_REDIS_CONTAINER=go-mail-test-redis \
@@ -164,6 +199,7 @@ backend image because the encoding is httpx's:
 
 ```bash
 cd soloclef_mail
+python3 -I scripts/python_dedupe_keys.py > dedupe/testdata/python_dedupe_keys.json
 python3 -I scripts/python_job_bytes.py   > mailjob/testdata/python_job_bytes.json
 python3 -I scripts/python_float_repr.py  > pythonjson/testdata/python_float_repr.json
 python3 -I scripts/python_mime_bytes.py  > mailer/mime/testdata/python_mime_bytes.json

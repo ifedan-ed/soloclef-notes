@@ -5,6 +5,12 @@
 // one: mail queued here is drained by whichever mail sender is running, Python
 // or Go, because what goes on the list is the same bytes either way
 // (mailjob.Job.Encode).
+//
+// A caller that says what identifies its mail (Message.IdempotencyKey) gets
+// one push per identity: the second is refused and told which mail already
+// holds it. A caller that says nothing is queued every time. A retry is not a
+// second push -- a failed job is written straight onto the retry set by the
+// sender -- so it never comes back through here.
 package enqueue
 
 import (
@@ -15,6 +21,7 @@ import (
 	"fmt"
 	"time"
 
+	"git.danvics.com/danvics/soloclef/soloclef_mail/dedupe"
 	"git.danvics.com/danvics/soloclef/soloclef_mail/mailjob"
 	"git.danvics.com/danvics/soloclef/soloclef_mail/queuekeys"
 )
@@ -25,12 +32,18 @@ import (
 // owes the same answer -- it must not report a send that did not happen.
 var ErrQueueUnavailable = errors.New("mail queue unavailable")
 
-// Broker is the one Redis call a producer makes, kept to one method for the
-// reason soloclef_celery's produce.Broker is: the two Go tiers reach Redis
-// with different clients and the bytes must not depend on which.
+// Broker is the Redis calls a producer makes. A tier satisfies it with its
+// own client, for the reason soloclef_celery's produce.Broker exists: the two
+// Go tiers reach Redis differently and the bytes must not depend on which.
+//
+// It was one method until mail began to dedupe. The dedupe half is the four
+// commands of dedupe.Keys, and they are here rather than behind a second,
+// optional seam on purpose: a producer that could be built without them would
+// be a producer that silently queues duplicates.
 type Broker interface {
 	// LPush is the producer's end of the list; the senders take from the other.
 	LPush(ctx context.Context, key, value string) error
+	dedupe.Keys
 }
 
 // Producer queues mail. Clock and NewID are seams for the tests; a zero
@@ -54,12 +67,16 @@ type Request struct {
 	NotAfter time.Time
 }
 
-// Queue writes the message to Redis and returns its id: the id every log line
-// about this message carries, from here to delivery.
+// Queue writes the message to Redis and returns the id of the mail that will
+// be sent: the id every log line about it carries, from here to delivery.
 //
-// One push per call. A push that fails is ErrQueueUnavailable and not retried
-// here, because a second push of the same mail is a second email: nothing in
-// the queue or either transport dedupes.
+// The id is this mail's own, unless Message.IdempotencyKey is already held by
+// one queued within dedupe.Window -- then nothing is pushed and that mail's id
+// comes back, because the email is on its way either way.
+//
+// A push that fails is ErrQueueUnavailable and is not retried here, because a
+// second push of the same mail is a second email; the identity it took is
+// given back so the caller can queue it again.
 func (p Producer) Queue(ctx context.Context, r Request) (string, error) {
 	if p.Broker == nil {
 		return "", errors.New("enqueue: no broker to queue mail on")
@@ -82,7 +99,29 @@ func (p Producer) Queue(ctx context.Context, r Request) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
+	key := r.Message.IdempotencyKey
+	if key == "" {
+		if err := p.Broker.LPush(ctx, queuekeys.Ready, raw); err != nil {
+			return "", fmt.Errorf("%w: %w", ErrQueueUnavailable, err)
+		}
+		return job.ID, nil
+	}
+
+	ledger := dedupe.QueuedOnce{Keys: p.Broker}
+	heldBy, err := ledger.Claim(ctx, key, job.ID)
+	if err != nil {
+		return "", fmt.Errorf("%w: %w", ErrQueueUnavailable, err)
+	}
+	if heldBy != "" {
+		return heldBy, nil
+	}
 	if err := p.Broker.LPush(ctx, queuekeys.Ready, raw); err != nil {
+		// Nothing was queued, so nothing may keep this identity: otherwise
+		// the caller could not queue the same mail again for a whole day.
+		if release := ledger.Release(ctx, key, job.ID); release != nil {
+			return "", fmt.Errorf("%w: %w", ErrQueueUnavailable, errors.Join(err, release))
+		}
 		return "", fmt.Errorf("%w: %w", ErrQueueUnavailable, err)
 	}
 	return job.ID, nil

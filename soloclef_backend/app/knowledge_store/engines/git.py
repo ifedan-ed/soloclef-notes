@@ -265,14 +265,42 @@ class GitContentEngine(VersionedContentEngine):
         for raw in status.untracked:
             rel = raw.decode() if isinstance(raw, bytes) else raw
             writes[rel] = (copy_path / rel).read_bytes()
-        for raw in status.unstaged:
-            rel = raw.decode() if isinstance(raw, bytes) else raw
-            file = copy_path / rel
-            if file.is_file():
-                writes[rel] = file.read_bytes()
-            else:
+        # ponytail: tracked files are compared by content, not by the status
+        # call's stat heuristic. dulwich skips reading a file whose size and
+        # whole-second mtime match the index, and it has no racily-clean
+        # re-check, so an edit of the same byte length inside one second of the
+        # copy being opened read as unchanged and was silently dropped from the
+        # turn. Hashing every tracked file is affordable: a working copy is one
+        # document tree, and each changed file is read here anyway.
+        for rel, content in self._modified_tracked_files(copy_path).items():
+            if content is None:
                 removes.append(rel)
+            else:
+                writes[rel] = content
         return writes, removes
+
+    @staticmethod
+    def _modified_tracked_files(copy_path: Path) -> dict[str, bytes | None]:
+        """Tracked paths whose content differs from the index, by blob hash.
+
+        ``None`` means the file is gone from the working copy.
+        """
+        changed: dict[str, bytes | None] = {}
+        repo = Repo(str(copy_path))
+        try:
+            index = repo.open_index()
+            for raw_path, entry in index.iteritems():
+                rel = raw_path.decode()
+                file = copy_path / rel
+                if not file.is_file():
+                    changed[rel] = None
+                    continue
+                content = file.read_bytes()
+                if Blob.from_string(content).id != entry.sha:
+                    changed[rel] = content
+        finally:
+            repo.close()
+        return changed
 
     def discard_working_copy(self, copy_id: str) -> None:
         copy_path = self._working_copies_path / copy_id

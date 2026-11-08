@@ -7,8 +7,12 @@
 # from the rest of the tree:
 #   docker build -t soloclef-mail-sender:latest soloclef_mail
 #
-# It is not deployed. custom/docs/go-mail.md says what a cutover needs, and the
-# first thing it needs is that only one sender process runs.
+# Deployed as the compose service `go_mail_sender`, which replaced the Python
+# `mail_sender` on 2026-11-08. It sits behind `profiles: [manual]` and has no
+# `restart: unless-stopped`, because the one thing a cutover must guarantee is
+# that only one sender process runs: two senders both recovering held mail at
+# start is how a message in flight goes out twice. custom/docs/go-mail.md has
+# the steps, in both directions.
 FROM golang:1.24-alpine AS build
 WORKDIR /src
 # The manifests first, so a source change does not re-download.

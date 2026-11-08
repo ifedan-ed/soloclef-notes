@@ -3,7 +3,8 @@
 - ``ready``: a list; new mail is pushed on the left, senders take from the right.
 - ``sending:<n>``: what sender ``n`` holds right now (moved there atomically
   as it is taken), so a sender that dies mid-send loses nothing: at start the
-  service puts every held message back on ``ready``.
+  service puts every held message back on ``ready`` (``recovery.py``), and
+  the send guard is what stops one already sent going out again.
 - ``retry``: a sorted set of failed mail by the time it is due again.
 """
 
@@ -59,13 +60,22 @@ class QueueStore:
     async def promote_due(self, now: float) -> int:
         return int(await self._promote(keys=[RETRY, READY], args=[now]))
 
-    async def requeue_held(self) -> int:
-        """Put back everything a previous run's senders were holding."""
-        moved = 0
-        async for key in self._redis.scan_iter(match=SENDING_PATTERN):
-            while await self._redis.lmove(key, READY, "RIGHT", "RIGHT") is not None:
-                moved += 1
-        return moved
+    async def held_keys(self) -> list[str]:
+        """Every sender's held list, this run's and a stopped run's alike."""
+        return [key async for key in self._redis.scan_iter(match=SENDING_PATTERN)]
+
+    async def newest_held(self, key: str) -> str | None:
+        """The entry ``put_back`` would move next, without moving it.
+
+        Recovery reads a held message before it moves it, because what it has
+        to do about that message depends on what the message is
+        (``recovery.py``).
+        """
+        return await self._redis.lindex(key, -1)
+
+    async def put_back(self, key: str) -> str | None:
+        """Move one held message to the end of the line; None when none is left."""
+        return await self._redis.lmove(key, READY, "RIGHT", "RIGHT")
 
     async def depth(self) -> dict[str, int]:
         return {

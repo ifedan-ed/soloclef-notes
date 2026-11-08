@@ -108,7 +108,7 @@ func TestWhatPythonPushesIsWhatThisProducerPushes(t *testing.T) {
 
 			var pushed []string
 			producer := enqueue.Producer{
-				Broker: brokerFunc(func(_ context.Context, key, value string) error {
+				Broker: newTestBroker(func(_ context.Context, key, value string) error {
 					if key != queuekeys.Ready {
 						t.Errorf("pushed onto %q, Python pushed onto %q", key, queuekeys.Ready)
 					}
@@ -171,12 +171,6 @@ func goMessage(t *testing.T, c interopCase) mailjob.Message {
 func floatToTime(seconds float64) time.Time {
 	whole := math.Floor(seconds)
 	return time.Unix(int64(whole), int64(math.Round((seconds-whole)*1e9)))
-}
-
-type brokerFunc func(ctx context.Context, key, value string) error
-
-func (f brokerFunc) LPush(ctx context.Context, key, value string) error {
-	return f(ctx, key, value)
 }
 
 func pythonPush(t *testing.T, env interopEnv, c interopCase) {

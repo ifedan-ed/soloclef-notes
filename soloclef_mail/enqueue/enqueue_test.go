@@ -7,10 +7,26 @@ import (
 	"testing"
 	"time"
 
+	"git.danvics.com/danvics/soloclef/soloclef_mail/dedupe/dedupetest"
 	"git.danvics.com/danvics/soloclef/soloclef_mail/enqueue"
 	"git.danvics.com/danvics/soloclef/soloclef_mail/mailjob"
 	"git.danvics.com/danvics/soloclef/soloclef_mail/queuekeys"
 )
+
+// testBroker is a Broker over an in-memory keyspace: the push goes where the
+// test says, the dedupe keys stay here.
+type testBroker struct {
+	*dedupetest.Memory
+	push func(ctx context.Context, key, value string) error
+}
+
+func newTestBroker(push func(ctx context.Context, key, value string) error) testBroker {
+	return testBroker{Memory: dedupetest.NewMemory(), push: push}
+}
+
+func (b testBroker) LPush(ctx context.Context, key, value string) error {
+	return b.push(ctx, key, value)
+}
 
 func aMessage() mailjob.Message {
 	return mailjob.Message{To: "person@queue.test", Subject: "s", TextBody: "t"}
@@ -19,7 +35,7 @@ func aMessage() mailjob.Message {
 func TestARefusedPushIsNotQueuedAndNotRetried(t *testing.T) {
 	refused := errors.New("connection refused")
 	pushes := 0
-	producer := enqueue.Producer{Broker: brokerFunc(func(context.Context, string, string) error {
+	producer := enqueue.Producer{Broker: newTestBroker(func(context.Context, string, string) error {
 		pushes++
 		return refused
 	})}
@@ -42,7 +58,7 @@ func TestARefusedPushIsNotQueuedAndNotRetried(t *testing.T) {
 
 func TestOneSendIsOnePushOntoReady(t *testing.T) {
 	var keys, values []string
-	producer := enqueue.Producer{Broker: brokerFunc(func(_ context.Context, key, value string) error {
+	producer := enqueue.Producer{Broker: newTestBroker(func(_ context.Context, key, value string) error {
 		keys = append(keys, key)
 		values = append(values, value)
 		return nil
@@ -68,7 +84,7 @@ func TestOneSendIsOnePushOntoReady(t *testing.T) {
 
 func TestAnExpiryTravelsWithTheMessageAndAnAbsentOneIsNull(t *testing.T) {
 	var queued []string
-	producer := enqueue.Producer{Broker: brokerFunc(func(_ context.Context, _, value string) error {
+	producer := enqueue.Producer{Broker: newTestBroker(func(_ context.Context, _, value string) error {
 		queued = append(queued, value)
 		return nil
 	})}
@@ -92,7 +108,7 @@ func TestAnExpiryTravelsWithTheMessageAndAnAbsentOneIsNull(t *testing.T) {
 
 func TestMailWithNoKindIsRefusedBeforeItReachesRedis(t *testing.T) {
 	pushes := 0
-	producer := enqueue.Producer{Broker: brokerFunc(func(context.Context, string, string) error {
+	producer := enqueue.Producer{Broker: newTestBroker(func(context.Context, string, string) error {
 		pushes++
 		return nil
 	})}
@@ -108,7 +124,7 @@ func TestMailWithNoKindIsRefusedBeforeItReachesRedis(t *testing.T) {
 }
 
 func TestADifferentIdEveryTime(t *testing.T) {
-	producer := enqueue.Producer{Broker: brokerFunc(func(context.Context, string, string) error { return nil })}
+	producer := enqueue.Producer{Broker: newTestBroker(func(context.Context, string, string) error { return nil })}
 	seen := map[string]bool{}
 	for range 200 {
 		id, err := producer.Queue(context.Background(), enqueue.Request{Message: aMessage(), Kind: "k"})
@@ -119,5 +135,101 @@ func TestADifferentIdEveryTime(t *testing.T) {
 			t.Fatalf("id %s was handed out twice", id)
 		}
 		seen[id] = true
+	}
+}
+
+func TestTheSameMailQueuedTwiceIsQueuedOnce(t *testing.T) {
+	var pushed []string
+	broker := newTestBroker(func(_ context.Context, _, value string) error {
+		pushed = append(pushed, value)
+		return nil
+	})
+	producer := enqueue.Producer{Broker: broker}
+	ctx := context.Background()
+
+	request := enqueue.Request{Message: aMessage(), Kind: "password_reset"}
+	request.Message.IdempotencyKey = "password_reset:abc"
+
+	first, err := producer.Queue(ctx, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := producer.Queue(ctx, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(pushed) != 1 {
+		t.Errorf("the same mail was queued %d times", len(pushed))
+	}
+	if second != first {
+		t.Errorf("the second caller was told %q, not the mail that is on its way (%q)", second, first)
+	}
+}
+
+func TestACallerWithNoKeyIsQueuedEveryTime(t *testing.T) {
+	var pushed []string
+	producer := enqueue.Producer{Broker: newTestBroker(func(_ context.Context, _, value string) error {
+		pushed = append(pushed, value)
+		return nil
+	})}
+	ctx := context.Background()
+
+	request := enqueue.Request{Message: aMessage(), Kind: "automation_result"}
+	first, err := producer.Queue(ctx, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := producer.Queue(ctx, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pushed) != 2 || first == second {
+		t.Errorf("a caller that named no identity was deduped anyway: %d pushes", len(pushed))
+	}
+}
+
+func TestAMailWithItsOwnKeyIsQueued(t *testing.T) {
+	pushes := 0
+	producer := enqueue.Producer{Broker: newTestBroker(func(context.Context, string, string) error {
+		pushes++
+		return nil
+	})}
+	ctx := context.Background()
+	for _, key := range []string{"invite:7:1.0", "invite:7:2.0"} {
+		request := enqueue.Request{Message: aMessage(), Kind: "invite"}
+		request.Message.IdempotencyKey = key
+		if _, err := producer.Queue(ctx, request); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if pushes != 2 {
+		t.Errorf("two send occasions made %d pushes", pushes)
+	}
+}
+
+func TestAPushThatNeverLandedDoesNotBlockTheNextOne(t *testing.T) {
+	fails := true
+	pushes := 0
+	producer := enqueue.Producer{Broker: newTestBroker(func(context.Context, string, string) error {
+		if fails {
+			return errors.New("connection refused")
+		}
+		pushes++
+		return nil
+	})}
+	ctx := context.Background()
+	request := enqueue.Request{Message: aMessage(), Kind: "invite"}
+	request.Message.IdempotencyKey = "invite:7:1.0"
+
+	if _, err := producer.Queue(ctx, request); !errors.Is(err, enqueue.ErrQueueUnavailable) {
+		t.Fatalf("got %v", err)
+	}
+	fails = false
+	if _, err := producer.Queue(ctx, request); err != nil {
+		t.Fatal(err)
+	}
+	if pushes != 1 {
+		t.Errorf("a mail Redis refused kept its identity and could not be queued again")
 	}
 }
