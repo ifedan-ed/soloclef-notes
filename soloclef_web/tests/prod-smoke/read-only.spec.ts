@@ -4,15 +4,16 @@ import { expectHeaderClearsSafeArea, expectNoOverflow } from "../helpers/layout/
 import { expect, prodGet, test } from "./guard";
 
 /**
- * Read-only smoke against production (default https://notes.danvics.com).
+ * Read-only smoke against a production server (PROD_BASE_URL).
  *
  * Navigates, opens dialogs and closes them (Escape / Cancel), and runs the
  * layout checks. Never submits anything; the guard in ./guard.ts aborts every
  * write the app might attempt anyway. Run with:
  *
- *   PROD_E2E_TOKEN=<access token> pnpm test:e2e:prod-smoke
+ *   PROD_BASE_URL=https://notes.example.com PROD_E2E_TOKEN=<access token> \
+ *     pnpm test:e2e:prod-smoke
  *
- * Optional: PROD_BASE_URL, PROD_WORKSPACE_ID, PROD_NOTEBOOK_ID,
+ * Optional: PROD_NOTEBOOK_ID,
  * PROD_EXTRA_COOKIES ("a=b; c=d", e.g. an SSO proxy's session),
  * PROD_EXTRA_HEADERS (JSON).
  */
@@ -20,11 +21,9 @@ import { expect, prodGet, test } from "./guard";
 type Notebook = { id: number; title: string; source_count: number };
 type Output = { id: number; kind: string; status: string; title: string };
 
-async function pickNotebook(page: Page, ws: number): Promise<Notebook | null> {
-	const list = await prodGet<Notebook[]>(
-		page.context().request,
-		`/api/v1/workspaces/${ws}/notebooks`
-	);
+/** PROD_NOTEBOOK_ID, or the account's notebook with the most sources. */
+async function pickNotebook(page: Page): Promise<Notebook | null> {
+	const list = await prodGet<Notebook[]>(page.context().request, `/api/v1/notebooks`);
 	const fromEnv = Number(process.env.PROD_NOTEBOOK_ID);
 	if (fromEnv) return list.find((n) => n.id === fromEnv) ?? null;
 	return [...list].sort((a, b) => b.source_count - a.source_count)[0] ?? null;
@@ -45,8 +44,8 @@ for (const [viewportName, device] of [
 		test.use(viewport);
 		const isPhone = viewportName === "phone";
 
-		test("notebooks home", async ({ page, ws }) => {
-			await page.goto(`/dashboard/${ws}/notebooks`);
+		test("notebooks home", async ({ page }) => {
+			await page.goto(`/dashboard/notebooks`);
 			await expect(page.getByRole("heading", { name: "Notebooks", level: 1 })).toBeVisible({
 				timeout: 30_000,
 			});
@@ -66,11 +65,11 @@ for (const [viewportName, device] of [
 			}
 		});
 
-		test("notebook: panels, dialogs, menu", async ({ page, ws }) => {
-			const nb = await pickNotebook(page, ws);
-			test.skip(!nb, "no notebook in this workspace");
+		test("notebook: panels, dialogs, menu", async ({ page }) => {
+			const nb = await pickNotebook(page);
+			test.skip(!nb, "this account has no notebook");
 			if (!nb) return;
-			await page.goto(`/dashboard/${ws}/notebooks/${nb.id}`);
+			await page.goto(`/dashboard/notebooks/${nb.id}`);
 			const title = page.getByRole("textbox", { name: "Notebook title" }).first();
 			await expect(title).toBeVisible({ timeout: 30_000 });
 			await expectNoOverflow(page, "notebook");
@@ -90,7 +89,7 @@ for (const [viewportName, device] of [
 			await page.getByRole("button", { name: "Add sources" }).first().click();
 			const add = page.getByRole("dialog", { name: "Add sources" });
 			await expect(add).toBeVisible();
-			await expectNoOverflow(page, "Add sources: workspace");
+			await expectNoOverflow(page, "Add sources: library");
 			await add.getByRole("tab", { name: /Upload/ }).click();
 			await expectNoOverflow(page, "Add sources: upload");
 			await add.getByRole("tab", { name: /connector/i }).click();
@@ -159,20 +158,20 @@ for (const [viewportName, device] of [
 			}
 		});
 
-		test("Studio viewers for existing outputs", async ({ page, ws }) => {
-			const nb = await pickNotebook(page, ws);
-			test.skip(!nb, "no notebook in this workspace");
+		test("Studio viewers for existing outputs", async ({ page }) => {
+			const nb = await pickNotebook(page);
+			test.skip(!nb, "this account has no notebook");
 			if (!nb) return;
 			const outputs = await prodGet<Output[]>(
 				page.context().request,
-				`/api/v1/workspaces/${ws}/notebooks/${nb.id}/studio/outputs`
+				`/api/v1/notebooks/${nb.id}/studio/outputs`
 			);
 			const firstOfKind = new Map<string, Output>();
 			for (const o of outputs) {
 				if (o.status === "ready" && !firstOfKind.has(o.kind)) firstOfKind.set(o.kind, o);
 			}
 			test.skip(firstOfKind.size === 0, "no finished Studio outputs in this notebook");
-			await page.goto(`/dashboard/${ws}/notebooks/${nb.id}`);
+			await page.goto(`/dashboard/notebooks/${nb.id}`);
 			await expect(page.getByRole("textbox", { name: "Notebook title" }).first()).toBeVisible({
 				timeout: 30_000,
 			});
@@ -198,26 +197,26 @@ for (const [viewportName, device] of [
 			}
 		});
 
-		test("settings, team, logs, automations", async ({ page, ws }) => {
+		test("settings and logs", async ({ page }) => {
+			// The account's one settings page; the admin-only sections send
+			// anyone else to Profile, which still has the Settings heading.
 			const pages: [string, string][] = [
-				["user-settings/profile", "User Settings"],
-				["user-settings/appearance", "User Settings"],
-				["user-settings/api-key", "User Settings"],
-				["user-settings/prompts", "User Settings"],
-				["user-settings/community-prompts", "User Settings"],
-				["user-settings/agent-permissions", "User Settings"],
-				["workspace-settings/general", "Workspace Settings"],
-				["workspace-settings/connectors", "Workspace Settings"],
-				["workspace-settings/automations", "Workspace Settings"],
-				["workspace-settings/models", "Workspace Settings"],
-				["workspace-settings/team-roles", "Workspace Settings"],
-				["workspace-settings/prompts", "Workspace Settings"],
-				["workspace-settings/public-links", "Workspace Settings"],
-				["team", "Members"],
+				["settings/profile", "Settings"],
+				["settings/appearance", "Settings"],
+				["settings/api-key", "Settings"],
+				["settings/models", "Settings"],
+				["settings/instructions", "Settings"],
+				["settings/memory", "Settings"],
+				["settings/prompts", "Settings"],
+				["settings/connectors", "Settings"],
+				["settings/automations", "Settings"],
+				["settings/public-links", "Settings"],
+				["settings/community-prompts", "Settings"],
+				["settings/agent-permissions", "Settings"],
 				["logs", "Task Logs"],
 			];
 			for (const [path, heading] of pages) {
-				await page.goto(`/dashboard/${ws}/${path}`);
+				await page.goto(`/dashboard/${path}`);
 				await expect(page.getByRole("heading", { name: heading }).first()).toBeVisible({
 					timeout: 30_000,
 				});
@@ -225,19 +224,14 @@ for (const [viewportName, device] of [
 				await expectNoOverflow(page, path);
 			}
 			// Dialogs that only read to open.
-			await page.goto(`/dashboard/${ws}/team`);
-			await page.getByRole("button", { name: "Invite", exact: true }).click();
-			await expectNoOverflow(page, "invite dialog");
-			await closeDialog(page);
-			// API keys are for administrators; anyone else lands on Profile.
-			await page.goto(`/dashboard/${ws}/user-settings/api-key`);
+			await page.goto(`/dashboard/settings/api-key`);
 			const createKey = page.getByRole("button", { name: "Create API key" }).first();
 			if (await createKey.isVisible({ timeout: 5_000 }).catch(() => false)) {
 				await createKey.click();
 				await expectNoOverflow(page, "create API key dialog");
 				await closeDialog(page);
 			}
-			await page.goto(`/dashboard/${ws}/user-settings/prompts`);
+			await page.goto(`/dashboard/settings/prompts`);
 			await page.getByRole("button", { name: "New", exact: true }).click();
 			await expectNoOverflow(page, "new prompt dialog");
 			await closeDialog(page);

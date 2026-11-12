@@ -31,7 +31,7 @@ shortening them. The selected composition must also be at most 600 seconds.
   at least half the frame's width and height. At most about six items a slide.
 - Everything is on screen by two seconds in and stays to the end. Use
   `stagger` for entrances only and never fade elements out: scenes cut to the
-  next, and the still review reads each scene's last frame.
+  next, and the layout check measures each scene's last frame.
 - The harness supplies sequencing, narration audio, and the Soloclef
   watermark. Do not add another watermark or audio element.
 - Use only these system-installed font families: `Inter` for normal text,
@@ -88,22 +88,35 @@ globals. Import only what that scene uses.
 4. Run `node render.mjs --preflight props.json`. It validates input, writes the
    verbatim modules, bundles them, selects the composition, and enforces the
    600-second limit without rendering frames.
-5. Run `node render.mjs --stills props.json /tmp/stills`. Inspect each scene's
-   start, middle, and end PNG plus `contact-sheet.png` for clipping, overflow,
-   contrast, hierarchy, blank frames, and safe margins.
-6. If preflight or still review fails, make one coordinated repair and repeat
-   preflight and still review once. If it still fails, stop; do not keep
-   repairing.
+5. Run `node render.mjs --stills props.json /tmp/stills`. It renders each
+   scene's last frame to `/tmp/stills` and measures it as Chrome laid it out,
+   writing the findings to `/tmp/stills/layout.json`, one entry per scene. A
+   scene passes when its findings list is empty. The rules:
+   - text stays inside its box, inside any container that clips it, and at
+     least 40 px from the frame's edge;
+   - no text is drawn over other text, and no line, shape or picture is drawn
+     over text;
+   - no text is under 30 px;
+   - text contrasts with the opaque background colour under it by at least
+     4.5:1, or 3:1 from 48 px (bold from 37 px); text over a picture or
+     gradient is not judged;
+   - pictures, SVGs, canvases and videos stay inside the frame;
+   - no text is invisible at the scene's end, and the frame shows something.
+   A big numeral or mark of at most three characters set at 200 px or more is
+   ornament and is held to no overlap or contrast rule.
+6. If preflight fails or `layout.json` has findings, make one coordinated
+   repair and repeat preflight and the stills once. If it still fails, stop;
+   do not keep repairing.
 7. Run the full `node render.mjs props.json /workspace/out.mp4`. The harness
    measures narration with `parseMedia`, derives timing, segments long renders,
    and concatenates them. Do not hand-calculate audio frame counts.
 8. Call `verify_artifact(path="/workspace/out.mp4", format="video")`. If it reports a blocking
-   finding, make one final repair, then run preflight, still review, render, and
+   finding, make one final repair, then run preflight, the stills, render, and
    verification once more. A second verification failure is terminal.
 9. Call `save_artifact` only after the exact MP4 verifies, passing the step-1
    deck specification as `markdown_representation`.
 
-The workflow permits at most two repairs total: one compile/still repair and
+The workflow permits at most two repairs total: one compile/layout repair and
 one final verification repair.
 
 A render must fit the sandbox operation timeout. The harness controls segment

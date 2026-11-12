@@ -25,6 +25,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { useDelayedFlag } from "@/features/notebooks/hooks/use-delayed-flag";
 import { copyToClipboard } from "@/lib/utils";
+import { settingsPath } from "@/lib/dashboard-paths";
 import { publicLinksApi } from "../api/public-links-api";
 import { liveNotebookUrl } from "../lib/public-link-url";
 import type { LiveLink } from "../model/live-link";
@@ -54,7 +55,6 @@ function expiryOf(link: LiveLink | null): ExpiryChoice {
 export function NotebookShareDialog({
 	open,
 	onOpenChange,
-	workspaceId,
 	notebookId,
 	notebookTitle,
 	link,
@@ -62,7 +62,6 @@ export function NotebookShareDialog({
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	workspaceId: number;
 	notebookId: number;
 	notebookTitle: string;
 	link: LiveLink | null;
@@ -101,7 +100,7 @@ export function NotebookShareDialog({
 		setError(null);
 		setNotice(null);
 		try {
-			const saved = await publicLinksApi.shareNotebook(workspaceId, notebookId, expiry, regenerate);
+			const saved = await publicLinksApi.shareNotebook(notebookId, expiry, regenerate);
 			onChange(saved);
 			if (live) setNotice(tn("updated"));
 		} catch (failure) {
@@ -220,16 +219,13 @@ export function NotebookShareDialog({
 								)}
 								{tn("regenerate")}
 							</Button>
-							{live.can_revoke ? (
-								<StopSharingButton
-									workspaceId={workspaceId}
-									notebookId={notebookId}
-									onStopped={() => {
-										onChange(null);
-										onOpenChange(false);
-									}}
-								/>
-							) : null}
+							<StopSharingButton
+								notebookId={notebookId}
+								onStopped={() => {
+									onChange(null);
+									onOpenChange(false);
+								}}
+							/>
 						</div>
 					) : null}
 				</div>
@@ -243,7 +239,7 @@ export function NotebookShareDialog({
 
 				<DialogFooter className="gap-2 sm:justify-between">
 					<Link
-						href={`/dashboard/${workspaceId}/workspace-settings/public-links`}
+						href={settingsPath("public-links")}
 						className="self-center text-sm text-primary underline-offset-4 hover:underline"
 						onClick={() => onOpenChange(false)}
 					>

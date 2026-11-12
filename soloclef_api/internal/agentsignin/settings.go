@@ -22,8 +22,7 @@ type Settings struct {
 }
 
 // Enabled reports whether this deployment has an agent provider at all. When it
-// does not, an agent's token is forwarded to the Python tier as before, which
-// is also what refuses it if that tier has none either.
+// does not, nothing can verify an agent's token, and the gate answers it 401.
 func (s Settings) Enabled() bool { return s.Issuer != "" && s.ClientID != "" }
 
 // DiscoveryURL is where the provider publishes its endpoints and key set.

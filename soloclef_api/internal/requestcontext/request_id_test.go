@@ -29,7 +29,7 @@ func TestMiddlewareEchoesTheIDAndHandsItToTheHandler(t *testing.T) {
 			response.WriteHeader(http.StatusOK)
 		}))
 
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/logs/workspaces/1/summary", nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/logs/summary", nil)
 	request.Header.Set(Header, "req_from_caller")
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)

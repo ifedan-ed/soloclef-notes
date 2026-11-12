@@ -6,13 +6,11 @@ import {
 	registerRequest,
 	registerResponse,
 } from "@/contracts/types/auth.types";
-import { humanCheckHeaders } from "@/features/human-check/lib/turnstile-script";
 import { ValidationError } from "../error";
 import { baseApiService } from "./base-api.service";
 
 class AuthApiService {
-	/** `humanCheckToken`: the solved Turnstile token, when the check is on. */
-	login = async (request: LoginRequest, humanCheckToken?: string | null) => {
+	login = async (request: LoginRequest) => {
 		// Validate the request
 		const parsedRequest = loginRequest.safeParse(request);
 
@@ -32,14 +30,11 @@ class AuthApiService {
 
 		return baseApiService.post(`/auth/jwt/login`, loginResponse, {
 			body: formData.toString(),
-			headers: {
-				"Content-Type": "application/x-www-form-urlencoded",
-				...humanCheckHeaders(humanCheckToken),
-			},
+			headers: { "Content-Type": "application/x-www-form-urlencoded" },
 		});
 	};
 
-	register = async (request: RegisterRequest, humanCheckToken?: string | null) => {
+	register = async (request: RegisterRequest) => {
 		// Validate the request
 		const parsedRequest = registerRequest.safeParse(request);
 
@@ -54,7 +49,7 @@ class AuthApiService {
 		return baseApiService.post(`/auth/register`, registerResponse, {
 			body: parsedRequest.data,
 			// Replaces post()'s default headers, so the JSON type is restated.
-			headers: { "Content-Type": "application/json", ...humanCheckHeaders(humanCheckToken) },
+			headers: { "Content-Type": "application/json" },
 		});
 	};
 }

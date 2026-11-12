@@ -1,20 +1,20 @@
 package knowledgebase
 
-// The published descriptions of this slice's tools, taken from the Python
-// server's docstrings unchanged. A client shows them to a model, so a reworded
-// one is a different tool surface even where the behaviour is the same.
+// The published descriptions of this slice's tools. A client shows them to a
+// model, so a reworded one is a different tool surface even where the
+// behaviour is the same: change one on purpose, with connect-your-agent.mdx.
 
-const SearchKnowledgeBaseDescription = `Search the workspace's knowledge base by meaning and keywords.
+const SearchKnowledgeBaseDescription = `Search your knowledge base by meaning and keywords.
 
         Use this FIRST when a question might be answered by content already
         stored in Soloclef Notes — notes, uploaded files, saved pages, past
-        research. Do NOT use it to fetch new data from the web; use the
-        scraper tools for that. Returns the most relevant documents with the
+        research. It reads only what is already stored and fetches nothing
+        new from the web. Returns the most relevant documents with the
         passages that matched, ranked by relevance score.
         Example: query='pricing feedback', top_k=5.
         `
 
-const ListDocumentsDescription = `List documents in the workspace's knowledge base, newest first.
+const ListDocumentsDescription = `List documents in your knowledge base, newest first.
 
         Use this to browse or inventory what is stored; to find documents
         about a topic, prefer soloclef_search_knowledge_base. Returns each
@@ -33,7 +33,7 @@ const GetDocumentDescription = `Read one document's full content and metadata by
         the document body.
         `
 
-const AddDocumentDescription = `Save a text or markdown note into the workspace's knowledge base.
+const AddDocumentDescription = `Save a text or markdown note into your knowledge base.
 
         Use this to store notes, summaries, or findings so they become
         searchable later — e.g. after finishing a piece of research. For files

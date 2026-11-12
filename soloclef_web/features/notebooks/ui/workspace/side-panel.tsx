@@ -16,6 +16,7 @@ export function SidePanel({
 	mobileHidden,
 	wide = false,
 	bare = false,
+	heading,
 	children,
 }: {
 	side: "left" | "right";
@@ -30,6 +31,8 @@ export function SidePanel({
 	wide?: boolean;
 	/** No title row: the content brings its own header. */
 	bare?: boolean;
+	/** Shown in the title row in place of the title (the right column's tabs). */
+	heading?: ReactNode;
 	children: ReactNode;
 }) {
 	const CollapseIcon = side === "left" ? PanelLeftClose : PanelRightClose;
@@ -66,7 +69,11 @@ export function SidePanel({
 				>
 					{collapsed ? <ExpandIcon className="size-4" /> : <CollapseIcon className="size-4" />}
 				</Button>
-				<h2 className={cn("flex-1 text-sm font-semibold", collapsed && "lg:hidden")}>{title}</h2>
+				{heading ? (
+					<div className={cn("min-w-0 flex-1", collapsed && "lg:hidden")}>{heading}</div>
+				) : (
+					<h2 className={cn("flex-1 text-sm font-semibold", collapsed && "lg:hidden")}>{title}</h2>
+				)}
 			</div>
 			<div className={cn("flex min-h-0 flex-1 flex-col", collapsed && "lg:hidden")}>{children}</div>
 		</aside>

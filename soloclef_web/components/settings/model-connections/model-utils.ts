@@ -1,4 +1,8 @@
-import type { ModelPreviewRead, ModelRead } from "@/contracts/types/model-connections.types";
+import type {
+	ConnectionScope,
+	ModelPreviewRead,
+	ModelRead,
+} from "@/contracts/types/model-connections.types";
 
 export type ModelCapabilityFilter = "chat" | "vision" | "image_gen";
 
@@ -31,23 +35,18 @@ export function modelLabel(model: SelectableModel) {
 	return model.display_name || model.model_id;
 }
 
-export function isPremiumModel(model: { billing_tier?: string | null }) {
-	return model.billing_tier?.toLowerCase() === "premium";
-}
-
 /**
  * The short tag shown beside a model in a picker. Shared models carry no
  * provider name (they all reach LiteLLM the same way, so "OpenAI-Compatible"
- * said nothing); a premium-tier model reads "Premium". A person's own
- * connection keeps its provider's name, since that is how they tell them apart.
+ * said nothing). A person's own connection keeps its provider's name, since
+ * that is how they tell them apart. Models have no billing tier any more, so
+ * nothing is tagged "Premium".
  */
 export function modelTag(
-	model: { billing_tier?: string | null },
-	connection: { scope?: string | null; provider: string },
+	connection: { scope: ConnectionScope; provider: string },
 	providerName: (provider: string) => string
 ): string | null {
-	if (isPremiumModel(model)) return "Premium";
-	if (connection.scope === "GLOBAL") return null;
+	if (connection.scope === "global") return null;
 	return providerName(connection.provider);
 }
 

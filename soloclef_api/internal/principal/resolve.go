@@ -8,24 +8,20 @@ import (
 	"time"
 )
 
-// ErrUnauthorized is the 401 the Python tier raises at the end of
-// get_auth_context when nothing identified the caller.
+// ErrUnauthorized is the 401 at the end of the resolution, when nothing
+// identified the caller.
 var ErrUnauthorized = errors.New("unauthorized")
-
-// ErrServedByPythonTier means the request carries a credential only the Python
-// tier can check — today an identity provider's access token, which it verifies
-// against the provider's keys (app/agent_sign_in). Refusing it here would log
-// an agent out; accepting it unchecked would be a bypass. The request goes to
-// the tier that can check it.
-var ErrServedByPythonTier = errors.New("credential is verified by the Python tier")
 
 // Directory is the account state a resolution needs. It is an interface so the
 // resolution order can be tested without a database.
 type Directory interface {
-	// UserIsActive reports whether the account exists and is active. A missing
-	// account and an inactive one are the same answer here, because
-	// get_auth_context treats both as "no principal".
-	UserIsActive(ctx context.Context, userID string) (bool, error)
+	// SessionIsLive reports whether an access token's sign-in may still act:
+	// the account exists and is active, and the sign-in (sessionID, a
+	// refresh-token family of that account) has not been ended -- signed
+	// out, signed out from the devices list or everywhere, ended by a new
+	// password or a replayed refresh token -- nor run past its own expiry.
+	// Every "no" is the same answer: the token is not a principal.
+	SessionIsLive(ctx context.Context, userID, sessionID string, now time.Time) (bool, error)
 	// PersonalAccessTokenOwner looks a hashed API key up, as resolve_pat does.
 	PersonalAccessTokenOwner(ctx context.Context, tokenHash string, now time.Time) (PersonalAccessTokenOwner, bool, error)
 	// TouchPersonalAccessToken records that the key was used, after the
@@ -42,9 +38,16 @@ type Agents interface {
 	// verifier is for, as is_agent_token does before anything is checked.
 	OwnsIssuer(issuer string) bool
 	// Resolve verifies the token and returns the account it acts as. It returns
-	// a Refusal for a verdict it reached, and ErrServedByPythonTier for a token
-	// it could not judge.
-	Resolve(ctx context.Context, token string) (string, error)
+	// a Refusal for every verdict, a provider that cannot be read included
+	// (a 503: the token may be perfectly good, so it is not a 401).
+	Resolve(ctx context.Context, token string) (AgentAccount, error)
+}
+
+// AgentAccount is the account an agent's token acts as, with the account's
+// API-access switch as it was on the row the account was found by.
+type AgentAccount struct {
+	UserID           string
+	APIAccessEnabled bool
 }
 
 // Resolver answers who a request is, in app.users.get_auth_context's order.
@@ -79,6 +82,14 @@ func (r Resolver) Resolve(ctx context.Context, request *http.Request) (Principal
 				return Principal{}, err
 			}
 			if found {
+				// A live key of an account that has API access off is
+				// refused outright. It does not fall through to the cookie:
+				// the caller presented a key, and answering as the browser
+				// session beside it would hide that the key does not work.
+				// The use is not recorded either, since nothing was used.
+				if !owner.APIAccessEnabled {
+					return Principal{}, ErrAPIAccessOff
+				}
 				if owner.NeedsLastUsedTouch(now()) {
 					r.Directory.TouchPersonalAccessToken(owner.TokenID)
 				}
@@ -87,38 +98,37 @@ func (r Resolver) Resolve(ctx context.Context, request *http.Request) (Principal
 		}
 
 		if isBearer {
-			userID, err := r.SessionTokens.UserID(token)
+			session, err := r.SessionTokens.Read(token)
 			switch {
 			case errors.Is(err, ErrForeignIssuer):
 				// A token claiming an issuer is never one of this
-				// application's own, so from here it is either an agent's
-				// sign-in or a credential this tier cannot judge. Either way
-				// it never falls through to the session check, exactly as
-				// get_auth_context never does.
+				// application's own, so from here it is an agent's sign-in
+				// or nothing. Either way it never falls through to the
+				// session check: a cookie sent beside a bad agent token must
+				// not quietly answer as the browser's account.
 				return r.resolveAgent(ctx, token)
 			case err == nil:
-				active, err := r.Directory.UserIsActive(ctx, userID)
+				live, err := r.Directory.SessionIsLive(ctx, session.UserID, session.SessionID, now())
 				if err != nil {
 					return Principal{}, err
 				}
-				if active {
-					return Principal{UserID: userID, Method: MethodSession}, nil
+				if live {
+					return Principal{UserID: session.UserID, Method: MethodSession}, nil
 				}
 			}
 		}
 	}
 
-	// The session cookie only ever holds this application's own access token
-	// (app.auth.session_cookies.write_session), so anything else in it is
-	// simply not valid — there is no other tier to ask.
+	// The session cookie only ever holds this application's own access token,
+	// so anything else in it is simply not valid.
 	if cookie, err := request.Cookie(r.SessionCookieName); err == nil && cookie.Value != "" {
-		if userID, tokenErr := r.SessionTokens.UserID(cookie.Value); tokenErr == nil {
-			active, err := r.Directory.UserIsActive(ctx, userID)
+		if session, tokenErr := r.SessionTokens.Read(cookie.Value); tokenErr == nil {
+			live, err := r.Directory.SessionIsLive(ctx, session.UserID, session.SessionID, now())
 			if err != nil {
 				return Principal{}, err
 			}
-			if active {
-				return Principal{UserID: userID, Method: MethodSession}, nil
+			if live {
+				return Principal{UserID: session.UserID, Method: MethodSession}, nil
 			}
 		}
 	}
@@ -126,21 +136,28 @@ func (r Resolver) Resolve(ctx context.Context, request *http.Request) (Principal
 	return Principal{}, ErrUnauthorized
 }
 
-// resolveAgent is get_auth_context's agent branch: a token the agent verifier
-// owns becomes an agent principal or a refusal, and anything else goes to the
-// tier that can check it.
+// resolveAgent is the agent branch: a token the agent verifier owns becomes an
+// agent principal or a refusal, and any other token that names an issuer is a
+// 401. Nothing else in this process can verify such a token, so there is no one
+// to hand it to; answering 401 tells the client, in the standard way, that the
+// credential is not accepted here.
 //
-// Reading the issuer here can only cost a hop, never a wrong verdict: a token
-// whose issuer this tier fails to read is forwarded, and the Python tier reads
-// it again with its own parser.
+// Reading the issuer unverified is safe for the same reason: it only chooses
+// which check runs, and a token whose issuer cannot be read is refused.
 func (r Resolver) resolveAgent(ctx context.Context, token string) (Principal, error) {
 	issuer, _ := unverifiedIssuer(token)
 	if r.Agents == nil || !r.Agents.OwnsIssuer(issuer) {
-		return Principal{}, ErrServedByPythonTier
+		return Principal{}, ErrUnauthorized
 	}
-	userID, err := r.Agents.Resolve(ctx, token)
+	account, err := r.Agents.Resolve(ctx, token)
 	if err != nil {
 		return Principal{}, err
 	}
-	return Principal{UserID: userID, Method: MethodAgent}, nil
+	// After every other verdict, so a token that is invalid or matches no
+	// account is told that, and only a token that would otherwise have been
+	// let in learns the switch is off.
+	if !account.APIAccessEnabled {
+		return Principal{}, ErrAPIAccessOff
+	}
+	return Principal{UserID: account.UserID, Method: MethodAgent}, nil
 }

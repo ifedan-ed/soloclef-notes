@@ -12,8 +12,9 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_mail/mailer"
 )
 
-// The bytes app/mailer/smtp.py's _build_mime and smtplib's own flattening
-// produce, from scripts/python_mime_bytes.py. The boundaries are random on both
+// The bytes the Python sender's MIME builder and smtplib's own flattening
+// produced, recorded in testdata/python_mime_bytes.json when the sender moved
+// to Go and kept as the regression guard. The boundaries are random on both
 // sides, so each is replaced by a counted placeholder before comparing; every
 // other byte is compared as it is.
 

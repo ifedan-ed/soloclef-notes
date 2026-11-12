@@ -1,0 +1,3 @@
+# Made by soloclef_web/scripts/e2e-stack-go.sh on every `up`: throwaway secrets,
+# the stand-in Google's test certificate, the speech stub's one MP3.
+.generated/

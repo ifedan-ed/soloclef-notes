@@ -1,5 +1,6 @@
 import {
 	type CreateConnectorRequest,
+	connectorParser,
 	createConnectorRequest,
 	createConnectorResponse,
 	type DeleteConnectorRequest,
@@ -15,15 +16,16 @@ import {
 	indexConnectorRequest,
 	indexConnectorResponse,
 	type SetConnectorEnabledRequest,
+	type SetConnectorParserRequest,
 	setConnectorEnabledRequest,
 	setConnectorEnabledResponse,
+	setConnectorParserRequest,
 	type UpdateConnectorRequest,
 	updateConnectorRequest,
 	updateConnectorResponse,
 } from "@/contracts/types/connector.types";
 import type {
 	CreateMCPConnectorRequest,
-	GetMCPConnectorsRequest,
 	MCPConnectorRead,
 	MCPServerConfig,
 	MCPTestConnectionResponse,
@@ -34,7 +36,8 @@ import { baseApiService } from "./base-api.service";
 
 class ConnectorsApiService {
 	/**
-	 * Get all connectors for a workspace
+	 * Every connection of the signed-in account, of every type. Each item
+	 * carries `enabled`, so no per-connection status request is needed.
 	 */
 	getConnectors = async (request: GetConnectorsRequest) => {
 		const parsedRequest = getConnectorsRequest.safeParse(request);
@@ -62,7 +65,7 @@ class ConnectorsApiService {
 			: "";
 
 		return baseApiService.get(
-			`/api/v1/search-source-connectors?${queryParams}`,
+			`/api/v1/search-source-connectors${queryParams ? `?${queryParams}` : ""}`,
 			getConnectorsResponse
 		);
 	};
@@ -99,26 +102,9 @@ class ConnectorsApiService {
 			throw new ValidationError(`Invalid request: ${errorMessage}`);
 		}
 
-		const { data, queryParams } = parsedRequest.data;
-
-		// Transform query params to be string values, filtering out undefined/null
-		const transformedQueryParams = Object.fromEntries(
-			Object.entries(queryParams)
-				.filter(([_, v]) => v !== undefined && v !== null)
-				.map(([k, v]) => {
-					return [k, String(v)];
-				})
-		);
-
-		const queryString = new URLSearchParams(transformedQueryParams).toString();
-
-		return baseApiService.post(
-			`/api/v1/search-source-connectors?${queryString}`,
-			createConnectorResponse,
-			{
-				body: data,
-			}
-		);
+		return baseApiService.post(`/api/v1/search-source-connectors`, createConnectorResponse, {
+			body: parsedRequest.data.data,
+		});
 	};
 
 	/**
@@ -134,18 +120,11 @@ class ConnectorsApiService {
 			throw new ValidationError(`Invalid request: ${errorMessage}`);
 		}
 
-		const { id, data, queryParams } = parsedRequest.data;
-		const query = queryParams
-			? `?${new URLSearchParams({ workspace_id: String(queryParams.workspace_id) })}`
-			: "";
+		const { id, data } = parsedRequest.data;
 
-		return baseApiService.put(
-			`/api/v1/search-source-connectors/${id}${query}`,
-			updateConnectorResponse,
-			{
-				body: data,
-			}
-		);
+		return baseApiService.put(`/api/v1/search-source-connectors/${id}`, updateConnectorResponse, {
+			body: data,
+		});
 	};
 
 	/**
@@ -168,7 +147,8 @@ class ConnectorsApiService {
 	};
 
 	/**
-	 * Switch an account connection on/off in a workspace. Owner only.
+	 * Switch a connection on or off: one PUT with the wanted state, so a
+	 * repeated click is harmless; the answer is the connection.
 	 */
 	setConnectorEnabled = async (request: SetConnectorEnabledRequest) => {
 		const parsedRequest = setConnectorEnabledRequest.safeParse(request);
@@ -180,13 +160,39 @@ class ConnectorsApiService {
 			throw new ValidationError(`Invalid request: ${errorMessage}`);
 		}
 
-		const { connectorId, workspaceId, enabled } = parsedRequest.data;
-		const url = `/api/v1/search-source-connectors/${connectorId}/workspaces/${workspaceId}`;
+		const { connectorId, enabled } = parsedRequest.data;
 
-		return enabled
-			? baseApiService.post(url, setConnectorEnabledResponse)
-			: baseApiService.delete(url, setConnectorEnabledResponse);
+		return baseApiService.put(
+			`/api/v1/search-source-connectors/${connectorId}/enabled`,
+			setConnectorEnabledResponse,
+			{ body: { enabled } }
+		);
 	};
+
+	/**
+	 * Choose which parser reads the files a connection brings in. Owner only.
+	 * The body is validated here first so a value that is not one of the four
+	 * parsers never leaves the browser.
+	 */
+	setConnectorParser = async (request: SetConnectorParserRequest) => {
+		const parsedRequest = setConnectorParserRequest.safeParse(request);
+
+		if (!parsedRequest.success) {
+			const errorMessage = parsedRequest.error.issues.map((issue) => issue.message).join(", ");
+			throw new ValidationError(`Invalid request: ${errorMessage}`);
+		}
+
+		const { connectorId, parser } = parsedRequest.data;
+		return baseApiService.put(
+			`/api/v1/search-source-connectors/${connectorId}/parser`,
+			connectorParser,
+			{ body: { parser } }
+		);
+	};
+
+	/** The parser a connection's files are read by; null when none was chosen. Owner only. */
+	getConnectorParser = async (connectorId: number) =>
+		baseApiService.get(`/api/v1/search-source-connectors/${connectorId}/parser`, connectorParser);
 
 	/**
 	 * Index connector content
@@ -203,19 +209,14 @@ class ConnectorsApiService {
 
 		const { connector_id, queryParams, body } = parsedRequest.data;
 
-		// Transform query params to be string values, filtering out undefined/null
-		const transformedQueryParams = Object.fromEntries(
-			Object.entries(queryParams)
-				.filter(([_, v]) => v !== undefined && v !== null)
-				.map(([k, v]) => {
-					return [k, String(v)];
-				})
-		);
-
-		const queryString = new URLSearchParams(transformedQueryParams).toString();
+		// Only the dates that were given go into the query string.
+		const dates = new URLSearchParams();
+		if (queryParams?.start_date) dates.set("start_date", queryParams.start_date);
+		if (queryParams?.end_date) dates.set("end_date", queryParams.end_date);
+		const queryString = dates.toString();
 
 		return baseApiService.post(
-			`/api/v1/search-source-connectors/${connector_id}/index?${queryString}`,
+			`/api/v1/search-source-connectors/${connector_id}/index${queryString ? `?${queryString}` : ""}`,
 			indexConnectorResponse,
 			{
 				body: body || {},
@@ -228,16 +229,10 @@ class ConnectorsApiService {
 	// =============================================================================
 
 	/**
-	 * Get all MCP connectors for a workspace
+	 * The signed-in account's MCP servers
 	 */
-	getMCPConnectors = async (request: GetMCPConnectorsRequest) => {
-		const { workspace_id } = request.queryParams;
-
-		const queryString = new URLSearchParams({
-			workspace_id: String(workspace_id),
-		}).toString();
-
-		return baseApiService.get<MCPConnectorRead[]>(`/api/v1/connectors/mcp?${queryString}`);
+	getMCPConnectors = async () => {
+		return baseApiService.get<MCPConnectorRead[]>(`/api/v1/connectors/mcp`);
 	};
 
 	/**
@@ -251,19 +246,9 @@ class ConnectorsApiService {
 	 * Create a new MCP connector
 	 */
 	createMCPConnector = async (request: CreateMCPConnectorRequest) => {
-		const { data, queryParams } = request;
-
-		const queryString = new URLSearchParams({
-			workspace_id: String(queryParams.workspace_id),
-		}).toString();
-
-		return baseApiService.post<MCPConnectorRead>(
-			`/api/v1/connectors/mcp?${queryString}`,
-			undefined,
-			{
-				body: data,
-			}
-		);
+		return baseApiService.post<MCPConnectorRead>(`/api/v1/connectors/mcp`, undefined, {
+			body: request.data,
+		});
 	};
 
 	/**
@@ -287,14 +272,9 @@ class ConnectorsApiService {
 	/**
 	 * Test MCP server connection and retrieve available tools
 	 */
-	testMCPConnection = async (
-		serverConfig: MCPServerConfig,
-		workspaceId: number | string,
-		connectorId?: number
-	) => {
-		const queryString = new URLSearchParams({ workspace_id: String(workspaceId) }).toString();
+	testMCPConnection = async (serverConfig: MCPServerConfig, connectorId?: number) => {
 		return baseApiService.post<MCPTestConnectionResponse>(
-			`/api/v1/connectors/mcp/test?${queryString}`,
+			`/api/v1/connectors/mcp/test`,
 			undefined,
 			{
 				// connector_id lets a saved server be tested with its masked keys.
@@ -305,18 +285,13 @@ class ConnectorsApiService {
 	};
 
 	/**
-	 * Whether the signed-in person may add MCP servers in this workspace (Owners
-	 * and Editors), and whether the admin allow-list applies (an administrator's
-	 * server is a shared site server; anyone else's is their own, on any public
-	 * https address).
+	 * Whether the signed-in person may add MCP servers, and whether the admin
+	 * allow-list applies (an administrator's server is a shared site server;
+	 * anyone else's is their own, on any public https address).
 	 */
-	getMCPPolicy = async (workspaceId?: number | string | null) => {
-		const query =
-			workspaceId === undefined || workspaceId === null
-				? ""
-				: `?${new URLSearchParams({ workspace_id: String(workspaceId) }).toString()}`;
+	getMCPPolicy = async () => {
 		return baseApiService.get<{ can_add: boolean; allow_list_applies?: boolean }>(
-			`/api/v1/connectors/mcp/policy${query}`
+			`/api/v1/connectors/mcp/policy`
 		);
 	};
 

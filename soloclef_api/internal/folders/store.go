@@ -2,22 +2,48 @@ package folders
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Store reads the folders and the documents inside them. The read methods take
-// the pool and the write methods take a pgx.Tx, so a slice cannot run a write
-// statement outside the transaction that is meant to hold it
-// (internal/database).
+// Store is Rows over Postgres. Every method is one statement, and so its
+// own transaction, except the delete's marker, which reads and then writes
+// the same rows and holds them in between.
 type Store struct{ Pool *pgxpool.Pool }
 
-// Folder is `session.get(Folder, id)`: nil for a row that is not there.
-func (s Store) Folder(ctx context.Context, folderID int64) (*Folder, error) {
-	row, err := New(s.Pool).FolderByID(ctx, folderID)
+var _ Rows = Store{}
+
+// The two constraints a folder write can break, by the names the schema
+// gives them (soloclef_schema/migrations).
+const (
+	siblingNameConstraint = "uq_folders_owner_parent_name"
+	parentConstraint      = "folders_parent_owner_fkey"
+)
+
+// refused turns the two constraint violations a route answers for into the
+// errors it knows, by constraint name and not by searching the message: any
+// other violation is a fault and stays one.
+func refused(err error) error {
+	var violation *pgconn.PgError
+	if errors.As(err, &violation) {
+		switch violation.ConstraintName {
+		case siblingNameConstraint:
+			return ErrNameTaken
+		case parentConstraint:
+			return ErrParentGone
+		}
+	}
+	return err
+}
+
+func (s Store) Folder(ctx context.Context, userID string, folderID int64) (*Folder, error) {
+	row, err := New(s.Pool).FolderOwned(ctx, FolderOwnedParams{FolderID: folderID, UserID: userID})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -28,63 +54,43 @@ func (s Store) Folder(ctx context.Context, folderID int64) (*Folder, error) {
 	return &found, nil
 }
 
-// Ancestors is the chain from the root down to the folder itself, which is
-// both the breadcrumb and the set move_folder's circular-reference check asks
-// about.
-func (s Store) Ancestors(ctx context.Context, folderID int64) ([]Breadcrumb, error) {
-	rows, err := New(s.Pool).FolderAncestors(ctx, folderID)
+func (s Store) Folders(ctx context.Context, userID string) ([]Folder, error) {
+	rows, err := New(s.Pool).FoldersOwned(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	chain := make([]Breadcrumb, 0, len(rows))
-	for _, row := range rows {
-		chain = append(chain, Breadcrumb{ID: row.ID, Name: row.Name})
+	tree := make([]Folder, len(rows))
+	for index, row := range rows {
+		tree[index] = Folder(row)
+	}
+	return tree, nil
+}
+
+func (s Store) Ancestors(ctx context.Context, userID string, folderID int64) ([]Breadcrumb, error) {
+	rows, err := New(s.Pool).FolderAncestors(ctx, FolderAncestorsParams{FolderID: folderID, UserID: userID})
+	if err != nil {
+		return nil, err
+	}
+	chain := make([]Breadcrumb, len(rows))
+	for index, row := range rows {
+		chain[index] = Breadcrumb(row)
 	}
 	return chain, nil
 }
 
-// Depth is get_folder_depth: a root folder is 1, and a folder that is not
-// there is 0 — which is Python's `result.scalar() or 0`.
-func (s Store) Depth(ctx context.Context, folderID int64) (int, error) {
-	depth, err := New(s.Pool).FolderDepth(ctx, folderID)
+func (s Store) Depth(ctx context.Context, userID string, folderID int64) (int, error) {
+	depth, err := New(s.Pool).FolderDepth(ctx, FolderDepthParams{FolderID: folderID, UserID: userID})
 	return int(depth), err
 }
 
-// SubtreeDepth is get_subtree_max_depth: how many levels hang below a folder,
-// 0 for a leaf.
-func (s Store) SubtreeDepth(ctx context.Context, folderID int64) (int, error) {
-	deepest, err := New(s.Pool).SubtreeMaxDepth(ctx, &folderID)
-	if err != nil {
-		return 0, err
-	}
-	// The query answers -1 for a folder with no children at all, and the
-	// Python helper turns anything from 0 upwards into one more than itself.
-	if deepest < 0 {
-		return 0, nil
-	}
-	return int(deepest) + 1, nil
+func (s Store) SubtreeDepth(ctx context.Context, userID string, folderID int64) (int, error) {
+	depth, err := New(s.Pool).SubtreeDepth(ctx, SubtreeDepthParams{FolderID: folderID, UserID: userID})
+	return int(depth), err
 }
 
-// SubtreeIDs is the folder and everything under it, in the worktable's own
-// order, which is the order the enqueued message carries.
-func (s Store) SubtreeIDs(ctx context.Context, folderID int64) ([]int64, error) {
-	return New(s.Pool).FolderSubtreeIDs(ctx, folderID)
-}
-
-// DocumentsToDelete is delete_folder's document read.
-func (s Store) DocumentsToDelete(ctx context.Context, folderIDs []int64) ([]int64, error) {
-	return New(s.Pool).DocumentsInFoldersNotDeleting(ctx, folderIDs)
-}
-
-// NextPosition is generate_folder_position's append case: a key after the last
-// sibling, or the first key of all when there is no sibling.
-//
-// Returning the sibling's position rather than the key itself keeps the one
-// place that calls fractionalindex in one file (position.go), so the two
-// branches of the Python helper stay recognisable.
-func (s Store) LastSiblingPosition(ctx context.Context, workspaceID int64, parentID *int64) (*string, error) {
+func (s Store) LastSiblingPosition(ctx context.Context, userID string, parentID *int64) (*string, error) {
 	position, err := New(s.Pool).LastSiblingPosition(ctx,
-		LastSiblingPositionParams{WorkspaceID: workspaceID, ParentID: parentID})
+		LastSiblingPositionParams{UserID: userID, ParentID: parentID})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -94,52 +100,113 @@ func (s Store) LastSiblingPosition(ctx context.Context, workspaceID int64, paren
 	return &position, nil
 }
 
-// Insert writes the new folder inside the caller's transaction.
-func Insert(ctx context.Context, tx pgx.Tx, folder Folder) (Folder, error) {
-	row, err := New(tx).InsertFolder(ctx, InsertFolderParams{
-		Name:        folder.Name,
-		Position:    folder.Position,
-		ParentID:    folder.ParentID,
-		WorkspaceID: folder.WorkspaceID,
-		CreatedByID: folder.CreatedByID,
-		CreatedAt:   folder.CreatedAt,
-		UpdatedAt:   folder.UpdatedAt,
+func (s Store) Insert(ctx context.Context, userID string, folder Folder) (Folder, error) {
+	row, err := New(s.Pool).InsertFolder(ctx, InsertFolderParams{
+		UserID:    userID,
+		Name:      folder.Name,
+		Position:  folder.Position,
+		ParentID:  folder.ParentID,
+		CreatedAt: folder.CreatedAt,
+		UpdatedAt: folder.UpdatedAt,
 	})
 	if err != nil {
-		return Folder{}, err
+		return Folder{}, refused(err)
 	}
 	return Folder(row), nil
 }
 
-// Rename, Reparent, Reposition and SetMetadata are the four flushes, each
-// carrying the `updated_at` the ORM's onupdate would have written. A route
-// calls one only when a column's value actually changes, because SQLAlchemy
-// emits no UPDATE otherwise and so leaves `updated_at` alone — which is
-// invisible in every response and visible in a row diff.
-func Rename(ctx context.Context, tx pgx.Tx, folderID int64, name string, at time.Time) error {
-	return New(tx).RenameFolder(ctx, RenameFolderParams{ID: folderID, Name: name, UpdatedAt: at})
+func (s Store) Rename(ctx context.Context, userID string, folderID int64, name string, at time.Time) error {
+	_, err := New(s.Pool).RenameFolder(ctx, RenameFolderParams{
+		FolderID: folderID, UserID: userID, Name: name, UpdatedAt: at})
+	return refused(err)
 }
 
-func Reparent(ctx context.Context, tx pgx.Tx, folderID int64, parentID *int64, position string, at time.Time) error {
-	return New(tx).ReparentFolder(ctx, ReparentFolderParams{
-		ID: folderID, ParentID: parentID, Position: position, UpdatedAt: at})
+func (s Store) Reparent(ctx context.Context, userID string, folderID int64, parentID *int64, position string, at time.Time) error {
+	_, err := New(s.Pool).ReparentFolder(ctx, ReparentFolderParams{
+		FolderID: folderID, UserID: userID, ParentID: parentID, Position: position, UpdatedAt: at})
+	return refused(err)
 }
 
-func Reposition(ctx context.Context, tx pgx.Tx, folderID int64, position string, at time.Time) error {
-	return New(tx).RepositionFolder(ctx, RepositionFolderParams{
-		ID: folderID, Position: position, UpdatedAt: at})
+func (s Store) Reposition(ctx context.Context, userID string, folderID int64, position string, at time.Time) error {
+	_, err := New(s.Pool).RepositionFolder(ctx, RepositionFolderParams{
+		FolderID: folderID, UserID: userID, Position: position, UpdatedAt: at})
+	return err
 }
 
-func SetMetadata(ctx context.Context, tx pgx.Tx, folderID int64, metadata []byte, at time.Time) error {
-	return New(tx).SetFolderMetadata(ctx, SetFolderMetadataParams{
-		ID: folderID, Column2: metadata, UpdatedAt: at})
+func (s Store) ClearWatched(ctx context.Context, userID string, folderID int64, at time.Time) error {
+	_, err := New(s.Pool).ClearWatchedFlag(ctx, ClearWatchedFlagParams{
+		FolderID: folderID, UserID: userID, UpdatedAt: at})
+	return err
 }
 
-// MarkDeleting and MarkReady are the delete's marker and its compensation.
-func MarkDeleting(ctx context.Context, tx pgx.Tx, documentIDs []int64) error {
-	return New(tx).MarkDocumentsDeleting(ctx, documentIDs)
+func (s Store) Documents(ctx context.Context, userID string, documentIDs []int64) ([]Document, error) {
+	rows, err := New(s.Pool).DocumentsOwned(ctx, DocumentsOwnedParams{UserID: userID, DocumentIds: documentIDs})
+	if err != nil {
+		return nil, err
+	}
+	found := make([]Document, len(rows))
+	for index, row := range rows {
+		found[index] = Document(row)
+	}
+	return found, nil
 }
 
-func MarkReady(ctx context.Context, tx pgx.Tx, documentIDs []int64) error {
-	return New(tx).MarkDocumentsReady(ctx, documentIDs)
+func (s Store) MoveDocuments(ctx context.Context, userID string, documentIDs []int64, folderID *int64) error {
+	return New(s.Pool).MoveDocuments(ctx, MoveDocumentsParams{
+		UserID: userID, DocumentIds: documentIDs, FolderID: folderID})
+}
+
+// MarkSubtreeDeleting reads the subtree, locks its documents, and marks
+// them, in one transaction: the statuses it returns are exactly the ones
+// the marker replaced, because nothing could change a locked row in
+// between.
+func (s Store) MarkSubtreeDeleting(ctx context.Context, userID string, folderID int64) (Marked, error) {
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return Marked{}, err
+	}
+	// A no-op after Commit; on any early return it undoes everything.
+	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
+	queries := New(tx)
+
+	var marked Marked
+	marked.SubtreeIDs, err = queries.FolderSubtreeIDs(ctx, FolderSubtreeIDsParams{FolderID: folderID, UserID: userID})
+	if err != nil {
+		return Marked{}, err
+	}
+	rows, err := queries.LockDocumentsInFolders(ctx,
+		LockDocumentsInFoldersParams{UserID: userID, FolderIds: marked.SubtreeIDs})
+	if err != nil {
+		return Marked{}, err
+	}
+	marked.Documents = make([]MarkedDocument, len(rows))
+	for index, row := range rows {
+		marked.Documents[index] = MarkedDocument(row)
+	}
+	if len(rows) > 0 {
+		err = queries.MarkDocumentsDeleting(ctx,
+			MarkDocumentsDeletingParams{UserID: userID, DocumentIds: marked.DocumentIDs()})
+		if err != nil {
+			return Marked{}, err
+		}
+	}
+	return marked, tx.Commit(ctx)
+}
+
+func (s Store) RestoreMarked(ctx context.Context, userID string, marked Marked) error {
+	if len(marked.Documents) == 0 {
+		return nil
+	}
+	// One object of id to status, so every document is restored by one
+	// statement however many there are.
+	statuses := make(map[string]json.RawMessage, len(marked.Documents))
+	for _, document := range marked.Documents {
+		statuses[strconv.FormatInt(document.ID, 10)] = document.Status
+	}
+	encoded, err := json.Marshal(statuses)
+	if err != nil {
+		return err
+	}
+	return New(s.Pool).RestoreDocumentStatuses(ctx,
+		RestoreDocumentStatusesParams{UserID: userID, Statuses: encoded})
 }

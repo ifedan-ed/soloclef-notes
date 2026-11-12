@@ -1,38 +1,23 @@
 name: Go
 
-# The Go tiers' own checks: build, vet, format and test, for each of the four
-# modules. They are in a workflow of their own rather than added to tests.yml
-# because that file's two jobs are the Python and web suites, and the Python
-# one is being deleted route by route as the port proceeds — nothing new goes
-# into it.
+# Build, vet, format and test every Go module, each in a job of its own.
 #
-# NOTHING HERE HAS EVER RUN, for the same reason tests.yml has not: every
-# runner registered on this host is scoped to another repository and the one
-# user-level registration went offline on 2026-05-11, so no runner accepts a
-# job for danvics/soloclef. A green tick on this workflow means a job was
-# cancelled while waiting, not that the checks passed. Until a runner is
-# registered against this repository, the commands below are the ones to run by
-# hand — they are exactly what `parity/README.md` and AGENTS.md ask for.
+# NOTHING HERE HAS EVER RUN: no runner has been registered for this
+# repository (checked 2026-11-08). A green tick on this workflow means a job
+# was cancelled while waiting, not that the checks passed. Until there is a
+# runner, the commands below are the ones to run by hand (AGENTS.md).
 #
-# THE TOOLCHAIN IS THE ONE THING THIS JOB NEEDS AND THIS HOST DOES NOT GIVE IT.
-# soloclef_mcp_go declares `go 1.25.0`; the host's toolchain is 1.24.4, and it
-# builds only because GOTOOLCHAIN=auto lets the go command download 1.25 on
-# first use. A runner with no network to proxy.golang.org, or with
-# GOTOOLCHAIN=local, fails on that module and on nothing else. So setup-go asks
-# for 1.25 explicitly and GOTOOLCHAIN stays auto: the first is what makes the
-# job independent of the host's installed version, the second is what lets a
+# The toolchain. Four modules declare `go 1.25.0` and the rest 1.24.4, so
+# setup-go asks for 1.25 explicitly and GOTOOLCHAIN stays auto: the first makes
+# the job independent of whatever the runner has installed, the second lets a
 # module ask for a newer one later without this file changing.
 #
-# THE PARITY SUITE CANNOT JOIN THIS JOB AS IT STANDS. `parity/run.sh` proves
-# the port by byte-comparing the Go tier against the running Python tier
-# (parity/README.md), and to do that it needs: a Docker daemon it may create
-# containers on, the `soloclef-backend-fast:latest` image or the means to build
-# it, and about half an hour for its 1,382 comparisons. A Forgejo runner with
-# `docker` available and that image present could run `bash parity/run.sh` as
-# one more job in this file, with no change to the suite — it already stands up
-# its own world, refuses to run against anything live, and cleans up from a
-# trap. Until there is such a runner, it is run by hand before a route is
-# handed over.
+# The chunker's Rust core. soloclef_chunker/chonkie is cgo over a static
+# library (soloclef_chunker/chonkie/rust), and every module that imports the
+# chunker links it in its tests: the library must exist before `go vet` or
+# `go test` runs there. It is built for every job, because which modules reach
+# it is a fact of their imports that changes, and a job that skipped it would
+# fail on the day an import was added rather than on the day it was reviewed.
 
 on:
   push:
@@ -49,29 +34,47 @@ jobs:
     name: Build, vet, format and test
     runs-on: ubuntu-latest
     env:
-      # A module may ask for a newer toolchain than the runner has, and one
-      # does. This is what lets the go command fetch it.
+      # A module may ask for a newer toolchain than the runner has, and some
+      # do. This is what lets the go command fetch it.
       GOTOOLCHAIN: auto
     strategy:
       fail-fast: false
       matrix:
-        # Each is its own module. soloclef_celery is required by the other two
-        # Go tiers with a relative replace, so all of them are built from this
-        # checkout and none is resolved from a proxy.
+        # Each is its own module, required by the others through relative
+        # replaces, so all of them are built from this checkout and none is
+        # resolved from a proxy.
         module:
-          - soloclef_celery
-          - soloclef_worker
+          - soloclef_agent
           - soloclef_api
+          - soloclef_assistant
+          - soloclef_automations
+          - soloclef_celery
+          - soloclef_chunker
+          - soloclef_connectors
+          - soloclef_filestore
+          - soloclef_ingest
+          - soloclef_mail
           - soloclef_mcp_go
+          - soloclef_schema
+          - soloclef_studio
+          - soloclef_worker
     steps:
       - uses: https://github.com/actions/checkout@v4
       - uses: https://github.com/actions/setup-go@v5
         with:
-          # The highest any module's go directive asks for
-          # (soloclef_mcp_go/go.mod). The others ask for 1.24.4 and build
-          # under it.
           go-version: '1.25'
           cache-dependency-path: ${{ matrix.module }}/go.sum
+      - name: Rust toolchain
+        # Pinned to the version the indexer's image builds with
+        # (soloclef_worker/Dockerfile.indexer), so a crate that needs a newer
+        # compiler fails here as it would there.
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --profile minimal --default-toolchain 1.89
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - name: Chunker's Rust core
+        # --locked: the crate versions are the ones Cargo.lock pins.
+        run: cargo build --release --locked --manifest-path soloclef_chunker/chonkie/rust/Cargo.toml
       - name: Format
         working-directory: ${{ matrix.module }}
         # gofmt reports rather than fails, so the empty output is the check.
@@ -88,6 +91,5 @@ jobs:
       - name: Test
         working-directory: ${{ matrix.module }}
         # The integration tests skip themselves unless pointed at a throwaway
-        # Postgres or Redis, so this is the unit suite
-        # (soloclef_worker/internal/beat/redis_test.go).
+        # Postgres, Valkey or bucket, so this is the unit suite.
         run: go test ./...

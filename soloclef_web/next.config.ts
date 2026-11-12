@@ -3,6 +3,7 @@ import { createMDX } from "fumadocs-mdx/next";
 import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
 import { docsRedirects } from "./lib/docs-redirects";
+import { pageSecurityHeaderRules } from "./lib/security-headers";
 
 // Create the next-intl plugin
 const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
@@ -19,10 +20,14 @@ if (process.env.NODE_ENV === "production" && !process.env.NEXT_PUBLIC_SITE_URL?.
 }
 
 // TODO: Separate app routes (/login, /dashboard) from marketing routes
-// (landing page, /contact, /pricing, /docs) so the desktop build only
+// (landing page, /contact, /docs) so the desktop build only
 // ships what desktop users actually need.
 const nextConfig: NextConfig = {
 	output: "standalone",
+	// No other site may frame a page, and no page is sniffed (lib/security-headers.ts says why).
+	async headers() {
+		return pageSecurityHeaderRules();
+	},
 	async redirects() {
 		return [
 			// /mcp-connector was split into the two MCP directions; the external

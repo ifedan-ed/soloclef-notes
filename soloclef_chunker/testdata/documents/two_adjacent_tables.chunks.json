@@ -1,0 +1,4 @@
+[
+  "| Specimen | Level | Grade | Result |\n|---|---|---|---|\n| Specimen 000 | 0.0 mg/dL | 0 | negative |\n| Specimen 001 | 3.5 mg/dL | 1 | negative |\n| Specimen 002 | 7.0 mg/dL | 2 | negative |\n",
+  "| Batch | Count |\n|---|---|\n| one | 1 |\n| two | 2 |\n"
+]

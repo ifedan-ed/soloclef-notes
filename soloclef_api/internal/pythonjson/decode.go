@@ -3,6 +3,7 @@ package pythonjson
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -105,6 +106,18 @@ func decodeNumber(number json.Number) (any, error) {
 		return RawInt(text), nil
 	}
 	parsed, err := strconv.ParseFloat(text, 64)
+	if errors.Is(err, strconv.ErrRange) {
+		// Too large for a float64. json.loads does not fail on it: float()
+		// answers inf, the value is held like any other, and only *writing*
+		// it fails, because json.dumps is called with allow_nan=False. So a
+		// column holding such a number somewhere a route never renders is
+		// still read there, and refusing it here would be a 500 where the
+		// Python tier answers 200. ParseFloat hands back the infinity along
+		// with the range error, and Marshal refuses it exactly where
+		// json.dumps does. (A value too *small* is not an error at all: both
+		// languages round it to zero.)
+		return parsed, nil
+	}
 	if err != nil {
 		return nil, fmt.Errorf("pythonjson: %q is not a number: %w", text, err)
 	}

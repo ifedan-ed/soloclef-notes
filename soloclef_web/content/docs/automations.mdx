@@ -6,7 +6,7 @@ icon: AlarmClock
 
 An automation runs a task for you on a schedule, with no one watching: for
 example, a weekly summary of what is new in your documents. Automations are
-in **Workspace settings → Automations**, on the website only.
+in Settings → Automations, on the website only.
 
 ## Making one
 
@@ -14,9 +14,6 @@ in **Workspace settings → Automations**, on the website only.
   automation: it shows a **Create automation** card to **Approve**, **Reject**
   or **Edit**. You can also reply in the chat to have it redrafted.
 - **Create manually** opens the form below.
-
-Owners and Editors can create, edit and pause automations. Viewers can see
-them and their runs. Only the workspace Owner can delete one.
 
 ## The form
 
@@ -26,7 +23,7 @@ them and their runs. Only the workspace Owner can delete one.
 **Tasks.** Each task is one instruction in your own words. Type **@** to point
 it at files, folders or connectors. A task also has:
 
-- **Can use:** **Your documents** (the workspace's documents only), **Your
+- **Can use:** **Your documents** (your documents only), **Your
   documents and the web** (it can also search the web and read pages, with
   Tavily, Exa and Browserbase), or **The web only** (the web and connected
   apps, not your documents).
@@ -53,7 +50,7 @@ Schedules are checked every minute. There is no button to run an automation
 straight away.
 
 **Models.** The **Chat model**, **Image model** and **Vision model** its runs
-use. **Auto** picks a standard model; premium models are marked **Premium**.
+use. **Auto** lets the app choose.
 
 **Settings.**
 
@@ -90,8 +87,7 @@ out or Cancelled, with the reason. Open a run to see its output, each task's
 result (including the task a time limit or a cancel cut off), the files it
 made and the inputs it ran with.
 
-**Cancelling a run.** A Pending or Running run has a **Cancel** button, for
-Owners and Editors. The run shows Cancelled at once and stops within a few
+**Cancelling a run.** A Pending or Running run has a **Cancel** button. The run shows Cancelled at once and stops within a few
 seconds; what it already saved, such as a note, stays. **Pause** does the
 same to the run in progress and to any runs waiting behind it. **Delete**
 stops a run in progress and removes it with the rest of the history.
@@ -102,7 +98,7 @@ minutes after its time limit it is shown as Timed out (with the email, if
 
 A run that is still waiting to start an hour after it could have started (for
 example, it was due while the app was down) isn't run late: it is shown as
-Cancelled, "Not started", and costs nothing. A queued run's hour counts from
+Cancelled, "Not started". A queued run's hour counts from
 when the run ahead of it ended.
 
 The result of a run reaches you:
@@ -116,12 +112,3 @@ The result of a run reaches you:
   [Email](/docs/email#emails-the-app-sends-you).
 
 Automation results don't appear in [Notifications](/docs/notifications).
-
-## What it costs
-
-Each task in a run costs the same as one chat message on its model: 1 credit
-on a standard model, 5 on a premium one. If credits have run out, or your plan
-doesn't include the model, the task fails and says why ("Not enough credits to
-run this step…" or "Your plan doesn't include this step's model…"). A task cut
-off by a time limit or a cancel costs nothing; the tasks that finished before
-it are charged as usual. See [Plans and credits](/docs/plans-and-credits).

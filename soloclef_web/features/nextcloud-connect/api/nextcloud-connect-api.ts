@@ -25,7 +25,9 @@ export type LoginProgress = z.infer<typeof loginProgressSchema>;
 
 const disconnectedSchema = z.object({ revoked: z.boolean() });
 
-const base = (workspaceId: number) => `/api/v1/workspaces/${workspaceId}/nextcloud`;
+// The connection is the signed-in account's: one per account, so the
+// routes name nobody.
+const base = "/api/v1/nextcloud";
 
 /**
  * Connecting Nextcloud with its Login Flow. The backend holds the poll token
@@ -33,17 +35,11 @@ const base = (workspaceId: number) => `/api/v1/workspaces/${workspaceId}/nextclo
  * login page to open.
  */
 export const nextcloudConnectApi = {
-	connection: (workspaceId: number) =>
-		baseApiService.get(`${base(workspaceId)}/connection`, nextcloudConnectionSchema),
-	start: (workspaceId: number) =>
-		baseApiService.post(`${base(workspaceId)}/login`, loginStartedSchema),
-	poll: (workspaceId: number, flowId: string) =>
-		baseApiService.post(
-			`${base(workspaceId)}/login/${encodeURIComponent(flowId)}/poll`,
-			loginProgressSchema
-		),
-	cancel: (workspaceId: number, flowId: string) =>
-		baseApiService.delete(`${base(workspaceId)}/login/${encodeURIComponent(flowId)}`),
+	connection: () => baseApiService.get(`${base}/connection`, nextcloudConnectionSchema),
+	start: () => baseApiService.post(`${base}/login`, loginStartedSchema),
+	poll: (flowId: string) =>
+		baseApiService.post(`${base}/login/${encodeURIComponent(flowId)}/poll`, loginProgressSchema),
+	cancel: (flowId: string) => baseApiService.delete(`${base}/login/${encodeURIComponent(flowId)}`),
 	disconnect: (connectorId: number) =>
 		baseApiService.delete(
 			`/api/v1/connectors/${connectorId}/nextcloud/connection`,

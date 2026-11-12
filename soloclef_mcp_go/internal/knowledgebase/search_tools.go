@@ -2,8 +2,8 @@ package knowledgebase
 
 // Knowledge-base read tools: semantic search, list, and read one document.
 //
-// Search and list default to the active workspace; a document read is addressed
-// by id, which is unique across the account, so it needs no workspace.
+// Every one of them reads the caller's own library: the API key or sign-in is
+// the account, and the account is the whole scope.
 
 import (
 	"context"
@@ -15,11 +15,9 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_mcp_go/internal/restclient"
 	"git.danvics.com/danvics/soloclef/soloclef_mcp_go/internal/tooldefinition"
 	"git.danvics.com/danvics/soloclef/soloclef_mcp_go/internal/toolschema"
-	"git.danvics.com/danvics/soloclef/soloclef_mcp_go/internal/workspaceselection"
 )
 
-func readDefinitions(client *restclient.Client,
-	selection *workspaceselection.Selection) []tooldefinition.Definition {
+func readDefinitions(client *restclient.Client) []tooldefinition.Definition {
 	return []tooldefinition.Definition{
 		{
 			Name:        "soloclef_search_knowledge_base",
@@ -48,12 +46,11 @@ func readDefinitions(client *restclient.Client,
 						Maximum:     toolschema.Limit(20),
 					},
 					documentTypesParameter(),
-					workspaceselection.ReferenceParameter(),
 					rendering.FormatParameter(),
 				},
 			},
 			Handle: func(ctx context.Context, arguments toolschema.Arguments) (string, error) {
-				return searchKnowledgeBase(ctx, client, selection, arguments)
+				return searchKnowledgeBase(ctx, client, arguments)
 			},
 		},
 		{
@@ -88,12 +85,11 @@ func readDefinitions(client *restclient.Client,
 						Default:     20,
 						Minimum:     toolschema.Limit(1),
 					},
-					workspaceselection.ReferenceParameter(),
 					rendering.FormatParameter(),
 				},
 			},
 			Handle: func(ctx context.Context, arguments toolschema.Arguments) (string, error) {
-				return listDocuments(ctx, client, selection, arguments)
+				return listDocuments(ctx, client, arguments)
 			},
 		},
 		{
@@ -115,12 +111,7 @@ func readDefinitions(client *restclient.Client,
 	}
 }
 
-func searchKnowledgeBase(ctx context.Context, client *restclient.Client,
-	selection *workspaceselection.Selection, arguments toolschema.Arguments) (string, error) {
-	workspace, err := selection.Resolve(ctx, arguments.Text("workspace"))
-	if err != nil {
-		return "", err
-	}
+func searchKnowledgeBase(ctx context.Context, client *restclient.Client, arguments toolschema.Arguments) (string, error) {
 	topK := arguments.Number("top_k")
 	// Clamped again on the way out, as the Python original clamps it: the
 	// schema already bounds it, and this is the value the backend is asked for.
@@ -134,7 +125,6 @@ func searchKnowledgeBase(ctx context.Context, client *restclient.Client,
 		Method: "POST",
 		Path:   "/documents/search-semantic",
 		JSONBody: pythonjson.NewObject(
-			pythonjson.Field("workspace_id", pythonjson.Num(workspace.ID)),
 			pythonjson.Field("query", pythonjson.Str(arguments.Text("query"))),
 			pythonjson.Field("top_k", pythonjson.Num(topK)),
 			pythonjson.Field("document_types", pythonjson.Strings(arguments.TextList("document_types"))),
@@ -150,12 +140,7 @@ func searchKnowledgeBase(ctx context.Context, client *restclient.Client,
 	return renderSearch(arguments.Text("query"), items), nil
 }
 
-func listDocuments(ctx context.Context, client *restclient.Client,
-	selection *workspaceselection.Selection, arguments toolschema.Arguments) (string, error) {
-	workspace, err := selection.Resolve(ctx, arguments.Text("workspace"))
-	if err != nil {
-		return "", err
-	}
+func listDocuments(ctx context.Context, client *restclient.Client, arguments toolschema.Arguments) (string, error) {
 	folder, folderGiven := arguments.OptionalNumber("folder_id")
 	folderValue := restclient.Omitted("folder_id")
 	if folderGiven {
@@ -165,7 +150,6 @@ func listDocuments(ctx context.Context, client *restclient.Client,
 		Method: "GET",
 		Path:   "/documents",
 		Query: []restclient.QueryParameter{
-			restclient.Number("workspace_id", workspace.ID),
 			restclient.Number("page", arguments.Number("page")),
 			restclient.Number("page_size", arguments.Number("page_size")),
 			restclient.Optional("document_types",
@@ -211,10 +195,13 @@ func renderSearch(query string, items []pythonjson.Value) string {
 	text.Line("# %d result(s) for \"%s\"", len(items), query)
 	text.Raw("")
 	for _, hit := range items {
-		text.Line("## %s (id %s) — score %.3f",
+		// The place in the order, 1 the best. The search fuses a ranking by
+		// meaning with one by keywords, and has no score that means
+		// anything on its own, so none is printed.
+		text.Line("## %s (id %s) — rank %s",
 			pythonjson.Text(hit, "title", "Untitled"),
 			pythonjson.Text(hit, "document_id", "None"),
-			pythonjson.Decimal(hit, "score", 0))
+			pythonjson.Text(hit, "rank", "None"))
 		for _, chunk := range pythonjson.Members(hit, "chunks") {
 			text.Line("> %s", rendering.Clip(
 				strings.TrimSpace(pythonjson.Text(chunk, "content", "")), 500))

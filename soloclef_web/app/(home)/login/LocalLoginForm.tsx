@@ -7,11 +7,9 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { loginMutationAtom } from "@/atoms/auth/auth-mutation.atoms";
-import { useRuntimeConfig } from "@/components/providers/runtime-config";
 import { Button } from "@/components/ui/button";
 import { ViewIcon, ViewOffSlashIcon } from "@/components/ui/icons";
 import { Spinner } from "@/components/ui/spinner";
-import { useHumanCheck } from "@/features/human-check/hooks/use-human-check";
 import { getAuthErrorDetails, isNetworkError } from "@/lib/auth-errors";
 import { getPostLoginRedirectPath } from "@/lib/auth-utils";
 import { ValidationError } from "@/lib/error";
@@ -30,24 +28,12 @@ export function LocalLoginForm() {
 		title: null,
 		message: null,
 	});
-	const { authType } = useRuntimeConfig();
 	const router = useRouter();
 	const [{ mutateAsync: login, isPending: isLoggingIn }] = useAtom(loginMutationAtom);
-	const humanCheck = useHumanCheck("login");
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		setError({ title: null, message: null }); // Clear any previous errors
-
-		if (!humanCheck.ready) {
-			setError({
-				title: t("security_check_title"),
-				message: t(
-					humanCheck.unavailable ? "security_check_unavailable" : "security_check_pending"
-				),
-			});
-			return;
-		}
 
 		// Track login attempt
 		trackLoginAttempt("local");
@@ -57,19 +43,13 @@ export function LocalLoginForm() {
 				username,
 				password,
 				grant_type: "password",
-				humanCheckToken: humanCheck.token,
 			});
-
-			// auth_login_success is now emitted server-side
-			// (UserManager.on_after_login) — authoritative vs. optimistic.
 
 			// Small delay to show success message
 			setTimeout(() => {
 				router.push(getPostLoginRedirectPath());
 			}, 500);
 		} catch (err) {
-			// A token is good for one request; the next attempt needs a new one.
-			humanCheck.reset();
 			if (err instanceof ValidationError) {
 				trackLoginFailure("local", err.message);
 				setError({ title: err.name, message: err.message });
@@ -232,8 +212,6 @@ export function LocalLoginForm() {
 					</div>
 				</div>
 
-				{humanCheck.widget}
-
 				<Button
 					type="submit"
 					disabled={isLoggingIn}
@@ -248,19 +226,17 @@ export function LocalLoginForm() {
 				</Button>
 			</form>
 
-			{authType === "LOCAL" && (
-				<div className="mt-4 text-center text-sm">
-					<p className="text-muted-foreground">
-						{t("dont_have_account")}{" "}
-						<Link
-							href={SIGNUPS_OPEN ? "/register" : REQUEST_ACCESS_HREF}
-							className="font-medium text-primary hover:text-primary/90"
-						>
-							{SIGNUPS_OPEN ? t("sign_up") : t("request_access")}
-						</Link>
-					</p>
-				</div>
-			)}
+			<div className="mt-4 text-center text-sm">
+				<p className="text-muted-foreground">
+					{t("dont_have_account")}{" "}
+					<Link
+						href={SIGNUPS_OPEN ? "/register" : REQUEST_ACCESS_HREF}
+						className="font-medium text-primary hover:text-primary/90"
+					>
+						{SIGNUPS_OPEN ? t("sign_up") : t("request_access")}
+					</Link>
+				</p>
+			</div>
 		</div>
 	);
 }

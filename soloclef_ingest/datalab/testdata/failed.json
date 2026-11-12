@@ -1,0 +1,9 @@
+{
+  "status": "complete",
+  "progress_percent": null,
+  "success": false,
+  "error": "Could not open the document: the file is password protected.",
+  "output_format": null,
+  "markdown": null,
+  "page_count": null
+}

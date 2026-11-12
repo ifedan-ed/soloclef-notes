@@ -27,10 +27,10 @@ func TestFailureSentencesMatchPythonClient(t *testing.T) {
 		{"401 with no body", 401, "",
 			"Authentication failed — the Soloclef Notes API key is invalid or expired."},
 		{"402", 402, `{"detail": "Out of credits"}`,
-			"The workspace is out of credits for this operation. (server said: Out of credits)"},
+			"The account is out of credits for this operation. (server said: Out of credits)"},
 		{"403", 403, `{"detail": "API access is disabled"}`,
-			"Access denied — the token lacks permission, or API access is disabled " +
-				"for this workspace (enable it in Soloclef Notes workspace settings). " +
+			"Access denied — the token lacks permission, or API access is switched " +
+				"off for this account (switch it on in Soloclef Notes, Settings, API access). " +
 				"(server said: API access is disabled)"},
 		{"404 with no body", 404, "", "The requested resource was not found."},
 		{"429", 429, `{"detail": "slow down"}`,

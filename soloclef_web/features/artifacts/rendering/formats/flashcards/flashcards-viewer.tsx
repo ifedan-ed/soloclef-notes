@@ -36,7 +36,7 @@ type LoadState =
 	| { status: "error" }
 	| { status: "ready"; deck: FlashcardDeck };
 
-export default function FlashcardsViewer({ workspaceId, manifest }: ArtifactRendererProps) {
+export default function FlashcardsViewer({ manifest, localOnly = false }: ArtifactRendererProps) {
 	const primary = selectPrimaryArtifactFile(manifest);
 	const reducedMotion = useReducedMotion() ?? false;
 	const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
@@ -50,19 +50,13 @@ export default function FlashcardsViewer({ workspaceId, manifest }: ArtifactRend
 	const [announcement, setAnnouncement] = useState("");
 	const manifestStudyStateRef = useRef(manifest.flashcard_study_state);
 	manifestStudyStateRef.current = manifest.flashcard_study_state;
-	const markMutation = useMarkFlashcard(workspaceId, manifest.artifact_id, manifest.generation);
-	const shuffleMutation = useShuffleFlashcards(
-		workspaceId,
-		manifest.artifact_id,
-		manifest.generation
-	);
+	const markMutation = useMarkFlashcard(manifest.artifact_id, manifest.generation);
+	const shuffleMutation = useShuffleFlashcards(manifest.artifact_id, manifest.generation);
 	const primaryContentUrl = primary?.content_url;
 	const primarySizeBytes = primary?.size_bytes;
 	const tExplain = useTranslations("explain");
 	const explain = useExplain();
 	const showSpinner = useDelayedFlag(loadState.status === "loading");
-	// Outside a workspace (a public notebook link) progress stays in this page.
-	const localOnly = workspaceId <= 0;
 
 	useEffect(() => {
 		const controller = new AbortController();

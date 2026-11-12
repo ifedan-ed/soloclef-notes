@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * "Revert turn" button rendered at the bottom of every completed
+ * "Undo turn" button rendered at the bottom of every completed
  * assistant turn that has at least one reversible action.
  *
  * The button reads from the unified ``useAgentActionsQuery`` cache
@@ -93,7 +93,7 @@ export function RevertTurnButton({ chatTurnId, variant = "button" }: RevertTurnB
 			}
 			if (response.status === "ok") {
 				toast.success(
-					response.reverted === 1 ? "Reverted 1 action." : `Reverted ${response.reverted} actions.`
+					response.reverted === 1 ? "Undid 1 change." : `Undid ${response.reverted} changes.`
 				);
 			} else {
 				// Every "not undone" bucket counts as a failure for the
@@ -103,7 +103,7 @@ export function RevertTurnButton({ chatTurnId, variant = "button" }: RevertTurnB
 				const failureCount =
 					response.failed + response.not_reversible + (response.permission_denied ?? 0);
 				toast.warning(
-					`Reverted ${response.reverted} of ${response.total}. ${failureCount} could not be undone.`
+					`Undid ${response.reverted} of ${response.total} changes. ${failureCount} could not be undone.`
 				);
 				setResultsOpen(true);
 			}
@@ -116,7 +116,7 @@ export function RevertTurnButton({ chatTurnId, variant = "button" }: RevertTurnB
 					? err.message
 					: err instanceof Error
 						? err.message
-						: "Failed to revert turn.";
+						: "The turn could not be undone.";
 			toast.error(message);
 		} finally {
 			setIsReverting(false);
@@ -136,7 +136,7 @@ export function RevertTurnButton({ chatTurnId, variant = "button" }: RevertTurnB
 						}}
 					>
 						<RotateCcw className="size-3.5" />
-						<span>Revert turn</span>
+						<span>Undo turn</span>
 						<span className="ml-auto text-xs tabular-nums opacity-70">
 							{reversibleCount}/{totalCount}
 						</span>
@@ -153,7 +153,7 @@ export function RevertTurnButton({ chatTurnId, variant = "button" }: RevertTurnB
 							}}
 						>
 							<RotateCcw className="size-3.5" />
-							<span>Revert turn</span>
+							<span>Undo turn</span>
 							<span className="text-xs tabular-nums opacity-70">
 								{reversibleCount}/{totalCount}
 							</span>
@@ -162,12 +162,12 @@ export function RevertTurnButton({ chatTurnId, variant = "button" }: RevertTurnB
 				)}
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>Revert this turn?</AlertDialogTitle>
+						<AlertDialogTitle>Undo this turn?</AlertDialogTitle>
 						<AlertDialogDescription>
-							This will undo {reversibleCount} of {totalCount} action
-							{totalCount === 1 ? "" : "s"} from this turn in reverse order. The chat history and
-							any read-only actions are preserved. Some rows may not be reversible — partial success
-							is normal.
+							This undoes the {reversibleCount} of {totalCount} change
+							{totalCount === 1 ? "" : "s"} this turn made to your documents that can still be
+							undone, newest first. The chat stays as it is. A change whose item has been changed
+							since is left as it is, and you are told why.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
@@ -179,7 +179,7 @@ export function RevertTurnButton({ chatTurnId, variant = "button" }: RevertTurnB
 							}}
 							disabled={isReverting}
 						>
-							{isReverting ? "Reverting…" : "Revert turn"}
+							{isReverting ? "Undoing…" : "Undo turn"}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>
@@ -188,9 +188,9 @@ export function RevertTurnButton({ chatTurnId, variant = "button" }: RevertTurnB
 			<AlertDialog open={resultsOpen} onOpenChange={setResultsOpen}>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>Revert results</AlertDialogTitle>
+						<AlertDialogTitle>What was undone</AlertDialogTitle>
 						<AlertDialogDescription>
-							Some actions could not be reverted. Review per-row outcomes below.
+							Some changes could not be undone. Each one says why.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<ul className="max-h-72 overflow-y-auto space-y-2 text-sm">

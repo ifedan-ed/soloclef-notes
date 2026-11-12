@@ -1,0 +1,39 @@
+# The C ABI over chonkie's own Rust core, for the Go chunker to call.
+#
+# Two crates, both the ones the Python side already runs:
+#
+#   chunk       chonkie's core, pinned to the exact version the installed
+#               chonkie-core wraps. chonkie-core 0.9.2 is chunk 0.9.2, and the
+#               pin is `=` rather than `^` on purpose: a newer core may cut in
+#               a different place, and the whole point of calling this crate
+#               instead of reimplementing it is that it cannot. Check the
+#               installed version with
+#               `pip show chonkie-core` in the backend image before changing it.
+#
+#   tokenizers  HuggingFace's, the same library the Python `tokenizers`
+#               package is built from, loading the same tokenizer.json the
+#               image bakes. Token counts therefore match by construction
+#               rather than by resemblance.
+#
+# chunk 0.10 and later need Rust 1.88 for let-chains; 0.9.2 builds on 1.85,
+# which is what this host has. That is a happy accident, not a reason to stay:
+# the reason to stay on 0.9.2 is that it is what Python runs.
+[package]
+name = "soloclef_chonkie"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "soloclef_chonkie"
+# staticlib, not cdylib: the Go binary then needs no shared object beside it
+# at run time, which keeps deployment the single file it is today.
+crate-type = ["staticlib"]
+
+[dependencies]
+chunk = "=0.9.2"
+tokenizers = { version = "0.21", default-features = false, features = ["onig"] }
+
+[profile.release]
+opt-level = 3
+panic = "abort"

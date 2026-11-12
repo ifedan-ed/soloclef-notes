@@ -17,8 +17,8 @@ import { useResetFlashcardProgress } from "@/features/artifacts/hooks/use-flashc
 import type { ArtifactRendererActionsProps } from "@/features/artifacts/model/renderer";
 import { FlashcardStudyStateSchema } from "./study-state";
 
-export default function FlashcardActions({ workspaceId, manifest }: ArtifactRendererActionsProps) {
-	const reset = useResetFlashcardProgress(workspaceId, manifest.artifact_id, manifest.generation);
+export default function FlashcardActions({ manifest }: ArtifactRendererActionsProps) {
+	const reset = useResetFlashcardProgress(manifest.artifact_id, manifest.generation);
 	const parsedState = FlashcardStudyStateSchema.safeParse(manifest.flashcard_study_state);
 	const hasProgress = parsedState.success && Object.keys(parsedState.data.marks).length > 0;
 	const disabled = !hasProgress || reset.isPending;

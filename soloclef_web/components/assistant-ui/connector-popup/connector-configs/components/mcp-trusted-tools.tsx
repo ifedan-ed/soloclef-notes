@@ -24,10 +24,8 @@ export const MCPTrustedTools: FC<MCPTrustedToolsProps> = ({ connector }) => {
 		try {
 			await connectorsApiService.untrustMCPTool(connector.id, toolName);
 			toast.success(`Removed ${toolName} from trusted tools`);
-			// Zero no longer brings the changed config (c0029): ask for it.
-			if (connector.workspace_id != null) {
-				void refreshConnectorAfterChange(queryClient, connector.workspace_id, connector.id);
-			}
+			// The cached list and detail still hold the tool as trusted: ask again.
+			void refreshConnectorAfterChange(queryClient, connector.id);
 		} catch {
 			toast.error(`Failed to remove ${toolName} from trusted tools`);
 		} finally {

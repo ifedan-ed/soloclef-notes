@@ -15,6 +15,10 @@
 // returns early for it — before it even looks at whether the cookie is there.
 // That early return is reproduced rather than tidied: a request with *both* an
 // Authorization header and the session cookie is not checked, on either tier.
+//
+// Beyond the Python middleware: the routes that write the browser's session
+// (sign-in, refresh, sign-out) are checked even without the cookie, which
+// closes login CSRF (session_writes.go).
 package csrforigin
 
 import (
@@ -44,8 +48,11 @@ type Policy struct {
 	// this deployment's own two addresses.
 	Allowed map[string]bool
 	// CookieName is SESSION_COOKIE_NAME; the check applies only when the
-	// request carries that cookie.
+	// request carries that cookie, or is one of the session writes.
 	CookieName string
+	// sessionWrites matches the routes checked with or without the cookie
+	// (GuardingSessionWrites); nil matches none.
+	sessionWrites func(*http.Request) bool
 }
 
 // NewPolicy builds the set the way _allowed_origins() builds it: the configured
@@ -89,7 +96,11 @@ func (p Policy) Permits(request *http.Request) bool {
 		return true
 	}
 	if _, carried := cookie(request, p.CookieName); !carried {
-		return true
+		// A session write is checked without the cookie too, except when it
+		// names no page at all: that is a native app (session_writes.go).
+		if !p.writesSession(request) || namesNoPage(request) {
+			return true
+		}
 	}
 
 	origin := request.Header.Get("Origin")
@@ -111,6 +122,13 @@ func (p Policy) Permits(request *http.Request) bool {
 	// An absent origin is refused here, because `None not in origins` is true:
 	// a cookie-authenticated write that names no origin at all does not pass.
 	return p.Allowed[origin]
+}
+
+// namesNoPage is a request with neither an Origin nor a Referer header. Both
+// are tested as sent: "Origin: null" is a page that hid where it is (a
+// sandboxed frame, a data: URL), which is the opposite of naming none.
+func namesNoPage(request *http.Request) bool {
+	return request.Header.Get("Origin") == "" && request.Header.Get("Referer") == ""
 }
 
 // originOf is _origin_from_url: the scheme and authority of a URL that has

@@ -10,6 +10,7 @@ import { GoogleDriveImportButton } from "@/features/google-drive-connect/ui/goog
 import { useNextcloudConnection } from "@/features/nextcloud-connect/hooks/use-nextcloud-connection";
 import { NextcloudConnectionControls } from "@/features/nextcloud-connect/ui/nextcloud-connection-controls";
 import { NextcloudPicker } from "@/features/nextcloud-files/ui/nextcloud-picker";
+import { settingsPath } from "@/lib/dashboard-paths";
 
 /**
  * Sources from a connector. Google Drive and Nextcloud are connected right
@@ -20,36 +21,35 @@ import { NextcloudPicker } from "@/features/nextcloud-files/ui/nextcloud-picker"
  * (MCP servers, web search) are called by the chat instead.
  */
 export function ConnectorSourcesTab({
-	workspaceId,
 	notebookId,
 	onLeave,
 	onPickFromLibrary,
 	onImported,
 }: {
-	workspaceId: number;
 	notebookId: number;
 	onLeave: () => void;
 	onPickFromLibrary: () => void;
 	onImported: () => void;
 }) {
 	const t = useTranslations("notebooks");
-	const { connection } = useNextcloudConnection(workspaceId);
-	const connectorsHref = `/dashboard/${workspaceId}/workspace-settings/connectors`;
+	const { connection } = useNextcloudConnection();
 	const connectorId = connection?.connector_id;
 	const usable = connectorId != null && !connection?.needs_reconnect;
-	const drive = useGoogleDriveConnection(workspaceId);
+	const drive = useGoogleDriveConnection();
 	const driveConnectorId = drive.connection?.connector_id;
 	const driveUsable = driveConnectorId != null && !drive.connection?.needs_reconnect;
 
 	return (
 		<div className="flex flex-col gap-4">
 			<div className="flex flex-col gap-3" data-testid="google-drive-sources">
-				<GoogleDriveConnectionControls workspaceId={workspaceId} />
+				<GoogleDriveConnectionControls />
 				{driveUsable && (
 					<>
 						<p className="text-sm text-muted-foreground">{t("google_drive_picker_hint")}</p>
 						<GoogleDriveImportButton
 							connectorId={driveConnectorId}
+							// The server checks the notebook is the account's own
+							// before linking the picks to it.
 							notebookId={notebookId}
 							onImported={onImported}
 							onNeedsReconnect={() => void drive.refresh()}
@@ -59,7 +59,7 @@ export function ConnectorSourcesTab({
 			</div>
 			{connection?.configured && (
 				<div className="flex flex-col gap-3" data-testid="nextcloud-sources">
-					<NextcloudConnectionControls workspaceId={workspaceId} />
+					<NextcloudConnectionControls />
 					{usable && (
 						<>
 							<p className="text-sm text-muted-foreground">{t("nextcloud_picker_hint")}</p>
@@ -88,7 +88,7 @@ export function ConnectorSourcesTab({
 						{t("add_from_library")}
 					</Button>
 					<Button asChild variant="outline">
-						<Link href={connectorsHref} onClick={onLeave}>
+						<Link href={settingsPath("connectors")} onClick={onLeave}>
 							{t("manage_connectors")}
 						</Link>
 					</Button>

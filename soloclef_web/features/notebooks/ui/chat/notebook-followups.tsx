@@ -33,13 +33,8 @@ export function NotebookFollowups() {
 	const settled = useDelayedFlag(enabled, 1200);
 
 	const followups = useQuery({
-		queryKey: notebookKeys.followups(
-			notebook?.workspaceId ?? 0,
-			notebook?.notebookId ?? 0,
-			messageId
-		),
-		queryFn: () =>
-			notebooksApi.followups(notebook?.workspaceId ?? 0, notebook?.notebookId ?? 0, answer),
+		queryKey: notebookKeys.followups(notebook?.notebookId ?? 0, messageId),
+		queryFn: () => notebooksApi.followups(notebook?.notebookId ?? 0, answer),
 		enabled: settled,
 		staleTime: Number.POSITIVE_INFINITY,
 		retry: false,

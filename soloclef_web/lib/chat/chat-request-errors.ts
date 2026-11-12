@@ -86,9 +86,6 @@ export function tagPreAcceptSendFailure(error: unknown): unknown {
 		const withCode = error as Error & { errorCode?: string; code?: string };
 		const existingCode = withCode.errorCode ?? withCode.code;
 		const passthroughCodes = new Set([
-			"PREMIUM_QUOTA_EXHAUSTED",
-			"INSUFFICIENT_CREDITS",
-			"PLAN_MODEL_TIER_NOT_INCLUDED",
 			"THREAD_BUSY",
 			"TURN_CANCELLING",
 			"AUTH_EXPIRED",

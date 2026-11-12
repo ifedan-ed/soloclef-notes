@@ -6,5 +6,4 @@ export { PublicOutputView } from "./ui/public-output-view";
 export { ShareDialog } from "./ui/share-dialog";
 export { SharedBadge } from "./ui/shared-badge";
 export { SharedNotice } from "./ui/shared-notice";
-export { useCanCreatePublicLinks } from "./ui/use-can-create-public-links";
 export { useLiveNotebookLink } from "./ui/use-live-notebook-link";

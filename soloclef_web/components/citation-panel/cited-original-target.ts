@@ -11,7 +11,6 @@ interface CitedChunk {
 
 interface CitedDocument {
 	id: number;
-	workspace_id: number;
 	title: string;
 	chunks: readonly CitedChunk[];
 }
@@ -24,7 +23,6 @@ export function citedOriginalTarget(
 	const page = cited?.page_start ?? null;
 	return {
 		documentId: document.id,
-		workspaceId: document.workspace_id,
 		title: document.title,
 		initialPage: page,
 		highlightText: page ? cited?.content : null,

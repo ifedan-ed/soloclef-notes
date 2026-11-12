@@ -10,6 +10,41 @@ import (
 	"time"
 )
 
+const insertToken = `-- name: InsertToken :one
+INSERT INTO personal_access_tokens (user_id, token_hash, token_prefix, label, expires_at)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, expires_at
+`
+
+type InsertTokenParams struct {
+	UserID      string
+	TokenHash   string
+	TokenPrefix string
+	Label       string
+	ExpiresAt   *time.Time
+}
+
+type InsertTokenRow struct {
+	ID        int64
+	ExpiresAt *time.Time
+}
+
+// A new key: its owner, the hash of the key and the short prefix the list
+// shows, never the key itself (create_route.go). created_at is the
+// database's, so a key minted in a transaction is stamped with its time.
+func (q *Queries) InsertToken(ctx context.Context, arg InsertTokenParams) (InsertTokenRow, error) {
+	row := q.db.QueryRow(ctx, insertToken,
+		arg.UserID,
+		arg.TokenHash,
+		arg.TokenPrefix,
+		arg.Label,
+		arg.ExpiresAt,
+	)
+	var i InsertTokenRow
+	err := row.Scan(&i.ID, &i.ExpiresAt)
+	return i, err
+}
+
 const revokeToken = `-- name: RevokeToken :exec
 DELETE FROM personal_access_tokens
 WHERE id = $1 AND user_id = $2
@@ -38,7 +73,7 @@ SELECT id,
        created_at
 FROM personal_access_tokens
 WHERE user_id = $1
-ORDER BY created_at DESC
+ORDER BY created_at DESC, id DESC
 `
 
 type TokensOfAccountRow struct {
@@ -52,7 +87,14 @@ type TokensOfAccountRow struct {
 
 // app/routes/personal_access_tokens_routes.py:list_personal_access_tokens.
 // The ordering is the Python route's own, so it is reproduced rather than left
-// to Postgres: newest first.
+// to Postgres: newest first, with `id` breaking the tie.
+//
+// The tie-break was added on both tiers on 2026-11-09. created_at is not
+// unique, so the Python route's ORDER BY left the tied rows to the plan --
+// which Postgres changes on a prepared statement's fifth execution per
+// connection, turning an index scan into an unstable sort. One tier could
+// therefore serve one account two different orders, and the two tiers could
+// disagree while each was internally consistent.
 func (q *Queries) TokensOfAccount(ctx context.Context, userID string) ([]TokensOfAccountRow, error) {
 	rows, err := q.db.Query(ctx, tokensOfAccount, userID)
 	if err != nil {

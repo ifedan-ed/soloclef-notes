@@ -4,19 +4,17 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { useHumanCheck } from "@/features/human-check/hooks/use-human-check";
 import { resetPassword } from "../api/password-reset-api";
 import { classifyResetError, newPasswordProblem, type ResetProblem } from "../lib/reset-errors";
 import { readResetToken } from "../lib/reset-token";
 import { AuthNotice, authInputClass } from "./auth-notice";
 import { SubmitButton } from "./submit-button";
 
-type Problem = ResetProblem | "password_mismatch" | "security_check_pending";
+type Problem = ResetProblem | "password_mismatch";
 
 /** Set a new password with the token from the email link. */
 export function ResetPasswordForm() {
 	const t = useTranslations("auth");
-	const check = useHumanCheck("reset_password");
 	// undefined until the link has been read (the fragment only exists in the browser).
 	const [token, setToken] = useState<string | null | undefined>(undefined);
 	const [password, setPassword] = useState("");
@@ -37,14 +35,10 @@ export function ResetPasswordForm() {
 			setProblem(local);
 			return;
 		}
-		if (!check.ready) {
-			setProblem(check.unavailable ? "security_check_unavailable" : "security_check_pending");
-			return;
-		}
 		setProblem(null);
 		setPending(true);
 		try {
-			await resetPassword(token, password, check.token);
+			await resetPassword(token, password);
 			setDone(true);
 			// The link is spent; keep it out of the address bar and history.
 			window.history.replaceState(null, "", window.location.pathname);
@@ -52,7 +46,6 @@ export function ResetPasswordForm() {
 			setProblem(classifyResetError(error));
 		} finally {
 			setPending(false);
-			check.reset();
 		}
 	};
 
@@ -126,7 +119,6 @@ export function ResetPasswordForm() {
 					disabled={pending}
 				/>
 			</div>
-			{check.widget}
 			<SubmitButton pending={pending}>{t("set_new_password")}</SubmitButton>
 		</form>
 	);

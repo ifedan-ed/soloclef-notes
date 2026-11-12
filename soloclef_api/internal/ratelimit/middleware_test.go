@@ -35,7 +35,7 @@ func TestTheRefusalArrivesOnTheRequestPastTheBudget(t *testing.T) {
 	limiter := Middleware{
 		Counter: counter,
 		Limit:   Limit{Amount: 3, Multiples: 1, Granularity: "minute", Window: time.Minute},
-		Covers:  CoveringRoutes("GET /api/v1/workspaces/{workspace_id}/members"),
+		Covers:  CoveringRoutes("GET /api/v1/notebooks/{notebook_id}/notes"),
 		Errors:  testErrors(),
 		Logger:  quietLogger(),
 	}
@@ -47,7 +47,7 @@ func TestTheRefusalArrivesOnTheRequestPastTheBudget(t *testing.T) {
 	statuses := []int{}
 	for attempt := 0; attempt < 4; attempt++ {
 		recorder := httptest.NewRecorder()
-		request := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/1/members", nil)
+		request := httptest.NewRequest(http.MethodGet, "/api/v1/notebooks/1/notes", nil)
 		request.Header.Set("CF-Connecting-IP", "203.0.113.7")
 		handler.ServeHTTP(recorder, request)
 		statuses = append(statuses, recorder.Code)
@@ -76,8 +76,8 @@ func TestOnlyTheRoutesThisTierServesAreCounted(t *testing.T) {
 		Counter: counter,
 		Limit:   DefaultLimit,
 		Covers: CoveringRoutes(
-			"GET /api/v1/workspaces/{workspace_id}/members",
-			"GET /api/v1/workspaces/{workspace_id}/my-access"),
+			"GET /api/v1/notebooks/{notebook_id}/notes",
+			"GET /api/v1/notebooks/{notebook_id}/feature"),
 		Errors: testErrors(),
 		Logger: quietLogger(),
 	}
@@ -87,10 +87,10 @@ func TestOnlyTheRoutesThisTierServesAreCounted(t *testing.T) {
 		method, path string
 		counted      bool
 	}{
-		"a route this tier serves":         {http.MethodGet, "/api/v1/workspaces/1/members", true},
-		"a method it does not serve":       {http.MethodPut, "/api/v1/workspaces/1/members/7", false},
+		"a route this tier serves":         {http.MethodGet, "/api/v1/notebooks/1/notes", true},
+		"a method it does not serve":       {http.MethodPut, "/api/v1/notebooks/1/notes/7", false},
 		"a path no route of its own takes": {http.MethodGet, "/api/v1/documents", false},
-		"a member of the member list":      {http.MethodGet, "/api/v1/workspaces/1/members/7", false},
+		"a note of the note list":          {http.MethodGet, "/api/v1/notebooks/1/notes/7", false},
 	}
 	for name, test := range cases {
 		before := counter.count
@@ -110,14 +110,14 @@ func TestARequestWithNoNameableClientIsNotCounted(t *testing.T) {
 	limiter := Middleware{
 		Counter: counter,
 		Limit:   DefaultLimit,
-		Covers:  CoveringRoutes("GET /api/v1/workspaces/{workspace_id}/members"),
+		Covers:  CoveringRoutes("GET /api/v1/notebooks/{notebook_id}/notes"),
 		Errors:  testErrors(),
 		Logger:  quietLogger(),
 	}
 	served := false
 	handler := limiter.Wrap(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { served = true }))
 
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/1/members", nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/notebooks/1/notes", nil)
 	request.Header.Set("CF-Connecting-IP", "  ")
 	handler.ServeHTTP(httptest.NewRecorder(), request)
 

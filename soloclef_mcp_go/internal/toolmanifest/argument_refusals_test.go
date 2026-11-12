@@ -10,13 +10,16 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_mcp_go/internal/toolschema"
 )
 
-// pythonRefusals holds, per case, the arguments sent and the sentence the Python
-// server answered. Captured from it over HTTP rather than written from
-// pydantic's documentation, because the model reads these sentences and several
+// refusals holds, per case, the arguments sent and the sentence the server
+// answers. First captured from the Python server it replaced, and kept. The
+// list-element cases on soloclef_list_documents were written later in the same
+// pydantic form, when the scraper tools that used to carry them were removed,
+// so binding a list still has a case per wrong element. Captured over HTTP
+// rather than written from pydantic's documentation, because the model reads these sentences and several
 // of them are not what the documentation implies — " 3 " is an integer, "2.0" is
 // an integer, "2.5" is a parse failure rather than a fractional-part failure,
 // and a value whose repr runs past 50 characters is cut to 25 + "..." + 24.
-const pythonRefusals = "testdata/python_argument_refusals.json"
+const refusals = "testdata/argument_refusals.json"
 
 type refusalCase struct {
 	Label     string         `json:"label"`
@@ -25,9 +28,9 @@ type refusalCase struct {
 	Refusal   string         `json:"refusal"`
 }
 
-func TestArgumentRefusalsMatchPythonServer(t *testing.T) {
+func TestArgumentRefusalsAreThePublishedSentences(t *testing.T) {
 	var cases []refusalCase
-	readJSON(t, pythonRefusals, &cases)
+	readJSON(t, refusals, &cases)
 	if len(cases) == 0 {
 		t.Fatal("no captured refusals to check against")
 	}
@@ -45,7 +48,7 @@ func TestArgumentRefusalsMatchPythonServer(t *testing.T) {
 			}
 			_, err = signature.Bind(raw)
 			if err == nil {
-				t.Fatalf("accepted arguments the Python server refused with:\n%s",
+				t.Fatalf("accepted arguments that should be refused with:\n%s",
 					each.Refusal)
 			}
 			if err.Error() != each.Refusal {

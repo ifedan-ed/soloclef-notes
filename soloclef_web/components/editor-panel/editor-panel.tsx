@@ -95,14 +95,12 @@ export function EditorPanelContent({
 	kind = "memory",
 	localFilePath,
 	memoryScope,
-	workspaceId,
 	title,
 	onClose,
 }: {
 	kind?: "local_file" | "memory";
 	localFilePath?: string;
-	memoryScope?: "user" | "team";
-	workspaceId?: number;
+	memoryScope?: "user";
 	title: string | null;
 	onClose?: () => void;
 }) {
@@ -130,15 +128,13 @@ export function EditorPanelContent({
 				return candidatePath;
 			}
 			try {
-				const mounts = (await electronAPI.getAgentFilesystemMounts(
-					workspaceId
-				)) as AgentFilesystemMount[];
+				const mounts = (await electronAPI.getAgentFilesystemMounts()) as AgentFilesystemMount[];
 				return normalizeLocalVirtualPathForEditor(candidatePath, mounts);
 			} catch {
 				return candidatePath;
 			}
 		},
-		[electronAPI, workspaceId]
+		[electronAPI]
 	);
 
 	useEffect(() => {
@@ -163,10 +159,7 @@ export function EditorPanelContent({
 						throw new Error("Local file editor is available only in desktop mode.");
 					}
 					const resolvedLocalPath = await resolveLocalVirtualPath(localFilePath);
-					const readResult = await electronAPI.readAgentLocalFileText(
-						resolvedLocalPath,
-						workspaceId
-					);
+					const readResult = await electronAPI.readAgentLocalFileText(resolvedLocalPath);
 					if (!readResult.ok) {
 						throw new Error(readResult.error || "Failed to read local file");
 					}
@@ -187,8 +180,6 @@ export function EditorPanelContent({
 				if (isMemoryMode) {
 					if (!memoryScope) throw new Error("Missing memory context");
 					const { document, limits } = await fetchMemoryEditorDocument({
-						scope: memoryScope,
-						workspaceId,
 						title,
 						signal: controller.signal,
 					});
@@ -219,7 +210,6 @@ export function EditorPanelContent({
 		localFilePath,
 		memoryScope,
 		resolveLocalVirtualPath,
-		workspaceId,
 		title,
 	]);
 
@@ -277,8 +267,7 @@ export function EditorPanelContent({
 					const contentToSave = markdownRef.current;
 					const writeResult = await electronAPI.writeAgentLocalFileText(
 						resolvedLocalPath,
-						contentToSave,
-						workspaceId
+						contentToSave
 					);
 					if (!writeResult.ok) {
 						throw new Error(writeResult.error || "Failed to save local file");
@@ -290,8 +279,6 @@ export function EditorPanelContent({
 				if (isMemoryMode) {
 					if (!memoryScope) throw new Error("Missing memory context");
 					const { markdown: savedContent, limits } = await saveMemoryMarkdown({
-						scope: memoryScope,
-						workspaceId,
 						markdown: markdownRef.current,
 					});
 					markdownRef.current = savedContent;
@@ -322,7 +309,6 @@ export function EditorPanelContent({
 			memoryLimits,
 			memoryScope,
 			resolveLocalVirtualPath,
-			workspaceId,
 		]
 	);
 
@@ -632,7 +618,6 @@ function DesktopEditorPanel() {
 				kind={panelState.kind}
 				localFilePath={panelState.localFilePath ?? undefined}
 				memoryScope={panelState.memoryScope ?? undefined}
-				workspaceId={panelState.workspaceId ?? undefined}
 				title={panelState.title}
 				onClose={closePanel}
 			/>
@@ -668,8 +653,7 @@ function MobileEditorDrawer() {
 						kind={panelState.kind}
 						localFilePath={panelState.localFilePath ?? undefined}
 						memoryScope={panelState.memoryScope ?? undefined}
-						workspaceId={panelState.workspaceId ?? undefined}
-						title={panelState.title}
+								title={panelState.title}
 					/>
 				</div>
 			</DrawerContent>

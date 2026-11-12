@@ -32,7 +32,7 @@ export function McpIcon({ className }: { className?: string }) {
  * The MCP setup guide. Claude (web, desktop, mobile) and ChatGPT sign in
  * through single sign-on when the deployment has it on; coding agents (Claude
  * Code, Codex, OpenCode, ...) use an API key: pick one, copy its config.
- * Either way the agent sees only workspaces with API key access on. Opened
+ * Either way the agent acts for the account only while its API access is on. Opened
  * from "Connect your agent" in the account menu (the user avatar in the
  * rail), so it has no trigger of its own.
  */
@@ -55,8 +55,8 @@ export function ConnectAgentDialog({
 				<DialogHeader>
 					<DialogTitle>Connect your agent to {BRAND.name}</DialogTitle>
 					<DialogDescription>
-						Give your agent {BRAND.name}'s scrapers and your knowledge base. It sees only the
-						workspaces where API key access is on (workspace settings, General).
+						Give your agent your {BRAND.name} knowledge base. It works only while API access is on
+						(Settings, API access).
 					</DialogDescription>
 				</DialogHeader>
 				{remoteUrl && <SignInSetup serverUrl={remoteUrl} />}

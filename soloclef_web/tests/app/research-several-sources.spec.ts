@@ -38,8 +38,8 @@ async function mockSeveralSourceSearch(page: Page, bodies: SearchBody[]) {
 		const body = route.request().postDataJSON() as SearchBody;
 		bodies.push(body);
 		const sources = body.sources ?? [body.source];
-		// Every source but Reddit answers with two rows; Reddit is busy.
-		const answered = sources.filter((s) => s !== "reddit");
+		// Every source but Tavily answers with two rows; Tavily is busy.
+		const answered = sources.filter((s) => s !== "tavily");
 		await route.fulfill({
 			status: 200,
 			headers: { "Content-Type": "text/event-stream" },
@@ -47,13 +47,13 @@ async function mockSeveralSourceSearch(page: Page, bodies: SearchBody[]) {
 				{ type: "phase", phase: "searching", progress: 5 },
 				...sources.map((source) => ({ type: "provider", source, status: "searching" })),
 				...sources.map((source) =>
-					source === "reddit"
+					source === "tavily"
 						? {
 								type: "provider",
 								source,
 								status: "error",
 								code: "source_busy",
-								message: "Reddit didn't answer.",
+								message: "Tavily didn't answer.",
 							}
 						: { type: "provider", source, status: "done", count: 2 }
 				),
@@ -73,12 +73,11 @@ const chip = (page: Page) => page.getByRole("button", { name: /^Search in:/ });
 test.describe("Research: several sources at once", () => {
 	test("tick several sources, search them together, add from the merged list", async ({
 		page,
-		workspace,
 		notebook,
 	}) => {
 		const bodies: SearchBody[] = [];
 		await mockSeveralSourceSearch(page, bodies);
-		await openNotebook(page, workspace.id, notebook.id, "Sources");
+		await openNotebook(page, notebook.id, "Sources");
 
 		await chip(page).click();
 		const several = page.getByRole("menuitemcheckbox", { name: "Search several at once" });
@@ -89,16 +88,17 @@ test.describe("Research: several sources at once", () => {
 		await expectNoOverflow(page, "research source menu (several)");
 
 		const item = (name: RegExp) => page.getByRole("menuitemcheckbox", { name });
-		await expect(item(/^Web$/)).toBeChecked();
-		for (const name of [/^Reddit/, /^PubMed/, /^arXiv/]) await item(name).click();
+		// PubMed is the box's default source, so it starts ticked.
+		await expect(item(/^PubMed/)).toBeChecked();
+		for (const name of [/^Exa/, /^Tavily/, /^arXiv/]) await item(name).click();
 		// Four ticked: the rest wait until one is unticked.
-		await expect(item(/^YouTube/)).toBeDisabled();
+		await expect(item(/^medRxiv/)).toBeDisabled();
 		await item(/^arXiv/).click();
 		await expect(item(/^arXiv/)).not.toBeChecked();
-		await expect(item(/^YouTube/)).toBeEnabled();
+		await expect(item(/^medRxiv/)).toBeEnabled();
 		await page.keyboard.press("Escape");
 
-		await expect(chip(page)).toHaveAccessibleName("Search in: Web, Reddit, PubMed");
+		await expect(chip(page)).toHaveAccessibleName("Search in: PubMed, Exa, Tavily");
 		await expect(chip(page)).toContainText("3 sources");
 
 		await page.getByRole("textbox", { name: "Search the web for new sources" }).fill("wheezing");
@@ -107,16 +107,16 @@ test.describe("Research: several sources at once", () => {
 		await expect(results).toBeVisible();
 		expect(bodies.at(-1)).toEqual({
 			query: "wheezing",
-			source: "web",
-			sources: ["web", "reddit", "pubmed"],
+			source: "pubmed",
+			sources: ["pubmed", "exa", "tavily"],
 			mode: "fast",
 		});
 
 		await expect(results.getByText("4 sources found")).toBeVisible();
-		await expect(results.getByText("From Web")).toHaveCount(2);
+		await expect(results.getByText("From Exa")).toHaveCount(2);
 		await expect(results.getByText("From PubMed")).toHaveCount(2);
 		await expect(results.getByText("Not every source answered:")).toBeVisible();
-		await expect(results.getByText(/Reddit didn.t answer just now/)).toBeVisible();
+		await expect(results.getByText(/Tavily didn.t answer just now/)).toBeVisible();
 		await expectNoOverflow(page, "research results (several sources)");
 
 		const importRequest = page.waitForRequest(
@@ -126,47 +126,44 @@ test.describe("Research: several sources at once", () => {
 		const sent = (await importRequest).postDataJSON() as {
 			items: { url: string; source: string }[];
 		};
-		expect(sent.items.map((i) => i.source)).toEqual(["web", "pubmed", "web", "pubmed"]);
+		expect(sent.items.map((i) => i.source)).toEqual(["pubmed", "exa", "pubmed", "exa"]);
 	});
 
 	test("the pick is remembered, and one click goes back to a single source", async ({
 		page,
-		workspace,
 		notebook,
 	}) => {
 		await mockSeveralSourceSearch(page, []);
-		await openNotebook(page, workspace.id, notebook.id, "Sources");
+		await openNotebook(page, notebook.id, "Sources");
 		await chip(page).click();
 		await page.getByRole("menuitemcheckbox", { name: "Search several at once" }).click();
-		await page.getByRole("menuitemcheckbox", { name: /^PubMed/ }).click();
+		await page.getByRole("menuitemcheckbox", { name: /^Exa/ }).click();
 		await page.keyboard.press("Escape");
 		await expect(chip(page)).toContainText("2 sources");
 
 		// A fresh visit (the phone layout reopens on another tab, so go back to Sources).
-		await openNotebook(page, workspace.id, notebook.id, "Sources");
+		await openNotebook(page, notebook.id, "Sources");
 		await expect(chip(page)).toContainText("2 sources");
-		await expect(chip(page)).toHaveAccessibleName("Search in: Web, PubMed");
+		await expect(chip(page)).toHaveAccessibleName("Search in: PubMed, Exa");
 
 		// Turning "several" off keeps the first pick, and single-click picking is back.
 		await chip(page).click();
 		await page.getByRole("menuitemcheckbox", { name: "Search several at once" }).click();
-		await expect(page.getByRole("menuitemradio", { name: /^YouTube/ })).toBeVisible();
-		await page.getByRole("menuitemradio", { name: /^YouTube/ }).click();
-		await expect(chip(page)).toHaveAccessibleName("Search in: YouTube");
+		await expect(page.getByRole("menuitemradio", { name: /^medRxiv/ })).toBeVisible();
+		await page.getByRole("menuitemradio", { name: /^medRxiv/ }).click();
+		await expect(chip(page)).toHaveAccessibleName("Search in: medRxiv / bioRxiv");
 	});
 
 	test("a real several-source search with no internet reports each source and ends inline", async ({
 		page,
-		workspace,
 		notebook,
 	}) => {
 		// Real backend (no stubs): PubMed and arXiv cannot be reached offline.
-		await openNotebook(page, workspace.id, notebook.id, "Sources");
+		await openNotebook(page, notebook.id, "Sources");
 		await chip(page).click();
 		await page.getByRole("menuitemcheckbox", { name: "Search several at once" }).click();
-		await page.getByRole("menuitemcheckbox", { name: /^PubMed/ }).click();
+		// PubMed, the default, is ticked already.
 		await page.getByRole("menuitemcheckbox", { name: /^arXiv/ }).click();
-		await page.getByRole("menuitemcheckbox", { name: /^Web$/ }).click();
 		await page.keyboard.press("Escape");
 		await expect(chip(page)).toHaveAccessibleName("Search in: PubMed, arXiv");
 

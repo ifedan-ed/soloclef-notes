@@ -24,9 +24,8 @@ import {
  */
 export type CitationElementNode = {
 	type: "citation";
-	kind: "chunk" | "doc" | "run" | "url";
+	kind: "chunk" | "doc" | "url";
 	chunkId?: number;
-	runId?: string;
 	url?: string;
 	/** Original literal token that produced this citation node. */
 	rawText: string;
@@ -51,7 +50,6 @@ export const CITATION_NODE = {
  */
 export function citationMarker(node: CitationElementNode): string {
 	if (node.kind === "url") return `[citation:${node.url ?? ""}]`;
-	if (node.kind === "run") return `[citation:${node.runId ?? ""}]`;
 	return `[citation:${node.kind === "doc" ? "doc-" : ""}${node.chunkId ?? ""}]`;
 }
 
@@ -106,15 +104,6 @@ function makeCitationElement(rawText: string, segment: CitationToken): CitationE
 			type: CITATION_TYPE,
 			kind: "url",
 			url: segment.url,
-			rawText,
-			children: [{ text: "" }],
-		};
-	}
-	if (segment.kind === "run") {
-		return {
-			type: CITATION_TYPE,
-			kind: "run",
-			runId: segment.runId,
 			rawText,
 			children: [{ text: "" }],
 		};

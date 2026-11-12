@@ -6,7 +6,6 @@ import { useAtomValue, useSetAtom } from "jotai";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { z } from "zod";
-import { activeWorkspaceIdAtom } from "@/atoms/workspaces/workspace-query.atoms";
 import { Mp4VideoPlayer } from "@/components/tool-ui/video-presentation/mp4-player";
 import { Spinner } from "@/components/ui/spinner";
 import { artifactDownloadPath } from "@/features/artifacts/api/artifact-download-path";
@@ -75,8 +74,8 @@ function ArtifactCard({
 }) {
 	const openPanel = useSetAtom(openArtifactPanelAtom);
 	const panelState = useAtomValue(artifactPanelAtom);
-	const workspaceId = Number(useAtomValue(activeWorkspaceIdAtom));
-	const canDownload = !publicRoute && Number.isFinite(workspaceId) && workspaceId > 0;
+	// A public link's reader is not signed in, and the download is the owner's route.
+	const canDownload = !publicRoute;
 	const selected = panelState.isOpen && panelState.selectedCardToolCallId === toolCallId;
 
 	return (
@@ -114,7 +113,7 @@ function ArtifactCard({
 			</span>
 			{canDownload ? (
 				<ArtifactDownloadButton
-					path={artifactDownloadPath(workspaceId, artifactId)}
+					path={artifactDownloadPath(artifactId)}
 					filename={filename}
 					appearance="text"
 					className="relative z-10 h-9 shrink-0 rounded-md bg-popover px-3 text-sm font-normal text-foreground hover:bg-popover/80"
@@ -130,18 +129,17 @@ function LegacySaveArtifactCompatibilityCard({
 	filename,
 	publicRoute,
 	toolCallId,
-	workspaceId,
 }: {
 	artifactId: number;
 	title: string;
 	filename: string;
 	publicRoute: boolean;
 	toolCallId: string;
-	workspaceId: number;
 }) {
-	const canResolve = !publicRoute && Number.isFinite(workspaceId) && workspaceId > 0;
+	// The manifest is the owner's route: a public link's reader cannot ask for it.
+	const canResolve = !publicRoute;
 	const { data: manifest, isPending } = useQuery({
-		...artifactManifestQueryOptions(workspaceId, artifactId),
+		...artifactManifestQueryOptions(artifactId),
 		enabled: canResolve,
 	});
 	const primary = manifest?.files.find((file) => file.role === "primary");
@@ -156,7 +154,6 @@ function LegacySaveArtifactCompatibilityCard({
 				artifactId={artifactId}
 				title={manifest?.title ?? title}
 				filename={resolvedFilename}
-				workspaceId={workspaceId}
 			/>
 		);
 	}
@@ -177,18 +174,12 @@ export function Mp4ArtifactCard({
 	artifactId,
 	title,
 	filename,
-	workspaceId,
 }: {
 	artifactId: number;
 	title: string;
 	filename: string;
-	workspaceId: number;
 }) {
-	const {
-		data: manifest,
-		error,
-		isPending,
-	} = useQuery(artifactManifestQueryOptions(workspaceId, artifactId));
+	const { data: manifest, error, isPending } = useQuery(artifactManifestQueryOptions(artifactId));
 	const primary = manifest?.files.find((file) => file.role === "primary");
 	const videoSrc = primary?.mime_type === "video/mp4" ? buildBackendUrl(primary.content_url) : null;
 
@@ -206,7 +197,7 @@ export function Mp4ArtifactCard({
 					<ArtifactFormatLabel format="video" className="mt-0.5 text-xs text-muted-foreground" />
 				</span>
 				<ArtifactDownloadButton
-					path={artifactDownloadPath(workspaceId, artifactId)}
+					path={artifactDownloadPath(artifactId)}
 					filename={filename}
 					appearance="text"
 					className="h-9 shrink-0 rounded-md bg-popover px-3 text-sm font-normal text-foreground hover:bg-popover/80"
@@ -241,15 +232,13 @@ export const SaveArtifactToolUI = ({
 	const pathname = usePathname();
 	const publicRoute = pathname?.startsWith("/public/") ?? false;
 	const queryClient = useQueryClient();
-	const workspaceId = Number(useAtomValue(activeWorkspaceIdAtom));
 	const savedArtifactId = result?.status === "saved" ? result.artifact_id : null;
 
 	useEffect(() => {
-		if (!savedArtifactId || !Number.isFinite(workspaceId) || workspaceId <= 0) {
-			return;
-		}
-		void invalidatePublishedArtifact(queryClient, workspaceId, savedArtifactId);
-	}, [queryClient, savedArtifactId, workspaceId]);
+		// Nothing of the owner's is cached on a public link.
+		if (!savedArtifactId || publicRoute) return;
+		void invalidatePublishedArtifact(queryClient, savedArtifactId);
+	}, [queryClient, savedArtifactId, publicRoute]);
 
 	if (status.type !== "complete" || result?.status !== "saved") return null;
 	const primary = result.files?.find((file) => file.role === "primary");
@@ -263,24 +252,11 @@ export const SaveArtifactToolUI = ({
 				filename={filename}
 				publicRoute={publicRoute}
 				toolCallId={toolCallId}
-				workspaceId={workspaceId}
 			/>
 		);
 	}
-	if (
-		primary?.mime_type === "video/mp4" &&
-		!publicRoute &&
-		Number.isFinite(workspaceId) &&
-		workspaceId > 0
-	) {
-		return (
-			<Mp4ArtifactCard
-				artifactId={result.artifact_id}
-				title={title}
-				filename={filename}
-				workspaceId={workspaceId}
-			/>
-		);
+	if (primary?.mime_type === "video/mp4" && !publicRoute) {
+		return <Mp4ArtifactCard artifactId={result.artifact_id} title={title} filename={filename} />;
 	}
 	return (
 		<ArtifactCard

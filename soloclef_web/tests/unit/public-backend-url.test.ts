@@ -8,12 +8,12 @@ import { publicBackendBaseUrl } from "@/lib/env-config";
 test("proxy mode hands an outside client this page's own origin", () => {
 	// The agent-setup dialog used to fall back to http://localhost:8000, which
 	// is the backend container's address, not anything the user's laptop can reach.
-	assert.equal(publicBackendBaseUrl("", "https://notes.danvics.com"), "https://notes.danvics.com");
+	assert.equal(publicBackendBaseUrl("", "https://notes.example.com"), "https://notes.example.com");
 });
 
 test("an explicitly configured backend URL wins", () => {
 	assert.equal(
-		publicBackendBaseUrl("https://api.example.test", "https://notes.danvics.com"),
+		publicBackendBaseUrl("https://api.example.test", "https://notes.example.com"),
 		"https://api.example.test"
 	);
 });

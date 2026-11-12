@@ -4,10 +4,10 @@ import type { KeyedToolId } from "./composer-tools";
 const NONE: ReadonlySet<KeyedToolId> = new Set();
 
 /**
- * Which keyed tools this workspace has a key for, read from the research
+ * Which keyed tools the account has a key for, read from the research
  * box's status (the same keys answer both). Exa and Tavily are connected
- * unless the status lists them as unavailable; Browserbase when it is the
- * page reader. No status yet, or a failed one, offers none of them.
+ * unless the status lists them as unavailable. No status yet, or a failed
+ * one, offers neither.
  */
 export function connectedKeyedTools(
 	status: ResearchSourcesStatus | undefined
@@ -16,6 +16,5 @@ export function connectedKeyedTools(
 	const connected = new Set<KeyedToolId>();
 	if (!status.unavailable.exa) connected.add("exa");
 	if (!status.unavailable.tavily) connected.add("tavily");
-	if (status.page_reader === "browserbase") connected.add("browserbase");
 	return connected;
 }

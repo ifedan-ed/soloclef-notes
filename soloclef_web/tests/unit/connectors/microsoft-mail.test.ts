@@ -65,10 +65,10 @@ test("the page to come back to keeps its own query but not a previous outcome", 
 	assert.equal(MICROSOFT_MAIL_PARAM, "microsoft_mail");
 	assert.equal(
 		returnPathWithoutOutcome({
-			pathname: "/dashboard/3/workspace-settings/connectors",
+			pathname: "/dashboard/settings/connectors",
 			search: "?microsoft_mail=connected&q=mail",
 		}),
-		"/dashboard/3/workspace-settings/connectors?q=mail"
+		"/dashboard/settings/connectors?q=mail"
 	);
 	assert.equal(returnPathWithoutOutcome({ pathname: "/dashboard/3", search: "" }), "/dashboard/3");
 });

@@ -2,10 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { LiveLinkError } from "@/features/public-sharing/api/live-notebook-api";
-import {
-	canCreatePublicLinks,
-	canViewPublicLinks,
-} from "@/features/public-sharing/lib/public-link-access";
 import { publicLinkFailure } from "@/features/public-sharing/lib/public-link-failure";
 import {
 	liveNotebookApiPath,
@@ -32,15 +28,6 @@ test("the token cannot steer the public API to another path", () => {
 		liveNotebookApiPath("../../workspaces/1", "/sources/2"),
 		"/api/v1/public-notebooks/..%2F..%2Fworkspaces%2F1/sources/2"
 	);
-});
-
-test("members who may see links see the badge; only owners by default make one", () => {
-	const viewer = { is_owner: false, permissions: ["public_sharing:view", "chats:read"] };
-	assert.equal(canViewPublicLinks(viewer), true);
-	assert.equal(canCreatePublicLinks(viewer), false);
-	assert.equal(canViewPublicLinks({ is_owner: true }), true);
-	assert.equal(canViewPublicLinks({ is_owner: false, permissions: [] }), false);
-	assert.equal(canViewPublicLinks(null), false);
 });
 
 test("an expired link says so; a revoked or deleted one is gone", () => {
@@ -80,7 +67,7 @@ test("the page payload parses as the server sends it", () => {
 	);
 });
 
-test("a link row carries whether the reader may revoke it", () => {
+test("a link row is the owner's own link: no creator and no revoke flag", () => {
 	const row = liveLinkSchema.parse({
 		id: 1,
 		notebook_id: 2,
@@ -88,12 +75,10 @@ test("a link row carries whether the reader may revoke it", () => {
 		notebook_icon: null,
 		share_token: "t",
 		public_url: "https://x/public/notebook/t",
-		created_at: "2026-09-27T10:00:00+00:00",
+		created_at: "2026-09-27T10:00:00Z",
 		expires_at: null,
 		is_expired: false,
-		created_by_user_id: null,
-		created_by_name: null,
-		can_revoke: false,
 	});
-	assert.equal(row.can_revoke, false);
+	assert.equal(row.is_expired, false);
+	assert.equal("can_revoke" in row, false);
 });

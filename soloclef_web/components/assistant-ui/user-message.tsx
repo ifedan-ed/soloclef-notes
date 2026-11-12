@@ -7,11 +7,7 @@ import {
 } from "@assistant-ui/react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { CheckIcon, CopyIcon, Pencil } from "lucide-react";
-import Image from "next/image";
-import { useParams } from "next/navigation";
-import { type FC, useCallback, useState } from "react";
-import { toast } from "sonner";
-import { currentThreadAtom } from "@/atoms/chat/current-thread.atom";
+import { type FC, useCallback } from "react";
 import { messageDocumentsMapAtom } from "@/atoms/chat/mentioned-documents.atom";
 import { openDocumentViewerAtom } from "@/atoms/documents/document-viewer.atom";
 import { MentionChip } from "@/components/assistant-ui/mention-chip";
@@ -21,46 +17,6 @@ import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button
 import { useArtifactsByDocument } from "@/features/artifacts/hooks/use-artifacts-by-document";
 import { getMentionDocKey } from "@/lib/chat/mention-doc-key";
 import { parseMentionSegments } from "@/lib/chat/parse-mention-segments";
-import { getWorkspaceIdNumber } from "@/lib/route-params";
-
-interface AuthorMetadata {
-	displayName: string | null;
-	avatarUrl: string | null;
-}
-
-const UserAvatar: FC<AuthorMetadata> = ({ displayName, avatarUrl }) => {
-	const [hasError, setHasError] = useState(false);
-
-	const initials = displayName
-		? displayName
-				.split(" ")
-				.map((n) => n[0])
-				.join("")
-				.toUpperCase()
-				.slice(0, 2)
-		: "U";
-
-	if (avatarUrl && !hasError) {
-		return (
-			<Image
-				src={avatarUrl}
-				alt={displayName || "User"}
-				width={32}
-				height={32}
-				className="size-8 rounded-full object-cover"
-				referrerPolicy="no-referrer"
-				onError={() => setHasError(true)}
-				unoptimized
-			/>
-		);
-	}
-
-	return (
-		<div className="flex size-8 items-center justify-center rounded-full bg-muted text-xs font-medium text-foreground select-none">
-			{initials}
-		</div>
-	);
-};
 
 const UserTextPart: FC = () => {
 	const messageId = useAuiState(({ message }) => message?.id);
@@ -69,23 +25,13 @@ const UserTextPart: FC = () => {
 	const messageDocumentsMap = useAtomValue(messageDocumentsMapAtom);
 	const mentionedDocs = (messageId ? messageDocumentsMap[messageId] : undefined) ?? [];
 	const openDocumentViewer = useSetAtom(openDocumentViewerAtom);
-	const params = useParams();
-	const resolvedWorkspaceId = getWorkspaceIdNumber(params);
-	const artifactsByDocument = useArtifactsByDocument(resolvedWorkspaceId ?? 0);
+	const artifactsByDocument = useArtifactsByDocument();
 
 	const handleOpenDoc = useCallback(
 		(docId: number, title: string) => {
-			if (!resolvedWorkspaceId) {
-				toast.error("Cannot open document outside a workspace.");
-				return;
-			}
-			openDocumentViewer({
-				documentId: docId,
-				workspaceId: resolvedWorkspaceId,
-				title,
-			});
+			openDocumentViewer({ documentId: docId, title });
 		},
-		[openDocumentViewer, resolvedWorkspaceId]
+		[openDocumentViewer]
 	);
 
 	const segments = parseMentionSegments(text, mentionedDocs);
@@ -133,19 +79,14 @@ const UserTextPart: FC = () => {
 const userMessageParts = { Text: UserTextPart };
 
 export const UserMessage: FC = () => {
-	const metadata = useAuiState(({ message }) => message?.metadata);
-	const author = metadata?.custom?.author as AuthorMetadata | undefined;
-	const isSharedChat = useAtomValue(currentThreadAtom).visibility === "SEARCH_SPACE";
-	const showAvatar = isSharedChat && !!author;
-
 	return (
 		<MessagePrimitive.Root
 			className="group/user-msg aui-user-message-root fade-in slide-in-from-bottom-1 mx-auto grid w-full max-w-(--thread-max-width) animate-in auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] content-start gap-y-2 px-2 pt-3 pb-8 duration-150 [&:where(>*)]:col-start-2"
 			data-role="user"
 		>
 			<div className="col-start-2 min-w-0">
-				<div className="aui-user-message-content-wrapper flex items-end gap-2">
-					<div className="relative flex-1 min-w-0">
+				<div className="aui-user-message-content-wrapper">
+					<div className="relative min-w-0">
 						<div className="aui-user-message-content wrap-break-word rounded-xl bg-muted px-4 py-2.5 text-foreground">
 							<MessagePrimitive.Parts components={userMessageParts} />
 						</div>
@@ -153,11 +94,6 @@ export const UserMessage: FC = () => {
 							<UserActionBar />
 						</div>
 					</div>
-					{showAvatar && (
-						<div className="shrink-0 mb-1.5">
-							<UserAvatar displayName={author.displayName} avatarUrl={author.avatarUrl} />
-						</div>
-					)}
 				</div>
 				<MessageTimestamp className="mt-1 pl-1" />
 			</div>

@@ -2,16 +2,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { test as base, expect, type Page } from "@playwright/test";
 import { acquireTestToken } from "../helpers/api/auth";
-import { createNotebook, type NotebookRow } from "../helpers/api/notebooks";
-import { createWorkspace, deleteWorkspace, type WorkspaceRow } from "../helpers/api/workspaces";
+import { createNotebook, deleteNotebook, type NotebookRow } from "../helpers/api/notebooks";
 
 /**
  * Fixtures for the app suite (desktop + phone projects, isolated stack only).
  *
  * - `token`: bearer token for the seeded e2e user (reuses the setup cookie).
- * - `workspace`: a fresh workspace per test, deleted afterwards, so tests run
- *   in parallel without seeing each other's notebooks.
- * - `notebook`: an empty notebook in that workspace.
+ * - `notebook`: a fresh, empty notebook per test, deleted afterwards. Every
+ *   test signs in as the same account, so a test isolates itself by its own
+ *   notebook (and unique names), never by assuming the account is empty.
  * - `isPhone`: true in the phone project.
  *
  * Every test also fails on a native alert/confirm/prompt (the app uses inline
@@ -33,7 +32,6 @@ function cachedToken(): string | null {
 
 type Fixtures = {
 	token: string;
-	workspace: WorkspaceRow;
 	notebook: NotebookRow;
 	isPhone: boolean;
 	failOnPopups: undefined;
@@ -54,20 +52,13 @@ export const test = base.extend<Fixtures, { workerToken: string }>({
 		{ scope: "worker" },
 	],
 	token: async ({ workerToken }, use) => use(workerToken),
-	workspace: async ({ request, token }, use) => {
-		const ws = await createWorkspace(
-			request,
-			token,
-			`web-e2e-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
-		);
+	notebook: async ({ request, token }, use) => {
+		const notebook = await createNotebook(request, token, uniqueName("E2E notebook"));
 		try {
-			await use(ws);
+			await use(notebook);
 		} finally {
-			await deleteWorkspace(request, token, ws.id).catch(() => undefined);
+			await deleteNotebook(request, token, notebook.id).catch(() => undefined);
 		}
-	},
-	notebook: async ({ request, token, workspace }, use) => {
-		await use(await createNotebook(request, token, workspace.id, "E2E notebook"));
 	},
 	isPhone: async ({ viewport }, use) => use((viewport?.width ?? 1280) < 640),
 	failOnPopups: [
@@ -101,7 +92,12 @@ const IGNORED_PAGE_ERRORS: RegExp[] = [
 
 export { expect };
 
-export const nbPath = (ws: number, id: number) => `/dashboard/${ws}/notebooks/${id}`;
+/** A name no other test of this run uses: the account is shared by every test. */
+export function uniqueName(prefix: string): string {
+	return `${prefix} ${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+export const nbPath = (id: number) => `/dashboard/notebooks/${id}`;
 
 /**
  * Open a notebook page and wait until its header has painted.
@@ -109,11 +105,10 @@ export const nbPath = (ws: number, id: number) => `/dashboard/${ws}/notebooks/${
  */
 export async function openNotebook(
 	page: Page,
-	ws: number,
 	id: number,
 	tab?: "Sources" | "Chat" | "Studio"
 ): Promise<void> {
-	await page.goto(nbPath(ws, id));
+	await page.goto(nbPath(id));
 	await expect(page.getByRole("textbox", { name: "Notebook title" }).first()).toBeVisible();
 	if (tab) await showPanel(page, tab);
 	if (tab === "Chat") await waitForChatReady(page);
@@ -121,8 +116,8 @@ export async function openNotebook(
 
 /**
  * The chat has loaded: its welcome card (empty chat) or its messages show.
- * Until then a placeholder composer sits in the footer and is swapped for the
- * welcome card's composer when loading ends.
+ * Until then a skeleton shows above the composer; the composer is the same
+ * element before and after, and only moves up under the welcome card.
  */
 export async function waitForChatReady(page: Page): Promise<void> {
 	await expect(
@@ -136,7 +131,13 @@ export async function waitForChatReady(page: Page): Promise<void> {
 export async function showPanel(page: Page, tab: "Sources" | "Chat" | "Studio"): Promise<void> {
 	const width = page.viewportSize()?.width ?? 1280;
 	if (width >= 1024) return;
-	const button = page.getByRole("tab", { name: new RegExp(`^${tab}`) });
+	// The phone's own tab names: "Sources (2)", "Chat", "Studio & notes". The
+	// Studio one is matched whole: the panel it opens has a "Studio" tab of
+	// its own (beside "Notes"), and a prefix would find both.
+	const button = page.getByRole("tab", {
+		name: tab === "Studio" ? "Studio & notes" : new RegExp(`^${tab}`),
+		exact: true,
+	});
 	await button.click();
 	await expect(button).toHaveAttribute("aria-selected", "true");
 }

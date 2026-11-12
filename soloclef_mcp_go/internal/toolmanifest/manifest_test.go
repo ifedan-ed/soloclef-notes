@@ -12,18 +12,19 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_mcp_go/internal/toolmanifest"
 )
 
-// pythonManifest is the tools/list the Python server published, captured from it
-// over HTTP. The tool names, parameter names and descriptions in it are the
-// contract a client has in its configuration, so this file is the specification
-// and this test is what proves the port did not move any of it.
-const pythonManifest = "testdata/python_tools_list.json"
+// manifest is the tools/list this server publishes. The tool names, parameter
+// names and descriptions in it are the contract a client has in its
+// configuration, so this file is the specification and this test is what
+// proves nothing moved by accident. It was first captured from the Python
+// server; it changes now only on purpose, together with connect-your-agent.mdx.
+const manifest = "testdata/tools_list.json"
 
-func TestPublishedSurfaceMatchesPythonServer(t *testing.T) {
-	expected := loadPythonManifest(t)
+func TestPublishedSurfaceIsTheManifest(t *testing.T) {
+	expected := loadManifest(t)
 	published := publishedByName(t)
 
 	if len(published) != len(expected) {
-		t.Fatalf("published %d tools, the Python server published %d",
+		t.Fatalf("published %d tools, the manifest lists %d",
 			len(published), len(expected))
 	}
 	for name, want := range expected {
@@ -40,20 +41,20 @@ func TestPublishedSurfaceMatchesPythonServer(t *testing.T) {
 		}
 		for field := range got {
 			if _, known := want[field]; !known {
-				t.Errorf("%s carries an extra field %q the Python server did not: %s",
+				t.Errorf("%s carries an extra field %q the manifest does not: %s",
 					name, field, mustJSON(t, got[field]))
 			}
 		}
 	}
 	for name := range published {
 		if _, known := expected[name]; !known {
-			t.Errorf("tool %s is published but was not in the Python server's list", name)
+			t.Errorf("tool %s is published but is not in the manifest", name)
 		}
 	}
 }
 
 func TestToolsAreListedInRegistrationOrder(t *testing.T) {
-	expected := pythonOrder(t)
+	expected := manifestOrder(t)
 	tools, err := toolmanifest.Collect()
 	if err != nil {
 		t.Fatal(err)
@@ -111,10 +112,10 @@ func publishedByName(t *testing.T) map[string]map[string]any {
 	return byName
 }
 
-func loadPythonManifest(t *testing.T) map[string]map[string]any {
+func loadManifest(t *testing.T) map[string]map[string]any {
 	t.Helper()
 	var captured []map[string]any
-	readJSON(t, pythonManifest, &captured)
+	readJSON(t, manifest, &captured)
 	byName := map[string]map[string]any{}
 	for _, tool := range captured {
 		byName[tool["name"].(string)] = tool
@@ -122,10 +123,10 @@ func loadPythonManifest(t *testing.T) map[string]map[string]any {
 	return byName
 }
 
-func pythonOrder(t *testing.T) []string {
+func manifestOrder(t *testing.T) []string {
 	t.Helper()
 	var captured []map[string]any
-	readJSON(t, pythonManifest, &captured)
+	readJSON(t, manifest, &captured)
 	var order []string
 	for _, tool := range captured {
 		order = append(order, tool["name"].(string))

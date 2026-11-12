@@ -1,9 +1,7 @@
 "use client";
 
-import { useAtomValue } from "jotai";
 import { ChevronRight, LayoutGrid, Search, X } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { activeWorkspaceIdAtom } from "@/atoms/workspaces/workspace-query.atoms";
 import { Button } from "@/components/ui/button";
 import {
 	Drawer,
@@ -32,19 +30,14 @@ import { type ConnectorRow, useConnectorRows } from "./hooks/use-connector-rows"
 import { AllConnectorsTab } from "./tabs/all-connectors-tab";
 import { ConnectorAccountsListView } from "./views/connector-accounts-list-view";
 import { ConnectorRowStatus } from "./your-connectors/connector-row-status";
-import {
-	liveRowsChanged,
-	liveRowsKey,
-	workspaceConnectorList,
-} from "./your-connectors/workspace-connector-list";
+import { liveRowsChanged, liveRowsKey } from "./your-connectors/live-rows";
 
 /**
- * Connector management surface (single `/connectors` route) rendered inside the
- * workspace panel. Stateful master–detail:
+ * Connector management surface (Settings > Connectors) rendered inside the
+ * page panel. Stateful master–detail:
  *  - sub-rail: Overview + a flat "Your connectors" list (only what's connected:
- *    this workspace's MCP servers and every account-wide connection usable
- *    here, each with a live status glyph, "Off" where it's switched off in
- *    this workspace) + an "Add MCP server" action;
+ *    every connection of the account, each with a live status glyph, "Off"
+ *    where it's switched off) + an "Add MCP server" action;
  *  - detail pane: the flat catalog (search + cards) OR one of the existing flow
  *    views (connect / edit / indexing / accounts), reused verbatim
  *    from the former dialog.
@@ -54,8 +47,7 @@ import {
  * inert on a route and ignored.
  */
 export function ConnectorsSection() {
-	const workspaceId = useAtomValue(activeWorkspaceIdAtom);
-	const documentTypeCounts = useZeroDocumentTypeCounts(workspaceId);
+	const documentTypeCounts = useZeroDocumentTypeCounts();
 	const [drawerOpen, setDrawerOpen] = useState(false);
 
 	const {
@@ -107,39 +99,29 @@ export function ConnectorsSection() {
 		setConnectorName,
 	} = useConnectorDialog();
 
-	const { connectors: liveConnectors, loading: liveLoading } = useConnectorsSync(workspaceId);
+	const { connectors: liveConnectors, loading: liveLoading } = useConnectorsSync();
 
-	// The workspace's own connectors live from Zero, plus every account-wide
-	// connection usable here (and its on/off state) from the REST list.
+	// The REST list is the whole list: every connection of the account, with
+	// its config and its on/off state. Nothing is merged into it.
 	const connectors = useMemo(
-		() =>
-			workspaceConnectorList(
-				liveLoading ? [] : liveConnectors,
-				allConnectors as SearchSourceConnector[] | undefined
-			),
-		[liveLoading, liveConnectors, allConnectors]
+		() => (allConnectors ?? []) as SearchSourceConnector[],
+		[allConnectors]
 	);
 
-	// Account-wide connections reach this list only through the REST list.
 	const refreshConnectors = async () => {
-		if (!workspaceId) return;
-		await queryClient.invalidateQueries({ queryKey: cacheKeys.connectors.all(workspaceId) });
+		await queryClient.invalidateQueries({ queryKey: cacheKeys.connectors.all() });
 	};
 
-	// An MCP server added or removed elsewhere (another tab, a teammate)
-	// reaches Zero at once but the REST list only when refetched; without
-	// this, the last server removed stayed listed (workspaceConnectorList
-	// falls back to the REST list when Zero holds no rows).
-	const liveKeyRef = useRef<{ workspaceId: string; key: string } | null>(null);
+	// Zero only says that something changed elsewhere (another tab, a
+	// finished indexing run): the REST list is then asked again (live-rows.ts).
+	const liveKeyRef = useRef<string | null>(null);
 	useEffect(() => {
-		if (!workspaceId || liveLoading) return;
-		const previous = liveKeyRef.current;
-		const previousKey = previous?.workspaceId === workspaceId ? previous.key : null;
-		if (liveRowsChanged(previousKey, liveConnectors)) {
-			void queryClient.invalidateQueries({ queryKey: cacheKeys.connectors.all(workspaceId) });
+		if (liveLoading) return;
+		if (liveRowsChanged(liveKeyRef.current, liveConnectors)) {
+			void queryClient.invalidateQueries({ queryKey: cacheKeys.connectors.all() });
 		}
-		liveKeyRef.current = { workspaceId, key: liveRowsKey(liveConnectors) };
-	}, [workspaceId, liveLoading, liveConnectors]);
+		liveKeyRef.current = liveRowsKey(liveConnectors);
+	}, [liveLoading, liveConnectors]);
 
 	// "Your connectors" rows with live indexing health, plus the shared indexing
 	// controls the flow views reuse (single source of truth via useConnectorRows).
@@ -158,8 +140,6 @@ export function ConnectorsSection() {
 	// An MCP server's edit view shows its config as the server holds it now,
 	// asked for when the view opens (editable-connector.ts).
 	const editable = useEditableConnector(editingConnector);
-
-	if (!workspaceId) return null;
 
 	const activeConnectorType = editingConnector
 		? editingConnector.connector_type
@@ -231,7 +211,6 @@ export function ConnectorsSection() {
 					isDisconnecting={isDisconnecting}
 					isIndexing={indexingConnectorIds.has(editingConnector.id)}
 					configPending={editable.pending}
-					workspaceId={workspaceId?.toString()}
 					onPeriodicEnabledChange={setPeriodicEnabled}
 					onFrequencyChange={setFrequencyMinutes}
 					onEnableVisionLlmChange={setEnableVisionLlm}
@@ -417,7 +396,6 @@ export function ConnectorsSection() {
 
 			<AllConnectorsTab
 				searchQuery={searchQuery}
-				workspaceId={workspaceId}
 				connectedTypes={connectedTypes}
 				connectingId={connectingId}
 				allConnectors={connectors}

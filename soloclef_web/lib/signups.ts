@@ -1,17 +1,17 @@
 /**
  * Whether the site offers sign-up (Create an account) or "Request access".
  *
- * Exactly `NEXT_PUBLIC_SIGNUPS_OPEN=true` in docker/.env opens it; anything
+ * Exactly `NEXT_PUBLIC_SIGNUPS_OPEN=true` at build time opens it; anything
  * else, unset included, offers "Request access" (REQUEST_ACCESS_HREF).
- * docker-compose.yml hands the line to the website build, and Next.js writes
- * it into the pages and scripts there, so a change needs the website rebuilt:
- * the running container never reads it. The backend reads the same line for
+ * docker-compose.go.yml builds the website with it set from
+ * SOLOCLEF_API_SIGNUP_ALLOWED in docker/.env.go, and Next.js writes it into
+ * the pages and scripts there, so a change needs the website rebuilt: the
+ * running container never reads it. The API reads the same setting for
  * GET /api/v1/sign-in-options, which the phone app follows.
  *
- * It only changes what is offered. The API's POST /auth/register stays open
- * unless the proxy in front of the server refuses it, which is how a server
- * closes sign-ups and keeps sign-in (REGISTRATION_ENABLED=FALSE stops every
- * sign-in). content/docs/self-hosting.mdx, "Closing sign-ups".
+ * The API enforces the same switch itself: with SOLOCLEF_API_SIGNUP_ALLOWED
+ * false it refuses POST /auth/register, so nothing in front of the server
+ * has to (content/docs/self-hosting.mdx, "Sign-in").
  */
 export const SIGNUPS_OPEN = process.env.NEXT_PUBLIC_SIGNUPS_OPEN === "true";
 

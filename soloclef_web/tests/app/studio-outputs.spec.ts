@@ -37,8 +37,8 @@ async function closeOutput(page: Page, isPhone: boolean) {
 	await expect(viewer(page)).toHaveCount(0);
 }
 
-async function openOutput(page: Page, ws: number, nb: number, title: string) {
-	await openNotebook(page, ws, nb, "Studio");
+async function openOutput(page: Page, nb: number, title: string) {
+	await openNotebook(page, nb, "Studio");
 	const button = row(page, title);
 	await expect(button).toBeEnabled({ timeout: 30_000 });
 	await button.click();
@@ -172,15 +172,9 @@ const CASES: ViewerCase[] = [
 
 test.describe("Studio output viewers", () => {
 	for (const c of CASES) {
-		test(`${c.kind} opens in its viewer`, async ({
-			page,
-			workspace,
-			notebook,
-			request,
-			isPhone,
-		}) => {
-			await seedOutput(request, workspace.id, notebook.id, c.kind, "ready", c.title);
-			await openOutput(page, workspace.id, notebook.id, c.title);
+		test(`${c.kind} opens in its viewer`, async ({ page, notebook, request, isPhone }) => {
+			await seedOutput(request, notebook.id, c.kind, "ready", c.title);
+			await openOutput(page, notebook.id, c.title);
 			const v = c.report ? reportView(page, c.title) : viewer(page, isPhone);
 			await expect(v.getByText(c.title).first()).toBeVisible({ timeout: 30_000 });
 			await c.check(v, page);
@@ -190,12 +184,11 @@ test.describe("Studio output viewers", () => {
 
 	test("audio plays in the Studio's own player with a transcript", async ({
 		page,
-		workspace,
 		notebook,
 		request,
 	}) => {
-		await seedOutput(request, workspace.id, notebook.id, "audio", "ready", "E2E audio");
-		await openNotebook(page, workspace.id, notebook.id, "Studio");
+		await seedOutput(request, notebook.id, "audio", "ready", "E2E audio");
+		await openNotebook(page, notebook.id, "Studio");
 		await expect(page.getByRole("button", { name: "Play" }).first()).toBeVisible();
 		await row(page, "E2E audio").click();
 		await expect(page.getByRole("button", { name: "Back to studio" })).toBeVisible();
@@ -229,13 +222,12 @@ test.describe("Mind map viewer", () => {
 
 	test("expand and collapse, expand all, zoom, pan and download", async ({
 		page,
-		workspace,
 		notebook,
 		request,
 		isPhone,
 	}) => {
-		await seedOutput(request, workspace.id, notebook.id, "mindmap", "ready", "E2E map viewer");
-		await openOutput(page, workspace.id, notebook.id, "E2E map viewer");
+		await seedOutput(request, notebook.id, "mindmap", "ready", "E2E map viewer");
+		await openOutput(page, notebook.id, "E2E map viewer");
 		const v = viewer(page, isPhone);
 		const canvas = v.getByTestId("mind-map-canvas");
 		await expect(canvas).toBeVisible({ timeout: 30_000 });
@@ -321,13 +313,12 @@ test.describe("Mind map viewer", () => {
 
 	test("clicking a topic asks the notebook chat about it", async ({
 		page,
-		workspace,
 		notebook,
 		request,
 		isPhone,
 	}) => {
-		await seedOutput(request, workspace.id, notebook.id, "mindmap", "ready", "E2E map ask");
-		await openOutput(page, workspace.id, notebook.id, "E2E map ask");
+		await seedOutput(request, notebook.id, "mindmap", "ready", "E2E map ask");
+		await openOutput(page, notebook.id, "E2E map ask");
 		const v = viewer(page, isPhone);
 		const ask = v.getByRole("button", { name: "Ask the chat about Respiration" });
 		await expect(ask).toBeVisible({ timeout: 30_000 });
@@ -352,15 +343,14 @@ test.describe("Mind map viewer", () => {
 test.describe("Studio output list", () => {
 	test("running and failed states, retry, rename and delete", async ({
 		page,
-		workspace,
 		notebook,
 		request,
 		token,
 	}) => {
-		await seedOutput(request, workspace.id, notebook.id, "quiz", "running", "E2E running quiz");
-		await seedOutput(request, workspace.id, notebook.id, "mindmap", "failed", "E2E failed map");
-		await seedOutput(request, workspace.id, notebook.id, "flashcards", "ready", "E2E ready cards");
-		await openNotebook(page, workspace.id, notebook.id, "Studio");
+		await seedOutput(request, notebook.id, "quiz", "running", "E2E running quiz");
+		await seedOutput(request, notebook.id, "mindmap", "failed", "E2E failed map");
+		await seedOutput(request, notebook.id, "flashcards", "ready", "E2E ready cards");
+		await openNotebook(page, notebook.id, "Studio");
 
 		await expect(row(page, "E2E running quiz")).toBeDisabled();
 		await expect(row(page, "E2E running quiz")).toContainText(/Rendering · 40%/);
@@ -398,9 +388,7 @@ test.describe("Studio output list", () => {
 		await expectNoOverflow(page, "output delete confirm");
 		await confirm.getByRole("button", { name: "Delete" }).click();
 		await expect
-			.poll(async () =>
-				(await listStudioOutputs(request, token, workspace.id, notebook.id)).map((o) => o.title)
-			)
+			.poll(async () => (await listStudioOutputs(request, token, notebook.id)).map((o) => o.title))
 			.not.toContain("E2E renamed cards");
 	});
 });
@@ -454,16 +442,15 @@ async function openContents(page: Page, dialog: Locator, isPhone: boolean): Prom
 test.describe("Report reading view", () => {
 	test("contents follow the reading position and jump to a section", async ({
 		page,
-		workspace,
 		notebook,
 		request,
 		isPhone,
 	}) => {
 		const title = "E2E reading report";
-		await seedOutput(request, workspace.id, notebook.id, "report", "ready", title, {
+		await seedOutput(request, notebook.id, "report", "ready", title, {
 			markdown: READING_REPORT,
 		});
-		await openOutput(page, workspace.id, notebook.id, title);
+		await openOutput(page, notebook.id, title);
 		const dialog = reportView(page, title);
 		await expect(
 			dialog.getByRole("heading", { name: "E2E orientation report", level: 1 })
@@ -515,7 +502,6 @@ test.describe("Report reading view", () => {
 
 	test("a suggestion is added, made in place and embedded; dismissals stick", async ({
 		page,
-		workspace,
 		notebook,
 		request,
 		token,
@@ -524,16 +510,15 @@ test.describe("Report reading view", () => {
 		await addNoteSource(
 			request,
 			token,
-			workspace.id,
 			notebook.id,
 			"E2E handbook",
 			"E2E handbook text about rounds, escalation and handovers."
 		);
 		const title = "E2E suggestion report";
-		await seedOutput(request, workspace.id, notebook.id, "report", "ready", title, {
+		await seedOutput(request, notebook.id, "report", "ready", title, {
 			markdown: READING_REPORT,
 		});
-		await openOutput(page, workspace.id, notebook.id, title);
+		await openOutput(page, notebook.id, title);
 		const dialog = reportView(page, title);
 
 		// Each suggestion sits under the section it deepens.
@@ -555,16 +540,17 @@ test.describe("Report reading view", () => {
 		let outputId = 0;
 		await expect
 			.poll(async () => {
-				const list = await listStudioOutputs(request, token, workspace.id, notebook.id);
+				const list = await listStudioOutputs(request, token, notebook.id);
 				const added = list.find((o) => o.title === "E2E quiz: escalation");
 				outputId = added?.id ?? 0;
 				return added?.status;
 			})
-			.toBe("queued");
+			// In progress: waiting for a runner, or taken by one.
+			.toMatch(/^(queued|running)$/);
 		await expectNoOverflow(page, "report progress card");
 
 		// Finished: the quiz is embedded where the suggestion was, and works.
-		await completeOutput(request, workspace.id, notebook.id, outputId);
+		await completeOutput(request, notebook.id, outputId);
 		const embed = dialog.getByRole("region", { name: "Quiz: E2E quiz: escalation" });
 		await expect(embed.getByRole("heading", { name: "E2E quiz question 1?" })).toBeVisible({
 			timeout: 30_000,
@@ -602,7 +588,6 @@ test.describe("Report reading view", () => {
 
 	test("an interactive report keeps its page and gets the contents list", async ({
 		page,
-		workspace,
 		notebook,
 		request,
 		isPhone,
@@ -614,10 +599,10 @@ test.describe("Report reading view", () => {
 					`<h2>${name}</h2>${`<p>${name} detail. ${"Handover and rounds text. ".repeat(20)}</p>`.repeat(6)}`
 			)
 			.join("");
-		await seedOutput(request, workspace.id, notebook.id, "report_html", "ready", title, {
+		await seedOutput(request, notebook.id, "report_html", "ready", title, {
 			html: `<h1>E2E interactive page</h1>${sections}`,
 		});
-		await openOutput(page, workspace.id, notebook.id, title);
+		await openOutput(page, notebook.id, title);
 		const dialog = reportView(page, title);
 		const frame = dialog.frameLocator('iframe[title="report.html"]');
 		await expect(frame.getByRole("heading", { name: "E2E interactive page" })).toBeVisible();

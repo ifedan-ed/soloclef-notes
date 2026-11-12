@@ -64,8 +64,8 @@ export default function PrivacyPage() {
 			<ul>
 				<li>
 					<strong>AI models.</strong> To answer a question or build a Studio output, your question
-					and the relevant passages from your sources go to the language model provider configured
-					for the workspace. Audio and video narration is spoken by a text-to-speech model.
+					and the relevant passages from your sources go to the language model provider you chose in
+					Settings. Audio and video narration is spoken by a text-to-speech model.
 				</li>
 				<li>
 					<strong>Cloud parsing.</strong> If you choose the Cloud parser, the file is uploaded to
@@ -79,8 +79,7 @@ export default function PrivacyPage() {
 				</li>
 				<li>
 					<strong>Research and web answers.</strong> Searches send your query to the provider you
-					picked (for example PubMed, arXiv, Google Scholar, Exa or Tavily). General web searches go
-					through a private SearXNG instance.
+					picked (for example PubMed, arXiv, Google Scholar, Exa or Tavily).
 				</li>
 			</ul>
 			<p>
@@ -100,14 +99,6 @@ export default function PrivacyPage() {
 			<p>
 				Signing in sets two cookies that keep you signed in. Your theme, language and a few layout
 				choices are kept in your browser&apos;s local storage. There are no third-party cookies.
-			</p>
-
-			<h2>Payments</h2>
-			<p>
-				Payments are made in cryptocurrency through our own BTCPay Server (once payments open): it
-				records the invoice amount and whether it was paid, and the payment goes straight to our
-				wallets on the blockchain, so no bank or card details are involved. Card payments are not
-				offered; if they are added, this page will say how they are handled before they open.
 			</p>
 
 			<h2>Deleting your data</h2>

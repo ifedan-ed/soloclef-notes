@@ -17,12 +17,13 @@ type Snapshot struct {
 	InFlightByQueue map[string]int
 	InFlightByTask  map[string]int
 
-	// HeldClaims is how many messages this worker holds unacked, which is the
-	// in-flight jobs plus anything waiting for its eta.
+	// HeldClaims is how many messages this worker holds unacked: the jobs
+	// it is running, and any waiting for a task class to have room.
 	HeldClaims int
 
-	// WaitingForETA is work taken off the queue that is not due yet.
-	WaitingForETA int
+	// Scheduled is how many messages wait in the scheduled set for their
+	// eta, for every queue and every worker (scheduled.go).
+	Scheduled int64
 
 	// Wait is true queue wait by task name — how long a message sat before
 	// this worker took it, from this app's own enqueue stamp.
@@ -33,6 +34,7 @@ type Snapshot struct {
 	Expired    uint64 // dropped unrun, past their expires
 	Unreadable uint64 // dropped unrun, not an envelope this worker can read
 	Requeued   uint64 // put back for any reason
+	Delayed    uint64 // taken before their eta and handed to the scheduled set
 	Restored   uint64 // made visible again after a claim went stale
 	// WaitUnknown counts messages whose wait could not be measured, so an
 	// absent measurement is never mistaken for a fast queue.
@@ -63,6 +65,7 @@ type metrics struct {
 	expired     uint64
 	unreadable  uint64
 	requeued    uint64
+	delayed     uint64
 	restored    uint64
 	waitUnknown uint64
 }
@@ -101,6 +104,7 @@ func (m *metrics) fill(into *Snapshot) {
 	into.Expired = m.expired
 	into.Unreadable = m.unreadable
 	into.Requeued = m.requeued
+	into.Delayed = m.delayed
 	into.Restored = m.restored
 	into.WaitUnknown = m.waitUnknown
 }

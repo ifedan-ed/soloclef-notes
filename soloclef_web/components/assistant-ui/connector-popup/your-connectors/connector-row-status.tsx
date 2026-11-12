@@ -5,13 +5,13 @@ import type { FC } from "react";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import type { ConnectorRow } from "../hooks/use-connector-rows";
-import { ENABLED_IN_WORKSPACE_LABEL } from "../workspace-enablement/enabled-in-workspace";
+import { ENABLED_LABEL } from "../enablement/enabled-switch";
 
 const quiet = "ml-auto shrink-0 text-[11px] tabular-nums text-muted-foreground";
 
 /**
- * The trailing mark on a connector row, most important first: switched off
- * in this workspace, syncing, last sync failed, some accounts off, or how
+ * The trailing mark on a connector row, most important first: switched off,
+ * syncing, last sync failed, some accounts off, or how
  * many accounts the row holds. Nothing for a single account that is on.
  * Used by "Your connectors" and by the chat composer's connectors menu
  * (desktop submenu and phone drawer), so all three mark a row alike;
@@ -23,7 +23,7 @@ export const ConnectorRowStatus: FC<{ row: ConnectorRow; className?: string }> =
 }) => {
 	if (row.enabledCount === 0) {
 		return (
-			<span className={cn(quiet, className)} title={`${ENABLED_IN_WORKSPACE_LABEL}: off`}>
+			<span className={cn(quiet, className)} title={`${ENABLED_LABEL}: off`}>
 				Off
 			</span>
 		);
@@ -41,7 +41,7 @@ export const ConnectorRowStatus: FC<{ row: ConnectorRow; className?: string }> =
 	}
 	if (row.enabledCount < row.accountCount) {
 		return (
-			<span className={cn(quiet, className)} title={ENABLED_IN_WORKSPACE_LABEL}>
+			<span className={cn(quiet, className)} title={ENABLED_LABEL}>
 				{`${row.enabledCount} of ${row.accountCount} on`}
 			</span>
 		);

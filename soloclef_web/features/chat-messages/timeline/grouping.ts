@@ -1,3 +1,4 @@
+import { PAGE_READER_TOOL, parsePageReaderCard } from "@/features/page-reader/page-reader-card";
 import {
 	type ActivityData,
 	type ActivityJournal,
@@ -59,6 +60,10 @@ export function isBodyTool(part: TracePartLike, bodyToolNames: ReadonlySet<strin
 	) {
 		return false;
 	}
+	// The page reader has a card only for a finished call that read back as
+	// one. Waiting for approval, running, or failed as a whole, it is a step
+	// in the trace like any other process tool.
+	if (part.toolName === PAGE_READER_TOOL) return parsePageReaderCard(part.result) !== null;
 	if (part.toolName !== "save_artifact") return true;
 	if (typeof part.result !== "object" || part.result === null) return false;
 	const result = part.result as Record<string, unknown>;

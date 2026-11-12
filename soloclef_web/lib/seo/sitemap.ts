@@ -1,11 +1,10 @@
 import type { MetadataRoute } from "next";
 import { BRAND, type Brand, siteUrl } from "@/lib/brand";
 
-/** The public site: landing, features, pricing, contact, legal pages and the docs. */
+/** The public site: landing, features, contact, legal pages and the docs. */
 export const PUBLIC_PAGES: { path: string; priority: number }[] = [
 	{ path: "/", priority: 1 },
 	{ path: "/features", priority: 0.9 },
-	{ path: "/pricing", priority: 0.9 },
 	{ path: "/docs", priority: 0.8 },
 	{ path: "/contact", priority: 0.5 },
 	{ path: "/privacy", priority: 0.3 },

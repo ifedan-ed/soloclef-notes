@@ -1,17 +1,15 @@
-import { atom, type Getter, type Setter } from "jotai";
+import { atom } from "jotai";
 import { rightPanelCollapsedAtom, rightPanelTabAtom } from "@/atoms/layout/right-panel.atom";
-
-/** The source the citation panel is showing: a KB chunk or a scraper run. */
-export type CitationTarget = { kind: "chunk"; chunkId: number } | { kind: "run"; runId: string };
 
 interface CitationPanelState {
 	isOpen: boolean;
-	target: CitationTarget | null;
+	/** The knowledge-base chunk the citation panel is showing. */
+	chunkId: number | null;
 }
 
 const initialState: CitationPanelState = {
 	isOpen: false,
-	target: null,
+	chunkId: null,
 };
 
 export const citationPanelAtom = atom<CitationPanelState>(initialState);
@@ -20,21 +18,15 @@ export const citationPanelOpenAtom = atom((get) => get(citationPanelAtom).isOpen
 
 const preCitationCollapsedAtom = atom<boolean | null>(null);
 
-function openWithTarget(get: Getter, set: Setter, target: CitationTarget) {
+export const openCitationPanelAtom = atom(null, (get, set, payload: { chunkId: number }) => {
+	// Remember whether the panel was collapsed before the first citation opened
+	// it, so closing the citation puts the layout back the way it was.
 	if (!get(citationPanelAtom).isOpen) {
 		set(preCitationCollapsedAtom, get(rightPanelCollapsedAtom));
 	}
-	set(citationPanelAtom, { isOpen: true, target });
+	set(citationPanelAtom, { isOpen: true, chunkId: payload.chunkId });
 	set(rightPanelTabAtom, "citation");
 	set(rightPanelCollapsedAtom, false);
-}
-
-export const openCitationPanelAtom = atom(null, (get, set, payload: { chunkId: number }) => {
-	openWithTarget(get, set, { kind: "chunk", chunkId: payload.chunkId });
-});
-
-export const openRunCitationPanelAtom = atom(null, (get, set, payload: { runId: string }) => {
-	openWithTarget(get, set, { kind: "run", runId: payload.runId });
 });
 
 export const closeCitationPanelAtom = atom(null, (get, set) => {

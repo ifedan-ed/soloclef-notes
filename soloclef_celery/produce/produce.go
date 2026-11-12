@@ -89,11 +89,22 @@ type Message struct {
 	Priority int
 
 	// IgnoreResult says no one will read the outcome, and means no result row
-	// is written at all.
+	// is written at all. A task that *declares* ignore_result=True gets the
+	// header whether a call site sets this or not, because Celery reads it off
+	// the task object (routing.IgnoresResult).
 	IgnoreResult bool
 
 	// ParentID is the task that published this one, when one did.
 	ParentID string
+
+	// ID is apply_async(task_id=…): the id the task is published under,
+	// instead of a fresh random one. It is for a task whose id is decided
+	// before it is published and written somewhere the task itself checks:
+	// a queued deliverable job's row names the id of the one attempt allowed
+	// to claim it (app/deliverables/jobs/service.py, task_id_for_attempt),
+	// and a message under any other id is ignored by the worker. Empty means
+	// a fresh id, which is what every .delay() site wants.
+	ID string
 }
 
 // Delay is the message a `task.delay(args…)` call site publishes.
@@ -132,9 +143,12 @@ func (p Producer) Send(ctx context.Context, m Message) (string, error) {
 	if newID == nil {
 		newID = NewID
 	}
-	id, err := newID()
-	if err != nil {
-		return "", err
+	id := m.ID
+	if id == "" {
+		var err error
+		if id, err = newID(); err != nil {
+			return "", err
+		}
 	}
 	tag, err := newID()
 	if err != nil {
@@ -171,8 +185,11 @@ func (p Producer) Send(ctx context.Context, m Message) (string, error) {
 		Origin:        p.Origin,
 		SoftTimeLimit: m.SoftTimeLimit,
 		HardTimeLimit: m.HardTimeLimit,
-		IgnoreResult:  m.IgnoreResult,
-		EnqueuedAtNs:  p.enqueueStamp(),
+		// The task's own declaration as well as the call's: Celery reads
+		// `ignore_result` off the task object, so `push_send.delay(…)` carries
+		// it without any call site asking (routing.IgnoresResult).
+		IgnoreResult: m.IgnoreResult || routing.IgnoresResult(m.Task),
+		EnqueuedAtNs: p.enqueueStamp(),
 	}
 	if m.Countdown > 0 {
 		task.ETA = at.Add(m.Countdown)

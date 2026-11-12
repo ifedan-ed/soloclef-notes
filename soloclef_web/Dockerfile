@@ -53,8 +53,9 @@ ENV NEXT_PUBLIC_BUILD_COMMIT=${NEXT_PUBLIC_BUILD_COMMIT}
 # This server's own settings that the public pages print. Those pages are
 # drawn here, at build time (the sitemap, robots.txt, canonical and share-card
 # links, the JSON-LD contact point, the docs' sign-in wording), so the values
-# come in as build args: docker-compose.yml fills them from docker/.env
-# (SOLOCLEF_PUBLIC_URL, SUPPORT_EMAIL, OIDC_*, NEXT_PUBLIC_SIGNUPS_OPEN). None
+# come in as build args: docker-compose.go.yml fills them from docker/.env.go
+# (SOLOCLEF_API_PUBLIC_URL, SOLOCLEF_API_SUPPORT_EMAIL, the OIDC and sign-up
+# settings). None
 # is a secret. Empty means the server has not published one: no absolute
 # links, no contact address, no single sign-on in the docs (lib/brand,
 # lib/sso-settings), and Request access instead of Create an account

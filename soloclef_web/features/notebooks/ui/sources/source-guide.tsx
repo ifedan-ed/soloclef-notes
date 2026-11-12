@@ -10,18 +10,16 @@ import { useSourceGuide } from "../../hooks/use-notebook-queries";
 import type { NotebookSource } from "../../model/notebook";
 
 export function SourceGuideView({
-	workspaceId,
 	notebookId,
 	source,
 	onBack,
 }: {
-	workspaceId: number;
 	notebookId: number;
 	source: NotebookSource;
 	onBack: () => void;
 }) {
 	const t = useTranslations("notebooks");
-	const guide = useSourceGuide(workspaceId, notebookId, source.id);
+	const guide = useSourceGuide(notebookId, source.id);
 	const showSkeleton = useDelayedFlag(guide.isLoading);
 
 	return (

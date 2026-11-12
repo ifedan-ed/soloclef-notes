@@ -3,9 +3,9 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
-// The dashboard has one sidebar, the rail. Home is on the rail; the account
-// menu (the user avatar) holds the workspace switcher, settings, "Connect your
-// agent" and notifications. These read the sources, like the other layout
+// The dashboard has one sidebar, the rail: Home and Notes, then the bell and
+// the account menu (the user avatar), which holds settings, "Connect your
+// agent" and notifications. There is nothing to switch between. These read the sources, like the other layout
 // tests, since the menus only render when opened.
 
 const root = process.cwd();
@@ -26,16 +26,16 @@ test("the second sidebar, its resize and collapse, and its notebook list are gon
 	const shell = read("components/layout/ui/shell/LayoutShell.tsx");
 	assert.doesNotMatch(shell, /<Sidebar\b|renderNavSlot|Resize sidebar|initialSidebar/);
 	assert.match(shell, /<IconRail[\s\S]*navItems=\{navItems\}/);
-	const layout = read("app/dashboard/[workspace_id]/layout.tsx");
+	const layout = read("app/dashboard/layout.tsx");
 	assert.doesNotMatch(layout, /sidebar/i);
 });
 
-test("the rail puts Home first, then the workspaces, then the account menu", () => {
+test("the rail puts Home and Notes first, then the account menu, and nothing to switch", () => {
 	const rail = read("components/layout/ui/icon-rail/IconRail.tsx");
 	const home = rail.indexOf("navItems.map");
-	const workspaces = rail.indexOf("workspaces.map");
 	const account = rail.indexOf("<SidebarUserProfile");
-	assert.ok(home > -1 && home < workspaces && workspaces < account);
+	assert.ok(home > -1 && home < account);
+	assert.doesNotMatch(rail, /workspace/i);
 	assert.match(rail, /aria-current=\{isActive \? "page" : undefined\}/);
 	assert.match(rail, /<nav\s+aria-label=/);
 	assert.match(rail, /showConnectAgent/);
@@ -45,15 +45,14 @@ test("the rail puts Home first, then the workspaces, then the account menu", () 
 
 	const provider = read("components/layout/providers/LayoutDataProvider.tsx");
 	assert.match(provider, /title: tSidebar\("home"\)/);
+	assert.match(provider, /title: tSidebar\("notes"\)/);
 });
 
-test("the account menu holds the switcher, settings, Connect your agent and Notifications", () => {
+test("the account menu holds settings, Connect your agent and Notifications", () => {
 	const menu = read("components/layout/ui/sidebar/SidebarUserProfile.tsx");
+	assert.doesNotMatch(menu, /workspace|manage_members/i);
 	for (const key of [
-		"switch_workspace",
-		"manage_members",
-		"workspace_settings",
-		"user_settings",
+		"settings",
 		"connect_agent",
 		"notifications",
 		"theme",
@@ -75,17 +74,17 @@ test("the account menu holds the switcher, settings, Connect your agent and Noti
 	assert.match(dialog, /open=\{open\} onOpenChange=\{onOpenChange\}/);
 });
 
-test("the phone sheet keeps Home, the workspaces and the account menu", () => {
+test("the phone sheet keeps the rail's links and the account menu", () => {
 	const sheet = read("components/layout/ui/sidebar/MobileSidebar.tsx");
 	assert.doesNotMatch(sheet, /<Sidebar\b/);
 	assert.match(sheet, /navItems\.map/);
-	assert.match(sheet, /workspaces\.map/);
+	assert.doesNotMatch(sheet, /workspace/i);
 	assert.match(sheet, /<SidebarUserProfile[\s\S]*showConnectAgent/);
 	assert.match(sheet, /<NotificationsDropdown/);
 });
 
-test("the notebooks home names the open workspace", () => {
+test("the notebooks home is the account's: no workspace name over it", () => {
 	const home = read("features/notebooks/ui/home/notebooks-home.tsx");
-	assert.match(home, /cacheKeys\.workspaces\.detail/);
-	assert.match(home, /\{workspace\.name\}/);
+	assert.doesNotMatch(home, /workspace/i);
+	assert.match(home, /settingsPath\(\)/);
 });

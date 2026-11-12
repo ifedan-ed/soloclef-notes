@@ -2,40 +2,41 @@ package documentdeletion
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
-	"git.danvics.com/danvics/soloclef/soloclef_api/internal/celeryqueue"
-	"git.danvics.com/danvics/soloclef/soloclef_api/internal/database"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/errorenvelope"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/humawriter"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/principal"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/pythonjson"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/requestcontext"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/requestnumber"
-	"git.danvics.com/danvics/soloclef/soloclef_api/internal/workspaceaccess"
 )
 
-// Access is the membership and workspace reader the gates need.
-type Access interface {
-	Membership(ctx context.Context, userID string, workspaceID int64) (*workspaceaccess.Membership, error)
-	Workspace(ctx context.Context, workspaceID int64) (workspaceaccess.Workspace, error)
+// Owners says whether an account has a document.
+type Owners interface {
+	Owns(ctx context.Context, documentID int64, userID string) (bool, error)
 }
+
+// Remover removes a document (Removal).
+type Remover interface {
+	Remove(ctx context.Context, documentID int64) error
+}
+
+// removalTimeout bounds one removal. It runs outside the request's context
+// (see serve), so it needs a limit of its own; a document of a hundred
+// thousand chunks is a hundred rounds of a few tens of milliseconds.
+const removalTimeout = 2 * time.Minute
 
 // Route serves the delete.
 type Route struct {
-	// Pool is taken rather than a store because the route runs two
-	// transactions: the marker, and the revert for an enqueue that failed.
-	Pool   *pgxpool.Pool
-	Access Access
-	Queue  celeryqueue.Enqueuer
-	Errors errorenvelope.Writer
-	Logger *slog.Logger
+	Owners  Owners
+	Removal Remover
+	Errors  errorenvelope.Writer
+	Logger  *slog.Logger
 }
 
 func (r Route) Register(api huma.API) {
@@ -44,9 +45,8 @@ func (r Route) Register(api huma.API) {
 		Method:      http.MethodDelete,
 		Path:        Path,
 		Summary:     "Delete a document",
-		Description: "The same response as the Python tier's " +
-			"DELETE /api/v1/documents/{document_id}, byte for byte, the same " +
-			"row marked, and the same Celery message on the same queue.",
+		Description: "Removes the document's vectors, chunks, stored files and row. " +
+			"Answers once the document is gone; safe to repeat.",
 		Tags: []string{"documents"},
 	}, func(ctx context.Context, _ *struct {
 		DocumentID string `path:"document_id" doc:"The document's id"`
@@ -67,49 +67,52 @@ func (r Route) serve(ctx huma.Context) {
 		return
 	}
 
-	documentID, failure, rangeErr := requestnumber.Parse(
-		ctx.Param("document_id"), "path", "document_id")
+	documentID, failure, rangeErr := requestnumber.Parse(ctx.Param("document_id"), "path", "document_id")
 	if failure != nil {
 		r.Errors.WriteValidation(response, requestID, []errorenvelope.Failure{*failure})
 		return
 	}
-	if rangeErr != nil {
-		r.fail(ctx, response, requestID, "a parameter is outside the range a request can use", rangeErr)
+	// A number no document can have names no document; asking the database
+	// would be an error instead of a "not found".
+	if rangeErr != nil || documentID < 1 {
+		r.Errors.Write(response, http.StatusNotFound, NotFound(documentID), requestID)
 		return
 	}
 
-	refusal, err := r.mark(ctx.Context(), caller, documentID)
+	// The document's state is not asked about. A pending or processing
+	// document can be deleted (the indexing worker checks the marker before
+	// it writes), and one already marked "deleting" is exactly the case a
+	// repeated delete exists for: an earlier attempt stopped partway, and
+	// this one finishes it.
+	owned, err := r.Owners.Owns(ctx.Context(), documentID, caller.UserID)
 	if err != nil {
-		r.fail(ctx, response, requestID, "could not mark the document for deletion", err)
+		r.fail(ctx, response, requestID, "could not read whose document this is", err)
 		return
 	}
-	if refusal != nil {
-		r.Errors.Write(response, refusal.Status, refusal.Message, requestID)
+	if !owned {
+		// Another account's document and an id that names nothing are the
+		// same answer, so document ids cannot be probed for.
+		r.Errors.Write(response, http.StatusNotFound, NotFound(documentID), requestID)
 		return
 	}
 
-	// After the commit, as there: the task reads the row it is about, so a
-	// message enqueued before the marker was durable could find the document
-	// still "ready".
-	if _, err := r.Queue.Enqueue(ctx.Context(), DeletionOf(documentID,
-		celeryqueue.LogContextFor(ctx.URL().Path, requestID, caller.UserID))); err != nil {
-		r.Logger.LogAttrs(ctx.Context(), slog.LevelError,
-			"could not queue a document's deletion",
-			slog.String("request_id", requestID),
-			slog.Int64("document_id", documentID),
-			slog.String("error", err.Error()))
-		// The Python route's own compensation: a document left "deleting"
-		// with nothing to delete it is hidden from search forever.
-		if _, revertErr := database.Write(ctx.Context(), r.Pool,
-			func(ctx context.Context, tx pgx.Tx, _ *database.Effects) (struct{}, error) {
-				return struct{}{}, New(tx).MarkDocumentReady(ctx, documentID)
-			}); revertErr != nil {
-			r.fail(ctx, response, requestID, "could not restore a document whose deletion was not queued", revertErr)
-			return
-		}
-		r.Errors.Write(response, http.StatusServiceUnavailable, QueueFailed, requestID)
+	// Not the request's context. A delete that has begun should finish even
+	// if the person closes the tab: a document half removed is repaired by
+	// asking again, but nobody asks again for a request they walked away
+	// from.
+	removing, done := context.WithTimeout(context.WithoutCancel(ctx.Context()), removalTimeout)
+	defer done()
+	started := time.Now()
+	if err := r.Removal.Remove(removing, documentID); err != nil {
+		r.Logger.LogAttrs(ctx.Context(), slog.LevelError, "a document was not fully deleted; it is left marked and the delete can be repeated",
+			slog.String("request_id", requestID), slog.Int64("document_id", documentID),
+			slog.Duration("after", time.Since(started)), slog.String("error", err.Error()))
+		r.Errors.Write(response, http.StatusServiceUnavailable, Unfinished, requestID)
 		return
 	}
+	r.Logger.LogAttrs(ctx.Context(), slog.LevelInfo, "document deleted",
+		slog.String("request_id", requestID), slog.Int64("document_id", documentID),
+		slog.Duration("took", time.Since(started)))
 
 	body, err := pythonjson.Marshal(Message())
 	if err != nil {
@@ -117,61 +120,6 @@ func (r Route) serve(ctx huma.Context) {
 		return
 	}
 	pythonjson.Send(response, http.StatusOK, body)
-}
-
-// mark is the refusals and then the marker.
-//
-// The read and the gates are on the pool and only the write is in a
-// transaction, which is the shape every write here has
-// (internal/workspaceroles): the Python route holds one session across all of
-// it, but with one statement to write there is nothing for a transaction to
-// make atomic that a single statement does not. It does not serialise two
-// deletes of the same document — both would read "ready" and both would
-// enqueue — and neither does the Python route, which takes no lock either.
-// The duplicate is harmless there and here: the task is idempotent and the
-// second message finds the document already gone.
-func (r Route) mark(ctx context.Context, caller principal.Principal, documentID int64) (*workspaceaccess.Refusal, error) {
-	document, err := New(r.Pool).DocumentForDeletion(ctx, documentID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return &workspaceaccess.Refusal{
-			Status:  http.StatusNotFound,
-			Message: NotFound(documentID),
-		}, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	// The state before the permission, as there: a document being processed is
-	// refused whoever asked.
-	state, err := StateOf(document.Status)
-	if err != nil {
-		return nil, err
-	}
-	if message := RefusalForState(state); message != "" {
-		return &workspaceaccess.Refusal{Status: http.StatusConflict, Message: message}, nil
-	}
-
-	membership, err := r.Access.Membership(ctx, caller.UserID, document.WorkspaceID)
-	if err != nil {
-		return nil, err
-	}
-	if refusal := workspaceaccess.CheckMembership(membership, DocumentsDelete, DeleteDenied); refusal != nil {
-		return refusal, nil
-	}
-	workspace, err := r.Access.Workspace(ctx, document.WorkspaceID)
-	if err != nil {
-		return nil, err
-	}
-	if refusal := workspaceaccess.CheckAPIAccess(workspace, caller.IsGated()); refusal != nil {
-		return refusal, nil
-	}
-
-	_, err = database.Write(ctx, r.Pool,
-		func(ctx context.Context, tx pgx.Tx, _ *database.Effects) (struct{}, error) {
-			return struct{}{}, New(tx).MarkDocumentDeleting(ctx, documentID)
-		})
-	return nil, err
 }
 
 func (r Route) fail(ctx huma.Context, response http.ResponseWriter, requestID, reason string, cause error) {

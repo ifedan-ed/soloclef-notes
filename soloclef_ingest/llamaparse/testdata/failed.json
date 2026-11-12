@@ -1,0 +1,9 @@
+{
+  "job": {
+    "id": "pjb-7f3a",
+    "project_id": "prj-01",
+    "status": "FAILED",
+    "error_message": "The document is encrypted and no password was provided.",
+    "tier": "agentic"
+  }
+}

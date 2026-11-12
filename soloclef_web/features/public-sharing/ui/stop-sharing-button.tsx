@@ -21,13 +21,11 @@ import { publicLinksApi } from "../api/public-links-api";
 export function StopSharingDialog({
 	open,
 	onOpenChange,
-	workspaceId,
 	notebookId,
 	onStopped,
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	workspaceId: number;
 	notebookId: number;
 	onStopped: () => void;
 }) {
@@ -38,7 +36,7 @@ export function StopSharingDialog({
 	const stop = async () => {
 		setStopping(true);
 		try {
-			await publicLinksApi.stopSharingNotebook(workspaceId, notebookId);
+			await publicLinksApi.stopSharingNotebook(notebookId);
 			toast.success(t("stopped"));
 			onOpenChange(false);
 			onStopped();
@@ -76,11 +74,9 @@ export function StopSharingDialog({
 }
 
 export function StopSharingButton({
-	workspaceId,
 	notebookId,
 	onStopped,
 }: {
-	workspaceId: number;
 	notebookId: number;
 	onStopped: () => void;
 }) {
@@ -102,7 +98,6 @@ export function StopSharingButton({
 			<StopSharingDialog
 				open={open}
 				onOpenChange={setOpen}
-				workspaceId={workspaceId}
 				notebookId={notebookId}
 				onStopped={onStopped}
 			/>

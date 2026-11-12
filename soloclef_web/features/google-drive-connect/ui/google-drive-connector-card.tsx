@@ -12,16 +12,14 @@ import { useGoogleDriveReturn } from "../hooks/use-google-drive-return";
  * page; once connected, Manage opens the connection.
  */
 export function GoogleDriveConnectorCard({
-	workspaceId,
 	onManage,
 }: {
-	workspaceId: number;
 	onManage: (connectorId: number) => void;
 }) {
 	const t = useTranslations("google_drive_connect");
-	const { connection, isConnected, refresh } = useGoogleDriveConnection(workspaceId);
+	const { connection, isConnected, refresh } = useGoogleDriveConnection();
 	useGoogleDriveReturn(refresh);
-	const { start, starting } = useGoogleDriveConnect(workspaceId);
+	const { start, starting } = useGoogleDriveConnect();
 	const configured = connection?.configured !== false;
 
 	return (

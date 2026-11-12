@@ -62,12 +62,13 @@ export const inputs = z.object({
 });
 export type Inputs = z.infer<typeof inputs>;
 
-// Captured model snapshot (server-managed). Set at create time and preserved
-// across edits so runs are insulated from later chat/workspace model changes.
+// Which model answers the automation's tasks, by the name the model proxy
+// lists it under (the names GET /api/v1/users/me/chat-model answers). Absent
+// means the account's own chat model, read when a run starts. A step may name
+// its own in ``params.model``. Keys of the older numeric shape are dropped
+// here: the server refuses them.
 export const automationModels = z.object({
-	chat_model_id: z.number().int().default(0),
-	image_gen_model_id: z.number().int().default(0),
-	vision_model_id: z.number().int().default(0),
+	chat: z.string().min(1).nullable().optional(),
 });
 export type AutomationModels = z.infer<typeof automationModels>;
 
@@ -120,7 +121,6 @@ export type Trigger = z.infer<typeof trigger>;
 // =============================================================================
 
 export const automationCreateRequest = z.object({
-	workspace_id: z.number(),
 	name: z.string().min(1).max(200),
 	description: z.string().nullable().optional(),
 	definition: automationDefinition,
@@ -138,7 +138,6 @@ export type AutomationUpdateRequest = z.infer<typeof automationUpdateRequest>;
 
 export const automationSummary = z.object({
 	id: z.number(),
-	workspace_id: z.number(),
 	name: z.string(),
 	description: z.string().nullable().optional(),
 	status: automationStatus,
@@ -161,7 +160,6 @@ export const automationListResponse = z.object({
 export type AutomationListResponse = z.infer<typeof automationListResponse>;
 
 export const automationListParams = z.object({
-	workspace_id: z.number(),
 	limit: z.number().int().min(1).max(200).default(50),
 	offset: z.number().int().min(0).default(0),
 });
@@ -198,9 +196,10 @@ export type Run = z.infer<typeof run>;
  * payloads), so this interface exists purely for safe field access in the UI
  * and does not perform runtime validation.
  *
- * Mirrors `_result()` in
- * `soloclef_backend/app/automations/runtime/step.py`. For the `agent_task`
- * action, `result` carries the markdown `final_message` produced by the agent.
+ * Written by the worker's automation run (`soloclef_worker/internal/
+ * automationrun`). For the `agent_task` action, `result` carries the markdown
+ * `final_message` produced by the agent and the step's transcript; the
+ * readers in `lib/automations/run-transcript.ts` take those apart.
  */
 export interface RunStepResult {
 	step_id: string;
@@ -217,6 +216,20 @@ export interface RunStepResult {
 		retrieval_scope?: string;
 		/** The agent's own verdict; failed / needs_attention come with a reason. */
 		outcome?: { status?: string; reason?: string | null };
+		/** The step's conversation after the task. */
+		transcript?: Array<{
+			role?: string;
+			content?: string;
+			tool_calls?: Array<{ name?: string; args?: string }>;
+			tool?: string;
+		}>;
+		/** The tool calls nobody was present to approve. */
+		refused?: Array<{ tool?: string; reason?: string }>;
+		/** The proxy name of the model that answered, and what it used. */
+		model?: string;
+		usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
+		/** The note the result was saved as, when the task asked for one. */
+		saved_note?: { document_id?: number; notebook_id?: number | null; title?: string };
 	} & Record<string, unknown>;
 	error?: { message?: string; type?: string };
 }
@@ -232,23 +245,3 @@ export const runListParams = z.object({
 	offset: z.number().int().min(0).default(0),
 });
 export type RunListParams = z.infer<typeof runListParams>;
-
-// =============================================================================
-// Model eligibility — mirror app/automations/api/automation.py (ModelEligibility)
-// =============================================================================
-
-export const modelEligibilityKind = z.enum(["llm", "image", "vision"]);
-export type ModelEligibilityKind = z.infer<typeof modelEligibilityKind>;
-
-export const modelEligibilityViolation = z.object({
-	kind: modelEligibilityKind,
-	config_id: z.number().nullable(),
-	reason: z.string(),
-});
-export type ModelEligibilityViolation = z.infer<typeof modelEligibilityViolation>;
-
-export const modelEligibility = z.object({
-	allowed: z.boolean(),
-	violations: z.array(modelEligibilityViolation),
-});
-export type ModelEligibility = z.infer<typeof modelEligibility>;

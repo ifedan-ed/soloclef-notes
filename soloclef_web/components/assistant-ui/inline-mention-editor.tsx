@@ -1,7 +1,6 @@
 "use client";
 
 import { X as XIcon } from "lucide-react";
-import { useParams } from "next/navigation";
 import type { NodeEntry, TElement } from "platejs";
 import type { PlateElementProps } from "platejs/react";
 import {
@@ -26,7 +25,6 @@ import { Button } from "@/components/ui/button";
 import type { Document } from "@/contracts/types/document.types";
 import { useArtifactsByDocument } from "@/features/artifacts/hooks/use-artifacts-by-document";
 import { getMentionDocKey } from "@/lib/chat/mention-doc-key";
-import { getWorkspaceIdNumber } from "@/lib/route-params";
 import { cn } from "@/lib/utils";
 
 export type MentionKind = "doc" | "folder" | "connector" | "thread";
@@ -391,9 +389,7 @@ export const InlineMentionEditor = forwardRef<InlineMentionEditorRef, InlineMent
 		},
 		ref
 	) => {
-		const params = useParams();
-		const workspaceId = getWorkspaceIdNumber(params) ?? 0;
-		const artifactsByDocument = useArtifactsByDocument(workspaceId);
+		const artifactsByDocument = useArtifactsByDocument();
 		const editableRef = useRef<HTMLDivElement | null>(null);
 		const editor = usePlateEditor({
 			readOnly: disabled,

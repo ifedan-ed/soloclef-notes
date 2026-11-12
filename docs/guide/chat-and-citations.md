@@ -1,0 +1,110 @@
+# Chat and citations
+
+Each notebook has one chat. It answers from the notebook's ticked sources
+only. It doesn't search the web on its own, and it doesn't read other
+notebooks. It can read your connected [email](email.md).
+
+![An answer with a citation, and suggested follow-up questions](../images/screens/chat-answer.png)
+
+The answer appears as it is written. You can switch to another tab while it
+answers: when you come back, the finished answer is there in full, without
+reloading the page.
+
+## Citations
+
+Answers carry numbered citations. Click one to see the exact passage it
+came from, with the passages around it. Each passage shows the PDF page it is
+on, such as p. 12, and the cited one is marked Cited chunk.
+
+![The cited passage](../images/screens/chat-citation.png)
+
+From there:
+
+- Summary shows the source's guide: what the whole source covers, in a
+  few paragraphs. The back arrow returns to the passage.
+- Open p. 12 opens the original PDF beside the chat, at the cited page,
+  with the cited text highlighted. When the page isn't known, the button
+  says Open and the file opens at the start.
+
+Large PDFs open quickly: the viewer loads only the pages you look at, not the
+whole file.
+
+## Asking well
+
+- Suggested questions appear when the chat is empty, and follow-up
+  questions appear under each answer.
+- Type @ to point a question at one or more of the notebook's ticked
+  sources.
+- Type / to use a saved prompt, or create one.
+- Tools runs one tool for your next message only, for example an Exa
+  search or a PubMed search. What it finds is not added to the notebook. See
+  [Tools](#tools) below.
+
+## Tools
+
+Tools, in the composer, picks one tool for your next message. That
+message can use it as well as your sources; the next one goes back to your
+sources alone. Regenerating its answer, or editing that message, uses the
+same tool again.
+
+| Tool | What it does |
+| --- | --- |
+| Exa, Tavily | Search the web in a few seconds: up to 10 results, each with a short passage. |
+| PubMed | Searches the peer-reviewed medical literature. |
+| arXiv | Searches arXiv's preprints. |
+| bioRxiv and medRxiv | Searches the two preprint servers together. |
+
+Exa and Tavily use your own key and are listed only when you have added their
+MCP server (see [MCP servers](notebooks-and-sources.md#mcp-servers)). If
+the key was removed in the last minute, the answer says the tool isn't
+available. The literature searches need no key. Picking a tool adds only that
+tool, for that message.
+
+If a tool can't run (its key was refused or the service is busy), the answer
+says so.
+
+## Choosing the model
+
+The picker beside the send button chooses the model for your messages.
+Auto lets the app choose the model. Which model is your default is set in
+Settings → Models.
+
+Every account is offered the same models; only a site administrator can
+connect more. Besides the Chat model, Models sets the Quick tasks
+model (Studio suggestions, follow-up questions, source guides and chat
+titles), the Studio outputs model (see
+[Studio](studio.md#which-model-writes-outputs)), the Vision model and
+the Image generation model. Chat, Vision and Image generation offer
+Auto mode; instead, Quick tasks offers its Default model or Same as
+chat model, and Studio outputs its Recommended model or Auto (same as
+chat model).
+
+## Configure chat
+
+From the notebook menu, Configure chat sets how answers are written:
+
+- Conversational goal: Default, Learning guide (helps you
+  understand step by step instead of just giving answers), or Custom, with
+  your own instructions.
+- Response length: Default, Longer or Shorter.
+
+If you have set [instructions](workspaces-and-sharing.md#instructions) in
+Settings, the composer shows Instructions applied. Answers follow their tone,
+audience and format, but still come only from your sources, with citations.
+
+## Setting up an automation
+
+Ask the chat to set up an automation, for example "every Monday, summarise
+what's new in my documents". It shows a Create automation card: Approve
+saves it, Edit lets you fine-tune it first, and Reject drops it. You can
+also reply in the chat to have it redrafted. See [Automations](automations.md).
+
+## Keeping answers
+
+Hover an answer to copy it, download it, or Save to note. The download is
+a Markdown file, and the latest answer can also be regenerated: the same
+question is asked again and the new answer replaces the old one, so the chat
+goes on as if the old one had never been given. Delete chat
+history in the notebook menu deletes the notebook's chats. Your chat history
+is private to you; you can share a chat by link: see
+[Settings and sharing](workspaces-and-sharing.md#public-links).

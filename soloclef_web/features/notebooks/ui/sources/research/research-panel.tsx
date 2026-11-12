@@ -26,21 +26,19 @@ import { ResearchResults } from "./research-results";
  * view and puts the cursor in the query, then ``onFocusHandled`` clears it.
  */
 export function ResearchPanel({
-	workspaceId,
 	notebookId,
 	focusRequest,
 	onFocusHandled,
 }: {
-	workspaceId: number;
 	notebookId: number;
 	focusRequest: number;
 	onFocusHandled: () => void;
 }) {
-	const { state, search, clear } = useResearchSearch(workspaceId, notebookId);
-	const importer = useResearchImport(workspaceId, notebookId);
-	const unavailable = useResearchSourcesStatus(workspaceId, notebookId);
-	const pageReader = usePageReader(workspaceId, notebookId);
-	const pageAdder = useReadWebPage(workspaceId, notebookId);
+	const { state, search, clear } = useResearchSearch(notebookId);
+	const importer = useResearchImport(notebookId);
+	const unavailable = useResearchSourcesStatus(notebookId);
+	const pageReader = usePageReader(notebookId);
+	const pageAdder = useReadWebPage(notebookId);
 	const [pageState, setPageState] = useState<ReadPageState>({ status: "idle" });
 	const [text, setText] = useState({
 		query: initialResearchDraft.query,
@@ -143,7 +141,6 @@ export function ResearchPanel({
 			{state.status === "results" ? (
 				<ResearchResults
 					results={state.results}
-					source={state.request.source}
 					providers={state.providers}
 					several={(state.request.sources?.length ?? 0) > 1}
 					importing={importer.isPending}

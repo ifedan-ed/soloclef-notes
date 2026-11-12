@@ -24,7 +24,7 @@ type Event struct {
 	// onto the same person the web app identifies.
 	Account string
 	// Route is the route template rather than the path, so the property stays
-	// low-cardinality — "/api/v1/workspaces/{workspace_id}/members".
+	// low-cardinality — "/api/v1/notebooks/{notebook_id}/notes".
 	Route  string
 	Method string
 	Status int

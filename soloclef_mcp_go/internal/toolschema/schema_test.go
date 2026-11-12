@@ -25,8 +25,7 @@ func TestEachParameterShapeMatchesPydantic(t *testing.T) {
 			{Name: "flag", Title: "Flag", Description: "On or off.",
 				Kind: toolschema.Flag, Default: false},
 			{Name: "names", Title: "Names", Description: "A list.",
-				Kind: toolschema.TextList, Required: true,
-				MinItems: toolschema.Limit(1)},
+				Kind: toolschema.TextList, Required: true},
 			{Name: "choice", Title: "Choice", Description: "One of two.",
 				Kind: toolschema.Text, Choices: []string{"a", "b"}, Default: "a"},
 			{Name: "maybe_text", Title: "Maybe Text", Description: "Or nothing.",
@@ -55,7 +54,7 @@ func TestEachParameterShapeMatchesPydantic(t *testing.T) {
 		`"default":null,"description":"Or nothing.","title":"Maybe Names"},` +
 		`"maybe_text":{"anyOf":[{"type":"string"},{"type":"null"}],"default":null,` +
 		`"description":"Or nothing.","title":"Maybe Text"},` +
-		`"names":{"description":"A list.","items":{"type":"string"},"minItems":1,` +
+		`"names":{"description":"A list.","items":{"type":"string"},` +
 		`"title":"Names","type":"array"},` +
 		`"text":{"description":"Some text.","minLength":1,"title":"Text","type":"string"}},` +
 		`"required":["text","names"],"title":"exampleArguments","type":"object"}`

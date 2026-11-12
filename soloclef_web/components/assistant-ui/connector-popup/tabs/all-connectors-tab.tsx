@@ -41,7 +41,6 @@ export function getConnectorDisplayName(fullName: string): string {
 
 interface AllConnectorsTabProps {
 	searchQuery: string;
-	workspaceId: string;
 	connectedTypes: Set<string>;
 	connectingId: string | null;
 	allConnectors: SearchSourceConnector[] | undefined;
@@ -54,7 +53,6 @@ interface AllConnectorsTabProps {
 
 export const AllConnectorsTab: FC<AllConnectorsTabProps> = ({
 	searchQuery,
-	workspaceId,
 	connectedTypes,
 	connectingId,
 	allConnectors,
@@ -213,11 +211,7 @@ export const AllConnectorsTab: FC<AllConnectorsTabProps> = ({
 	const nativeCards: ReactNode[] = [];
 	if (available.oauth.some((c) => c.connectorType === EnumConnectorName.GOOGLE_DRIVE_CONNECTOR)) {
 		nativeCards.push(
-			<GoogleDriveConnectorCard
-				key="google-drive-connector"
-				workspaceId={Number(workspaceId)}
-				onManage={manageById}
-			/>
+			<GoogleDriveConnectorCard key="google-drive-connector" onManage={manageById} />
 		);
 	}
 	if (
@@ -227,13 +221,7 @@ export const AllConnectorsTab: FC<AllConnectorsTabProps> = ({
 				matchesSearch(c.title, c.description)
 		)
 	) {
-		nativeCards.push(
-			<NextcloudConnectorCard
-				key="nextcloud-connector"
-				workspaceId={Number(workspaceId)}
-				onManage={manageById}
-			/>
-		);
+		nativeCards.push(<NextcloudConnectorCard key="nextcloud-connector" onManage={manageById} />);
 	}
 	if (
 		NATIVE_CONNECTORS.some(
@@ -242,9 +230,7 @@ export const AllConnectorsTab: FC<AllConnectorsTabProps> = ({
 				matchesSearch(c.title, c.description)
 		)
 	) {
-		nativeCards.push(
-			<EmailImapConnectorCard key="email-imap-connector" workspaceId={Number(workspaceId)} />
-		);
+		nativeCards.push(<EmailImapConnectorCard key="email-imap-connector" />);
 	}
 
 	return (

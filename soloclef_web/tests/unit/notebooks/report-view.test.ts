@@ -23,7 +23,7 @@ import type { ReportSuggestion, StudioOutput } from "@/features/notebooks/model/
 import { ReportSuggestionCard } from "@/features/notebooks/ui/report/report-suggestion-card";
 import { ReportToc } from "@/features/notebooks/ui/report/report-toc";
 
-// The same report the backend's tests split (tests/unit/notebooks/test_report_view.py).
+// The same report the API's tests split (soloclef_api/internal/studioviews/pieces_test.go).
 const REPORT = `# CHAM PICU Resident Orientation
 
 *Prepared for new residents*

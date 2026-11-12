@@ -5,54 +5,39 @@ import type {
 	GetConnectorsResponse,
 	IndexConnectorRequest,
 	IndexConnectorResponse,
+	SearchSourceConnector,
 	SetConnectorEnabledRequest,
 	UpdateConnectorRequest,
 } from "@/contracts/types/connector.types";
 import { connectorsApiService } from "@/lib/apis/connectors-api.service";
 import { cacheKeys } from "@/lib/query-client/cache-keys";
 import { queryClient } from "@/lib/query-client/client";
-import { activeWorkspaceIdAtom } from "../workspaces/workspace-query.atoms";
 
-export const createConnectorMutationAtom = atomWithMutation((get) => {
-	const workspaceId = get(activeWorkspaceIdAtom);
-
+export const createConnectorMutationAtom = atomWithMutation(() => {
 	return {
-		mutationKey: cacheKeys.connectors.all(workspaceId ?? ""),
-		enabled: !!workspaceId,
+		mutationKey: cacheKeys.connectors.all(),
 		mutationFn: async (request: CreateConnectorRequest) => {
 			return connectorsApiService.createConnector(request);
 		},
 
 		onSuccess: () => {
-			if (!workspaceId) return;
 			queryClient.invalidateQueries({
-				queryKey: cacheKeys.connectors.all(workspaceId),
+				queryKey: cacheKeys.connectors.all(),
 			});
 		},
 	};
 });
 
-export const updateConnectorMutationAtom = atomWithMutation((get) => {
-	const workspaceId = get(activeWorkspaceIdAtom);
-
+export const updateConnectorMutationAtom = atomWithMutation(() => {
 	return {
-		mutationKey: cacheKeys.connectors.all(workspaceId ?? ""),
-		enabled: !!workspaceId,
+		mutationKey: cacheKeys.connectors.all(),
 		mutationFn: async (request: UpdateConnectorRequest) => {
-			// Every edit here is made from one workspace's Connectors page, and
-			// a non-MCP connection's indexing settings belong to that workspace:
-			// without workspace_id the server refuses them (400).
-			return connectorsApiService.updateConnector({
-				...request,
-				queryParams:
-					request.queryParams ?? (workspaceId ? { workspace_id: workspaceId } : undefined),
-			});
+			return connectorsApiService.updateConnector(request);
 		},
 
 		onSuccess: (_, request: UpdateConnectorRequest) => {
-			if (!workspaceId) return;
 			queryClient.invalidateQueries({
-				queryKey: cacheKeys.connectors.all(workspaceId),
+				queryKey: cacheKeys.connectors.all(),
 			});
 			queryClient.invalidateQueries({
 				queryKey: cacheKeys.connectors.byId(String(request.id)),
@@ -61,20 +46,16 @@ export const updateConnectorMutationAtom = atomWithMutation((get) => {
 	};
 });
 
-export const deleteConnectorMutationAtom = atomWithMutation((get) => {
-	const workspaceId = get(activeWorkspaceIdAtom);
-
+export const deleteConnectorMutationAtom = atomWithMutation(() => {
 	return {
-		mutationKey: cacheKeys.connectors.all(workspaceId ?? ""),
-		enabled: !!workspaceId,
+		mutationKey: cacheKeys.connectors.all(),
 		mutationFn: async (request: DeleteConnectorRequest) => {
 			return connectorsApiService.deleteConnector(request);
 		},
 
 		onSuccess: (_, request: DeleteConnectorRequest) => {
-			if (!workspaceId) return;
 			queryClient.setQueryData(
-				cacheKeys.connectors.all(workspaceId),
+				cacheKeys.connectors.all(),
 				(oldData: GetConnectorsResponse | undefined) => {
 					if (!oldData) return oldData;
 					return oldData.filter((connector) => connector.id !== request.id);
@@ -87,39 +68,36 @@ export const deleteConnectorMutationAtom = atomWithMutation((get) => {
 	};
 });
 
-export const setConnectorEnabledMutationAtom = atomWithMutation((get) => {
-	const workspaceId = get(activeWorkspaceIdAtom);
-
+export const setConnectorEnabledMutationAtom = atomWithMutation(() => {
 	return {
-		mutationKey: cacheKeys.connectors.all(workspaceId ?? ""),
-		enabled: !!workspaceId,
+		mutationKey: cacheKeys.connectors.all(),
 		mutationFn: async (request: SetConnectorEnabledRequest) => {
 			return connectorsApiService.setConnectorEnabled(request);
 		},
 
-		onSuccess: () => {
-			if (!workspaceId) return;
-			queryClient.invalidateQueries({
-				queryKey: cacheKeys.connectors.all(workspaceId),
-			});
+		// The answer is the connection as it now stands, so it is written
+		// straight into the cached list and its own entry: no refetch.
+		onSuccess: (updated: SearchSourceConnector) => {
+			queryClient.setQueryData(
+				cacheKeys.connectors.all(),
+				(oldData: GetConnectorsResponse | undefined) =>
+					oldData?.map((connector) => (connector.id === updated.id ? updated : connector))
+			);
+			queryClient.setQueryData(cacheKeys.connectors.byId(String(updated.id)), updated);
 		},
 	};
 });
 
-export const indexConnectorMutationAtom = atomWithMutation((get) => {
-	const workspaceId = get(activeWorkspaceIdAtom);
-
+export const indexConnectorMutationAtom = atomWithMutation(() => {
 	return {
 		mutationKey: cacheKeys.connectors.index(),
-		enabled: !!workspaceId,
 		mutationFn: async (request: IndexConnectorRequest) => {
 			return connectorsApiService.indexConnector(request);
 		},
 
 		onSuccess: (response: IndexConnectorResponse) => {
-			if (!workspaceId) return;
 			queryClient.invalidateQueries({
-				queryKey: cacheKeys.connectors.all(workspaceId),
+				queryKey: cacheKeys.connectors.all(),
 			});
 			queryClient.invalidateQueries({
 				queryKey: cacheKeys.connectors.byId(String(response.connector_id)),

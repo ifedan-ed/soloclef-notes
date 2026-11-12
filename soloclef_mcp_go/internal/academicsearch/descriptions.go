@@ -25,14 +25,3 @@ const PreprintSearchDescription = `Search medRxiv (health sciences) or bioRxiv (
         year, DOI, the landing-page URL, and the abstract.
         Example: query='pediatric asthma exacerbation', server='medrxiv'.
         `
-
-const ScholarSearchDescription = `Search Google Scholar across disciplines and publishers.
-
-        Broadest coverage, but the least structured result (no reliable
-        abstract or full text — only the search snippet). Prefer
-        soloclef_pubmed_search, soloclef_arxiv_search or
-        soloclef_preprint_search when the topic fits one of them.
-        Returns, per hit: title, authors/venue/year line, URL, cited-by count
-        when shown, and the snippet.
-        Example: query='pediatric sepsis early recognition'.
-        `

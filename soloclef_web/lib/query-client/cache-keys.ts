@@ -1,7 +1,6 @@
 import type { GetConnectorsRequest } from "@/contracts/types/connector.types";
 import type { GetDocumentsRequest } from "@/contracts/types/document.types";
 import type { GetLogsRequest } from "@/contracts/types/log.types";
-import type { GetWorkspacesRequest } from "@/contracts/types/workspace.types";
 
 /**
  * Convert an object to a stable array of [key, value] pairs sorted by key.
@@ -30,71 +29,45 @@ export const cacheKeys = {
 		document: (documentId: string) => ["document", documentId] as const,
 	},
 	logs: {
-		list: (workspaceId?: number | string) => ["logs", "list", workspaceId] as const,
+		list: () => ["logs", "list"] as const,
 		detail: (logId: number | string) => ["logs", "detail", logId] as const,
-		summary: (workspaceId?: number | string) => ["logs", "summary", workspaceId] as const,
+		// The prefix of every summary query; a reader appends its window in
+		// hours, so invalidating this refreshes them all.
+		summary: () => ["logs", "summary"] as const,
 		withQueryParams: (queries: GetLogsRequest["queryParams"]) =>
 			["logs", "with-query-params", ...stableEntries(queries)] as const,
 	},
 	modelConnections: {
-		all: (workspaceId: number) => ["model-connections", workspaceId] as const,
+		// "own" keeps this key from being a prefix of the three below, so
+		// invalidating the account's connections does not refetch the shared ones.
+		all: () => ["model-connections", "own"] as const,
 		global: () => ["model-connections", "global"] as const,
 		globalConfigStatus: () => ["model-connections", "global-config-status"] as const,
 		providers: () => ["model-connections", "providers"] as const,
-		roles: (workspaceId: number) => ["model-roles", workspaceId] as const,
-		setupStatus: (workspaceId: number) => ["llm-setup-status", workspaceId] as const,
+		roles: () => ["model-roles"] as const,
+		setupStatus: () => ["llm-setup-status"] as const,
 	},
+	// The account's chat model: a proxy model name, not a model-role id.
+	chatModel: () => ["chat-model"] as const,
+	// The model of one of the account's other jobs ("quick", "studio"), also
+	// a proxy model name (features/model-choice).
+	modelChoice: (job: string) => ["model-choice", job] as const,
 	auth: {
 		user: ["auth", "user"] as const,
 	},
-	workspaces: {
-		all: ["workspaces"] as const,
-		limits: ["workspaces", "limits"] as const,
-		withQueryParams: (queries: GetWorkspacesRequest["queryParams"]) =>
-			["workspaces", ...stableEntries(queries)] as const,
-		detail: (workspaceId: string) => ["workspaces", workspaceId] as const,
-		gitRemotes: (workspaceId: number) => ["workspaces", workspaceId, "git-remotes"] as const,
-		githubRepos: (workspaceId: number, installationId: string) =>
-			["workspaces", workspaceId, "github-repos", installationId] as const,
-		githubFolders: (
-			workspaceId: number,
-			installationId: string,
-			fullName: string,
-			branch: string
-		) => ["workspaces", workspaceId, "github-folders", installationId, fullName, branch] as const,
-		githubBranches: (workspaceId: number, installationId: string, fullName: string) =>
-			["workspaces", workspaceId, "github-branches", installationId, fullName] as const,
-		// The PAT is deliberately excluded from GitLab keys; a nonce forces a reload.
-		gitlabRepos: (workspaceId: number, nonce: number) =>
-			["workspaces", workspaceId, "gitlab-repos", nonce] as const,
-		gitlabBranches: (workspaceId: number, projectId: string) =>
-			["workspaces", workspaceId, "gitlab-branches", projectId] as const,
-		gitlabFolders: (workspaceId: number, projectId: string, branch: string) =>
-			["workspaces", workspaceId, "gitlab-folders", projectId, branch] as const,
-	},
 	user: {
 		current: () => ["user", "me"] as const,
-	},
-	roles: {
-		all: (workspaceId: string) => ["roles", workspaceId] as const,
-		byId: (workspaceId: string, roleId: string) => ["roles", workspaceId, roleId] as const,
-	},
-	permissions: {
-		all: () => ["permissions"] as const,
-	},
-	members: {
-		all: (workspaceId: string) => ["members", workspaceId] as const,
-		myAccess: (workspaceId: string) => ["members", "my-access", workspaceId] as const,
-	},
-	invites: {
-		all: (workspaceId: string) => ["invites", workspaceId] as const,
-		info: (inviteCode: string) => ["invites", "info", inviteCode] as const,
+		// The account's settings: chat instructions, citations, API access.
+		settings: () => ["user", "settings"] as const,
+		memory: () => ["user", "memory"] as const,
 	},
 	agentTools: {
 		all: () => ["agent-tools"] as const,
 	},
 	connectors: {
-		all: (workspaceId: string) => ["connectors", workspaceId] as const,
+		// "list" keeps this key from being a prefix of the Google Drive folder
+		// keys below, so invalidating the list does not refetch open folders.
+		all: () => ["connectors", "list"] as const,
 		withQueryParams: (queries: GetConnectorsRequest["queryParams"]) =>
 			["connectors", ...stableEntries(queries)] as const,
 		byId: (connectorId: string) => ["connector", connectorId] as const,
@@ -103,9 +76,6 @@ export const cacheKeys = {
 			folders: (connectorId: number, parentId?: string) =>
 				["connectors", "google-drive", connectorId, "folders", parentId] as const,
 		},
-	},
-	comments: {
-		byMessage: (messageId: number) => ["comments", "message", messageId] as const,
 	},
 	publicChat: {
 		byToken: (shareToken: string) => ["public-chat", shareToken] as const,
@@ -116,52 +86,36 @@ export const cacheKeys = {
 	},
 	liveNotebookLinks: {
 		all: ["live-notebook-links"] as const,
-		byWorkspace: (workspaceId: number) =>
-			["live-notebook-links", "workspace", workspaceId] as const,
-		byNotebook: (workspaceId: number, notebookId: number) =>
-			["live-notebook-links", "notebook", workspaceId, notebookId] as const,
+		list: ["live-notebook-links", "list"] as const,
+		byNotebook: (notebookId: number) => ["live-notebook-links", "notebook", notebookId] as const,
 	},
 	publicNotebook: {
 		byToken: (shareToken: string) => ["public-notebook", shareToken] as const,
 	},
 	publicChatSnapshots: {
 		all: ["public-chat-snapshots"] as const,
-		byWorkspace: (workspaceId: number) =>
-			["public-chat-snapshots", "workspace", workspaceId] as const,
+		list: ["public-chat-snapshots", "list"] as const,
 	},
 	prompts: {
 		all: () => ["prompts"] as const,
 		public: () => ["prompts", "public"] as const,
 	},
 	notifications: {
-		search: (workspaceId: number | null, search: string, tab: string) =>
-			["notifications", "search", workspaceId, search, tab] as const,
-		sourceTypes: (workspaceId: number | null) =>
-			["notifications", "source-types", workspaceId] as const,
-		batchUnreadCounts: (workspaceId: number | null) =>
-			["notifications", "unread-counts-batch", workspaceId] as const,
+		search: (search: string, tab: string) => ["notifications", "search", search, tab] as const,
+		sourceTypes: () => ["notifications", "source-types"] as const,
+		batchUnreadCounts: () => ["notifications", "unread-counts-batch"] as const,
 	},
 	etl: {
 		// Deployment-wide: the backend reads its parser settings at boot.
 		capabilities: () => ["etl", "capabilities"] as const,
 	},
-	scrapers: {
-		capabilities: (workspaceId: number | string) =>
-			["scrapers", "capabilities", workspaceId] as const,
-		runs: (workspaceId: number | string) => ["scrapers", "runs", workspaceId] as const,
-		run: (workspaceId: number | string, runId: string) =>
-			["scrapers", "run", workspaceId, runId] as const,
-	},
 	automations: {
 		// list endpoint is keyed by pagination too so distinct pages don't collide
-		list: (workspaceId: number, limit: number, offset: number) =>
-			["automations", "list", workspaceId, limit, offset] as const,
+		list: (limit: number, offset: number) => ["automations", "list", limit, offset] as const,
 		detail: (automationId: number) => ["automations", "detail", automationId] as const,
 		runs: (automationId: number, limit: number, offset: number) =>
 			["automations", "runs", automationId, limit, offset] as const,
 		run: (automationId: number, runId: number) =>
 			["automations", "runs", automationId, runId] as const,
-		modelEligibility: (workspaceId: number) =>
-			["automations", "model-eligibility", workspaceId] as const,
 	},
 };

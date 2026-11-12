@@ -1,12 +1,10 @@
 import { defineQuery } from "@rocicorp/zero";
-import { z } from "zod";
 import { zql } from "../schema/index";
-import { canReadSpace, constrainToAllowedSpaces, denySpace } from "./authz";
+import { constrainToOwner } from "./ownership";
 
+// The caller's folder tree: no argument, the account is the context's.
 export const folderQueries = {
-	bySpace: defineQuery(z.object({ workspaceId: z.number() }), ({ args: { workspaceId }, ctx }) => {
-		const query = zql.folders.where("workspaceId", workspaceId);
-		if (!canReadSpace(ctx, workspaceId)) return denySpace(query).orderBy("position", "asc");
-		return constrainToAllowedSpaces(query, ctx).orderBy("position", "asc");
-	}),
+	mine: defineQuery(({ ctx }) =>
+		constrainToOwner(zql.folders, ctx).orderBy("position", "asc")
+	),
 };

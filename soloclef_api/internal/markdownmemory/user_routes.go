@@ -136,7 +136,7 @@ func (r UserRoutes) save(ctx huma.Context, response http.ResponseWriter, request
 			if err != nil {
 				return Outcome{}, err
 			}
-			outcome := Save(UserScope, requested, stored)
+			outcome := Save(requested, stored)
 			if !outcome.Write {
 				return outcome, nil
 			}

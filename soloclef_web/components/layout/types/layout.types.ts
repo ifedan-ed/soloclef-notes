@@ -1,15 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import type { DocumentsProcessingStatus } from "@/hooks/use-documents-processing";
 
-export interface Workspace {
-	id: number;
-	name: string;
-	description?: string | null;
-	isOwner: boolean;
-	memberCount: number;
-	createdAt?: string;
-}
-
 export interface User {
 	email: string;
 	name?: string;
@@ -31,19 +22,13 @@ export interface PageUsage {
 }
 
 export interface IconRailProps {
-	workspaces: Workspace[];
-	activeWorkspaceId: number | null;
-	onWorkspaceSelect: (id: number) => void;
-	onAddWorkspace: () => void;
+	navItems?: NavItem[];
 	className?: string;
 }
 
 export interface SidebarUserProfileProps {
 	user: User;
-	workspaceId?: string;
 	onSettings?: () => void;
-	onManageMembers?: () => void;
-	onSwitchWorkspace?: () => void;
 	onToggleTheme?: () => void;
 	onLogout?: () => void;
 	theme?: string;

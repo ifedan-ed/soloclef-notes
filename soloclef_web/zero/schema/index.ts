@@ -1,43 +1,13 @@
 import { createBuilder, createSchema, relationships } from "@rocicorp/zero";
 import { automationRunTable, automationTable } from "./automations";
-import {
-	chatCommentTable,
-	chatSessionStateTable,
-	newChatMessageTable,
-	newChatThreadTable,
-} from "./chat";
+import { chatSessionStateTable, newChatMessageTable, newChatThreadTable } from "./chat";
 import { deliverableJobTable } from "./deliverable-jobs";
 import { documentTable, searchSourceConnectorTable } from "./documents";
 import { folderTable } from "./folders";
 import { notificationTable } from "./inbox";
 import { podcastRunTable } from "./podcast-runs";
-import { userTable } from "./user";
-import { videoPresentationRunTable } from "./video-presentation-runs";
 
-const chatCommentRelationships = relationships(chatCommentTable, ({ one }) => ({
-	message: one({
-		sourceField: ["messageId"],
-		destSchema: newChatMessageTable,
-		destField: ["id"],
-	}),
-	parent: one({
-		sourceField: ["parentId"],
-		destSchema: chatCommentTable,
-		destField: ["id"],
-	}),
-	thread: one({
-		sourceField: ["threadId"],
-		destSchema: newChatThreadTable,
-		destField: ["id"],
-	}),
-}));
-
-const newChatMessageRelationships = relationships(newChatMessageTable, ({ one, many }) => ({
-	comments: many({
-		sourceField: ["id"],
-		destSchema: chatCommentTable,
-		destField: ["messageId"],
-	}),
+const newChatMessageRelationships = relationships(newChatMessageTable, ({ one }) => ({
 	thread: one({
 		sourceField: ["threadId"],
 		destSchema: newChatThreadTable,
@@ -53,19 +23,10 @@ const chatSessionStateThreadRelationships = relationships(chatSessionStateTable,
 	}),
 }));
 
-// A Studio output's thread (the chat or Studio request that made it): who may
-// read the thread may follow the output live (queries/thread-access.ts).
-// threadId is NULL for an output made outside a chat (a notebook's audio
-// overview) or whose thread was deleted.
+// A Studio output's thread (the chat or Studio request that made it). threadId
+// is NULL for an output made outside a chat (a notebook's audio overview) or
+// whose thread was deleted.
 const podcastRunRelationships = relationships(podcastRunTable, ({ one }) => ({
-	thread: one({
-		sourceField: ["threadId"],
-		destSchema: newChatThreadTable,
-		destField: ["id"],
-	}),
-}));
-
-const videoPresentationRunRelationships = relationships(videoPresentationRunTable, ({ one }) => ({
 	thread: one({
 		sourceField: ["threadId"],
 		destSchema: newChatThreadTable,
@@ -97,21 +58,16 @@ export const schema = createSchema({
 		searchSourceConnectorTable,
 		newChatThreadTable,
 		newChatMessageTable,
-		chatCommentTable,
 		chatSessionStateTable,
-		userTable,
 		automationTable,
 		automationRunTable,
 		podcastRunTable,
-		videoPresentationRunTable,
 		deliverableJobTable,
 	],
 	relationships: [
-		chatCommentRelationships,
 		newChatMessageRelationships,
 		chatSessionStateThreadRelationships,
 		podcastRunRelationships,
-		videoPresentationRunRelationships,
 		deliverableJobRelationships,
 		automationRunRelationships,
 	],

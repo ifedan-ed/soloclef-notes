@@ -16,13 +16,13 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/errorenvelope"
 )
 
-// ErrOutOfRange is a parameter Python parses as an int and then fails on: a
-// workspace id no column can hold, which makes its query raise, or a window its
+// ErrOutOfRange is a parameter Python parses as an int and then fails on: an
+// id no column can hold, which makes its query raise, or a window its
 // arithmetic cannot express. Both end as a route's sanitised 500.
 var ErrOutOfRange = errors.New("the request's numbers are out of range")
 
 // Parse reads one parameter. location is the path pydantic reports for it, such
-// as ("path", "workspace_id"): a value that is not a whole number comes back as
+// as ("path", "folder_id"): a value that is not a whole number comes back as
 // the failure for that location, and the caller decides whether to report it
 // with the others, as FastAPI reports every bad parameter of a request at once.
 func Parse(text string, location ...string) (int64, *errorenvelope.Failure, error) {

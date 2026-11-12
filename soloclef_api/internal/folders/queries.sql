@@ -1,134 +1,180 @@
--- name: FolderByID :one
--- `session.get(Folder, folder_id)`, which is what every route but the list and
--- the create begins with. The predicate is deliberately **unscoped**: all five
--- of those routes load the row before asking whether the caller may see it, so
--- a folder of another workspace is a 403 and an absent one is a 404. That is a
--- folder-existence oracle and it is the Python routes' own shape
--- (custom/docs/go-api-tier.md, "defects the port exposed"); scoping it here
--- would answer 404 where that tier answers 403.
-SELECT id, name, position, parent_id, workspace_id, created_by_id,
-       created_at, updated_at, metadata
-FROM folders WHERE id = $1;
+-- Every statement here names the owner. A folder or a document is the
+-- caller's or it does not exist: there is no second check after the read,
+-- so there is nothing to forget, and another account's row answers exactly
+-- as a row that was never made.
+
+-- name: FolderOwned :one
+-- One folder of this account. The row a route is about, and equally the
+-- parent or the target a write names: all of them must be the caller's.
+SELECT id, name, position, parent_id, created_at, updated_at, metadata
+FROM folders
+WHERE id = sqlc.arg('folder_id') AND user_id = sqlc.arg('user_id');
+
+-- name: FoldersOwned :many
+-- The account's whole tree, flat. `position` ties (every first child of
+-- every parent gets the same first key), so `id` is what makes the order
+-- total and the same on every request.
+SELECT id, name, position, parent_id, created_at, updated_at, metadata
+FROM folders
+WHERE user_id = sqlc.arg('user_id')
+ORDER BY position, id;
 
 -- name: FolderAncestors :many
--- get_folder_breadcrumb's own recursive CTE, word for word, including the
--- ordering by depth so the root comes first.
---
--- move_folder's check_no_circular_reference asks the *same* chain, in its own
--- copy of this CTE, and then only whether one id is in it. This statement
--- answers that too, so the slice runs one query where the Python route has two
--- spellings of it: the extra name column and the ordering cannot change a
--- set-membership answer, and the self row the chain starts with is the case
--- move_folder has already refused by then with its own equality check.
+-- The chain from the root down to the folder itself: the breadcrumb, and the
+-- set a move asks "is the folder being moved among the target's ancestors?"
+-- of. The owner is named on every step, not only the first, so the walk can
+-- never leave the account even if a parent link were ever wrong.
 WITH RECURSIVE ancestors AS (
     SELECT f.id, f.name, f.parent_id, 0 AS depth
-    FROM folders f WHERE f.id = $1
+    FROM folders f
+    WHERE f.id = sqlc.arg('folder_id') AND f.user_id = sqlc.arg('user_id')
     UNION ALL
     SELECT f.id, f.name, f.parent_id, a.depth + 1
-    FROM folders f JOIN ancestors a ON f.id = a.parent_id
+    FROM folders f
+    JOIN ancestors a ON f.id = a.parent_id
+    WHERE f.user_id = sqlc.arg('user_id')
 )
 SELECT a.id, a.name FROM ancestors a ORDER BY a.depth DESC;
 
 -- name: FolderDepth :one
--- app/services/folder_service.py:get_folder_depth. A root folder is 1.
+-- How deep a folder sits: 1 for a top-level folder, 0 for one that is not
+-- this account's.
 WITH RECURSIVE ancestors AS (
     SELECT f.id, f.parent_id, 1 AS depth
     FROM folders f
-    WHERE f.id = $1
+    WHERE f.id = sqlc.arg('folder_id') AND f.user_id = sqlc.arg('user_id')
     UNION ALL
     SELECT f.id, f.parent_id, a.depth + 1
     FROM folders f
     JOIN ancestors a ON f.id = a.parent_id
+    WHERE f.user_id = sqlc.arg('user_id')
 )
 SELECT COALESCE(MAX(a.depth), 0)::int AS depth FROM ancestors a;
 
--- name: SubtreeMaxDepth :one
--- get_subtree_max_depth. -1 means the folder has no children at all, which the
--- caller turns into a subtree depth of 0.
+-- name: SubtreeDepth :one
+-- How many levels hang below a folder: 0 for a leaf.
 WITH RECURSIVE descendants AS (
-    SELECT f.id, 0 AS depth
+    SELECT f.id, 1 AS depth
     FROM folders f
-    WHERE f.parent_id = $1
+    WHERE f.parent_id = sqlc.arg('folder_id')::bigint AND f.user_id = sqlc.arg('user_id')
     UNION ALL
     SELECT f.id, d.depth + 1
     FROM folders f
     JOIN descendants d ON f.parent_id = d.id
+    WHERE f.user_id = sqlc.arg('user_id')
 )
-SELECT COALESCE(MAX(d.depth), -1)::int AS depth FROM descendants d;
+SELECT COALESCE(MAX(d.depth), 0)::int AS depth FROM descendants d;
 
 -- name: LastSiblingPosition :one
--- generate_folder_position's own query for the append case. The ordering is the
--- column's collation on both tiers, which is why it is the same statement and
--- not a sort in Go.
+-- The last key among the folders under one parent (NULL for the top level),
+-- which a new or a moved folder is placed after. Sorted by Postgres and not
+-- in Go because the keys are compared by the column's collation everywhere
+-- else they are ordered.
 SELECT position FROM folders
-WHERE workspace_id = sqlc.arg('workspace_id')
-  AND (parent_id = sqlc.narg('parent_id')
-       OR (sqlc.narg('parent_id') IS NULL AND parent_id IS NULL))
-ORDER BY position DESC LIMIT 1;
+WHERE user_id = sqlc.arg('user_id')
+  AND (parent_id = sqlc.narg('parent_id')::bigint
+       OR (sqlc.narg('parent_id')::bigint IS NULL AND parent_id IS NULL))
+ORDER BY position DESC, id DESC
+LIMIT 1;
 
 -- name: InsertFolder :one
--- create_folder's insert. created_at and updated_at are Python-side defaults
--- evaluated in the application rather than column defaults, so they are passed
--- in; the Python model declares updated_at before the created_at its mixin
--- adds, so that tier's two clock readings come in that order and differ by a
--- few microseconds.
-INSERT INTO folders (name, position, parent_id, workspace_id, created_by_id,
-                     created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, name, position, parent_id, workspace_id, created_by_id,
-          created_at, updated_at, metadata;
+-- A new folder. The two times are passed and not left to the column
+-- defaults so that the answer and the row carry the same instant, and so a
+-- test can hold the clock still. A parent of another account cannot be
+-- named: the composite foreign key (parent_id, user_id) refuses it.
+INSERT INTO folders (user_id, name, position, parent_id, created_at, updated_at)
+VALUES (sqlc.arg('user_id'), sqlc.arg('name'), sqlc.arg('position'),
+        sqlc.narg('parent_id'), sqlc.arg('created_at'), sqlc.arg('updated_at'))
+RETURNING id, name, position, parent_id, created_at, updated_at, metadata;
 
--- name: RenameFolder :exec
--- update_folder's flush. The route only runs it when the name actually
--- changes, because SQLAlchemy emits no UPDATE for an attribute reassigned to
--- an equal value — and so leaves updated_at alone, which a row diff sees.
-UPDATE folders SET name = $2, updated_at = $3 WHERE id = $1;
+-- name: RenameFolder :execrows
+UPDATE folders SET name = sqlc.arg('name'), updated_at = sqlc.arg('updated_at')
+WHERE id = sqlc.arg('folder_id') AND user_id = sqlc.arg('user_id');
 
--- name: ReparentFolder :exec
--- move_folder's flush: the new parent and the position generated for it.
-UPDATE folders SET parent_id = $2, position = $3, updated_at = $4 WHERE id = $1;
+-- name: ReparentFolder :execrows
+-- A move: the new parent and the position generated under it.
+UPDATE folders
+SET parent_id = sqlc.narg('parent_id'), position = sqlc.arg('position'),
+    updated_at = sqlc.arg('updated_at')
+WHERE id = sqlc.arg('folder_id') AND user_id = sqlc.arg('user_id');
 
--- name: RepositionFolder :exec
--- reorder_folder's flush.
-UPDATE folders SET position = $2, updated_at = $3 WHERE id = $1;
+-- name: RepositionFolder :execrows
+UPDATE folders SET position = sqlc.arg('position'), updated_at = sqlc.arg('updated_at')
+WHERE id = sqlc.arg('folder_id') AND user_id = sqlc.arg('user_id');
 
--- name: SetFolderMetadata :exec
--- stop_watching_folder's flush. The value is the whole column rewritten rather
--- than a jsonb_set, because that is what `folder.folder_metadata = {**m,
--- "watched": False}` stores: the dict goes back out through json.dumps, so a
--- number the column held more precisely than a float64 comes back rounded
--- (internal/pythonjson.MarshalColumn). jsonb_set would have kept it, which
--- would have been a different row.
-UPDATE folders SET metadata = $2::jsonb, updated_at = $3 WHERE id = $1;
+-- name: ClearWatchedFlag :execrows
+-- Stop keeping a folder in step with a folder on someone's computer. Only
+-- the one key is written, so every other value in the metadata keeps its own
+-- text, and only a folder that is watched is touched: asking twice changes
+-- nothing the second time, `updated_at` included.
+UPDATE folders
+SET metadata = jsonb_set(metadata, '{watched}', 'false'::jsonb),
+    updated_at = sqlc.arg('updated_at')
+WHERE id = sqlc.arg('folder_id') AND user_id = sqlc.arg('user_id')
+  AND metadata -> 'watched' = 'true'::jsonb;
 
 -- name: FolderSubtreeIDs :many
--- delete_folder's get_folder_subtree_ids, inclusive of the folder itself. The
--- order is the worktable's and is in the enqueued message, so it is this
--- statement and not a sort in Go.
+-- The folder and everything under it, the folder itself first.
 WITH RECURSIVE subtree AS (
-    SELECT f.id FROM folders f WHERE f.id = $1
+    SELECT f.id, 0 AS depth
+    FROM folders f
+    WHERE f.id = sqlc.arg('folder_id') AND f.user_id = sqlc.arg('user_id')
     UNION ALL
-    SELECT f.id FROM folders f JOIN subtree s ON f.parent_id = s.id
+    SELECT f.id, s.depth + 1
+    FROM folders f
+    JOIN subtree s ON f.parent_id = s.id
+    WHERE f.user_id = sqlc.arg('user_id')
 )
-SELECT s.id FROM subtree s;
+SELECT s.id FROM subtree s ORDER BY s.depth, s.id;
 
--- name: DocumentsInFoldersNotDeleting :many
--- delete_folder's document read. `Document.status["state"].as_string() !=
--- "deleting"` is `status ->> 'state' <> 'deleting'`, and that is NULL — so the
--- row is **excluded** — for a document whose status has no state at all. A
--- document with `{}` is therefore left alone and not queued, which was checked
--- against the running tier rather than reasoned about.
-SELECT id FROM documents
-WHERE folder_id = ANY(sqlc.arg('folder_ids')::int[])
-  AND status ->> 'state' <> 'deleting';
+-- name: LockDocumentsInFolders :many
+-- The documents a folder delete will remove, with the status each holds
+-- now, locked until the marker below is written. The status is read so that
+-- a delete whose job could not be queued puts each document back exactly as
+-- it was, not as "ready". A document already being deleted is someone
+-- else's and is left out.
+SELECT id, status FROM documents
+WHERE user_id = sqlc.arg('user_id')
+  AND folder_id = ANY(sqlc.arg('folder_ids')::bigint[])
+  AND status ->> 'state' <> 'deleting'
+ORDER BY id
+FOR UPDATE;
 
 -- name: MarkDocumentsDeleting :exec
--- The marker, over the ids just read.
+-- The marker: it takes the documents out of search at once and tells the
+-- indexer to leave them alone.
 UPDATE documents SET status = '{"state": "deleting"}'::jsonb
-WHERE id = ANY(sqlc.arg('document_ids')::int[]);
+WHERE user_id = sqlc.arg('user_id')
+  AND id = ANY(sqlc.arg('document_ids')::bigint[]);
 
--- name: MarkDocumentsReady :exec
--- The compensation for an enqueue that did not happen. It writes "ready" over
--- whatever each state was, exactly as the Python route's own revert does.
-UPDATE documents SET status = '{"state": "ready"}'::jsonb
-WHERE id = ANY(sqlc.arg('document_ids')::int[]);
+-- name: RestoreDocumentStatuses :exec
+-- The compensation for a delete that could not be queued: each document
+-- gets back the status it had, from one object of document id to status.
+-- Only a row still carrying the marker is written, so a document something
+-- else has moved since is left alone.
+UPDATE documents AS d
+SET status = restored.status
+FROM jsonb_each(sqlc.arg('statuses')::jsonb) AS restored(id, status)
+WHERE d.id = restored.id::bigint
+  AND d.user_id = sqlc.arg('user_id')
+  AND d.status ->> 'state' = 'deleting';
+
+-- name: DocumentsOwned :many
+-- The documents among these ids that are this account's, in id order: a
+-- move announces each arrival in the order the rows come back, so the order
+-- has to be one the rows carry. `document_type` is read as text because the
+-- arrival carries the type's name.
+SELECT id, folder_id, title, connector_id, status, document_type::text AS document_type
+FROM documents
+WHERE user_id = sqlc.arg('user_id')
+  AND id = ANY(sqlc.arg('document_ids')::bigint[])
+ORDER BY id;
+
+-- name: MoveDocuments :exec
+-- The one column a move writes. `updated_at` is left alone: where a
+-- document is filed is not a change to the document. A folder of another
+-- account cannot be named: the composite foreign key (folder_id, user_id)
+-- refuses it.
+UPDATE documents SET folder_id = sqlc.narg('folder_id')
+WHERE user_id = sqlc.arg('user_id')
+  AND id = ANY(sqlc.arg('document_ids')::bigint[]);

@@ -11,21 +11,19 @@ import { NextcloudDisconnectButton } from "./nextcloud-disconnect-button";
 import { NextcloudLoginPanel } from "./nextcloud-login-panel";
 
 /**
- * This person's Nextcloud in a workspace: Connect when there is none, and
+ * This person's Nextcloud: Connect when there is none, and
  * once connected the account with Reconnect and (optionally) Disconnect.
  */
 export function NextcloudConnectionControls({
-	workspaceId,
 	showDisconnect = true,
 	onDisconnected,
 }: {
-	workspaceId: number;
 	showDisconnect?: boolean;
 	onDisconnected?: () => void;
 }) {
 	const t = useTranslations("nextcloud_connect");
-	const { connection, isLoading, isConnected, refresh } = useNextcloudConnection(workspaceId);
-	const login = useNextcloudLogin(workspaceId, (next) => {
+	const { connection, isLoading, isConnected, refresh } = useNextcloudConnection();
+	const login = useNextcloudLogin((next) => {
 		toast.success(t("connected_toast"));
 		void refresh(next);
 		login.reset();
@@ -58,7 +56,10 @@ export function NextcloudConnectionControls({
 				<span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted">
 					<Cloud className="size-4" />
 				</span>
-				<div className="min-w-0 flex-1 text-sm">
+				{/* A floor on the label's width: without one it gave up all its
+				    room to the buttons on a phone and read "C…". With it the
+				    buttons drop to a second line, kept to the right. */}
+				<div className="min-w-40 flex-1 text-sm">
 					{isConnected && connection.account ? (
 						<>
 							<p className="truncate font-medium" data-testid="nextcloud-account">
@@ -75,7 +76,7 @@ export function NextcloudConnectionControls({
 						</>
 					)}
 				</div>
-				<div className="flex flex-wrap items-center gap-1">
+				<div className="ml-auto flex flex-wrap items-center gap-1">
 					{isConnected
 						? connectButton(t("reconnect"), "outline")
 						: connectButton(t("connect"), "default")}

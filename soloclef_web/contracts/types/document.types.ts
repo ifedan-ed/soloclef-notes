@@ -25,22 +25,10 @@ export const document = z.object({
 	unique_identifier_hash: z.string().nullable(),
 	created_at: z.string(),
 	updated_at: z.string().nullable(),
-	workspace_id: z.number(),
-	created_by_id: z.string().nullable().optional(),
+	// No owner fields: a document is the signed-in account's or it is not
+	// answered at all, so the API names no owner and no creator id.
 	created_by_name: z.string().nullable().optional(),
 	created_by_email: z.string().nullable().optional(),
-});
-
-export const extensionDocumentContent = z.object({
-	metadata: z.object({
-		BrowsingSessionId: z.string(),
-		VisitedWebPageURL: z.string(),
-		VisitedWebPageTitle: z.string(),
-		VisitedWebPageDateWithTimeInISOString: z.string(),
-		VisitedWebPageReffererURL: z.string(),
-		VisitedWebPageVisitDurationInMilliseconds: z.string(),
-	}),
-	pageContent: z.string(),
 });
 
 export const documentWithChunks = document.extend({
@@ -67,7 +55,6 @@ export const sortOrderEnum = z.enum(["asc", "desc"]);
 export const getDocumentsRequest = z.object({
 	queryParams: paginationQueryParams
 		.extend({
-			workspace_id: z.number().or(z.string()).optional(),
 			document_types: z.array(documentTypeEnum).optional(),
 			sort_by: documentSortByEnum.optional(),
 			sort_order: sortOrderEnum.optional(),
@@ -91,65 +78,78 @@ export const getDocumentRequest = document.pick({ id: true });
 export const getDocumentResponse = document;
 
 /**
- * Create documents
+ * Add a note: a title and a text, optionally where it came from and the
+ * folder it is filed in.
  */
-export const createDocumentRequest = document
-	.pick({ document_type: true, workspace_id: true })
-	.extend({
-		content: z.string().or(z.array(z.string())).or(z.array(extensionDocumentContent)),
-	});
-
-export const createDocumentResponse = z.object({
-	message: z.literal("Documents queued for background processing"),
-	status: z.literal("queued"),
+export const createDocumentRequest = z.object({
+	title: z.string().min(1).max(500),
+	content: z.string().min(1),
+	source_url: z.string().url().nullable().optional(),
+	folder_id: z.number().int().positive().nullable().optional(),
 });
+
+export const createDocumentResponse = document;
 
 /**
  * Upload documents
  */
 /**
- * Which parser reads an upload: "local" (pymupdf4llm on the server) or
- * "cloud" (the service ETL_CLOUD_SERVICE names). Replaces the old
- * Basic/Premium toggle, which meant something different per parser.
+ * Which parser reads a source's files. Every source names one: an upload, a
+ * notebook's "add sources", a Nextcloud import, a connection such as Drive.
+ * "local" is the pymupdf4llm service on the server; the other three are
+ * hosted APIs. The names are the server's own (soloclef_ingest/selection),
+ * exact: there is no alias and no "default" spelling.
  */
-export const documentParserEnum = z.enum(["local", "cloud"]);
+export const documentParserEnum = z.enum(["local", "datalab", "llamaparse", "unstructured"]);
 
 /**
- * One parser choice as the deployment is configured right now. The backend
- * owns this table (app/etl_pipeline/capabilities.py), so the UI never keeps
- * its own list of which parser opens which file.
+ * One parser as this deployment has it. The server always lists all four,
+ * so a parser with no key is shown as unavailable instead of being absent,
+ * and the picker never keeps its own list of which parser opens which file.
  */
 export const parserCapability = z.object({
 	parser: documentParserEnum,
-	service: z.string().nullable(),
 	available: z.boolean(),
-	/** "missing_api_key" | "not_installed" | "unknown_service" | null. */
+	/** "not_configured" when unavailable, else null. A token to translate, not a sentence. */
 	unavailable_reason: z.string().nullable(),
-	/** Page-credit multiplier. 0 = free. */
-	page_multiplier: z.number().int().min(0),
+	/** What the parser reads, known whether or not it is configured. */
 	document_extensions: z.array(z.string()),
 });
 
 export const etlCapabilities = z.object({
 	default_parser: documentParserEnum,
 	parsers: z.array(parserCapability),
-	/** File types read the same way whichever parser is chosen. */
+	/**
+	 * File types the server reads itself whichever parser is chosen: text is
+	 * text, and sending it to a metered API would be paying for nothing.
+	 */
 	always_handled: z.object({
 		plaintext: z.array(z.string()),
 		direct_convert: z.array(z.string()),
-		audio: z.array(z.string()),
-		/** Read by the vision LLM when asked for; otherwise by the parser. */
-		image: z.array(z.string()),
 	}),
-	page_credit_billing_enabled: z.boolean(),
+	/**
+	 * Whether the caller may switch the vision model on: they, or the server,
+	 * have one. False hides the switch, as the upload would refuse it.
+	 */
+	vision_available: z.boolean(),
+	/**
+	 * Pictures an upload with vision on accepts whichever parser is chosen:
+	 * the vision model describes them.
+	 */
+	picture_extensions: z.array(z.string()),
+	max_file_size_bytes: z.number().int().positive(),
+	max_files_per_upload: z.number().int().positive(),
 });
 
 export const uploadDocumentRequest = z.object({
 	files: z.array(z.instanceof(File)),
-	workspace_id: z.number(),
 	use_vision_llm: z.boolean().default(false),
-	/** Omitted: the server default parser applies. */
-	parser: documentParserEnum.optional(),
+	/**
+	 * Required: the dialog sends nothing until the parser choices have
+	 * loaded and one that can run is picked, so no upload leaves the choice
+	 * to the server.
+	 */
+	parser: documentParserEnum,
 });
 
 export const uploadDocumentResponse = z.object({
@@ -166,14 +166,28 @@ export const uploadDocumentResponse = z.object({
  */
 export const getDocumentsStatusRequest = z.object({
 	queryParams: z.object({
-		workspace_id: z.number(),
 		document_ids: z.array(z.number()).min(1),
 	}),
 });
 
+/**
+ * What the indexer is doing with a document that is "processing", so a slow
+ * upload says what it is waiting on. "retrying" is a document waiting to be
+ * tried again after a service it needs did not answer.
+ */
+export const documentStageEnum = z.enum([
+	"parsing",
+	"chunking",
+	"embedding",
+	"indexing",
+	"retrying",
+]);
+
 export const documentStatus = z.object({
 	state: z.enum(["ready", "pending", "processing", "failed"]),
 	reason: z.string().nullable().optional(),
+	/** Set only while the state is "processing". */
+	stage: documentStageEnum.nullable().optional(),
 });
 
 export const documentStatusItem = z.object({
@@ -193,7 +207,6 @@ export const getDocumentsStatusResponse = z.object({
 export const searchDocumentsRequest = z.object({
 	queryParams: paginationQueryParams
 		.extend({
-			workspace_id: z.number().or(z.string()).optional(),
 			document_types: z.array(documentTypeEnum).optional(),
 			title: z.string().optional(),
 		})
@@ -219,7 +232,6 @@ export const documentTitleRead = z.object({
 
 export const searchDocumentTitlesRequest = z.object({
 	queryParams: z.object({
-		workspace_id: z.number(),
 		title: z.string().optional(),
 		page: z.number().optional(),
 		page_size: z.number().optional(),
@@ -234,12 +246,11 @@ export const searchDocumentTitlesResponse = z.object({
 /**
  * Get document type counts
  */
+// The counts are the account's own; there is nothing to ask for but them.
+// The empty object is kept so this read has the same request shape as the
+// others and its callers need not change again when a filter is added.
 export const getDocumentTypeCountsRequest = z.object({
-	queryParams: z
-		.object({
-			workspace_id: z.number().or(z.string()).optional(),
-		})
-		.nullish(),
+	queryParams: z.object({}).nullish(),
 });
 
 export const getDocumentTypeCountsResponse = z.record(z.string(), z.number());
@@ -321,5 +332,6 @@ export type GetDocumentChunksRequest = z.infer<typeof getDocumentChunksRequest>;
 export type GetDocumentChunksResponse = z.infer<typeof getDocumentChunksResponse>;
 export type ChunkRead = z.infer<typeof chunkRead>;
 export type DocumentParser = z.infer<typeof documentParserEnum>;
+export type DocumentStage = z.infer<typeof documentStageEnum>;
 export type ParserCapability = z.infer<typeof parserCapability>;
 export type EtlCapabilities = z.infer<typeof etlCapabilities>;

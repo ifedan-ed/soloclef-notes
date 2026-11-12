@@ -1,14 +1,17 @@
 import {Audio} from "@remotion/media";
 import type React from "react";
-import type {ComponentType} from "react";
+import {type ComponentType, useEffect, useRef, useState} from "react";
 import {
   AbsoluteFill,
+  continueRender,
+  delayRender,
   interpolate,
   Series,
   staticFile,
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
+import {LAYOUT_MARK, type LayoutReport, measureScene} from "./layoutCheck";
 import {sceneComponents} from "./scenes/generated";
 
 export type SceneInput = {
@@ -22,6 +25,9 @@ export type DeckProps = {
   min_duration_in_frames: number;
   scenes: SceneInput[];
   sceneDurations?: number[];
+  // layout_check is set by render.mjs for --stills only: each scene's last
+  // frame is then measured (layoutCheck.ts) before it is captured.
+  layout_check?: boolean;
 };
 
 const Watermark: React.FC = () => {
@@ -66,9 +72,71 @@ const Watermark: React.FC = () => {
   );
 };
 
+// Measure checks the scene drawn in root once Chrome has laid it out with
+// its fonts, and prints the findings on the line render.mjs reads. The
+// frame is held (delayRender) until then, so the still that is captured is
+// the layout that was measured.
+const Measure: React.FC<{
+  root: React.RefObject<HTMLDivElement | null>;
+  slideNumber: number;
+}> = ({root, slideNumber}) => {
+  // Called while rendering, before Remotion can take the screenshot; an
+  // effect would run too late to hold it.
+  const [handle] = useState(() =>
+    delayRender(`Measuring the layout of slide ${slideNumber}`),
+  );
+  useEffect(() => {
+    let live = true;
+    document.fonts.ready
+      .then(
+        () =>
+          // One frame after the fonts: the layout they change is settled.
+          new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+      )
+      .then(() => {
+        if (!live) return;
+        const report: LayoutReport = {
+          slide_number: slideNumber,
+          findings: root.current
+            ? measureScene(root.current)
+            : ["the scene was not drawn"],
+        };
+        console.log(LAYOUT_MARK + JSON.stringify(report));
+        continueRender(handle);
+      });
+    return () => {
+      live = false;
+    };
+  }, [handle, root, slideNumber]);
+  return null;
+};
+
+// SceneFrame draws a scene in a frame of its own, so the layout check
+// measures that scene and not the watermark or anything Remotion adds. It
+// is the same full-frame box the sequence gives, drawn in every mode, so
+// the layout measured in the stills is the layout of the video.
+const SceneFrame: React.FC<{
+  Scene: ComponentType;
+  slideNumber: number;
+  durationInFrames: number;
+  check: boolean;
+}> = ({Scene, slideNumber, durationInFrames, check}) => {
+  const frame = useCurrentFrame();
+  const root = useRef<HTMLDivElement>(null);
+  return (
+    <AbsoluteFill ref={root}>
+      <Scene />
+      {check && frame === durationInFrames - 1 ? (
+        <Measure root={root} slideNumber={slideNumber} />
+      ) : null}
+    </AbsoluteFill>
+  );
+};
+
 export const Deck: React.FC<DeckProps> = ({
   scenes,
   sceneDurations = [],
+  layout_check = false,
 }) => {
   const {fps} = useVideoConfig();
   if (scenes.length !== sceneComponents.length) {
@@ -92,7 +160,12 @@ export const Deck: React.FC<DeckProps> = ({
               durationInFrames={durationInFrames}
               premountFor={fps}
             >
-              <Scene />
+              <SceneFrame
+                Scene={Scene}
+                slideNumber={scene.slide_number}
+                durationInFrames={durationInFrames}
+                check={layout_check}
+              />
               {scene.audio ? <Audio src={staticFile(scene.audio)} /> : null}
             </Series.Sequence>
           );

@@ -7,13 +7,12 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_mcp_go/internal/pythonjson"
 )
 
-// failureHints turn a status into one actionable sentence for the model. They
-// are the Python client's, word for word, because the model reads them.
+// failureHints turn a status into one actionable sentence for the model.
 var failureHints = map[int]string{
 	401: "Authentication failed — the Soloclef Notes API key is invalid or expired.",
-	402: "The workspace is out of credits for this operation.",
-	403: "Access denied — the token lacks permission, or API access is disabled " +
-		"for this workspace (enable it in Soloclef Notes workspace settings).",
+	402: "The account is out of credits for this operation.",
+	403: "Access denied — the token lacks permission, or API access is switched " +
+		"off for this account (switch it on in Soloclef Notes, Settings, API access).",
 	404: "The requested resource was not found.",
 	429: "Rate limited by the backend — retry after a short pause.",
 }

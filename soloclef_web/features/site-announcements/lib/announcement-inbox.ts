@@ -34,5 +34,5 @@ export function announcementTarget(item: InboxLike): AnnouncementTarget | null {
 	if (item.type !== SITE_ANNOUNCEMENT_TYPE) return null;
 	const link = metadataOf(item).link;
 	if (typeof link !== "string" || !isSafeHref(link)) return null;
-	return /^\/(?![\/\\])/.test(link) ? { kind: "app", href: link } : { kind: "web", href: link };
+	return /^\/(?![/\\])/.test(link) ? { kind: "app", href: link } : { kind: "web", href: link };
 }

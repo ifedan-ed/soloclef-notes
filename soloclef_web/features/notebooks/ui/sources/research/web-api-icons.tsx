@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { brandIcon } from "@/features/scraper-tools/platform-icons";
+import { brandIcon } from "@/components/ui/brand-icon";
 import type { WebApiSourceId } from "../../../model/research-sources";
 
 /** Marks for the key-backed web search APIs. */

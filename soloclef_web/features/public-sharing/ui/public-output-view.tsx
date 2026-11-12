@@ -100,7 +100,6 @@ export function PublicOutputView({
 			<div className="relative flex min-h-0 flex-1 flex-col overflow-hidden border-t">
 				{viewer === "report" ? (
 					<ReportBody
-						workspaceId={0}
 						notebookId={0}
 						output={{ id: 0, title: output.title, artifact_id: output.artifact_id, options: {} }}
 						compact={!isDesktop}
@@ -118,7 +117,7 @@ export function PublicOutputView({
 				) : (
 					<div className="relative min-h-0 flex-1 overflow-hidden" data-testid="public-artifact">
 						<ArtifactRenderer
-							workspaceId={0}
+							localOnly
 							manifest={manifest}
 							zoomControlsContainer={controls}
 							presentation={presentation}

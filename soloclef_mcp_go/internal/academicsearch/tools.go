@@ -1,9 +1,16 @@
-// Package academicsearch exposes PubMed, arXiv, medRxiv/bioRxiv and Google
-// Scholar search, standalone.
+// Package academicsearch exposes PubMed, arXiv and medRxiv/bioRxiv search,
+// standalone.
 //
-// Thin wrappers over the backend's /workspaces/{id}/academic-search/{source}
-// door, which reuses the notebook research academic sources without creating a
-// notebook or an import. Not billed, which matches the backend today.
+// Thin wrappers over the API's three /academic-search/<source> routes, which
+// run the same sources the chat's own tools search, as the caller's account,
+// without creating a notebook or an import.
+//
+// There is no Google Scholar tool. Scholar has no API; the tool this server
+// once published worked by scraping its result pages, which Google's terms
+// forbid and its wall soon blocks, and the API no longer does that. A tool
+// that could only ever answer "unavailable" would cost a model a turn each
+// time it was tried, so it was taken off the surface, and out of the
+// instructions and the documentation, in the same change.
 package academicsearch
 
 import (
@@ -16,10 +23,9 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_mcp_go/internal/restclient"
 	"git.danvics.com/danvics/soloclef/soloclef_mcp_go/internal/tooldefinition"
 	"git.danvics.com/danvics/soloclef/soloclef_mcp_go/internal/toolschema"
-	"git.danvics.com/danvics/soloclef/soloclef_mcp_go/internal/workspaceselection"
 )
 
-// queryParameter and resultsParameter are shared by all four tools, as the
+// queryParameter and resultsParameter are shared by all three tools, as the
 // Python annotations are.
 func queryParameter() toolschema.Parameter {
 	return toolschema.Parameter{
@@ -44,20 +50,17 @@ func resultsParameter() toolschema.Parameter {
 	}
 }
 
-// Definitions are the four academic search tools, in the order they are
+// Definitions are the three academic search tools, in the order they are
 // published.
-func Definitions(client *restclient.Client,
-	selection *workspaceselection.Selection) []tooldefinition.Definition {
+func Definitions(client *restclient.Client) []tooldefinition.Definition {
 	return []tooldefinition.Definition{
-		pubmed(client, selection),
-		arxiv(client, selection),
-		preprint(client, selection),
-		scholar(client, selection),
+		pubmed(client),
+		arxiv(client),
+		preprint(client),
 	}
 }
 
-func pubmed(client *restclient.Client,
-	selection *workspaceselection.Selection) tooldefinition.Definition {
+func pubmed(client *restclient.Client) tooldefinition.Definition {
 	return tooldefinition.Definition{
 		Name:        "soloclef_pubmed_search",
 		Title:       "Search PubMed",
@@ -91,14 +94,13 @@ func pubmed(client *restclient.Client,
 					Kind:    toolschema.Flag,
 					Default: false,
 				},
-				workspaceselection.ReferenceParameter(),
 				rendering.FormatParameter(),
 			},
 		},
 		Handle: func(ctx context.Context, arguments toolschema.Arguments) (string, error) {
 			since, sinceGiven := arguments.OptionalNumber("since")
 			until, untilGiven := arguments.OptionalNumber("until")
-			return search(ctx, client, selection, arguments, "pubmed", pythonjson.NewObject(
+			return search(ctx, client, arguments, "pubmed", pythonjson.NewObject(
 				pythonjson.Field("query", pythonjson.Str(arguments.Text("query"))),
 				pythonjson.Field("max_results", pythonjson.Num(arguments.Number("max_results"))),
 				pythonjson.Field("since", pythonjson.OptionalNum(since, sinceGiven)),
@@ -109,8 +111,7 @@ func pubmed(client *restclient.Client,
 	}
 }
 
-func arxiv(client *restclient.Client,
-	selection *workspaceselection.Selection) tooldefinition.Definition {
+func arxiv(client *restclient.Client) tooldefinition.Definition {
 	return tooldefinition.Definition{
 		Name:        "soloclef_arxiv_search",
 		Title:       "Search arXiv",
@@ -121,18 +122,16 @@ func arxiv(client *restclient.Client,
 			Parameters: []toolschema.Parameter{
 				queryParameter(),
 				resultsParameter(),
-				workspaceselection.ReferenceParameter(),
 				rendering.FormatParameter(),
 			},
 		},
 		Handle: func(ctx context.Context, arguments toolschema.Arguments) (string, error) {
-			return search(ctx, client, selection, arguments, "arxiv", queryAndCount(arguments))
+			return search(ctx, client, arguments, "arxiv", queryAndCount(arguments))
 		},
 	}
 }
 
-func preprint(client *restclient.Client,
-	selection *workspaceselection.Selection) tooldefinition.Definition {
+func preprint(client *restclient.Client) tooldefinition.Definition {
 	return tooldefinition.Definition{
 		Name:        "soloclef_preprint_search",
 		Title:       "Search medRxiv / bioRxiv",
@@ -151,40 +150,17 @@ func preprint(client *restclient.Client,
 					Required:    true,
 				},
 				resultsParameter(),
-				workspaceselection.ReferenceParameter(),
 				rendering.FormatParameter(),
 			},
 		},
 		// The source in the path is always medrxiv: the backend's medRxiv source
 		// serves both servers and picks between them from the body's "server".
 		Handle: func(ctx context.Context, arguments toolschema.Arguments) (string, error) {
-			return search(ctx, client, selection, arguments, "medrxiv", pythonjson.NewObject(
+			return search(ctx, client, arguments, "medrxiv", pythonjson.NewObject(
 				pythonjson.Field("query", pythonjson.Str(arguments.Text("query"))),
 				pythonjson.Field("max_results", pythonjson.Num(arguments.Number("max_results"))),
 				pythonjson.Field("server", pythonjson.Str(arguments.Text("server"))),
 			))
-		},
-	}
-}
-
-func scholar(client *restclient.Client,
-	selection *workspaceselection.Selection) tooldefinition.Definition {
-	return tooldefinition.Definition{
-		Name:        "soloclef_scholar_search",
-		Title:       "Search Google Scholar",
-		Description: ScholarSearchDescription,
-		Annotations: tooldefinition.ReadOnlyOpen,
-		Signature: toolschema.Signature{
-			ArgumentsTitle: "scholar_searchArguments",
-			Parameters: []toolschema.Parameter{
-				queryParameter(),
-				resultsParameter(),
-				workspaceselection.ReferenceParameter(),
-				rendering.FormatParameter(),
-			},
-		},
-		Handle: func(ctx context.Context, arguments toolschema.Arguments) (string, error) {
-			return search(ctx, client, selection, arguments, "google_scholar", queryAndCount(arguments))
 		},
 	}
 }
@@ -199,16 +175,11 @@ func queryAndCount(arguments toolschema.Arguments) pythonjson.Value {
 // search runs one source and renders its rows. The body is sent as written,
 // nulls included, because the backend's academic door reads an absent year and
 // a null year the same way and the Python original does not strip them.
-func search(ctx context.Context, client *restclient.Client,
-	selection *workspaceselection.Selection, arguments toolschema.Arguments,
+func search(ctx context.Context, client *restclient.Client, arguments toolschema.Arguments,
 	source string, body pythonjson.Value) (string, error) {
-	workspace, err := selection.Resolve(ctx, arguments.Text("workspace"))
-	if err != nil {
-		return "", err
-	}
 	reply, err := client.Do(ctx, restclient.Call{
 		Method:   "POST",
-		Path:     fmt.Sprintf("/workspaces/%d/academic-search/%s", workspace.ID, source),
+		Path:     "/academic-search/" + source,
 		JSONBody: body,
 	})
 	if err != nil {

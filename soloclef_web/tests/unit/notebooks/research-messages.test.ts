@@ -4,10 +4,10 @@ import { join } from "node:path";
 import test from "node:test";
 import {
 	ACADEMIC_SOURCE_IDS,
-	MAY_RETURN_NOTHING,
+	READ_PAGE_ID,
 	RESEARCH_SOURCE_IDS,
 	WEB_API_SOURCE_IDS,
-	WEB_GROUP_SOURCE_IDS,
+	WEB_GROUP_MENU_IDS,
 } from "@/features/notebooks/model/research-sources";
 
 const LOCALES = ["en", "es", "hi", "ko", "pt", "zh"] as const;
@@ -24,13 +24,13 @@ test("research strings exist in all six locales", () => {
 	}
 });
 
-test("every academic source has a name and every caveated source its explanation", () => {
+test("every source the box offers has a name in every locale", () => {
+	// The menu names each choice through `source_<id>`, so a missing one would
+	// show its dotted key to people.
 	for (const locale of LOCALES) {
 		const catalogue = research(locale);
-		for (const id of ACADEMIC_SOURCE_IDS) assert.ok(catalogue[`source_${id}`], `${locale} ${id}`);
-		for (const id of MAY_RETURN_NOTHING) {
-			assert.ok(catalogue[`caveat_${id}`], `${locale} caveat ${id}`);
-			assert.ok(catalogue[`no_results_${id}`], `${locale} no_results ${id}`);
+		for (const id of [...RESEARCH_SOURCE_IDS, READ_PAGE_ID]) {
+			assert.ok(catalogue[`source_${id}`], `${locale} ${id}`);
 		}
 	}
 });
@@ -41,6 +41,8 @@ test("Exa and Tavily are named, and their unavailable and error wording exists e
 		for (const id of WEB_API_SOURCE_IDS) assert.ok(catalogue[`source_${id}`], `${locale} ${id}`);
 		for (const key of [
 			"unavailable_not_connected",
+			"unavailable_not_available",
+			"error_source_unavailable",
 			"unavailable_hint",
 			"error_source_not_connected",
 			"error_source_key_rejected",
@@ -54,9 +56,9 @@ test("Exa and Tavily are named, and their unavailable and error wording exists e
 	}
 });
 
-test("the web group lists the general searches first, then Exa and Tavily, then the platforms", () => {
-	assert.deepEqual(WEB_GROUP_SOURCE_IDS.slice(0, 4), ["web", "google_search", "exa", "tavily"]);
-	const academic = new Set<string>(ACADEMIC_SOURCE_IDS);
-	const everyNonAcademic = RESEARCH_SOURCE_IDS.filter((id) => !academic.has(id));
-	assert.deepEqual([...WEB_GROUP_SOURCE_IDS].sort(), [...everyNonAcademic].sort());
+test("the menu's two groups offer every searchable source exactly once", () => {
+	const offered = [...WEB_GROUP_MENU_IDS, ...ACADEMIC_SOURCE_IDS].filter(
+		(id) => id !== READ_PAGE_ID
+	);
+	assert.deepEqual([...offered].sort(), [...RESEARCH_SOURCE_IDS].sort());
 });

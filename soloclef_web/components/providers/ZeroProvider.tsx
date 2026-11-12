@@ -11,6 +11,7 @@ import { useSession } from "@/hooks/use-session";
 import { authenticatedFetch, getDesktopAccessToken } from "@/lib/auth-fetch";
 import { handleUnauthorized, isPublicRoute, refreshSession } from "@/lib/auth-utils";
 import { buildBackendUrl } from "@/lib/env-config";
+import { ZERO_CONTEXT_PATH, zeroContextFromAccount } from "@/lib/zero/zero-context";
 import type { Context } from "@/types/zero";
 import { queries } from "@/zero/queries";
 import { schema } from "@/zero/schema";
@@ -32,7 +33,7 @@ function getCacheURL() {
 }
 
 async function fetchZeroContext(isDesktop: boolean): Promise<LoadedZeroContext | null> {
-	const response = await authenticatedFetch(buildBackendUrl("/zero/context"), {
+	const response = await authenticatedFetch(buildBackendUrl(ZERO_CONTEXT_PATH), {
 		skipAuthRedirect: true,
 	});
 	if (response.status === 401) {
@@ -43,9 +44,11 @@ async function fetchZeroContext(isDesktop: boolean): Promise<LoadedZeroContext |
 		return null;
 	}
 	if (!response.ok) return null;
+	const context = zeroContextFromAccount(await response.json().catch(() => null));
+	if (!context) return null;
 
 	return {
-		context: (await response.json()) as ZeroContext,
+		context,
 		desktopAuth: isDesktop ? (await getDesktopAccessToken()) || undefined : undefined,
 	};
 }

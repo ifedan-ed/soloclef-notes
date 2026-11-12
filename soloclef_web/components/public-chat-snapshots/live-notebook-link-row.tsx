@@ -69,9 +69,7 @@ export function LiveNotebookLinkRow({
 					) : null}
 				</div>
 				<p className="text-xs text-muted-foreground">
-					{link.created_by_name
-						? t("created_by", { name: link.created_by_name, date: date(link.created_at) })
-						: t("created", { date: date(link.created_at) })}
+					{t("created", { date: date(link.created_at) })}
 					{" · "}
 					{link.expires_at
 						? link.is_expired
@@ -92,38 +90,36 @@ export function LiveNotebookLinkRow({
 						</a>
 					</Button>
 				)}
-				{link.can_revoke ? (
-					<AlertDialog>
-						<AlertDialogTrigger asChild>
-							<Button
-								variant="ghost"
-								size="icon"
-								className="size-8 text-muted-foreground hover:text-destructive"
-								aria-label={t("revoke")}
-								disabled={revoking}
+				<AlertDialog>
+					<AlertDialogTrigger asChild>
+						<Button
+							variant="ghost"
+							size="icon"
+							className="size-8 text-muted-foreground hover:text-destructive"
+							aria-label={t("revoke")}
+							disabled={revoking}
+						>
+							<Trash2 className="size-4" />
+						</Button>
+					</AlertDialogTrigger>
+					<AlertDialogContent>
+						<AlertDialogHeader>
+							<AlertDialogTitle>{t("revoke_title")}</AlertDialogTitle>
+							<AlertDialogDescription>
+								{t("revoke_body", { title: link.notebook_title })}
+							</AlertDialogDescription>
+						</AlertDialogHeader>
+						<AlertDialogFooter>
+							<AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
+							<AlertDialogAction
+								onClick={() => void onRevoke(link)}
+								className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
 							>
-								<Trash2 className="size-4" />
-							</Button>
-						</AlertDialogTrigger>
-						<AlertDialogContent>
-							<AlertDialogHeader>
-								<AlertDialogTitle>{t("revoke_title")}</AlertDialogTitle>
-								<AlertDialogDescription>
-									{t("revoke_body", { title: link.notebook_title })}
-								</AlertDialogDescription>
-							</AlertDialogHeader>
-							<AlertDialogFooter>
-								<AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
-								<AlertDialogAction
-									onClick={() => void onRevoke(link)}
-									className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-								>
-									{t("revoke")}
-								</AlertDialogAction>
-							</AlertDialogFooter>
-						</AlertDialogContent>
-					</AlertDialog>
-				) : null}
+								{t("revoke")}
+							</AlertDialogAction>
+						</AlertDialogFooter>
+					</AlertDialogContent>
+				</AlertDialog>
 			</div>
 		</li>
 	);

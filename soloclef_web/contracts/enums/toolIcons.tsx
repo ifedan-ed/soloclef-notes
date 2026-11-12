@@ -7,7 +7,9 @@ import {
 	FileText,
 	FileX,
 	Film,
+	FolderOpen,
 	FolderPlus,
+	FolderSearch,
 	FolderTree,
 	FolderX,
 	ImageIcon,
@@ -22,8 +24,8 @@ import {
 
 /**
  * Every tool now renders a card via ``ToolFallback``. The icon map is
- * keyed on the canonical backend tool name (registered in
- * ``soloclef_backend/app/agents/new_chat/tools/registry.py``); unknown
+ * keyed on the canonical tool name the chat's agent registers (the API's
+ * chat and soloclef_assistant); unknown
  * names fall back to the generic ``Wrench`` icon so the card still
  * communicates "this is a tool call".
  */
@@ -35,6 +37,7 @@ const TOOL_ICONS: Record<string, LucideIcon> = {
 	display_image: ImageIcon,
 	// Web / search
 	scrape_webpage: ScanLine,
+	web_crawl: ScanLine,
 	// Automations
 	create_automation: AlarmClock,
 	// Memory
@@ -48,6 +51,20 @@ const TOOL_ICONS: Record<string, LucideIcon> = {
 	rmdir: FolderX,
 	mkdir: FolderPlus,
 	ls: FolderTree,
+	// The knowledge-base specialist's tools (soloclef_api/internal/knowledgebase)
+	knowledge_base: FolderOpen,
+	list_folder: FolderTree,
+	find_documents: FolderSearch,
+	read_document: FileText,
+	create_note: FilePlus,
+	edit_note: FileEdit,
+	rename_document: FileEdit,
+	move_document: Move,
+	delete_note: FileX,
+	create_folder: FolderPlus,
+	rename_folder: FolderOpen,
+	move_folder: Move,
+	delete_folder: FolderX,
 	write_todos: ListTodo,
 	// Google Drive
 	create_google_drive_file: FilePlus,
@@ -89,6 +106,19 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
 	grep: "Search in files",
 	write_todos: "Plan tasks",
 	save_document: "Save document",
+	knowledge_base: "Work in your documents",
+	list_folder: "List folder",
+	find_documents: "Find documents",
+	read_document: "Read document",
+	create_note: "Write note",
+	edit_note: "Edit note",
+	rename_document: "Rename document",
+	move_document: "Move document",
+	delete_note: "Delete note",
+	create_folder: "Create folder",
+	rename_folder: "Rename folder",
+	move_folder: "Move folder",
+	delete_folder: "Delete folder",
 	// Generators
 	generate_podcast: "Generate podcast",
 	generate_video_presentation: "Generate video presentation",
@@ -96,6 +126,7 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
 	display_image: "Show image",
 	// Web / search
 	scrape_webpage: "Read webpage",
+	web_crawl: "Read web pages",
 	// Automations
 	create_automation: "Create automation",
 	// Memory

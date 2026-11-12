@@ -1,0 +1,60 @@
+# FAQ
+
+## Why won't the chat answer from the web?
+
+A notebook chat answers only from the notebook's ticked sources, so you
+always know where an answer came from. To bring in new material, search
+for it in the Sources panel and add it. For a one-off web search, pick a
+tool from Tools; its results are cited as Web and not added to the
+notebook.
+
+## The chat says it can't find something that is in my file.
+
+Check that the source is ticked and has finished indexing. For scans,
+complex tables or figures, try uploading it again with the Cloud
+parser, or with Vision on.
+
+## Local or a hosted parser: which should I use?
+
+Start with Local: it is free and the file stays on the server. Use a hosted
+parser (Datalab, LlamaParse or Unstructured, if the server has one) for
+scanned documents and files where tables and figures matter.
+
+## How long does a Studio output take?
+
+Usually a few minutes; long videos take longer. You can keep working
+while it is made, and turn on browser notifications to hear when it is
+ready.
+
+## A Studio output failed.
+
+Choose Try again on it in the Studio list. If it keeps failing, try
+fewer sources or a narrower focus.
+
+## I changed a file in Nextcloud. Does the notebook update?
+
+No. Nextcloud files are copied once. Use Refresh from Nextcloud in the
+document's menu to fetch the new version.
+
+## How do I get an account?
+
+Unless the server lets people sign up, ask for an account through the contact page (`/contact` on your server).
+If the server lets people make their own accounts, the sign-up form and a first
+single sign-on both make one.
+
+## Can it read or send my email?
+
+It can read it, never send it. Add a mailbox under Settings →
+Connectors → Email (IMAP), with an app password if you use two-factor
+sign-in. The assistant can then search and read it, read-only: it never
+sends, deletes, moves or flags mail, and mail is never imported as a
+source. Mail is read in chats, notebook chats included, and in
+automations whose tasks can use the web. See [Email](email.md).
+
+## I didn't get the email.
+
+Check your spam folder first. A password-reset link works once and
+expires after 30 minutes, and one address is sent at most 3 an hour:
+further requests send nothing. Automation results are emailed only to
+the person who created the automation, and only when Email me the result
+is on. See [Email](email.md#emails-the-app-sends-you).

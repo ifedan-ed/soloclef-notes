@@ -11,12 +11,12 @@ const OWN_ERROR_TOAST = { suppressGlobalErrorToast: true } as const;
  * An open Studio output's frame: the prompt it was made with and its sources
  * ("View prompt and N sources").
  */
-export function useOutputView(workspaceId: number, notebookId: number, outputId: number) {
-	const key = notebookKeys.outputView(workspaceId, notebookId, outputId);
+export function useOutputView(notebookId: number, outputId: number) {
+	const key = notebookKeys.outputView(notebookId, outputId);
 	const view = useQuery({
 		queryKey: key,
-		queryFn: () => notebooksApi.outputView(workspaceId, notebookId, outputId),
-		enabled: workspaceId > 0 && notebookId > 0 && outputId > 0,
+		queryFn: () => notebooksApi.outputView(notebookId, outputId),
+		enabled: notebookId > 0 && outputId > 0,
 		staleTime: 60_000,
 		refetchOnWindowFocus: false,
 		meta: OWN_ERROR_TOAST,

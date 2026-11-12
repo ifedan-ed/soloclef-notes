@@ -9,17 +9,17 @@ import { researchApi } from "../api/research-api";
  * pending; the sources query keeps polling until the page is read and indexed.
  * Errors are shown inline by the research box, so no global toast.
  */
-export function useReadWebPage(workspaceId: number, notebookId: number) {
+export function useReadWebPage(notebookId: number) {
 	const queryClient = useQueryClient();
 	return useMutation({
 		meta: { suppressGlobalErrorToast: true },
-		mutationFn: (url: string) => researchApi.readPage(workspaceId, notebookId, url.trim()),
+		mutationFn: (url: string) => researchApi.readPage(notebookId, url.trim()),
 		onSuccess: (sources) => {
-			queryClient.setQueryData(notebookKeys.sources(workspaceId, notebookId), sources);
+			queryClient.setQueryData(notebookKeys.sources(notebookId), sources);
 			void queryClient.invalidateQueries({
-				queryKey: notebookKeys.detail(workspaceId, notebookId),
+				queryKey: notebookKeys.detail(notebookId),
 			});
-			void queryClient.invalidateQueries({ queryKey: notebookKeys.list(workspaceId) });
+			void queryClient.invalidateQueries({ queryKey: notebookKeys.list() });
 		},
 	});
 }

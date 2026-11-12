@@ -2,11 +2,11 @@ import { buildBackendUrl } from "@/lib/env-config";
 import { BRAND } from "./index";
 
 /**
- * Where "Report Issue" mails go. An admin sets it on Billing -> Admin ->
- * Settings (backend `support_email`, else SUPPORT_EMAIL, read from
- * `GET /api/v1/support-contact`); until it has loaded, or if it cannot, the
- * build's NEXT_PUBLIC_SUPPORT_EMAIL (`BRAND.contactEmail`) is used, which is
- * empty on a server that set none.
+ * Where "Report Issue" mails go: the API's one setting for it
+ * (SOLOCLEF_API_SUPPORT_EMAIL), read from `GET /api/v1/support-contact`.
+ * Until it has loaded, or if it cannot, the build's
+ * NEXT_PUBLIC_SUPPORT_EMAIL (`BRAND.contactEmail`) is used, which is empty
+ * on a server that set none.
  */
 export const SUPPORT_CONTACT_PATH = "/api/v1/support-contact";
 

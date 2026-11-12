@@ -21,7 +21,6 @@ import {
 	type ResearchImportItem,
 	type ResearchResult,
 } from "../../../model/research";
-import { MAY_RETURN_NOTHING, type ResearchSourceId } from "../../../model/research-sources";
 import { FailedSourcesNote } from "./failed-sources-note";
 import { ResearchResultRow } from "./research-result-row";
 
@@ -32,7 +31,6 @@ import { ResearchResultRow } from "./research-result-row";
  */
 export function ResearchResults({
 	results,
-	source,
 	providers = [],
 	several = false,
 	importing,
@@ -41,7 +39,6 @@ export function ResearchResults({
 	onDismiss,
 }: {
 	results: ResearchResult[];
-	source: ResearchSourceId;
 	providers?: ProviderProgress[];
 	several?: boolean;
 	importing: boolean;
@@ -76,9 +73,7 @@ export function ResearchResults({
 			</div>
 			<FailedSourcesNote providers={providers} />
 			{results.length === 0 ? (
-				<p className="px-3 pb-3 text-xs text-muted-foreground">
-					{!several && MAY_RETURN_NOTHING.has(source) ? t(`no_results_${source}`) : t("no_results")}
-				</p>
+				<p className="px-3 pb-3 text-xs text-muted-foreground">{t("no_results")}</p>
 			) : (
 				<>
 					<div className="flex items-center gap-2 border-t px-4 py-1.5 text-xs text-muted-foreground">

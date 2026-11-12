@@ -10,7 +10,7 @@ import { returnPathWithoutOutcome } from "../lib/microsoft-mail-outcome";
  * Connect (or, with an account id, reconnect) a Microsoft mailbox: the
  * browser goes to Microsoft's sign-in and Microsoft sends it back here.
  */
-export function useMicrosoftMailConnect(workspaceId: number) {
+export function useMicrosoftMailConnect() {
 	const t = useTranslations("email_imap_connect");
 	const [starting, setStarting] = useState(false);
 
@@ -19,7 +19,6 @@ export function useMicrosoftMailConnect(workspaceId: number) {
 			setStarting(true);
 			try {
 				const { auth_url } = await microsoftMailApi.connect(
-					workspaceId,
 					returnPathWithoutOutcome(window.location),
 					accountId
 				);
@@ -29,7 +28,7 @@ export function useMicrosoftMailConnect(workspaceId: number) {
 				setStarting(false);
 			}
 		},
-		[workspaceId, t]
+		[t]
 	);
 
 	return { start, starting };

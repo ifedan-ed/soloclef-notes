@@ -2,7 +2,6 @@ import { z } from "zod";
 
 export const notebookSchema = z.object({
 	id: z.number(),
-	workspace_id: z.number(),
 	title: z.string(),
 	icon: z.string().nullable(),
 	created_at: z.string(),
@@ -42,23 +41,6 @@ export const notebookSourceSchema = z.object({
 	added_at: z.string(),
 });
 export type NotebookSource = z.infer<typeof notebookSourceSchema>;
-
-export const noteOriginSchema = z.enum(["hand", "chat", "automation"]);
-export type NoteOrigin = z.infer<typeof noteOriginSchema>;
-
-export const notebookNoteSchema = z.object({
-	id: z.number(),
-	notebook_id: z.number(),
-	title: z.string(),
-	content: z.string(),
-	converted_document_id: z.number().nullable(),
-	/** Add note ("hand"), Save to note ("chat"), or an automation's result. */
-	origin: noteOriginSchema.default("hand"),
-	automation_id: z.number().nullish(),
-	created_at: z.string(),
-	updated_at: z.string(),
-});
-export type NotebookNote = z.infer<typeof notebookNoteSchema>;
 
 export const notebookThreadSchema = z.object({
 	id: z.number(),

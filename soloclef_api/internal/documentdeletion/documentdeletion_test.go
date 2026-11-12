@@ -47,21 +47,3 @@ func TestATruthyNonObjectStatusIsTheFailurePythonHas(t *testing.T) {
 		}
 	}
 }
-
-// The order is the route's: a pending document is reported as pending, and
-// only a document already being deleted gets the second message.
-func TestTheTwoConflictsAreWordedAsThePythonRouteWordsThem(t *testing.T) {
-	cases := map[string]string{
-		"pending":    BeingProcessed,
-		"processing": BeingProcessed,
-		"deleting":   AlreadyDeleting,
-		"ready":      "",
-		"":           "",
-		"failed":     "",
-	}
-	for state, want := range cases {
-		if got := RefusalForState(state); got != want {
-			t.Errorf("RefusalForState(%q) = %q, want %q", state, got, want)
-		}
-	}
-}

@@ -14,6 +14,7 @@ import { Separator } from "@/components/ui/separator";
 import type { ConnectionRead, ModelSelection } from "@/contracts/types/model-connections.types";
 import { BRAND } from "@/lib/brand";
 import { ConnectionCard } from "./connection-card";
+import { previewFailureOf, previewRequestFor, providersFor, withNamedModel } from "./model-listing";
 import { capability, type SelectableModel } from "./model-utils";
 import { ProviderConnectDialog } from "./provider-connect-dialog";
 import {
@@ -24,8 +25,13 @@ import {
 } from "./provider-metadata";
 
 interface ModelProviderConnectionsPanelProps {
-	workspaceId: number;
 	connections: ConnectionRead[];
+	/**
+	 * Whether the account administers the site. Every account may connect an
+	 * OpenAI-compatible endpoint of its own; only an administrator is offered
+	 * the other providers (model-listing.ts, providersFor).
+	 */
+	isAdmin: boolean;
 	className?: string;
 	addProviderTitle?: string;
 	addProviderDescription?: string;
@@ -50,8 +56,8 @@ function toModelSelection(model: SelectableModel): ModelSelection {
 }
 
 export function ModelProviderConnectionsPanel({
-	workspaceId,
 	connections,
+	isAdmin,
 	className,
 	addProviderTitle = "Add Provider",
 	addProviderDescription = `${BRAND.name} supports popular providers and self-hosted model endpoints.`,
@@ -59,7 +65,8 @@ export function ModelProviderConnectionsPanel({
 	footerAction,
 	showAddProviderHeader = true,
 }: ModelProviderConnectionsPanelProps) {
-	const { data: providers = [] } = useAtomValue(modelProvidersAtom);
+	const { data: allProviders = [] } = useAtomValue(modelProvidersAtom);
+	const providers = providersFor(allProviders, isAdmin);
 	const createConnection = useAtomValue(createModelConnectionMutationAtom);
 	const previewModels = useAtomValue(previewConnectionModelsMutationAtom);
 	const testPreviewModel = useAtomValue(testPreviewModelMutationAtom);
@@ -67,6 +74,10 @@ export function ModelProviderConnectionsPanel({
 	const [isAddProviderOpen, setIsAddProviderOpen] = useState(false);
 	const [provider, setProvider] = useState("openai_compatible");
 	const [connectModels, setConnectModels] = useState<ModelSelection[]>([]);
+	// Why the last listing failed, as the server said it; cleared by the next.
+	const [previewFailure, setPreviewFailure] = useState<ReturnType<typeof previewFailureOf> | null>(
+		null
+	);
 	const selectedProvider = providers.find((item) => item.provider === provider);
 
 	const sortedProviders = [...providers].sort((left, right) => {
@@ -83,6 +94,7 @@ export function ModelProviderConnectionsPanel({
 
 	function resetConnectState() {
 		setConnectModels([]);
+		setPreviewFailure(null);
 	}
 
 	function handleConnectOpenChange(open: boolean) {
@@ -127,11 +139,6 @@ export function ModelProviderConnectionsPanel({
 	// Each provider connect form builds its own credential payload; the backend
 	// resolver (`to_litellm`) forwards `extra.litellm_params` straight to LiteLLM.
 	function handleCreate(draft: ConnectionDraft) {
-		if (!Number.isFinite(workspaceId) || workspaceId <= 0) {
-			toast.error("Workspace is still loading. Please try again.");
-			return;
-		}
-
 		const models = connectionModelsForDraft(draft);
 		const testModel = representativeTestModel(models);
 		if (!testModel) {
@@ -143,8 +150,12 @@ export function ModelProviderConnectionsPanel({
 			provider,
 			base_url: draft.base_url,
 			api_key: draft.api_key,
-			scope: "SEARCH_SPACE" as const,
-			workspace_id: workspaceId,
+			// Present only when headers were typed; the form makes them only
+			// for an OpenAI-compatible endpoint.
+			...(draft.headers ? { headers: draft.headers } : {}),
+			// Always the signed-in account's own: shared connections are not
+			// made from this panel.
+			scope: "user" as const,
 			extra: draft.extra,
 			enabled: true,
 			models,
@@ -166,57 +177,41 @@ export function ModelProviderConnectionsPanel({
 		);
 	}
 
+	function listModels(request: NonNullable<ReturnType<typeof previewRequestFor>>) {
+		setPreviewFailure(null);
+		previewModels.mutate(request, {
+			onSuccess: mergePreviewModels,
+			onError: (error) => {
+				// Models already typed by name are kept: they are the person's
+				// own work, and a failed listing says nothing against them.
+				setConnectModels((current) => current.filter((model) => model.source === "MANUAL"));
+				setPreviewFailure(previewFailureOf(error));
+			},
+		});
+	}
+
 	function openProviderDialog(providerId: string) {
 		resetConnectState();
 		setProvider(providerId);
 		setIsAddProviderOpen(true);
-		if (providerId === "vertex_ai") {
-			if (!Number.isFinite(workspaceId) || workspaceId <= 0) {
-				toast.error("Workspace is still loading. Please try again.");
-				return;
-			}
-
-			previewModels.mutate(
-				{
-					provider: providerId,
-					base_url: null,
-					api_key: null,
-					scope: "SEARCH_SPACE",
-					workspace_id: workspaceId,
-					extra: {},
-					enabled: true,
-					models: [],
-				},
-				{
-					onSuccess: mergePreviewModels,
-					onError: resetConnectState,
-				}
-			);
-		}
+		// A catalogue is the model service's own and needs no key, so it is
+		// listed as the dialog opens. An endpoint's list needs the address and
+		// key typed first (previewRequestFor is null until then), and a
+		// provider with no list starts empty, its models added by name.
+		const request = previewRequestFor(
+			providers.find((item) => item.provider === providerId),
+			{ base_url: null, api_key: null }
+		);
+		if (request) listModels(request);
 	}
 
 	function refreshConnectModels(draft: ConnectionDraft) {
-		if (!Number.isFinite(workspaceId) || workspaceId <= 0) {
-			toast.error("Workspace is still loading. Please try again.");
-			return;
-		}
+		const request = previewRequestFor(selectedProvider, draft);
+		if (request) listModels(request);
+	}
 
-		previewModels.mutate(
-			{
-				provider,
-				base_url: draft.base_url,
-				api_key: draft.api_key,
-				scope: "SEARCH_SPACE",
-				workspace_id: workspaceId,
-				extra: draft.extra,
-				enabled: true,
-				models: [],
-			},
-			{
-				onSuccess: mergePreviewModels,
-				onError: resetConnectState,
-			}
-		);
+	function addNamedModel(name: string) {
+		setConnectModels((current) => withNamedModel(current, name));
 	}
 
 	function toggleConnectModel(model: SelectableModel, enabled: boolean) {
@@ -279,6 +274,8 @@ export function ModelProviderConnectionsPanel({
 				previewModels={connectModels}
 				isPreviewingModels={previewModels.isPending}
 				onPreviewModels={refreshConnectModels}
+				previewFailure={previewFailure}
+				onAddNamedModel={addNamedModel}
 				onTogglePreviewModel={toggleConnectModel}
 				onBulkTogglePreviewModels={bulkToggleConnectModels}
 			/>

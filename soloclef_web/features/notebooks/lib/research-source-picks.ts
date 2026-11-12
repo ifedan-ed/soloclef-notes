@@ -23,7 +23,20 @@ export interface SourcePicks {
 	sources: ResearchSourceId[];
 }
 
-export const initialSourcePicks: SourcePicks = { source: "web", several: false, sources: ["web"] };
+/**
+ * The source the box starts on, and the one it falls back to when every
+ * picked source has become unavailable. PubMed, because it needs no key: the
+ * keyless web searches that used to fill this role were platform scrapers,
+ * cut from the product, and Exa and Tavily only work with the account's own
+ * connector.
+ */
+export const DEFAULT_RESEARCH_SOURCE: ResearchSourceId = "pubmed";
+
+export const initialSourcePicks: SourcePicks = {
+	source: DEFAULT_RESEARCH_SOURCE,
+	several: false,
+	sources: [DEFAULT_RESEARCH_SOURCE],
+};
 
 /** One click on a source: search only it (or read a page), and leave "several" mode. */
 export function pickOnly(picks: SourcePicks, id: ResearchBoxSource): SourcePicks {
@@ -35,7 +48,7 @@ export function pickOnly(picks: SourcePicks, id: ResearchBoxSource): SourcePicks
 export function setSeveral(picks: SourcePicks, several: boolean): SourcePicks {
 	const first: ResearchSourceId = isResearchSourceId(picks.source)
 		? picks.source
-		: (picks.sources[0] ?? "web");
+		: (picks.sources[0] ?? DEFAULT_RESEARCH_SOURCE);
 	if (!several) return { source: first, several: false, sources: [first] };
 	const sources = picks.sources.includes(first)
 		? [first, ...picks.sources.filter((id) => id !== first)]
@@ -64,8 +77,9 @@ export function searchedSources(picks: SourcePicks): ResearchSourceId[] {
 }
 
 /**
- * The picks with sources this workspace cannot search taken out (an Exa key
- * removed since the picks were remembered). Nothing left falls back to Web.
+ * The picks with sources the account cannot search taken out (an Exa key
+ * removed since the picks were remembered). Nothing left falls back to
+ * {@link DEFAULT_RESEARCH_SOURCE}.
  */
 export function withoutUnavailable(
 	picks: SourcePicks,
@@ -73,7 +87,7 @@ export function withoutUnavailable(
 ): SourcePicks {
 	const sources = picks.sources.filter((id) => !unavailable[id]);
 	if (sources.length === picks.sources.length) return picks;
-	const kept = sources.length > 0 ? sources : (["web"] as ResearchSourceId[]);
+	const kept = sources.length > 0 ? sources : [DEFAULT_RESEARCH_SOURCE];
 	const source = picks.source === READ_PAGE_ID ? picks.source : kept[0];
 	return { source, several: picks.several, sources: kept };
 }

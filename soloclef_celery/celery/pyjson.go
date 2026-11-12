@@ -78,6 +78,10 @@ func pyJSON(value any) (string, error) {
 			parts = append(parts, encoded)
 		}
 		return "[" + strings.Join(parts, ", ") + "]", nil
+	case Mapping:
+		// An object whose key order is the call site's rather than sorted
+		// (ordered_mapping.go).
+		return v.json()
 	case map[string]any:
 		object := pyObject{}
 		for _, key := range sortedKeys(v) {
@@ -168,6 +172,8 @@ func pyRepr(value any) (string, error) {
 			parts = append(parts, encoded)
 		}
 		return "[" + strings.Join(parts, ", ") + "]", nil
+	case Mapping:
+		return v.repr()
 	case map[string]any:
 		parts := make([]string, 0, len(v))
 		for _, key := range sortedKeys(v) {

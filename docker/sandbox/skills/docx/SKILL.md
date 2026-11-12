@@ -42,8 +42,7 @@ silently rebuild from `markdown_path` and do not fall back to a Markdown-only
 deliverable. Rebuild the DOCX from Markdown/context only when the user
 explicitly requested or accepted that lossy rebuild.
 
-Do not use vision to reconstruct the document; `verify_artifact` may use vision
-after the revision is written. Save the verified revision with the returned
+Do not use vision to reconstruct the document. Save the verified revision with the returned
 `artifact_id` and `expected_generation`. A changed title, filename, or design
 is still the same artifact unless the user explicitly asks for a separate copy.
 
@@ -58,4 +57,6 @@ Then call `save_artifact(path=output_path, title="...",
 markdown_representation="...")`. Working files may use any paths; no source
 file, preview file, or matching filename stem is part of the publication
 contract. The Markdown representation must faithfully contain the document's
-substantive text for accessibility and search.
+substantive text for accessibility and search. Pass the Markdown text itself in
+`markdown_representation`: tool arguments are not run by a shell, so
+`$(cat file)` or a file path is refused.

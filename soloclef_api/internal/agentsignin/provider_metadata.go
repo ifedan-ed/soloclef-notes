@@ -10,8 +10,19 @@ import (
 // mirroring app/auth_oidc/discovery.py's ProviderMetadata.
 type ProviderMetadata struct {
 	Issuer string
+	// AuthorizationEndpoint is where a browser is sent to sign in, and
+	// TokenEndpoint where the code it comes back with is exchanged. Agent
+	// sign-in reads neither; the web's single sign-on (internal/oidcsignin)
+	// reads both, from this same document.
+	AuthorizationEndpoint string
+	TokenEndpoint         string
 	// JWKSURI is where the signing keys are published.
 	JWKSURI string
+	// EndSessionEndpoint is the provider's own sign-out page, when it
+	// publishes one (OpenID Connect RP-Initiated Logout). Optional: the
+	// phone app's single sign-on hands it to the app, which opens it at
+	// sign-out so the provider forgets the person too (internal/oidcsignin).
+	EndSessionEndpoint string
 	// SigningAlgorithms is id_token_signing_alg_values_supported, which the
 	// accepted algorithms are intersected with: a provider that no longer
 	// signs with an algorithm cannot have a token accepted under it.
@@ -56,9 +67,16 @@ func ParseMetadata(document []byte, discoveryURL string) (ProviderMetadata, erro
 	if err != nil {
 		return ProviderMetadata{}, err
 	}
-	var jwksURI string
-	_ = json.Unmarshal(fields["jwks_uri"], &jwksURI)
-	return ProviderMetadata{Issuer: issuer, JWKSURI: jwksURI, SigningAlgorithms: algorithms}, nil
+	metadata := ProviderMetadata{Issuer: issuer, SigningAlgorithms: algorithms}
+	// A required field that is present and not a string was let through by
+	// the truth test above; it is left empty here, and nothing can be
+	// fetched from or sent to an empty address.
+	_ = json.Unmarshal(fields["jwks_uri"], &metadata.JWKSURI)
+	_ = json.Unmarshal(fields["authorization_endpoint"], &metadata.AuthorizationEndpoint)
+	_ = json.Unmarshal(fields["token_endpoint"], &metadata.TokenEndpoint)
+	// Not required, and not a string is the same as not published.
+	_ = json.Unmarshal(fields["end_session_endpoint"], &metadata.EndSessionEndpoint)
+	return metadata, nil
 }
 
 // signingAlgorithms reproduces `tuple(document.get(...) or ("RS256",))`,

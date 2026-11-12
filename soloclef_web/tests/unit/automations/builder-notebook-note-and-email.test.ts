@@ -12,7 +12,7 @@ test("save_to_notebook_id is emitted on the step when set", () => {
 	const form = createEmptyForm();
 	form.name = "Digest";
 	form.tasks = [{ ...emptyTask(), query: "Summarize new docs", saveToNotebookId: 7 }];
-	const payload = buildCreatePayload(form, 1);
+	const payload = buildCreatePayload(form);
 	const step = payload.definition.plan[0] as { params: Record<string, unknown> };
 	assert.equal(step.params.save_to_notebook_id, 7);
 });
@@ -21,7 +21,7 @@ test("save_to_notebook_id is omitted when unset (don't save)", () => {
 	const form = createEmptyForm();
 	form.name = "Digest";
 	form.tasks = [{ ...emptyTask(), query: "Summarize new docs" }];
-	const payload = buildCreatePayload(form, 1);
+	const payload = buildCreatePayload(form);
 	const step = payload.definition.plan[0] as { params: Record<string, unknown> };
 	assert.equal("save_to_notebook_id" in step.params, false);
 });
@@ -31,11 +31,8 @@ test("email_result is carried onto execution when the owner asks to be emailed",
 	form.name = "Digest";
 	form.tasks = [{ ...emptyTask(), query: "Summarize new docs" }];
 	form.execution.emailResult = true;
-	const payload = buildCreatePayload(form, 1);
-	assert.equal(
-		(payload.definition.execution as { email_result: boolean }).email_result,
-		true
-	);
+	const payload = buildCreatePayload(form);
+	assert.equal((payload.definition.execution as { email_result: boolean }).email_result, true);
 });
 
 test("hydrateForm round-trips save_to_notebook_id and execution.email_result", () => {

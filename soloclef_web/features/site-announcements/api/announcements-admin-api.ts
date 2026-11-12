@@ -8,9 +8,6 @@ export const sentAnnouncementSchema = z.object({
 	title: z.string(),
 	body: z.string(),
 	link: z.string().nullable(),
-	audience: z.enum(["all", "workspace"]),
-	workspace_id: z.number().nullable(),
-	workspace_name: z.string().nullable(),
 	created_at: z.string(),
 	expires_at: z.string().nullable(),
 	withdrawn_at: z.string().nullable(),
@@ -21,7 +18,6 @@ export const sentAnnouncementSchema = z.object({
 
 export const announcementsOverviewSchema = z.object({
 	announcements: z.array(sentAnnouncementSchema),
-	workspaces: z.array(z.object({ id: z.number(), name: z.string(), member_count: z.number() })),
 });
 
 export type SentAnnouncement = z.infer<typeof sentAnnouncementSchema>;
@@ -32,11 +28,9 @@ export interface AnnouncementBody {
 	body: string;
 	link: string | null;
 	expires_at: string | null;
-	audience: "all" | "workspace";
-	workspace_id: number | null;
 }
 
-/** Site announcements. Every route requires a site administrator. */
+/** Site announcements, sent to every account. Every route requires a site administrator. */
 export const announcementsAdminApi = {
 	overview: (signal?: AbortSignal) =>
 		baseApiService.get(BASE, announcementsOverviewSchema, { signal }),

@@ -278,7 +278,6 @@ function LivePodcastCard({
 					<PodcastPlayer
 						podcastId={podcast.id}
 						artifactId={artifactId}
-						workspaceId={podcast.workspaceId}
 						title={title}
 						durationMs={podcast.durationSeconds ? podcast.durationSeconds * 1000 : undefined}
 					/>

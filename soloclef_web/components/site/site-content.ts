@@ -5,9 +5,6 @@
  * the code before adding a claim. The copy is kept apart from the components
  * so it can move into an admin-edited store without touching the layout: the
  * app has no site-content table yet, so for now it ships in the bundle.
- *
- * Prices are not written here. They come from the billing catalog
- * (`lib/pricing/catalog.ts`), which the pricing page and the docs share.
  */
 import { BRAND } from "@/lib/brand";
 import { SIGNUPS_OPEN } from "@/lib/signups";
@@ -18,7 +15,6 @@ export { REQUEST_ACCESS_HREF, SIGNUPS_OPEN } from "@/lib/signups";
 
 export const NAV_LINKS: SiteLink[] = [
 	{ name: "Features", href: "/features" },
-	{ name: "Pricing", href: "/pricing" },
 	{ name: "Docs", href: "/docs" },
 	{ name: "Contact", href: "/contact" },
 ];
@@ -28,7 +24,6 @@ export const FOOTER_COLUMNS: { heading: string; links: SiteLink[] }[] = [
 		heading: "Product",
 		links: [
 			{ name: "Features", href: "/features" },
-			{ name: "Pricing", href: "/pricing" },
 			{ name: "Phone app", href: "/docs/mobile-app" },
 		],
 	},
@@ -73,8 +68,8 @@ export const ADVANTAGES: Advantage[] = [
 	},
 	{
 		key: "parsing",
-		title: "Local or Cloud parsing, per upload",
-		body: "Read PDFs and Office files on the server with the Local parser, or send hard ones such as scans and complex layouts to the Cloud parser. An optional vision model describes images and figures.",
+		title: "Your choice of parser, per source",
+		body: "Read PDFs and Office files on the server with the Local parser, or send hard ones such as scans and complex layouts to Datalab, LlamaParse or Unstructured. Each upload, import and connection names its parser, and only that parser reads it.",
 		href: "/docs/notebooks-and-sources",
 	},
 	{
@@ -158,7 +153,7 @@ export const PRIVACY_POINTS: PrivacyPoint[] = [
 	},
 	{
 		title: "What does leave the server",
-		body: "To answer a question or build a Studio output, the relevant passages are sent to the language model provider. The Cloud parser uploads the file to Datalab (or to LlamaCloud for a few file types Datalab can't open, or if Datalab fails), and research searches send your query to the search provider you picked. The Local parser keeps the file on the server.",
+		body: "To answer a question or build a Studio output, the relevant passages are sent to the language model provider. A hosted parser uploads the file to the service you chose (Datalab, LlamaParse or Unstructured) and to no other, and research searches send your query to the search provider you picked. The Local parser keeps the file on the server.",
 	},
 ];
 
@@ -172,7 +167,7 @@ export const HOME_FAQ: Faq[] = [
 	{
 		question: "Does the chat answer from the internet?",
 		answer:
-			"No. A notebook's chat answers from that notebook's enabled sources only. You can pick a web search from the Tools menu for a single message, and those results are marked Web. To keep something from the web, import it as a source with Search the web for new sources.",
+			"No. A notebook's chat answers from that notebook's enabled sources only. You can pick a web search from the Tools menu for a single message. To keep something from the web, import it as a source with Search the web for new sources.",
 	},
 	{
 		question: "Which files can I add?",
@@ -182,7 +177,7 @@ export const HOME_FAQ: Faq[] = [
 	{
 		question: "Can I sign up?",
 		answer: SIGNUPS_OPEN
-			? "Yes. Create an account and you start on the Free plan."
+			? "Yes. Create an account from the sign-up page."
 			: "Not yet: new accounts are not open. You can request access from the contact page, and if you already have an account, sign in.",
 	},
 	{
@@ -215,8 +210,8 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
 				body: "Drag files onto a notebook or pick them from your device: PDFs, Word, PowerPoint, Excel, text and Markdown, images, audio and video.",
 			},
 			{
-				title: "Local or Cloud parser",
-				body: "Choose per upload. Local reads the file on the server with PyMuPDF4LLM. Cloud sends it to Datalab, which handles scans, tables and complex layouts better; LlamaCloud reads the few file types Datalab can't open, and steps in if Datalab fails.",
+				title: "Four parsers to choose from",
+				body: "Choose per upload, import or connection. Local reads the file on the server with PyMuPDF4LLM. Datalab, LlamaParse and Unstructured are hosted parsers that handle scans, tables and complex layouts better. A file is read by the parser you chose and by no other.",
 			},
 			{
 				title: "Optional vision model",
@@ -228,7 +223,7 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
 			},
 			{
 				title: "Research",
-				body: "Search the web (through a private SearXNG), Google, Exa or Tavily, papers on PubMed, arXiv, medRxiv and bioRxiv or Google Scholar, and platforms such as YouTube and Reddit. Import the results you choose.",
+				body: "Search Exa or Tavily with your own key, or papers on PubMed, arXiv, medRxiv and bioRxiv or Google Scholar. Import the results you choose.",
 			},
 			{
 				title: "Links and videos",
@@ -258,7 +253,7 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
 			},
 			{
 				title: "Your choice of model",
-				body: "Each workspace picks its chat and Studio models in its settings.",
+				body: "You pick your chat and Studio models in Settings.",
 			},
 		],
 		docs: "/docs/chat-and-citations",

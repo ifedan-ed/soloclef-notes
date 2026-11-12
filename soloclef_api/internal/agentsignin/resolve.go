@@ -11,11 +11,11 @@ import (
 
 // Accounts finds the account a verified identity acts as.
 type Accounts interface {
-	Account(ctx context.Context, identity Identity) (string, error)
+	Account(ctx context.Context, identity Identity) (principal.AgentAccount, error)
 }
 
 // Principals turns an agent's bearer token into the account it acts as, or into
-// the refusal the Python tier words, mirroring app/agent_sign_in/principal.py.
+// a refusal, in the words app/agent_sign_in/principal.py used.
 type Principals struct {
 	Verifier *Verifier
 	Accounts Accounts
@@ -23,6 +23,14 @@ type Principals struct {
 	// app.brand.BRAND_NAME.
 	BrandName string
 	Logger    *slog.Logger
+}
+
+// ErrSignInUnreachable is the answer when the provider's metadata or keys
+// cannot be read, so the token could be checked neither way. The words are the
+// ones agents have always been given for it.
+var ErrSignInUnreachable = principal.Refusal{
+	Status:  http.StatusServiceUnavailable,
+	Message: "Single sign-on cannot be reached right now; try again shortly",
 }
 
 // OwnsIssuer is is_agent_token: whether this verifier is the one for a token
@@ -33,29 +41,28 @@ func (p Principals) OwnsIssuer(issuer string) bool {
 
 // Resolve is agent_user: the account the token acts as, a 401 for a token that
 // is not a valid sign-in, a 403 when the provider does not let this person in or
-// no account matches, and the Python tier's own answer when the provider could
-// not be read at all.
-func (p Principals) Resolve(ctx context.Context, token string) (string, error) {
+// no account matches, and a 503 when the provider could not be read at all.
+func (p Principals) Resolve(ctx context.Context, token string) (principal.AgentAccount, error) {
 	identity, err := p.Verifier.Verify(ctx, token)
 	switch {
 	case errors.Is(err, ErrProviderUnavailable):
-		// The Python tier answers 503 here, having nothing else to offer. This
-		// tier has: the request goes to that tier, which keeps its own copy of
-		// the provider's metadata and keys and may well be able to check the
-		// token. If it cannot either, its 503 is what the caller gets — the
-		// same answer, from the tier that words it.
-		p.Logger.WarnContext(ctx, "an agent's sign-in could not be checked here",
+		// 503 and never 401. The token may be perfectly good: what failed is
+		// reading the provider's metadata or keys. A 401 would make Claude and
+		// ChatGPT drop the token and send the person back to sign in, for
+		// every connected agent at once; a 503 says "try again shortly",
+		// which is the truth.
+		p.Logger.WarnContext(ctx, "an agent's sign-in could not be checked",
 			slog.String("error", err.Error()))
-		return "", principal.ErrServedByPythonTier
+		return principal.AgentAccount{}, ErrSignInUnreachable
 	case errors.Is(err, ErrRefused):
 		p.Logger.InfoContext(ctx, "an agent's sign-in token was refused",
 			slog.String("error", err.Error()))
-		return "", principal.Refusal{
+		return principal.AgentAccount{}, principal.Refusal{
 			Status:  http.StatusUnauthorized,
 			Message: "The agent's sign-in is not valid or has expired",
 		}
 	case err != nil:
-		return "", err
+		return principal.AgentAccount{}, err
 	}
 
 	if identity.NotesAccess == nil || !*identity.NotesAccess {
@@ -66,7 +73,7 @@ func (p Principals) Resolve(ctx context.Context, token string) (string, error) {
 		p.Logger.InfoContext(ctx, "an agent's sign-in was refused",
 			slog.String("subject", identity.Subject),
 			slog.Bool("claim_present", identity.NotesAccess != nil))
-		return "", principal.Refusal{
+		return principal.AgentAccount{}, principal.Refusal{
 			Status:  http.StatusForbidden,
 			Message: "This sign-in may not use " + p.BrandName,
 		}
@@ -77,13 +84,13 @@ func (p Principals) Resolve(ctx context.Context, token string) (string, error) {
 		p.Logger.InfoContext(ctx, "an agent's sign-in matches no account",
 			slog.String("subject", identity.Subject),
 			slog.String("error", err.Error()))
-		return "", principal.Refusal{
+		return principal.AgentAccount{}, principal.Refusal{
 			Status:  http.StatusForbidden,
 			Message: "No " + p.BrandName + " account matches this sign-in",
 		}
 	}
 	if err != nil {
-		return "", err
+		return principal.AgentAccount{}, err
 	}
 	return account, nil
 }

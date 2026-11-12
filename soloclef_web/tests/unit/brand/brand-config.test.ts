@@ -47,12 +47,12 @@ test("BRAND is brand.json unless the build overrides it", () => {
 });
 
 test("brandTitle and siteUrl", () => {
-	assert.equal(brandTitle("Pricing", base), "Pricing · Soloclef Notes");
+	assert.equal(brandTitle("Features", base), "Features · Soloclef Notes");
 	assert.equal(brandTitle(undefined, base), "Soloclef Notes");
 	assert.equal(brandTitle("   ", base), "Soloclef Notes");
 	const site = resolveBrand(base, { siteUrl: "https://notes.example.org/" });
 	assert.equal(siteUrl("/", site), "https://notes.example.org/");
-	assert.equal(siteUrl("pricing", site), "https://notes.example.org/pricing");
+	assert.equal(siteUrl("features", site), "https://notes.example.org/features");
 	assert.equal(siteUrl("/docs/studio", site), "https://notes.example.org/docs/studio");
 	assert.equal(metadataBase(site)?.href, "https://notes.example.org/");
 });
@@ -123,5 +123,5 @@ test("/ sends a visitor with a session cookie to the dashboard, and nobody else"
 	assert.equal(signedInHomeRedirect("/", has(["surfsense_refresh"])), "/dashboard");
 	assert.equal(signedInHomeRedirect("/", has([])), null);
 	assert.equal(signedInHomeRedirect("/", has(["other"])), null);
-	assert.equal(signedInHomeRedirect("/pricing", has(["surfsense_session"])), null);
+	assert.equal(signedInHomeRedirect("/features", has(["surfsense_session"])), null);
 });

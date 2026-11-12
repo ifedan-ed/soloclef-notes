@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { paginationQueryParams } from ".";
+import { documentParserEnum } from "./document.types";
 
 export const searchSourceConnectorTypeEnum = z.enum([
 	"GOOGLE_DRIVE_CONNECTOR",
@@ -13,6 +14,10 @@ export const searchSourceConnector = z.object({
 	id: z.number(),
 	name: z.string(),
 	connector_type: searchSourceConnectorTypeEnum,
+	// Whether the connection is switched on for its owner's chats and
+	// indexing. It is the connection's own field, changed with
+	// PUT .../{id}/enabled.
+	enabled: z.boolean(),
 	is_indexable: z.boolean(),
 	is_active: z.boolean().default(true),
 	last_indexed_at: z.string().nullable(),
@@ -21,28 +26,17 @@ export const searchSourceConnector = z.object({
 	periodic_indexing_enabled: z.boolean(),
 	indexing_frequency_minutes: z.number().nullable(),
 	next_scheduled_at: z.string().nullable(),
-	// NULL for every connector type but MCP: account-level connections have
-	// no single workspace (custom/ACCOUNT_CONNECTIONS.md).
-	workspace_id: z.number().nullable(),
+	// Always the signed-in account: the server lists and answers only the
+	// caller's own connections (someone else's id is a 404).
 	user_id: z.string(),
 	created_at: z.string(),
-	// Set by the list endpoint only: whether this connection is switched on
-	// in the workspace that was asked about, and whether the caller owns it
-	// (only the owner may see/use the on-off switch).
-	enabled_in_workspace: z.boolean().nullable().optional(),
-	is_mine: z.boolean().nullable().optional(),
 });
 
 /**
  * Get connectors
  */
 export const getConnectorsRequest = z.object({
-	queryParams: paginationQueryParams
-		.pick({ skip: true, limit: true })
-		.extend({
-			workspace_id: z.number().or(z.string()).nullish(),
-		})
-		.nullish(),
+	queryParams: paginationQueryParams.pick({ skip: true, limit: true }).nullish(),
 });
 
 export const getConnectorsResponse = z.array(searchSourceConnector);
@@ -70,9 +64,6 @@ export const createConnectorRequest = z.object({
 		indexing_frequency_minutes: true,
 		next_scheduled_at: true,
 	}),
-	queryParams: z.object({
-		workspace_id: z.number().or(z.string()),
-	}),
 });
 
 export const createConnectorResponse = searchSourceConnector;
@@ -82,17 +73,6 @@ export const createConnectorResponse = searchSourceConnector;
  */
 export const updateConnectorRequest = z.object({
 	id: z.number(),
-	/**
-	 * The workspace whose settings change. Required by the server for a
-	 * non-MCP connection's is_indexable / periodic-indexing fields: they live
-	 * on that workspace's enablement row, not on the account-wide connection
-	 * (custom/ACCOUNT_CONNECTIONS.md). Without it such a PUT answers 400.
-	 */
-	queryParams: z
-		.object({
-			workspace_id: z.number().or(z.string()),
-		})
-		.optional(),
 	data: searchSourceConnector
 		.pick({
 			name: true,
@@ -106,6 +86,10 @@ export const updateConnectorRequest = z.object({
 			indexing_frequency_minutes: true,
 			next_scheduled_at: true,
 		})
+		// An update changes only the fields it names. The read schema's
+		// defaults would otherwise fill in the two it leaves out, and every
+		// rename would have switched the vision model off.
+		.extend({ is_active: z.boolean(), enable_vision_llm: z.boolean() })
 		.partial(),
 });
 
@@ -153,37 +137,54 @@ export const googleDriveIndexBody = z.object({
  */
 export const indexConnectorRequest = z.object({
 	connector_id: z.number(),
-	queryParams: z.object({
-		workspace_id: z.number().or(z.string()),
-		start_date: z.string().optional(),
-		end_date: z.string().optional(),
-	}),
+	// The date range to index; absent for a connector that has none (web
+	// pages, a Google Drive folder selection).
+	queryParams: z
+		.object({
+			start_date: z.string().optional(),
+			end_date: z.string().optional(),
+		})
+		.optional(),
 	body: googleDriveIndexBody.optional(),
 });
 
+// The sync is queued, not finished: the answer says so and names the
+// connection. It reports no date range, because a Drive sync reads the
+// change feed and never read one.
 export const indexConnectorResponse = z.object({
 	message: z.string(),
 	connector_id: z.number(),
-	workspace_id: z.number(),
-	indexing_from: z.string(),
-	indexing_to: z.string(),
 });
 
 /**
- * Switch an account connection on/off in the current workspace.
- * Owner only — the backend 403s otherwise.
+ * Switch a connection on or off (PUT .../{id}/enabled). The server answers
+ * the connection as it now stands, so the caller needs no second read.
  */
 export const setConnectorEnabledRequest = z.object({
 	connectorId: z.number(),
-	workspaceId: z.number(),
 	enabled: z.boolean(),
 });
 
-export const setConnectorEnabledResponse = z.object({
-	connector_id: z.number(),
-	workspace_id: z.number(),
-	enabled: z.boolean(),
-	documents_removed: z.number().optional(),
+export const setConnectorEnabledResponse = searchSourceConnector;
+
+/**
+ * The parser that reads the files a connection brings in. It has a route of
+ * its own (GET and PUT on .../{id}/parser) and is not a field of the
+ * connection read: only the account that owns the connection may see or
+ * change it, and a save is validated against what this server has
+ * configured, so a 400 names the parser that is not.
+ *
+ * `parser` is null on a connection nobody has chosen for; the server's
+ * default parser reads its files until someone does.
+ */
+export const connectorParser = z.object({
+	id: z.number(),
+	parser: documentParserEnum.nullable(),
+});
+
+export const setConnectorParserRequest = z.object({
+	connectorId: z.number(),
+	parser: documentParserEnum,
 });
 
 // Inferred types
@@ -203,3 +204,5 @@ export type IndexConnectorRequest = z.infer<typeof indexConnectorRequest>;
 export type IndexConnectorResponse = z.infer<typeof indexConnectorResponse>;
 export type SetConnectorEnabledRequest = z.infer<typeof setConnectorEnabledRequest>;
 export type SetConnectorEnabledResponse = z.infer<typeof setConnectorEnabledResponse>;
+export type SetConnectorParserRequest = z.infer<typeof setConnectorParserRequest>;
+export type ConnectorParser = z.infer<typeof connectorParser>;

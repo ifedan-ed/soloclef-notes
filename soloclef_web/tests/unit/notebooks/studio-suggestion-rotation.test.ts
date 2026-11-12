@@ -5,7 +5,6 @@ import test from "node:test";
 import { NextIntlClientProvider } from "next-intl";
 import { type ComponentProps, createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { selectValue } from "@/components/settings/model-connections/quick-tasks-model";
 import {
 	advanceRotation,
 	claimOpenOffset,
@@ -130,22 +129,12 @@ test("every locale names each dialog's ideas and the quick tasks model", () => {
 			assert.ok(all.notebooks.kinds[kind].ideas_label, `${locale} ${kind}`);
 		}
 		assert.ok(all.notebooks.more_ideas && all.notebooks.more_ideas_failed, locale);
-		for (const key of [
-			"title",
-			"description",
-			"default_option",
-			"default_unavailable",
-			"same_as_chat",
-			"save_failed",
-		]) {
-			assert.ok(all.quick_model[key], `${locale} quick_model.${key}`);
+		// The two settings the model page names from the messages; their
+		// options are model names and the server's own sentences.
+		for (const setting of ["quick_model", "studio_model"]) {
+			for (const key of ["title", "description"]) {
+				assert.ok(all[setting][key], `${locale} ${setting}.${key}`);
+			}
 		}
 	}
-});
-
-test("the quick model select keeps default, same-as-chat and a gone model apart", () => {
-	assert.equal(selectValue(null, [4]), "default");
-	assert.equal(selectValue(0, [4]), "0");
-	assert.equal(selectValue(4, [4]), "4");
-	assert.equal(selectValue(99, [4]), "default");
 });

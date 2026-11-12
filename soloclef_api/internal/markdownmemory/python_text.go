@@ -2,7 +2,8 @@ package markdownmemory
 
 import (
 	"strings"
-	"unicode"
+
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/pythontext"
 )
 
 // The three pieces of Python string behaviour the memory parser rests on and
@@ -14,25 +15,24 @@ import (
 // unicode.IsLetter: each would be a different document for input a client can
 // send today.
 
-// pythonSpace is the character set str.strip() removes, which is str.isspace()
-// — the Unicode White_Space property *plus* the four C0 separators U+001C to
-// U+001F, which Go's unicode.IsSpace does not include. A heading line wrapped
-// in U+001C is stripped on the Python tier.
+// pythonSpace, pythonStrip and pythonRightStrip are internal/pythontext's,
+// under this slice's own names. They moved there when a second slice needed
+// them — internal/agentrules strips a rule's permission and pattern — because
+// two spellings of one mirror is the thing a byte comparison exists to
+// prevent. The vectors that pin them stay in python_text_test.go beside the
+// parser they decide.
 func pythonSpace(r rune) bool {
-	if r >= 0x1c && r <= 0x1f {
-		return true
-	}
-	return unicode.IsSpace(r)
+	return pythontext.IsSpace(r)
 }
 
 // pythonStrip is str.strip() with no argument.
 func pythonStrip(text string) string {
-	return strings.TrimFunc(text, pythonSpace)
+	return pythontext.Strip(text)
 }
 
 // pythonRightStrip is str.rstrip() with no argument.
 func pythonRightStrip(text string) string {
-	return strings.TrimRightFunc(text, pythonSpace)
+	return pythontext.RightStrip(text)
 }
 
 // lineBoundaries is str.splitlines()' own set, which is wider than "\n": it
@@ -76,12 +76,4 @@ func pythonSplitLines(text string) []string {
 		lines = append(lines, current.String())
 	}
 	return lines
-}
-
-// pythonIsAlphanumeric is str.isalnum() for one character: isalpha, isdecimal,
-// isdigit or isnumeric. Those are the letter categories plus every numeric
-// category, which is unicode.IsLetter or unicode.IsNumber here — so "²" and
-// "〇" count, as they do there.
-func pythonIsAlphanumeric(r rune) bool {
-	return unicode.IsLetter(r) || unicode.IsNumber(r)
 }

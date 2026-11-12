@@ -12,10 +12,10 @@ import { idleResearch, researchReducer } from "@/features/notebooks/lib/research
 import type { ResearchRequest, ResearchResult } from "@/features/notebooks/model/research";
 
 function result(id: string, url = `https://example.com/${id}`): ResearchResult {
-	return { id, url, title: `Title ${id}`, snippet: `Snippet ${id}`, source: "web", meta: null };
+	return { id, url, title: `Title ${id}`, snippet: `Snippet ${id}`, source: "exa", meta: null };
 }
 
-const request: ResearchRequest = { query: "iron", source: "web", mode: "fast" };
+const request: ResearchRequest = { query: "iron", source: "exa", mode: "fast" };
 
 test("a search moves through its phases to results", () => {
 	let state = researchReducer(idleResearch, { type: "start", request });
@@ -47,9 +47,9 @@ test("an error event or a failed request ends in an error that remembers the req
 	assert.deepEqual(
 		researchReducer(searching, {
 			type: "event",
-			event: { type: "error", message: "quota", code: "out_of_credit" },
+			event: { type: "error", message: "quota", code: "source_quota" },
 		}),
-		{ status: "error", request, message: "quota", code: "out_of_credit", source: null }
+		{ status: "error", request, message: "quota", code: "source_quota", source: null }
 	);
 	assert.deepEqual(researchReducer(searching, { type: "failed", message: null }), {
 		status: "error",
@@ -92,7 +92,7 @@ test("select all flips between everything and nothing", () => {
 test("the import body keeps display order, drops repeated URLs and unchecked rows", () => {
 	const results = [result("a"), result("b"), result("c", "https://example.com/a")];
 	assert.deepEqual(importItemsFor(results, new Set(["c", "a"])), [
-		{ url: "https://example.com/a", title: "Title a", snippet: "Snippet a", source: "web" },
+		{ url: "https://example.com/a", title: "Title a", snippet: "Snippet a", source: "exa" },
 	]);
 	assert.deepEqual(
 		importItemsFor(results, new Set(["b"])).map((item) => item.title),

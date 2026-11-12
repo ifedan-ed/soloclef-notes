@@ -12,16 +12,10 @@ import { NextcloudLoginPanel } from "./nextcloud-login-panel";
  * Nextcloud in the connectors catalog, next to Google Drive: Connect starts
  * the Login Flow in place; once connected, Manage opens the connection.
  */
-export function NextcloudConnectorCard({
-	workspaceId,
-	onManage,
-}: {
-	workspaceId: number;
-	onManage: (connectorId: number) => void;
-}) {
+export function NextcloudConnectorCard({ onManage }: { onManage: (connectorId: number) => void }) {
 	const t = useTranslations("nextcloud_connect");
-	const { connection, isConnected, refresh } = useNextcloudConnection(workspaceId);
-	const login = useNextcloudLogin(workspaceId, (next) => {
+	const { connection, isConnected, refresh } = useNextcloudConnection();
+	const login = useNextcloudLogin((next) => {
 		toast.success(t("connected_toast"));
 		void refresh(next);
 		login.reset();

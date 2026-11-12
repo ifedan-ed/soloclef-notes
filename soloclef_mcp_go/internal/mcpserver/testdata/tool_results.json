@@ -1,0 +1,158 @@
+[
+  {
+    "label": "search_knowledge_base",
+    "tool": "soloclef_search_knowledge_base",
+    "arguments": {
+      "query": "synthetic"
+    },
+    "text": "# 1 result(s) for \"synthetic\"\n\n## Synthetic note (id 7) — rank 1\n> matched passage",
+    "is_error": false
+  },
+  {
+    "label": "search_knowledge_base/full",
+    "tool": "soloclef_search_knowledge_base",
+    "arguments": {
+      "query": "synthetic",
+      "top_k": 3,
+      "document_types": [
+        "FILE",
+        "EXTENSION"
+      ],
+      "response_format": "json"
+    },
+    "text": "[\n  {\n    \"document_id\": 7,\n    \"title\": \"Synthetic note\",\n    \"document_type\": \"NOTE\",\n    \"rank\": 1,\n    \"chunks\": [\n      {\n        \"chunk_id\": 70,\n        \"content\": \"  matched passage  \",\n        \"position\": 0,\n        \"page\": null\n      }\n    ]\n  }\n]",
+    "is_error": false
+  },
+  {
+    "label": "list_documents",
+    "tool": "soloclef_list_documents",
+    "arguments": {},
+    "text": "# Documents\n\n- **Synthetic note** (id 7) · EXTENSION · updated 2026-01-02T03:04:05+00:00\n\n_Page 0 · showing 1 of 3 · more available_",
+    "is_error": false
+  },
+  {
+    "label": "list_documents/full",
+    "tool": "soloclef_list_documents",
+    "arguments": {
+      "document_types": [
+        "FILE"
+      ],
+      "folder_id": 4,
+      "page": 1,
+      "page_size": 5,
+      "response_format": "json"
+    },
+    "text": "{\n  \"items\": [\n    {\n      \"id\": 7,\n      \"title\": \"Synthetic note\",\n      \"document_type\": \"EXTENSION\",\n      \"updated_at\": \"2026-01-02T03:04:05+00:00\"\n    }\n  ],\n  \"total\": 3,\n  \"page\": 0,\n  \"has_more\": true\n}",
+    "is_error": false
+  },
+  {
+    "label": "get_document",
+    "tool": "soloclef_get_document",
+    "arguments": {
+      "document_id": 7
+    },
+    "text": "---\ntype: note\ntitle: Synthetic note\n---\n\nbody text\n",
+    "is_error": false
+  },
+  {
+    "label": "get_document/json",
+    "tool": "soloclef_get_document",
+    "arguments": {
+      "document_id": 7,
+      "response_format": "json"
+    },
+    "text": "{\n  \"id\": 7,\n  \"title\": \"Synthetic note\",\n  \"content\": \"body text\"\n}",
+    "is_error": false
+  },
+  {
+    "label": "add_document",
+    "tool": "soloclef_add_document",
+    "arguments": {
+      "title": "Synthetic finding",
+      "content": "- a\n- b"
+    },
+    "text": "Queued 'Synthetic finding' for indexing. It will be searchable once processing completes.",
+    "is_error": false
+  },
+  {
+    "label": "add_document/source",
+    "tool": "soloclef_add_document",
+    "arguments": {
+      "title": "Synthetic finding",
+      "content": "- a\n- b",
+      "source_url": "https://example.invalid/p"
+    },
+    "text": "Queued 'Synthetic finding' for indexing. It will be searchable once processing completes.",
+    "is_error": false
+  },
+  {
+    "label": "update_document",
+    "tool": "soloclef_update_document",
+    "arguments": {
+      "document_id": 7,
+      "content": "replacement text"
+    },
+    "text": "Updated document 7.",
+    "is_error": false
+  },
+  {
+    "label": "delete_document",
+    "tool": "soloclef_delete_document",
+    "arguments": {
+      "document_id": 7
+    },
+    "text": "Deleted document 7.",
+    "is_error": false
+  },
+  {
+    "label": "pubmed_search",
+    "tool": "soloclef_pubmed_search",
+    "arguments": {
+      "query": "bronchiolitis"
+    },
+    "text": "# 1 result(s) for \"bronchiolitis\"\n\n## A synthetic paper\nDoe J. · 2024 · J Synth\nDOI: 10.0000/synthetic.1 · PMID: 11111111\nhttps://example.invalid/p/1\n> Abstract text.",
+    "is_error": false
+  },
+  {
+    "label": "pubmed_search/full",
+    "tool": "soloclef_pubmed_search",
+    "arguments": {
+      "query": "bronchiolitis",
+      "max_results": 3,
+      "since": 2018,
+      "until": 2026,
+      "full_text": true,
+      "response_format": "json"
+    },
+    "text": "[\n  {\n    \"title\": \"A synthetic paper\",\n    \"meta\": \"Doe J. · 2024 · J Synth\",\n    \"url\": \"https://example.invalid/p/1\",\n    \"snippet\": \"Abstract text.\",\n    \"paper\": {\n      \"doi\": \"10.0000/synthetic.1\",\n      \"pmid\": \"11111111\"\n    }\n  }\n]",
+    "is_error": false
+  },
+  {
+    "label": "arxiv_search",
+    "tool": "soloclef_arxiv_search",
+    "arguments": {
+      "query": "attention"
+    },
+    "text": "# 1 result(s) for \"attention\"\n\n## Another synthetic paper\nRoe R. · 2023\narXiv: 2301.00001\nhttps://example.invalid/p/2\n> More abstract.",
+    "is_error": false
+  },
+  {
+    "label": "preprint_search",
+    "tool": "soloclef_preprint_search",
+    "arguments": {
+      "query": "asthma",
+      "server": "biorxiv"
+    },
+    "text": "# 1 result(s) for \"asthma\"\n\n## Another synthetic paper\nRoe R. · 2023\narXiv: 2301.00001\nhttps://example.invalid/p/2\n> More abstract.",
+    "is_error": false
+  },
+  {
+    "label": "scholar_search/removed",
+    "tool": "soloclef_scholar_search",
+    "arguments": {
+      "query": "sepsis"
+    },
+    "text": "Unknown tool: soloclef_scholar_search",
+    "is_error": true
+  }
+]

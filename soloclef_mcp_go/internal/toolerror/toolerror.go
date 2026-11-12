@@ -2,8 +2,8 @@
 // to the model.
 //
 // A failed tool call should tell the model what to do next, not leak a stack
-// trace. Anything the caller could act on — no workspace selected, an unknown
-// id, a rejected request — becomes an Error whose message is safe to surface.
+// trace. Anything the caller could act on — an unknown id, a rejected
+// request — becomes an Error whose message is safe to surface.
 package toolerror
 
 // Error is a user-actionable failure whose message is meant for the model to read.

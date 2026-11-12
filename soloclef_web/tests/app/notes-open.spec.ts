@@ -1,18 +1,22 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { APIRequestContext, Locator, Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { authHeaders } from "../helpers/api/auth";
-import { expect, nbPath, openNotebook, showPanel, test } from "./fixtures";
+import { type NoteMaker, noteUrl, provideNotes, storedText } from "../helpers/api/notes";
+import { noteEditor, openNotesTab } from "../helpers/ui/notes";
+import { test as base, expect, nbPath, uniqueName } from "./fixtures";
 
 /**
- * A note saved from a chat answer, opened on the Notes page: it is drawn once,
- * whole, and never blank; its Markdown and maths look as they did in the chat;
+ * A note shaped like a chat answer kept with Save to note, opened on the
+ * Notes page: it is drawn once, whole, and never blank; its Markdown and maths look as they did in the chat;
  * and opening it writes nothing back.
  *
  * NOTES_OPEN_FRAMES=<dir> also keeps the page's frames while the note opens.
  */
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_FASTAPI_BACKEND_URL ?? "http://127.0.0.1:3940";
+const test = base.extend<{ notes: NoteMaker }>({
+	notes: async ({ request, token }, use) => provideNotes(request, token, use),
+});
 
 // The shape of a note the chat's "Save to note" writes: the answer's
 // Markdown as it came, TeX between \( \) and \[ \], a table, a list, code,
@@ -128,18 +132,22 @@ async function goInApp(page: Page, url: string) {
 	await page.waitForURL((current) => `${current.pathname}${current.search}` === url);
 }
 
-/** A note's text as the server has it. */
-async function stored(request: APIRequestContext, token: string, url: string): Promise<string> {
-	const response = await request.get(url, { headers: authHeaders(token) });
-	return ((await response.json()) as { content: string }).content.trim();
-}
-
 /** Every PATCH of the note reaches the server `ms` later: a save still on its way. */
 async function slowSaves(page: Page, noteId: number, ms: number) {
-	await page.route(new RegExp(`/notes/${noteId}$`), async (route) => {
+	await page.route(new RegExp(`/api/v1/notes/${noteId}$`), async (route) => {
 		if (route.request().method() === "PATCH") await new Promise((r) => setTimeout(r, ms));
 		await route.continue();
 	});
+}
+
+/**
+ * Leaves the open note on the Notes page, so that opening it again mounts it
+ * again. A phone shows one screen at a time and has Back; a desktop shows the
+ * list beside the note, and opening another note is how it is left there.
+ */
+async function leaveNote(page: Page, isPhone: boolean, otherTitle: string) {
+	if (isPhone) await page.getByRole("button", { name: "Back to notes" }).click();
+	else await page.getByRole("button", { name: otherTitle }).click();
 }
 
 test.describe("A note opened on the Notes page", () => {
@@ -147,20 +155,14 @@ test.describe("A note opened on the Notes page", () => {
 		page,
 		request,
 		token,
-		workspace,
-		notebook,
+		notes,
 	}, testInfo) => {
-		const base = `${BACKEND_URL}/api/v1/workspaces/${workspace.id}/notebooks/${notebook.id}/notes`;
-		const created = await request.post(base, {
-			headers: authHeaders(token),
-			data: { title: "The correlation was moderate", content: ANSWER, origin: "chat" },
-		});
-		expect(created.ok()).toBeTruthy();
-		const note = (await created.json()) as { id: number };
-		const writes = watchWrites(page, new RegExp(`/notes/${note.id}$`));
+		const title = uniqueName("The correlation was moderate");
+		const note = await notes.create({ title, content: ANSWER });
+		const writes = watchWrites(page, new RegExp(`/api/v1/notes/${note.id}(/|$)`));
 
-		await page.goto(`/dashboard/${workspace.id}/notes`);
-		const row = page.getByRole("button", { name: /The correlation was moderate/ }).first();
+		await page.goto(`/dashboard/notes`);
+		const row = page.getByRole("button", { name: title });
 		await expect(row).toBeVisible();
 
 		const framesDir = process.env.NOTES_OPEN_FRAMES
@@ -221,10 +223,10 @@ test.describe("A note opened on the Notes page", () => {
 		await expect.soft(editor.getByRole("button", { name: "View cited chunk 12" })).toBeVisible();
 		await expect.soft(editor).not.toContainText("[citation:");
 
-		// Opened and clicked, it wrote nothing.
+		// Opened and clicked, it wrote nothing: not its text, its pin or its sources.
 		expect.soft(writes, "requests that changed the note while it was only read").toEqual([]);
 		const stored = (await (
-			await request.get(`${base}/${note.id}`, { headers: authHeaders(token) })
+			await request.get(noteUrl(note.id), { headers: authHeaders(token) })
 		).json()) as { content: string };
 		expect(stored.content).toBe(ANSWER);
 	});
@@ -233,26 +235,15 @@ test.describe("A note opened on the Notes page", () => {
 		page,
 		request,
 		token,
-		workspace,
-		notebook,
+		notes,
 	}) => {
-		const base = `${BACKEND_URL}/api/v1/workspaces/${workspace.id}/notebooks/${notebook.id}/notes`;
-		const created = await request.post(base, {
-			headers: authHeaders(token),
-			data: { title: "Typing check", content: "First line." },
-		});
-		const note = (await created.json()) as { id: number };
+		const title = uniqueName("Typing check");
+		const note = await notes.create({ title, content: "First line." });
 		// A slow save, so that its answer comes back while typing goes on.
-		await page.route(new RegExp(`/notes/${note.id}$`), async (route) => {
-			if (route.request().method() === "PATCH") await new Promise((r) => setTimeout(r, 700));
-			await route.continue();
-		});
-		await page.goto(`/dashboard/${workspace.id}/notes`);
-		await page
-			.getByRole("button", { name: /Typing check/ })
-			.first()
-			.click();
-		const editor = page.locator("[data-slate-editor]").first();
+		await slowSaves(page, note.id, 700);
+		await page.goto(`/dashboard/notes`);
+		await page.getByRole("button", { name: title }).click();
+		const editor = noteEditor(page, "First line.");
 		await caretAtEnd(page, editor, "First line.");
 		await page.keyboard.type(" alpha", { delay: 30 });
 		// The autosave goes (800 ms after the last key) and is answered 700 ms later.
@@ -271,98 +262,42 @@ test.describe("A note opened on the Notes page", () => {
 			lengths.filter((n, i) => i > 0 && n < lengths[i - 1]),
 			"frames where typed words went missing"
 		).toEqual([]);
-		await expect
-			.poll(async () => {
-				const r = await request.get(`${base}/${note.id}`, { headers: authHeaders(token) });
-				return ((await r.json()) as { content: string }).content.trim();
-			})
-			.toBe(typed.trim());
-	});
-
-	test("a note document clicked into has nothing to save", async ({
-		page,
-		request,
-		token,
-		workspace,
-	}) => {
-		const created = await request.post(`${BACKEND_URL}/api/v1/workspaces/${workspace.id}/notes`, {
-			headers: authHeaders(token),
-			data: { title: "Document check", source_markdown: ANSWER },
-		});
-		expect(created.ok()).toBeTruthy();
-		await page.goto(`/dashboard/${workspace.id}/notes`);
-		await page
-			.getByRole("button", { name: /Document check/ })
-			.first()
-			.click();
-		const editor = page.locator("[data-slate-editor]").first();
-		await editor.getByText("What it means").click();
-		await page.waitForTimeout(500);
-		await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
-		await expect(editor.locator(".katex").first()).toBeVisible();
-		await page.keyboard.type("!");
-		await expect(page.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
+		await expect.poll(() => storedText(request, token, note.id)).toBe(typed.trim());
 	});
 });
 
 test.describe("A note in two places, and opened again", () => {
-	const notesUrl = (ws: number, nb: number) =>
-		`${BACKEND_URL}/api/v1/workspaces/${ws}/notebooks/${nb}/notes`;
-
-	/** The note's editor (a notebook's page has the chat's box too, also an editor). */
-	const noteEditor = (page: Page, text: string) =>
-		page.locator("[data-slate-editor]", { hasText: text });
-
-	async function makeNote(
-		request: APIRequestContext,
-		token: string,
-		url: string,
-		title: string,
-		content: string
-	) {
-		const created = await request.post(url, {
-			headers: authHeaders(token),
-			data: { title, content },
-		});
-		expect(created.ok()).toBeTruthy();
-		return (await created.json()) as { id: number };
-	}
-
-	test("an edit made on the Notes page is what the notebook's Studio opens", async ({
+	test("an edit made on the Notes page is what the notebook's Notes tab opens", async ({
 		page,
 		request,
 		token,
-		workspace,
 		notebook,
+		notes,
 	}) => {
-		const url = notesUrl(workspace.id, notebook.id);
-		const note = await makeNote(request, token, url, "Two places", "Original text.");
-		// The notebook's Studio lists the note first, so this page keeps its list.
-		await openNotebook(page, workspace.id, notebook.id, "Studio");
-		await expect(page.getByRole("button", { name: /^Two places/ })).toBeVisible();
+		const title = uniqueName("Two places");
+		const note = await notes.create({ title, content: "Original text.", notebook_id: notebook.id });
+		// The notebook's Notes tab lists the note first, so this page keeps its list.
+		await openNotesTab(page, notebook.id);
+		await expect(page.getByRole("button", { name: title })).toBeVisible();
 
-		await goInApp(page, `/dashboard/${workspace.id}/notes`);
-		await page
-			.getByRole("button", { name: /Two places/ })
-			.first()
-			.click();
+		await goInApp(page, `/dashboard/notes`);
+		await page.getByRole("button", { name: title }).click();
 		const editor = noteEditor(page, "Original text.");
 		await caretAtEnd(page, editor, "Original text.");
 		const saved = page.waitForResponse(
-			(r) => r.request().method() === "PATCH" && r.url().endsWith(`/notes/${note.id}`)
+			(r) => r.request().method() === "PATCH" && r.url().endsWith(`/api/v1/notes/${note.id}`)
 		);
 		await page.keyboard.type(" edited", { delay: 30 });
 		await saved;
 
-		await page.getByRole("link", { name: "Open in notebook" }).click();
-		await page.waitForURL(new RegExp(`/notebooks/${notebook.id}\\?note=${note.id}$`));
-		await showPanel(page, "Studio");
-		const studio = noteEditor(page, "Original text.");
-		await expect(studio).toContainText("Original text. edited");
-		await caretAtEnd(page, studio, "Original text. edited");
+		// The address a search result links a note by: the notebook, opened at the note.
+		await goInApp(page, `${nbPath(notebook.id)}?note=${note.id}`);
+		const inNotebook = noteEditor(page, "Original text.");
+		await expect(inNotebook).toContainText("Original text. edited");
+		await caretAtEnd(page, inNotebook, "Original text. edited");
 		await page.keyboard.type(" more", { delay: 30 });
 		await expect
-			.poll(() => stored(request, token, `${url}/${note.id}`), { timeout: 15_000 })
+			.poll(() => storedText(request, token, note.id), { timeout: 15_000 })
 			.toBe("Original text. edited more");
 	});
 
@@ -370,18 +305,18 @@ test.describe("A note in two places, and opened again", () => {
 		page,
 		request,
 		token,
-		workspace,
 		notebook,
+		notes,
 	}) => {
 		// Half a minute passes in the test (the page's copy of the notebook's
 		// notes is then old enough to be read again), without waiting for it.
 		await page.clock.install();
-		const url = notesUrl(workspace.id, notebook.id);
-		const note = await makeNote(request, token, url, "Elsewhere", "Original text.");
-		await openNotebook(page, workspace.id, notebook.id, "Studio");
-		await expect(page.getByRole("button", { name: /^Elsewhere/ })).toBeVisible();
+		const title = uniqueName("Elsewhere");
+		const note = await notes.create({ title, content: "Original text.", notebook_id: notebook.id });
+		await openNotesTab(page, notebook.id);
+		await expect(page.getByRole("button", { name: title })).toBeVisible();
 		// The phone adds to the note meanwhile.
-		const phone = await request.patch(`${url}/${note.id}`, {
+		const phone = await request.patch(noteUrl(note.id), {
 			headers: authHeaders(token),
 			data: { content: "Original text. From the phone." },
 		});
@@ -390,42 +325,41 @@ test.describe("A note in two places, and opened again", () => {
 
 		// The note opened in its notebook again: drawn from this page's older
 		// copy, then the newer text arrives.
-		await goInApp(page, `/dashboard/${workspace.id}/notes`);
-		await goInApp(page, `${nbPath(workspace.id, notebook.id)}?note=${note.id}`);
-		await showPanel(page, "Studio");
-		const studio = noteEditor(page, "Original text.");
-		await expect(studio).toContainText("From the phone.");
-		await caretAtEnd(page, studio, "From the phone.");
+		await goInApp(page, `/dashboard/notes`);
+		await goInApp(page, `${nbPath(notebook.id)}?note=${note.id}`);
+		const inNotebook = noteEditor(page, "Original text.");
+		await expect(inNotebook).toContainText("From the phone.");
+		await caretAtEnd(page, inNotebook, "From the phone.");
 		await page.keyboard.type(" more", { delay: 30 });
 		await expect
-			.poll(() => stored(request, token, `${url}/${note.id}`), { timeout: 15_000 })
+			.poll(() => storedText(request, token, note.id), { timeout: 15_000 })
 			.toBe("Original text. From the phone. more");
 	});
 
-	test("opened again in Studio before its save lands, the note shows and keeps the last words", async ({
+	test("opened again in its notebook before its save lands, the note shows and keeps the last words", async ({
 		page,
 		request,
 		token,
-		workspace,
 		notebook,
+		notes,
 	}) => {
-		const url = notesUrl(workspace.id, notebook.id);
-		const note = await makeNote(request, token, url, "Reopen check", "First line.");
+		const title = uniqueName("Reopen check");
+		const note = await notes.create({ title, content: "First line.", notebook_id: notebook.id });
 		await slowSaves(page, note.id, 2500);
-		await openNotebook(page, workspace.id, notebook.id, "Studio");
-		const row = page.getByRole("button", { name: /^Reopen check/ });
+		await openNotesTab(page, notebook.id);
+		const row = page.getByRole("button", { name: title });
 		await row.click();
 		const editor = noteEditor(page, "First line.");
 		await caretAtEnd(page, editor, "First line.");
 		await page.keyboard.type(" alpha", { delay: 30 });
-		await page.getByRole("button", { name: "Back to studio" }).click();
+		await page.getByRole("button", { name: "Back to this notebook's notes" }).click();
 		await row.click();
 		// Its save is still on its way (2.5 s): the words are there all the same.
 		await expect(editor).toContainText("First line. alpha", { timeout: 2000 });
 		await caretAtEnd(page, editor, "First line. alpha");
 		await page.keyboard.type(" beta", { delay: 30 });
 		await expect
-			.poll(() => stored(request, token, `${url}/${note.id}`), { timeout: 15_000 })
+			.poll(() => storedText(request, token, note.id), { timeout: 15_000 })
 			.toBe("First line. alpha beta");
 	});
 
@@ -433,25 +367,27 @@ test.describe("A note in two places, and opened again", () => {
 		page,
 		request,
 		token,
-		workspace,
-		notebook,
+		notes,
+		isPhone,
 	}) => {
-		const url = notesUrl(workspace.id, notebook.id);
-		const note = await makeNote(request, token, url, "Notes reopen", "First line.");
+		const title = uniqueName("Notes reopen");
+		const other = uniqueName("Another note");
+		const note = await notes.create({ title, content: "First line." });
+		await notes.create({ title: other, content: "Something else." });
 		await slowSaves(page, note.id, 2500);
-		await page.goto(`/dashboard/${workspace.id}/notes`);
-		const row = page.getByRole("button", { name: /Notes reopen/ }).first();
+		await page.goto(`/dashboard/notes`);
+		const row = page.getByRole("button", { name: title });
 		await row.click();
 		const editor = noteEditor(page, "First line.");
 		await caretAtEnd(page, editor, "First line.");
 		await page.keyboard.type(" alpha", { delay: 30 });
-		await page.getByRole("button", { name: "Back to notes" }).click();
+		await leaveNote(page, isPhone, other);
 		await row.click();
 		await expect(editor).toContainText("First line. alpha");
 		await caretAtEnd(page, editor, "First line. alpha");
 		await page.keyboard.type(" beta", { delay: 30 });
 		await expect
-			.poll(() => stored(request, token, `${url}/${note.id}`), { timeout: 15_000 })
+			.poll(() => storedText(request, token, note.id), { timeout: 15_000 })
 			.toBe("First line. alpha beta");
 	});
 
@@ -459,22 +395,16 @@ test.describe("A note in two places, and opened again", () => {
 		page,
 		request,
 		token,
-		workspace,
-		notebook,
+		notes,
 	}) => {
-		const url = notesUrl(workspace.id, notebook.id);
-		const note = await makeNote(
-			request,
-			token,
-			url,
-			"Cited note",
-			"Start oxygen below 90% [citation:1204, doc-88]; see [citation:https://example.org/hf-trial].\n\nLast line."
-		);
-		await page.goto(`/dashboard/${workspace.id}/notes`);
-		await page
-			.getByRole("button", { name: /Cited note/ })
-			.first()
-			.click();
+		const title = uniqueName("Cited note");
+		const note = await notes.create({
+			title,
+			content:
+				"Start oxygen below 90% [citation:1204, doc-88]; see [citation:https://example.org/hf-trial].\n\nLast line.",
+		});
+		await page.goto(`/dashboard/notes`);
+		await page.getByRole("button", { name: title }).click();
 		const editor = noteEditor(page, "Last line.");
 		await expect(editor).toContainText("Last line.");
 		await expect(editor.locator("[data-citation]")).toHaveCount(3);
@@ -483,7 +413,7 @@ test.describe("A note in two places, and opened again", () => {
 		await caretAtEnd(page, editor, "Last line.");
 		await page.keyboard.type(" More.", { delay: 30 });
 		await expect
-			.poll(() => stored(request, token, `${url}/${note.id}`), { timeout: 15_000 })
+			.poll(() => storedText(request, token, note.id), { timeout: 15_000 })
 			.toBe(
 				"Start oxygen below 90% [citation:1204][citation:doc-88]; see [citation:https://example.org/hf-trial].\n\nLast line. More."
 			);

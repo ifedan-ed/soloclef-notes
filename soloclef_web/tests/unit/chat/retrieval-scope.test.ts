@@ -27,8 +27,10 @@ test("cookie preference is accepted only for the matching user", () => {
 });
 
 test("new, resume, and regenerate requests carry retrieval_scope", () => {
+	// The three bodies are built in one module, apart from the engine that
+	// sends them (tests/unit/chat/turn-request-bodies.test.ts reads their values).
 	const source = readFileSync(
-		new URL("../../../lib/chat/stream-engine/engine.ts", import.meta.url),
+		new URL("../../../lib/chat/stream-engine/turn-request-bodies.ts", import.meta.url),
 		"utf8"
 	);
 	assert.equal(
@@ -61,11 +63,11 @@ test("composer reconciles scope when mentions arrive outside the inline picker",
 
 test("dashboard seeds scope from the server cookie before rendering chat", () => {
 	const layout = readFileSync(
-		new URL("../../../app/dashboard/[workspace_id]/layout.tsx", import.meta.url),
+		new URL("../../../app/dashboard/layout.tsx", import.meta.url),
 		"utf8"
 	);
 	const clientLayout = readFileSync(
-		new URL("../../../app/dashboard/[workspace_id]/client-layout.tsx", import.meta.url),
+		new URL("../../../app/dashboard/client-layout.tsx", import.meta.url),
 		"utf8"
 	);
 	assert.ok(layout.includes("initialRetrievalScope={initialRetrievalScope}"));

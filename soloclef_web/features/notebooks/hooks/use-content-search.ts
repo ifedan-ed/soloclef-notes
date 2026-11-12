@@ -11,13 +11,13 @@ import { CONTENT_SEARCH_DEBOUNCE_MS, contentSearchQuery } from "../lib/content-s
  * client; this looks inside sources and notes once typing pauses. Earlier
  * results stay painted while the next ones load, so the list never blanks.
  */
-export function useContentSearch(workspaceId: number, rawQuery: string) {
+export function useContentSearch(rawQuery: string) {
 	const current = contentSearchQuery(rawQuery);
 	const sent = useDebouncedValue(current, CONTENT_SEARCH_DEBOUNCE_MS);
 	const query = useQuery({
-		queryKey: notebookKeys.search(workspaceId, sent),
-		queryFn: () => notebooksApi.search(workspaceId, sent),
-		enabled: workspaceId > 0 && sent !== "",
+		queryKey: notebookKeys.search(sent),
+		queryFn: () => notebooksApi.search(sent),
+		enabled: sent !== "",
 		placeholderData: keepPreviousData,
 		staleTime: 30_000,
 		retry: 1,

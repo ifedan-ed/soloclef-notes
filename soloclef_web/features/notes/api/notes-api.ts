@@ -1,44 +1,48 @@
-import { z } from "zod";
-import { notebookNoteSchema } from "@/features/notebooks/model/notebook";
 import { baseApiService } from "@/lib/apis/base-api.service";
-import { noteDocumentContentSchema, workspaceNoteSchema } from "../model/workspace-note";
+import { type NotesFilter, notesQueryString } from "../lib/notes-filter";
+import { noteSchema, notesPageSchema } from "../model/note";
 
-const workspace = (workspaceId: number) => `/api/v1/workspaces/${workspaceId}`;
+const base = "/api/v1/notes";
+const one = (noteId: number) => `${base}/${noteId}`;
 
-/**
- * The Notes page's own routes. A notebook note is otherwise read and changed
- * through its notebook's routes (``notebooksApi``), and a note document
- * through the document editor routes, as everywhere else.
- */
+/** What a new note starts with. */
+export interface NewNote {
+	title?: string;
+	content?: string;
+	/** File it in this notebook. A kept answer is filed in its chat's notebook unless this says otherwise. */
+	notebook_id?: number | null;
+	/** The answer it is kept from. */
+	thread_id?: number;
+	message_id?: number;
+}
+
+/** A save: whichever of the two changed. */
+export interface NoteChanges {
+	title?: string;
+	content?: string;
+}
+
+/** The notes routes (soloclef_api/internal/notes). Every write answers the note as saved. */
 export const notesApi = {
-	list: (workspaceId: number, query: string) => {
-		const params = new URLSearchParams();
-		if (query) params.set("q", query);
-		const suffix = params.size > 0 ? `?${params.toString()}` : "";
-		return baseApiService.get(
-			`${workspace(workspaceId)}/all-notes${suffix}`,
-			z.array(workspaceNoteSchema)
-		);
-	},
-	/** The note document becomes a note of ``notebookId`` (see the backend's moving.py). */
-	moveIntoNotebook: (workspaceId: number, documentId: number, notebookId: number) =>
-		baseApiService.post(
-			`${workspace(workspaceId)}/all-notes/documents/${documentId}/move`,
-			notebookNoteSchema,
-			{ body: { notebook_id: notebookId } }
-		),
-	documentContent: (workspaceId: number, documentId: number) =>
-		baseApiService.get(
-			`${workspace(workspaceId)}/documents/${documentId}/editor-content`,
-			noteDocumentContentSchema
-		),
-	/** Saving a note document reindexes it, so this is a Save button, not autosave. */
-	saveDocument: (workspaceId: number, documentId: number, title: string, markdown: string) =>
-		baseApiService.post(`${workspace(workspaceId)}/documents/${documentId}/save`, undefined, {
-			// The title is sent so the server keeps it instead of reading one
-			// off the first line.
-			body: { title, source_markdown: markdown },
+	list: (filter: NotesFilter, offset = 0) =>
+		baseApiService.get(`${base}?${notesQueryString(filter, offset)}`, notesPageSchema),
+	get: (noteId: number) => baseApiService.get(one(noteId), noteSchema),
+	create: (body: NewNote) => baseApiService.post(base, noteSchema, { body }),
+	update: (noteId: number, body: NoteChanges) =>
+		baseApiService.patch(one(noteId), noteSchema, { body }),
+	remove: (noteId: number) => baseApiService.delete(one(noteId)),
+	setPinned: (noteId: number, pinned: boolean) =>
+		pinned
+			? baseApiService.put(`${one(noteId)}/pin`, noteSchema)
+			: baseApiService.delete(`${one(noteId)}/pin`, noteSchema),
+	/** Files the note in a notebook, or in none with null. */
+	file: (noteId: number, notebookId: number | null) =>
+		baseApiService.put(`${one(noteId)}/notebook`, noteSchema, {
+			body: { notebook_id: notebookId },
 		}),
-	deleteDocument: (workspaceId: number, documentId: number) =>
-		baseApiService.delete(`${workspace(workspaceId)}/notes/${documentId}`),
+	/** The source switch: whether the notebook's chat reads the note. */
+	setSource: (noteId: number, notebookId: number, on: boolean) =>
+		on
+			? baseApiService.put(`${one(noteId)}/sources/${notebookId}`, noteSchema)
+			: baseApiService.delete(`${one(noteId)}/sources/${notebookId}`, noteSchema),
 };

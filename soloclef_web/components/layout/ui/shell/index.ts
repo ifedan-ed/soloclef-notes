@@ -1,2 +1,2 @@
 export { LayoutShell } from "./LayoutShell";
-export { WorkspacePanel } from "./WorkspacePanel";
+export { PagePanel } from "./PagePanel";

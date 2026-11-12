@@ -12,7 +12,7 @@ import { getConnectorTelemetryMeta } from "@/lib/connector-telemetry";
  * SCOPE: this file now holds only *intent* and client-perceived *UX* events.
  * Authoritative *outcome* events (resource creation, task/ingestion/indexing
  * completion, auth success, billing) are emitted server-side in
- * soloclef_backend/app/observability/analytics.py — they are reliable
+ * the API (soloclef_api/internal/posthogcapture) — they are reliable
  * regardless of ad-blockers, tab-close, or non-browser (MCP/PAT/OAuth)
  * clients. Do NOT re-add optimistic outcome captures here; they double-count.
  *
@@ -42,11 +42,11 @@ function compact<T extends object>(obj: T): Record<string, unknown> {
 // AUTH EVENTS (attempts + failures only; successes are server-side)
 // ============================================
 
-export function trackLoginAttempt(method: "local" | "google") {
+export function trackLoginAttempt(method: "local") {
 	safeCapture("auth_login_attempt", { method });
 }
 
-export function trackLoginFailure(method: "local" | "google", error?: string) {
+export function trackLoginFailure(method: "local", error?: string) {
 	safeCapture("auth_login_failure", { method, error });
 }
 
@@ -67,7 +67,6 @@ export function trackLogout() {
 // ============================================
 
 export function trackChatMessageSent(
-	workspaceId: number,
 	chatId: number,
 	options?: {
 		hasAttachments?: boolean;
@@ -76,7 +75,6 @@ export function trackChatMessageSent(
 	}
 ) {
 	safeCapture("chat_message_sent", {
-		workspace_id: workspaceId,
 		chat_id: chatId,
 		has_attachments: options?.hasAttachments ?? false,
 		has_mentioned_documents: options?.hasMentionedDocuments ?? false,
@@ -84,19 +82,8 @@ export function trackChatMessageSent(
 	});
 }
 
-export function trackChatResponseReceived(workspaceId: number, chatId: number) {
-	safeCapture("chat_response_received", {
-		workspace_id: workspaceId,
-		chat_id: chatId,
-	});
-}
-
-export function trackChatError(workspaceId: number, chatId: number, error?: string) {
-	safeCapture("chat_error", {
-		workspace_id: workspaceId,
-		chat_id: chatId,
-		error,
-	});
+export function trackChatResponseReceived(chatId: number) {
+	safeCapture("chat_response_received", { chat_id: chatId });
 }
 
 export function trackActivityTraceInteraction(
@@ -137,15 +124,10 @@ export interface ChatFailureTelemetry {
 	message?: string;
 }
 
-export function trackChatBlocked(
-	workspaceId: number,
-	chatId: number | null,
-	payload: ChatFailureTelemetry
-) {
+export function trackChatBlocked(chatId: number | null, payload: ChatFailureTelemetry) {
 	safeCapture(
 		"chat_blocked",
 		compact({
-			workspace_id: workspaceId,
 			chat_id: chatId ?? undefined,
 			flow: payload.flow,
 			kind: payload.kind,
@@ -157,15 +139,10 @@ export function trackChatBlocked(
 	);
 }
 
-export function trackChatErrorDetailed(
-	workspaceId: number,
-	chatId: number | null,
-	payload: ChatFailureTelemetry
-) {
+export function trackChatErrorDetailed(chatId: number | null, payload: ChatFailureTelemetry) {
 	safeCapture(
 		"chat_error",
 		compact({
-			workspace_id: workspaceId,
 			chat_id: chatId ?? undefined,
 			flow: payload.flow,
 			kind: payload.kind,
@@ -175,43 +152,14 @@ export function trackChatErrorDetailed(
 			message: payload.message,
 		})
 	);
-}
-
-/**
- * Track a message sent from the unauthenticated "free" / anonymous chat
- * flow. This is intentionally a separate event from `chat_message_sent`
- * so WAU / retention queries on the authenticated event stay clean while
- * still giving us visibility into top-of-funnel usage on /free/*.
- *
- * Kept frontend-side despite the backend's `anon_chat_turn_completed`: the
- * frontend anon distinct id is what merges into the person at signup,
- * powering the anonymous-to-registered conversion funnel.
- */
-export function trackAnonymousChatMessageSent(options: {
-	modelSlug: string;
-	messageLength?: number;
-	hasUploadedDoc?: boolean;
-	surface?: "free_chat_page" | "free_model_page";
-}) {
-	safeCapture("anonymous_chat_message_sent", {
-		model_slug: options.modelSlug,
-		message_length: options.messageLength,
-		has_uploaded_doc: options.hasUploadedDoc ?? false,
-		surface: options.surface,
-	});
 }
 
 // ============================================
 // DOCUMENT EVENTS (intent only; ingestion outcome is server-side)
 // ============================================
 
-export function trackDocumentUploadStarted(
-	workspaceId: number,
-	fileCount: number,
-	totalSizeBytes: number
-) {
+export function trackDocumentUploadStarted(fileCount: number, totalSizeBytes: number) {
 	safeCapture("document_upload_started", {
-		workspace_id: workspaceId,
 		file_count: fileCount,
 		total_size_bytes: totalSizeBytes,
 	});
@@ -233,7 +181,6 @@ export type ConnectorEventStage =
 	| "oauth_initiated";
 
 export interface ConnectorEventOptions {
-	workspaceId?: number | null;
 	connectorId?: number | null;
 	/** Source of the action (e.g. "oauth_callback", "non_oauth_form", "webcrawler_quick_add"). */
 	source?: string;
@@ -258,7 +205,6 @@ export function trackConnectorEvent(
 	const meta = getConnectorTelemetryMeta(connectorType);
 	safeCapture(`connector_${stage}`, {
 		...compact({
-			workspace_id: options.workspaceId ?? undefined,
 			connector_id: options.connectorId ?? undefined,
 			source: options.source,
 			error: options.error,
@@ -272,33 +218,16 @@ export function trackConnectorEvent(
 
 // ---- Convenience wrappers kept for backward compatibility ----
 
-export function trackConnectorSetupStarted(
-	workspaceId: number,
-	connectorType: string,
-	source?: string
-) {
-	trackConnectorEvent("setup_started", connectorType, { workspaceId, source });
+export function trackConnectorSetupStarted(connectorType: string, source?: string) {
+	trackConnectorEvent("setup_started", connectorType, { source });
 }
 
-export function trackConnectorSetupSuccess(
-	workspaceId: number,
-	connectorType: string,
-	connectorId: number
-) {
-	trackConnectorEvent("setup_success", connectorType, { workspaceId, connectorId });
+export function trackConnectorSetupSuccess(connectorType: string, connectorId: number) {
+	trackConnectorEvent("setup_success", connectorType, { connectorId });
 }
 
-export function trackConnectorSetupFailure(
-	workspaceId: number | null | undefined,
-	connectorType: string,
-	error?: string,
-	source?: string
-) {
-	trackConnectorEvent("setup_failure", connectorType, {
-		workspaceId: workspaceId ?? undefined,
-		error,
-		source,
-	});
+export function trackConnectorSetupFailure(connectorType: string, error?: string, source?: string) {
+	trackConnectorEvent("setup_failure", connectorType, { error, source });
 }
 
 // ============================================
@@ -319,20 +248,14 @@ export function trackDesktopDownloadClicked(options: {
 // INDEXING EVENTS (intent/UX; indexing outcome is server-side)
 // ============================================
 
-export function trackIndexWithDateRangeOpened(
-	workspaceId: number,
-	connectorType: string,
-	connectorId: number
-) {
+export function trackIndexWithDateRangeOpened(connectorType: string, connectorId: number) {
 	safeCapture("index_with_date_range_opened", {
-		workspace_id: workspaceId,
 		connector_type: connectorType,
 		connector_id: connectorId,
 	});
 }
 
 export function trackIndexWithDateRangeStarted(
-	workspaceId: number,
 	connectorType: string,
 	connectorId: number,
 	options?: {
@@ -341,7 +264,6 @@ export function trackIndexWithDateRangeStarted(
 	}
 ) {
 	safeCapture("index_with_date_range_started", {
-		workspace_id: workspaceId,
 		connector_type: connectorType,
 		connector_id: connectorId,
 		has_start_date: options?.hasStartDate ?? false,
@@ -349,51 +271,29 @@ export function trackIndexWithDateRangeStarted(
 	});
 }
 
-export function trackQuickIndexClicked(
-	workspaceId: number,
-	connectorType: string,
-	connectorId: number
-) {
+export function trackQuickIndexClicked(connectorType: string, connectorId: number) {
 	safeCapture("quick_index_clicked", {
-		workspace_id: workspaceId,
 		connector_type: connectorType,
 		connector_id: connectorId,
 	});
 }
 
-export function trackConfigurePeriodicIndexingOpened(
-	workspaceId: number,
-	connectorType: string,
-	connectorId: number
-) {
+export function trackConfigurePeriodicIndexingOpened(connectorType: string, connectorId: number) {
 	safeCapture("configure_periodic_indexing_opened", {
-		workspace_id: workspaceId,
 		connector_type: connectorType,
 		connector_id: connectorId,
 	});
 }
 
 export function trackPeriodicIndexingStarted(
-	workspaceId: number,
 	connectorType: string,
 	connectorId: number,
 	frequencyMinutes: number
 ) {
 	safeCapture("periodic_indexing_started", {
-		workspace_id: workspaceId,
 		connector_type: connectorType,
 		connector_id: connectorId,
 		frequency_minutes: frequencyMinutes,
-	});
-}
-
-// ============================================
-// SEARCH SPACE INVITE EVENTS (decline is client-only; sent/accepted server-side)
-// ============================================
-
-export function trackWorkspaceInviteDeclined(workspaceName?: string) {
-	safeCapture("workspace_invite_declined", {
-		workspace_name: workspaceName,
 	});
 }
 
@@ -414,7 +314,7 @@ export function trackReferralLanding(refCode: string, landingUrl: string) {
 // AUTOMATION EVENTS (failures + chat-builder UX; CRUD outcomes are server-side)
 // ============================================
 
-export function trackAutomationCreateFailed(props: { workspace_id?: number; error?: string }) {
+export function trackAutomationCreateFailed(props: { error?: string }) {
 	safeCapture("automation_create_failed", compact(props));
 }
 
@@ -447,38 +347,34 @@ export function trackAutomationTriggerRemoveFailed(props: {
 }
 
 interface AutomationChatDecisionProps {
-	workspace_id?: number;
 	edited?: boolean;
 	task_count?: number;
 	trigger_type?: string;
-	chat_model_id?: number;
-	image_gen_model_id?: number;
-	vision_model_id?: number;
+	/** The proxy name of the model picked on the card; absent for the account's own. */
+	chat_model?: string;
 }
 
 export function trackAutomationChatApproved(props: AutomationChatDecisionProps) {
 	safeCapture("automation_chat_approved", compact(props));
 }
 
-export function trackAutomationChatRejected(props: { workspace_id?: number }) {
-	safeCapture("automation_chat_rejected", compact(props));
+export function trackAutomationChatRejected() {
+	safeCapture("automation_chat_rejected", {});
 }
 
-export function trackAutomationChatDraftEdited(props: { workspace_id?: number }) {
-	safeCapture("automation_chat_draft_edited", compact(props));
+export function trackAutomationChatDraftEdited() {
+	safeCapture("automation_chat_draft_edited", {});
 }
 
 export function trackAutomationChatCreateSucceeded(props: {
 	automation_id: number;
 	name?: string;
-	workspace_id?: number;
 }) {
 	safeCapture("automation_chat_create_succeeded", compact(props));
 }
 
 export function trackAutomationChatCreateFailed(props: {
 	reason: "invalid" | "error";
-	workspace_id?: number;
 	issue_count?: number;
 	message?: string;
 }) {

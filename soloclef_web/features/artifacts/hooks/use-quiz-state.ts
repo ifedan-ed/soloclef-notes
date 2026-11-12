@@ -26,25 +26,23 @@ async function readQuizState(response: Response, failureMessage: string): Promis
 }
 
 function useQuizMutation<TVariables>({
-	workspaceId,
 	artifactId,
 	generation,
 	path,
 	method,
 }: {
-	workspaceId: number;
 	artifactId: number;
 	generation: number;
 	path: string;
 	method: "PUT" | "POST";
 }) {
 	const queryClient = useQueryClient();
-	const queryKey = artifactManifestQueryKey(workspaceId, artifactId);
+	const queryKey = artifactManifestQueryKey(artifactId);
 
 	return useMutation<QuizState, Error, TVariables>({
 		mutationFn: async (variables) => {
 			const response = await authenticatedFetch(
-				buildBackendUrl(`/api/v1/workspaces/${workspaceId}/artifacts/${artifactId}/${path}`),
+				buildBackendUrl(`/api/v1/artifacts/${artifactId}/${path}`),
 				{
 					method,
 					headers: { "Content-Type": "application/json" },
@@ -66,9 +64,8 @@ function useQuizMutation<TVariables>({
 	});
 }
 
-export function useSubmitQuizAnswer(workspaceId: number, artifactId: number, generation: number) {
+export function useSubmitQuizAnswer(artifactId: number, generation: number) {
 	return useQuizMutation<{ question_index: number; selected_option_index: number }>({
-		workspaceId,
 		artifactId,
 		generation,
 		path: "quiz-answer",
@@ -76,9 +73,8 @@ export function useSubmitQuizAnswer(workspaceId: number, artifactId: number, gen
 	});
 }
 
-export function useSkipQuizQuestion(workspaceId: number, artifactId: number, generation: number) {
+export function useSkipQuizQuestion(artifactId: number, generation: number) {
 	return useQuizMutation<{ question_index: number }>({
-		workspaceId,
 		artifactId,
 		generation,
 		path: "quiz-skip",
@@ -86,9 +82,8 @@ export function useSkipQuizQuestion(workspaceId: number, artifactId: number, gen
 	});
 }
 
-export function useRetakeQuiz(workspaceId: number, artifactId: number, generation: number) {
+export function useRetakeQuiz(artifactId: number, generation: number) {
 	return useQuizMutation<{ mode: QuizRetakeMode }>({
-		workspaceId,
 		artifactId,
 		generation,
 		path: "quiz-retake",

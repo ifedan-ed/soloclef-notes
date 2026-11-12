@@ -7,8 +7,8 @@ import {
 import {
 	applyMediaLinks,
 	findMediaRefs,
+	isAccountArtifactUrl,
 	mediaOrigins,
-	workspaceIdFromContentUrl,
 } from "@/features/file-viewers/html-media-links";
 
 const REPORT = [
@@ -30,13 +30,13 @@ test("placeholders are found once each, in order", () => {
 
 test("links are written in, unknown ones and existing sources are left alone", () => {
 	const links = new Map([
-		["12:22", "https://app.example/api/v1/public/artifact-media/a.b"],
-		["13:23", "https://app.example/api/v1/public/artifact-media/c.d"],
+		["12:22", "https://app.example/api/v1/artifact-media/a.b"],
+		["13:23", "https://app.example/api/v1/artifact-media/c.d"],
 	]);
 	const html = applyMediaLinks(REPORT, links);
 	assert.match(
 		html,
-		/<video controls preload="metadata" playsinline data-soloclef-media="12:22" src="https:\/\/app\.example\/api\/v1\/public\/artifact-media\/a\.b" title="Film"><\/video>/
+		/<video controls preload="metadata" playsinline data-soloclef-media="12:22" src="https:\/\/app\.example\/api\/v1\/artifact-media\/a\.b" title="Film"><\/video>/
 	);
 	// No link issued: stays without a source, so the report shows its note.
 	assert.match(html, /<audio controls data-soloclef-media="11:21"><\/audio>/);
@@ -56,15 +56,21 @@ test("link attributes cannot break out of the tag", () => {
 	);
 });
 
-test("the workspace comes from the artifact's content URL", () => {
-	assert.equal(workspaceIdFromContentUrl("/api/v1/workspaces/7/artifacts/9/files/3/content"), 7);
-	assert.equal(workspaceIdFromContentUrl("/api/v1/documents/9"), null);
+test("only the account's own artifact route can ask for media links", () => {
+	assert.equal(isAccountArtifactUrl("/api/v1/artifacts/9/files/3/content"), true);
+	assert.equal(
+		isAccountArtifactUrl("https://app.example/api/v1/artifacts/9/files/3/content"),
+		true
+	);
+	// A public link's copy: its reader has no session to ask with.
+	assert.equal(isAccountArtifactUrl("/api/v1/public/tok/artifacts/9/files/3/content"), false);
+	assert.equal(isAccountArtifactUrl("/api/v1/documents/9"), false);
 });
 
 test("media is allowed only from the links' own origins", () => {
 	const links = new Map([
-		["1:2", "https://app.example/api/v1/public/artifact-media/a"],
-		["3:4", "https://app.example/api/v1/public/artifact-media/b"],
+		["1:2", "https://app.example/api/v1/artifact-media/a"],
+		["3:4", "https://app.example/api/v1/artifact-media/b"],
 		["5:6", "not a url"],
 	]);
 	assert.deepEqual(mediaOrigins(links), ["https://app.example"]);

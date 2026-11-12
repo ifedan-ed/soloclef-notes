@@ -24,9 +24,10 @@ import { AppError } from "@/lib/error";
 import { useToolAction } from "./use-tool-action";
 
 /**
- * Inline Revert button rendered on a default-fallback tool card when
- * the matching ``AgentActionLog`` row is reversible and hasn't been
- * reverted yet.
+ * Inline undo button for one change the assistant made, drawn on a
+ * default-fallback tool card (``variant="card"``) or at the end of the
+ * change's line in the turn's trace (``variant="trace"``), when the
+ * matching ``AgentActionLog`` row is reversible and hasn't been undone yet.
  *
  * Renders ``null`` (silent) in any of these cases:
  *  - no matching action row (still streaming, or never logged)
@@ -44,10 +45,12 @@ export function ToolCardRevertButton({
 	toolCallId,
 	toolName,
 	langchainToolCallId,
+	variant = "card",
 }: {
 	toolCallId: string;
 	toolName: string;
 	langchainToolCallId?: string;
+	variant?: "card" | "trace";
 }) {
 	const queryClient = useQueryClient();
 	const { threadId, action } = useToolAction({
@@ -61,8 +64,13 @@ export function ToolCardRevertButton({
 
 	if (!action) return null;
 	if (!action.reversible) return null;
-	if (action.reverted_by_action_id !== null && action.reverted_by_action_id !== undefined)
-		return null;
+	if (action.reverted_by_action_id !== null && action.reverted_by_action_id !== undefined) {
+		// On the trace the line keeps saying what happened to it, after a
+		// reload too: the log row carries the undo.
+		return variant === "trace" ? (
+			<span className="shrink-0 px-2 text-xs text-muted-foreground">Undone</span>
+		) : null;
+	}
 	if (action.is_revert_action) return null;
 	if (action.error !== null && action.error !== undefined) return null;
 	if (!threadId) return null;
@@ -72,7 +80,7 @@ export function ToolCardRevertButton({
 		try {
 			const response = await agentActionsApiService.revert(threadId, action.id);
 			markActionRevertedInCache(queryClient, threadId, action.id, response.new_action_id ?? null);
-			toast.success(response.message || "Action reverted.");
+			toast.success(response.message || "Undone.");
 		} catch (err) {
 			if (err instanceof AppError && err.status === 503) {
 				return;
@@ -82,7 +90,7 @@ export function ToolCardRevertButton({
 					? err.message
 					: err instanceof Error
 						? err.message
-						: "Failed to revert action.";
+						: "The change could not be undone.";
 			toast.error(message);
 		} finally {
 			setIsReverting(false);
@@ -95,26 +103,30 @@ export function ToolCardRevertButton({
 			<AlertDialogTrigger asChild>
 				<Button
 					size="sm"
-					variant="outline"
-					className="gap-1.5"
+					variant={variant === "trace" ? "ghost" : "outline"}
+					className={
+						variant === "trace"
+							? "-my-0.5 h-6 gap-1 px-2 text-xs font-normal text-muted-foreground hover:text-foreground max-md:-my-3 max-md:min-h-11"
+							: "gap-1.5"
+					}
 					onClick={(e) => {
 						e.stopPropagation();
 						setConfirmOpen(true);
 					}}
 					disabled={isReverting}
+					aria-label={`Undo: ${getToolDisplayName(action.tool_name)}`}
 				>
 					{isReverting ? <Spinner size="xs" /> : <RotateCcw data-icon="inline-start" />}
-					Revert
+					Undo
 				</Button>
 			</AlertDialogTrigger>
 			<AlertDialogContent>
 				<AlertDialogHeader>
-					<AlertDialogTitle>Revert this action?</AlertDialogTitle>
+					<AlertDialogTitle>Undo this change?</AlertDialogTitle>
 					<AlertDialogDescription>
-						This will undo{" "}
-						<span className="font-medium">{getToolDisplayName(action.tool_name)}</span> and add a
-						new entry to the history. Your chat is preserved — only the changes the agent made to
-						your knowledge base or connected apps will be rolled back where possible.
+						This takes back &ldquo;{getToolDisplayName(action.tool_name)}&rdquo; in your documents
+						and adds the undo to the history. Your chat stays as it is. If the item has been changed
+						since, nothing is overwritten and you are told why.
 					</AlertDialogDescription>
 				</AlertDialogHeader>
 				<AlertDialogFooter>
@@ -128,7 +140,7 @@ export function ToolCardRevertButton({
 						className="gap-1.5"
 					>
 						{isReverting && <Spinner size="xs" />}
-						Revert
+						Undo
 					</AlertDialogAction>
 				</AlertDialogFooter>
 			</AlertDialogContent>

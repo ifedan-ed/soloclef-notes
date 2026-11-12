@@ -3,15 +3,14 @@ import { authenticatedFetch } from "@/lib/auth-fetch";
 import { buildBackendUrl } from "@/lib/env-config";
 import { DocumentViewManifestSchema } from "./model";
 
-export const documentViewQueryKey = (workspaceId: number, documentId: number) =>
-	["document-view", workspaceId, documentId] as const;
+export const documentViewQueryKey = (documentId: number) => ["document-view", documentId] as const;
 
-export function documentViewQueryOptions(workspaceId: number, documentId: number) {
+export function documentViewQueryOptions(documentId: number) {
 	return queryOptions({
-		queryKey: documentViewQueryKey(workspaceId, documentId),
+		queryKey: documentViewQueryKey(documentId),
 		queryFn: async () => {
 			const response = await authenticatedFetch(
-				buildBackendUrl(`/api/v1/workspaces/${workspaceId}/documents/${documentId}/view-manifest`),
+				buildBackendUrl(`/api/v1/documents/${documentId}/view-manifest`),
 				{ skipAuthRedirect: true }
 			);
 			if (!response.ok) {

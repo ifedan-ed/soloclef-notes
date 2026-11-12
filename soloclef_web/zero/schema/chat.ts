@@ -20,31 +20,14 @@ export const newChatMessageTable = table("new_chat_messages")
 	})
 	.primaryKey("id");
 
-// Published only as the authz parent of chat messages/comments/session-state
-// (whereExists("thread")): its workspace, and who may read it (the creator,
-// or every member when shared), the REST thread routes' rule
-// (queries/thread-access.ts). The title is resolved over REST (react-query)
-// for the tab bar, not synced through Zero.
+// Published only as the authz parent of chat messages, session state and
+// Studio outputs (whereExists("thread")): its id and its owner, which is all
+// the rule needs (queries/thread-access.ts). The title is resolved over REST
+// (react-query) for the tab bar, not synced through Zero.
 export const newChatThreadTable = table("new_chat_threads")
 	.columns({
 		id: number(),
-		workspaceId: number().from("workspace_id"),
-		// "PRIVATE" or "SEARCH_SPACE" (shared with the workspace).
-		visibility: string(),
-		createdById: string().optional().from("created_by_id"),
-	})
-	.primaryKey("id");
-
-export const chatCommentTable = table("chat_comments")
-	.columns({
-		id: number(),
-		messageId: number().from("message_id"),
-		threadId: number().from("thread_id"),
-		parentId: number().optional().from("parent_id"),
-		authorId: string().optional().from("author_id"),
-		content: string(),
-		createdAt: number().from("created_at"),
-		updatedAt: number().from("updated_at"),
+		userId: string().from("user_id"),
 	})
 	.primaryKey("id");
 

@@ -5,7 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useGoogleDriveImport } from "../hooks/use-google-drive-import";
 
-/** Opens the Google Picker; what is picked is imported (into the notebook, if given). */
+/**
+ * Opens the Google Picker; what is picked is imported into the account's
+ * library (and into the notebook, if given).
+ */
 export function GoogleDriveImportButton({
 	connectorId,
 	notebookId,

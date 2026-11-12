@@ -9,8 +9,7 @@
  *   Centralising the rules keeps the agent's path encoding and the UI's
  *   decoding from drifting apart.
  *
- * The agent emits paths under `/documents/...` with two encoding rules
- * applied by `soloclef_backend/app/agents/new_chat/path_resolver.py`:
+ * The agent emits paths under `/documents/...` with two encoding rules:
  *
  * 1. Every basename ends with `.xml` (so the LLM treats KB documents as XML
  *    files). Display layer strips this — users think of the underlying

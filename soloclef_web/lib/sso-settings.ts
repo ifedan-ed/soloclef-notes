@@ -2,18 +2,19 @@
  * This server's single sign-on as its public pages describe it: whether there
  * is one, the button's name, where it lives and whom it makes accounts for.
  *
- * The docs are prerendered, so these are the build's values: docker-compose.yml
- * passes OIDC_ENABLED, OIDC_BUTTON_LABEL, OIDC_DISCOVERY_URL,
- * OIDC_AUTOCREATE_DOMAINS and OIDC_ALLOW_SIGNUP from docker/.env as the
- * NEXT_PUBLIC_OIDC_* build args below, the same lines the backend reads at
- * runtime. Change one, rebuild the frontend. The login page's own button
+ * The docs are prerendered, so these are the build's values:
+ * docker-compose.go.yml passes SOLOCLEF_API_OIDC_ENABLED,
+ * SOLOCLEF_WEB_SSO_BUTTON_LABEL, SOLOCLEF_API_OIDC_ISSUER and
+ * SOLOCLEF_API_SIGNUP_ALLOWED from docker/.env.go as the NEXT_PUBLIC_OIDC_*
+ * build args below, the same settings the API reads at start. Change one,
+ * rebuild the frontend. The login page's own button
  * reads OIDC_ENABLED and OIDC_BUTTON_LABEL at runtime (runtime-config).
  */
 
 /** The button's name when OIDC_BUTTON_LABEL is unset. */
 export const DEFAULT_SSO_BUTTON_LABEL = "Continue with single sign-on";
 
-/** Who a first single sign-on makes an account for (app/auth_oidc/account_creation_rule.py). */
+/** Who a first single sign-on makes an account for (the API's soloclef_api/internal/oidcsignin). */
 export type SsoAccounts = "anyone" | "domains" | "nobody";
 
 export interface SsoSettings {

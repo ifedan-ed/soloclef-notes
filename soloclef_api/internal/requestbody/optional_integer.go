@@ -22,10 +22,8 @@ type OptionalNumber struct {
 	Value *int64
 	// OutOfRange is a number Python reads and a query then fails on. It is
 	// held per field rather than on the Model, because which statement fails
-	// decides *when* the 500 comes: a workspace id too wide fails the
-	// permission query, before the gates, while a parent id too wide fails a
-	// lookup that happens after them — so a caller who is not a member and
-	// names a parent of 2,200,000,000 is answered the 403 and not the 500.
+	// decides *when* the 500 comes, and a route that checks one field before
+	// another has to know which of the two was out of range.
 	OutOfRange bool
 }
 
@@ -47,7 +45,12 @@ func (m *Model) OptionalNumber(name string) OptionalNumber {
 	if !present || value == nil {
 		return OptionalNumber{}
 	}
+	return m.optionalNumberValue(name, value)
+}
 
+// optionalNumberValue is the coercion on its own, for a value already taken
+// out of the body.
+func (m *Model) optionalNumberValue(name string, value any) OptionalNumber {
 	switch typed := value.(type) {
 	case bool:
 		read := int64(0)

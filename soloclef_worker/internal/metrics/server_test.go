@@ -33,12 +33,12 @@ func sampleConsumer() fakeConsumer {
 		InFlightByQueue: map[string]int{"surfsense.heavy": 3},
 		InFlightByTask:  map[string]int{"podcast.render_audio": 2},
 		HeldClaims:      4,
-		WaitingForETA:   1,
+		Scheduled:       1,
 		Wait: map[string]broker.WaitStats{
 			"podcast.render_audio": {Count: 2, Total: 3 * time.Second, Max: 2 * time.Second},
 		},
 		Taken: 11, Deferred: 2, Expired: 1, Unreadable: 1,
-		Requeued: 3, Restored: 1, WaitUnknown: 2,
+		Requeued: 3, Delayed: 5, Restored: 1, WaitUnknown: 2,
 	}}
 }
 
@@ -99,7 +99,7 @@ func TestAScrapeCarriesTheNamesADashboardWillUse(t *testing.T) {
 		`soloclef_worker_jobs_in_flight{queue="surfsense.heavy"} 3`,
 		`soloclef_worker_task_jobs_in_flight{task="podcast.render_audio"} 2`,
 		`soloclef_worker_held_claims 4`,
-		`soloclef_worker_waiting_for_eta 1`,
+		`soloclef_worker_scheduled_messages 1`,
 		`soloclef_worker_queue_wait_seconds_total{task="podcast.render_audio"} 3`,
 		`soloclef_worker_queue_wait_measurements_total{task="podcast.render_audio"} 2`,
 		`soloclef_worker_queue_wait_seconds_max{task="podcast.render_audio"} 2`,
@@ -108,6 +108,7 @@ func TestAScrapeCarriesTheNamesADashboardWillUse(t *testing.T) {
 		`soloclef_worker_messages_expired_total 1`,
 		`soloclef_worker_messages_unreadable_total 1`,
 		`soloclef_worker_messages_requeued_total 3`,
+		`soloclef_worker_messages_delayed_total 5`,
 		`soloclef_worker_messages_restored_total 1`,
 		`soloclef_worker_queue_wait_unknown_total 2`,
 		`soloclef_worker_beat_lease_held 1`,

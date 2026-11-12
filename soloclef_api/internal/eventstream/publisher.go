@@ -9,7 +9,7 @@ import (
 	"github.com/valkey-io/valkey-go"
 )
 
-// Publisher appends events to the stream the Python dispatcher reads.
+// Publisher appends events to the stream the dispatcher reads.
 //
 // The connection is made on first use, as ratelimit.ValkeyCounter's is: a Redis
 // that is down when this process starts must not stop it from serving.

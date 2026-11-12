@@ -73,12 +73,13 @@ export function holds(
 /** The AST zero-cache gets for the named query, as the query route builds it. */
 export async function serverAst(
 	name: string,
-	args: Record<string, unknown>,
+	args: Record<string, unknown> | undefined,
 	ctx: Context
 ): Promise<{ table: string; where?: Condition }> {
 	const request = new Request("http://frontend/api/zero/query", {
 		method: "POST",
-		body: JSON.stringify(["transform", [{ id: "q1", name, args: [args] }]]),
+		// A query with no arguments (the `mine` lists) is sent with none.
+		body: JSON.stringify(["transform", [{ id: "q1", name, args: args ? [args] : [] }]]),
 	});
 	const result = (await handleQueryRequest({
 		handler: (queryName, queryArgs) => {

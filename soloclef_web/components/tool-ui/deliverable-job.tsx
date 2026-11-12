@@ -92,7 +92,7 @@ function ActionButton({ job, action }: { job: LiveDeliverableJob; action: "cance
 	const run = async () => {
 		setIsPending(true);
 		try {
-			await deliverableJobsApiService[action](job.workspaceId, job.id);
+			await deliverableJobsApiService[action](job.id);
 			// Zero owns reconciliation; do not locally invent a lifecycle state.
 		} catch (error) {
 			toast.error(
@@ -168,7 +168,6 @@ export function DeliverableJobStatusCard({ job }: { job: LiveDeliverableJob }) {
 					artifactId={job.artifactId}
 					title={job.title}
 					filename={`${job.title}.mp4`}
-					workspaceId={job.workspaceId}
 				/>
 			);
 		default:

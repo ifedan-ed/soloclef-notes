@@ -5,17 +5,10 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { useBillingMe } from "@/features/billing/hooks/use-billing-queries";
 import { useDelayedFlag } from "@/features/notebooks/hooks/use-delayed-flag";
+import { useSiteAdmin } from "@/hooks/use-site-admin";
 import { useAnnouncementsOverview, useSendAnnouncement } from "../hooks/use-announcements-admin";
 import {
 	type AnnouncementDraft,
@@ -30,8 +23,8 @@ import { SentAnnouncementsList } from "./sent-announcements-list";
 
 /** Site administrators write an announcement, preview it, send it, and withdraw it later. */
 export function AnnouncementsAdminPage() {
-	const me = useBillingMe();
-	const isAdmin = me.data?.is_admin === true;
+	const me = useSiteAdmin();
+	const isAdmin = me.isAdmin === true;
 	const overview = useAnnouncementsOverview(isAdmin);
 	const [draft, setDraft] = useState<AnnouncementDraft>(emptyDraft);
 	const [tried, setTried] = useState(false);
@@ -41,7 +34,7 @@ export function AnnouncementsAdminPage() {
 	});
 	const showSkeleton = useDelayedFlag(me.isLoading || (isAdmin && overview.isLoading));
 
-	if (me.data && !isAdmin) {
+	if (me.isAdmin === false) {
 		return (
 			<p className="text-sm text-muted-foreground">
 				Only site administrators can send announcements.
@@ -55,16 +48,8 @@ export function AnnouncementsAdminPage() {
 		return showSkeleton ? <Skeleton className="h-64 w-full" /> : null;
 	}
 
-	const workspaces = overview.data.workspaces;
 	const problems = draftProblems(draft);
 	const set = (patch: Partial<AnnouncementDraft>) => setDraft((prev) => ({ ...prev, ...patch }));
-	const chosen = workspaces.find((ws) => ws.id === draft.workspaceId);
-	const reach =
-		draft.audience === "all"
-			? "every account"
-			: chosen
-				? `the ${chosen.member_count} member${chosen.member_count === 1 ? "" : "s"} of ${chosen.name}`
-				: "one workspace";
 
 	const onSend = () => {
 		setTried(true);
@@ -74,8 +59,7 @@ export function AnnouncementsAdminPage() {
 	return (
 		<div className="min-w-0 space-y-6">
 			<p className="text-sm text-muted-foreground">
-				Send a notification to everyone, or to one workspace. It lands in Notifications with the
-				unread badge.
+				Send a notification to every account. It lands in Notifications with the unread badge.
 			</p>
 
 			<div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -124,43 +108,6 @@ export function AnnouncementsAdminPage() {
 							/>
 						</div>
 					</div>
-					<div className="grid gap-4 sm:grid-cols-2">
-						<div className="space-y-1.5">
-							<Label htmlFor="announcement-audience">Send to</Label>
-							<Select
-								value={draft.audience}
-								onValueChange={(value) => set({ audience: value as AnnouncementDraft["audience"] })}
-							>
-								<SelectTrigger id="announcement-audience" className="w-full">
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="all">Everyone</SelectItem>
-									<SelectItem value="workspace">One workspace</SelectItem>
-								</SelectContent>
-							</Select>
-						</div>
-						{draft.audience === "workspace" ? (
-							<div className="space-y-1.5">
-								<Label htmlFor="announcement-workspace">Workspace</Label>
-								<Select
-									value={draft.workspaceId === null ? undefined : String(draft.workspaceId)}
-									onValueChange={(value) => set({ workspaceId: Number(value) })}
-								>
-									<SelectTrigger id="announcement-workspace" className="w-full">
-										<SelectValue placeholder="Choose a workspace" />
-									</SelectTrigger>
-									<SelectContent>
-										{workspaces.map((ws) => (
-											<SelectItem key={ws.id} value={String(ws.id)}>
-												{ws.name} ({ws.member_count})
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-							</div>
-						) : null}
-					</div>
 					{tried && problems.length > 0 ? (
 						<ul className="list-disc space-y-0.5 pl-5 text-sm text-destructive">
 							{problems.map((problem) => (
@@ -173,7 +120,7 @@ export function AnnouncementsAdminPage() {
 							<Send className="size-4" aria-hidden />
 							Send
 						</Button>
-						<p className="text-sm text-muted-foreground">Goes to {reach}.</p>
+						<p className="text-sm text-muted-foreground">Goes to every account.</p>
 					</div>
 				</div>
 

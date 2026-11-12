@@ -12,6 +12,7 @@ import { useGoogleDriveReturn } from "@/features/google-drive-connect/hooks/use-
 import { useNextcloudRefreshable } from "@/features/nextcloud-files/hooks/use-nextcloud-refreshable";
 import { useDelayedFlag } from "../../hooks/use-delayed-flag";
 import { useNotebookSources, useSourceMutations } from "../../hooks/use-notebook-queries";
+import { useSourceStages } from "../../hooks/use-source-stages";
 import { nextSelectAllValue, selectAllState } from "../../lib/source-selection";
 import { AddSourcesDialog, type DroppedFiles } from "./add-sources-dialog";
 import { FileDropOverlay } from "./file-drop-overlay";
@@ -21,7 +22,6 @@ import { SourceRow } from "./source-row";
 import { SourcesEmptyState } from "./sources-empty-state";
 
 export function SourcesPanel({
-	workspaceId,
 	notebookId,
 	addOpen,
 	onAddOpenChange,
@@ -30,7 +30,6 @@ export function SourcesPanel({
 	researchFocusToken,
 	initialOpenSourceId = null,
 }: {
-	workspaceId: number;
 	notebookId: number;
 	addOpen: boolean;
 	onAddOpenChange: (open: boolean) => void;
@@ -44,9 +43,10 @@ export function SourcesPanel({
 	initialOpenSourceId?: number | null;
 }) {
 	const t = useTranslations("notebooks");
-	const { data: sources = [], isLoading } = useNotebookSources(workspaceId, notebookId);
-	const { toggle, add, remove, refresh } = useSourceMutations(workspaceId, notebookId);
-	const nextcloudRefreshable = useNextcloudRefreshable(workspaceId);
+	const { data: sources = [], isLoading } = useNotebookSources(notebookId);
+	const { toggle, add, remove, refresh } = useSourceMutations(notebookId);
+	const nextcloudRefreshable = useNextcloudRefreshable();
+	const stages = useSourceStages(sources);
 	const [openSourceId, setOpenSourceId] = useState<number | null>(initialOpenSourceId);
 	const [researchFocus, setResearchFocus] = useState(0);
 	// Back from connecting Google Drive: reopen Add sources where the picker is.
@@ -95,7 +95,6 @@ export function SourcesPanel({
 				{isDragActive ? <FileDropOverlay /> : null}
 				{openSource ? (
 					<SourceGuideView
-						workspaceId={workspaceId}
 						notebookId={notebookId}
 						source={openSource}
 						onBack={() => setOpenSourceId(null)}
@@ -114,7 +113,6 @@ export function SourcesPanel({
 						</div>
 						<div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 pb-3">
 							<ResearchPanel
-								workspaceId={workspaceId}
 								notebookId={notebookId}
 								focusRequest={researchFocus}
 								onFocusHandled={clearResearchFocus}
@@ -159,6 +157,8 @@ export function SourcesPanel({
 											}
 											onOpen={() => setOpenSourceId(source.id)}
 											onRemove={() => remove.mutate(source.id, { onError })}
+											onReindexed={refresh}
+											stage={source.kind === "document" ? stages.get(source.target_id) : undefined}
 											nextcloudConnectorId={
 												source.kind === "document"
 													? nextcloudRefreshable?.get(source.target_id)
@@ -175,7 +175,6 @@ export function SourcesPanel({
 			<AddSourcesDialog
 				open={addOpen}
 				onOpenChange={onAddOpenChange}
-				workspaceId={workspaceId}
 				notebookId={notebookId}
 				onAdd={addSources}
 				onImported={refresh}

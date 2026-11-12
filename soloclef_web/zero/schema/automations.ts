@@ -3,14 +3,15 @@ import { json, number, string, table } from "@rocicorp/zero";
 export const automationTable = table("automations")
 	.columns({
 		id: number(),
-		workspaceId: number().from("workspace_id"),
+		// The owner: the only column published besides the id, for the runs' rule.
+		userId: string().from("user_id"),
 	})
 	.primaryKey("id");
 
 // Thin live row: status + per-step progress only. Heavy fields
 // (definition_snapshot, inputs, output, artifacts, error) stay on REST
 // (`GET /automations/{id}/runs/{run_id}`) and load on detail expand.
-// Mirrors the publication shape in migration 148.
+// Mirrors the publication's column list (soloclef_schema/migrations).
 export const automationRunTable = table("automation_runs")
 	.columns({
 		id: number(),

@@ -1,9 +1,4 @@
 {
 	"biome.configurationPath": "./soloclef_web/biome.json",
-	"deepscan.ignoreConfirmWarning": true,
-	"python.defaultInterpreterPath": "${workspaceFolder}/soloclef_backend/.venv/bin/python",
-	"basedpyright.analysis.extraPaths": [
-		"${workspaceFolder}/soloclef_backend"
-	],
-	"python-envs.pythonProjects": []
+	"deepscan.ignoreConfirmWarning": true
 }

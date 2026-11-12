@@ -8,10 +8,11 @@ import { expect, openNotebook, test } from "./fixtures";
  * their defaults ("Default: X" under segmented groups, "(Default)" on cards),
  * the style gallery, focus ideas, and the request "Generate now" sends.
  *
- * Generation itself needs the sandbox and paid models, so it is not run: the
- * spec asserts the POST /studio/generate body. The backend answers audio with
- * a queued run (it then fails offline) and the rest with 503 (sandbox off);
- * both outcomes must show inline, never as a browser popup.
+ * What is asserted is the POST /studio/generate body and what the page does
+ * with the answer. The stack accepts the kinds it can make (a queued row;
+ * see MADE_HERE) and answers 503 for the ones that need a sandbox or an
+ * image model it does not have; both outcomes must show inline, never as a
+ * browser popup.
  */
 
 type Segmented = { label: string; def: string; pick?: string };
@@ -97,16 +98,22 @@ const KINDS: Kind[] = [
 	{ tile: "Data Table", kind: "data_table", title: "Create data table", body: {} },
 ];
 
+/**
+ * The kinds the isolated stack accepts. Audio is voiced through the model
+ * proxy, and a mind map, flashcards and a quiz are written by the chat's
+ * specialist: none needs the sandbox. A video is accepted too, and its
+ * render job then fails it at once (the stack's worker has rendering off).
+ * The rest need the sandbox (report, slides, data table) or an image model
+ * (infographic), which this stack has neither of.
+ */
+const MADE_HERE = new Set(["audio", "video", "mindmap", "flashcards", "quiz"]);
+
 const studioTile = (page: Page, name: string) =>
 	page.getByRole("button", { name, exact: true }).first();
 
 test.describe("Studio dialogs", () => {
-	test("without sources a dialog says so and offers to add some", async ({
-		page,
-		workspace,
-		notebook,
-	}) => {
-		await openNotebook(page, workspace.id, notebook.id, "Studio");
+	test("without sources a dialog says so and offers to add some", async ({ page, notebook }) => {
+		await openNotebook(page, notebook.id, "Studio");
 		await studioTile(page, "Quiz").click();
 		const dialog = page.getByRole("dialog");
 		await expect(dialog).toContainText("has none yet");
@@ -118,20 +125,12 @@ test.describe("Studio dialogs", () => {
 	for (const k of KINDS) {
 		test(`${k.tile}: options, defaults, ideas, generate request`, async ({
 			page,
-			workspace,
 			notebook,
 			request,
 			token,
 		}) => {
-			await addNoteSource(
-				request,
-				token,
-				workspace.id,
-				notebook.id,
-				"Studio source",
-				"Photosynthesis facts."
-			);
-			await openNotebook(page, workspace.id, notebook.id, "Studio");
+			await addNoteSource(request, token, notebook.id, "Studio source", "Photosynthesis facts.");
+			await openNotebook(page, notebook.id, "Studio");
 			await studioTile(page, k.tile).click();
 			const dialog = page.getByRole("dialog", { name: k.title });
 			await expect(dialog).toBeVisible();
@@ -179,20 +178,23 @@ test.describe("Studio dialogs", () => {
 			expect(String(body.title)).toContain(k.tile === "Reports" ? "" : "E2E notebook");
 			if (k.kind !== "video") expect(String(body.focus ?? "")).toContain("E2E idea");
 
-			if (k.kind === "audio") {
+			if (MADE_HERE.has(k.kind)) {
 				// Queued: the dialog closes, a toast confirms, the row appears.
 				await expect(dialog).toBeHidden();
 				await expect(page.getByText("Generating — it will appear in Studio.")).toBeVisible();
 				await expect
-					.poll(
-						async () => (await listStudioOutputs(request, token, workspace.id, notebook.id)).length
+					.poll(async () =>
+						(await listStudioOutputs(request, token, notebook.id)).map((o) => o.kind)
 					)
-					.toBe(1);
-				await expect(
-					page.getByRole("button", { name: /Audio Overview: E2E notebook/ })
-				).toBeVisible();
+					.toEqual([k.kind]);
+				if (k.kind === "audio") {
+					await expect(
+						page.getByRole("button", { name: /Audio Overview: E2E notebook/ })
+					).toBeVisible();
+				}
 			} else {
-				// Sandbox off in the isolated stack: the 503 shows as an inline
+				// What this stack cannot make (no sandbox, no image model) is
+				// refused when it is asked for: the 503 shows as an inline
 				// toast and the dialog stays open with the choices intact.
 				// Exactly one toast: the dialog's own, not a second global one.
 				const toastText = page.getByText("Generation is not enabled on this server.");
@@ -206,13 +208,12 @@ test.describe("Studio dialogs", () => {
 
 	test("video style gallery: Custom needs a description before Generate", async ({
 		page,
-		workspace,
 		notebook,
 		request,
 		token,
 	}) => {
-		await addNoteSource(request, token, workspace.id, notebook.id, "Video source", "Cells.");
-		await openNotebook(page, workspace.id, notebook.id, "Studio");
+		await addNoteSource(request, token, notebook.id, "Video source", "Cells.");
+		await openNotebook(page, notebook.id, "Studio");
 		await studioTile(page, "Video Overview").click();
 		const dialog = page.getByRole("dialog", { name: "Customize Video Overview" });
 		const gallery = dialog.getByRole("group", { name: "Choose visual style" });
@@ -237,13 +238,12 @@ test.describe("Studio dialogs", () => {
 
 	test("infographic: rocket style gallery, orientation, detail and the exact request", async ({
 		page,
-		workspace,
 		notebook,
 		request,
 		token,
 	}) => {
-		await addNoteSource(request, token, workspace.id, notebook.id, "Info source", "Iron.");
-		await openNotebook(page, workspace.id, notebook.id, "Studio");
+		await addNoteSource(request, token, notebook.id, "Info source", "Iron.");
+		await openNotebook(page, notebook.id, "Studio");
 		await studioTile(page, "Infographic").click();
 		const dialog = page.getByRole("dialog", { name: "Create infographic" });
 		await expect(dialog.getByText("Describe the infographic you want to create")).toBeVisible();
@@ -301,7 +301,7 @@ test.describe("Studio dialogs", () => {
 		const body = (await generate).postDataJSON() as Record<string, unknown>;
 		expect(body).toEqual({
 			kind: "infographic",
-			title: "Infographic: E2E notebook",
+			title: `Infographic: ${notebook.title}`,
 			request_id: expect.stringMatching(/^[A-Za-z0-9_-]+$/),
 			orientation: "square",
 			style: "bento-grid",
@@ -312,13 +312,12 @@ test.describe("Studio dialogs", () => {
 
 	test("reports: interactive format hides the file type, templates are editable", async ({
 		page,
-		workspace,
 		notebook,
 		request,
 		token,
 	}) => {
-		await addNoteSource(request, token, workspace.id, notebook.id, "Report source", "Enzymes.");
-		await openNotebook(page, workspace.id, notebook.id, "Studio");
+		await addNoteSource(request, token, notebook.id, "Report source", "Enzymes.");
+		await openNotebook(page, notebook.id, "Studio");
 		await studioTile(page, "Reports").click();
 		const dialog = page.getByRole("dialog", { name: "Create report" });
 		await expect(dialog.getByRole("radiogroup", { name: "File type" })).toBeVisible();
@@ -338,21 +337,13 @@ test.describe("Studio dialogs", () => {
 
 	test("the source picker narrows what a generation uses", async ({
 		page,
-		workspace,
 		notebook,
 		request,
 		token,
 	}) => {
-		await addNoteSource(request, token, workspace.id, notebook.id, "Source one", "One.");
-		const two = await addNoteSource(
-			request,
-			token,
-			workspace.id,
-			notebook.id,
-			"Source two",
-			"Two."
-		);
-		await openNotebook(page, workspace.id, notebook.id, "Studio");
+		await addNoteSource(request, token, notebook.id, "Source one", "One.");
+		const two = await addNoteSource(request, token, notebook.id, "Source two", "Two.");
+		await openNotebook(page, notebook.id, "Studio");
 		await studioTile(page, "Mind Map").click();
 		const dialog = page.getByRole("dialog", { name: "Customize mind map" });
 		await dialog.getByRole("button", { name: "2 sources" }).click();

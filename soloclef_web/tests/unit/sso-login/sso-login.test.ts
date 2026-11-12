@@ -24,7 +24,7 @@ test("an address on another site is never passed on", () => {
 });
 
 test("every refusal the callback can send is explained in words", () => {
-	// The codes in soloclef_backend/app/auth_oidc/errors.py.
+	// The codes the API's single sign-on sends (soloclef_api/internal/oidcsignin).
 	for (const code of [
 		"OIDC_NO_ACCOUNT",
 		"OIDC_EMAIL_NOT_VERIFIED",

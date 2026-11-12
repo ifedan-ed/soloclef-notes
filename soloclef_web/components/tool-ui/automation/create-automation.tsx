@@ -1,15 +1,10 @@
 "use client";
 
 import type { ToolCallMessagePartProps } from "@assistant-ui/react";
-import { useAtomValue } from "jotai";
 import { AlarmClock, AlertCircle, CornerDownLeftIcon, ExternalLink, Pencil } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-	AutomationModelFields,
-	type AutomationModelSelection,
-} from "@/app/dashboard/[workspace_id]/automations/components/builder/automation-model-fields";
-import { activeWorkspaceIdAtom } from "@/atoms/workspaces/workspace-query.atoms";
+import { AutomationChatModelField } from "@/app/dashboard/automations/components/builder/automation-model-fields";
 import { JsonView } from "@/components/json-view";
 import { TextShimmerLoader } from "@/components/prompt-kit/loader";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -17,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { automationCreateRequest } from "@/contracts/types/automation.types";
 import type { HitlDecision, InterruptResult } from "@/features/chat-messages/hitl";
 import { isInterruptResult, useHitlDecision, useHitlPhase } from "@/features/chat-messages/hitl";
-import { useAutomationEligibleModels } from "@/hooks/use-automation-eligible-models";
+import { automationPath } from "@/lib/dashboard-paths";
 import {
 	trackAutomationChatApproved,
 	trackAutomationChatCreateFailed,
@@ -27,16 +22,14 @@ import {
 } from "@/lib/posthog/events";
 import { AutomationDraftPreview } from "./automation-draft-preview";
 
-const editArgsSchema = automationCreateRequest.omit({ workspace_id: true });
-
 // ----------------------------------------------------------------------------
 // Result discrimination — mirrors the backend return shapes in
 // app/agents/multi_agent_chat/main_agent/tools/automation/create.py.
 // ----------------------------------------------------------------------------
 
-type AutomationCreateContext = {
-	workspace_id?: number;
-};
+// The interrupt carries no context of its own: the server takes the account
+// from the session, so nothing here names whose automation it is.
+type AutomationCreateContext = Record<string, never>;
 
 interface SavedResult {
 	status: "saved";
@@ -80,8 +73,7 @@ function hasStatus(value: unknown, status: string): boolean {
 // Approval card — pending → processing → complete / rejected.
 //
 // Edit toggle reuses the same primitives as the Create-via-JSON page: raw
-// textarea, Format, Zod validation against ``AutomationCreate`` (minus the
-// ``workspace_id`` field, which the backend injects). Approve dispatches
+// textarea, Format, Zod validation against ``AutomationCreate``. Approve dispatches
 // an ``edit`` decision with the parsed args when edits are pending, otherwise
 // a plain ``approve``. Multi-turn chat refinement still works as a fallback.
 // ----------------------------------------------------------------------------
@@ -107,64 +99,31 @@ function ApprovalCard({ args, interruptData, onDecision }: ApprovalCardProps) {
 	const effectiveArgs = pendingEdits ?? args;
 	const draft = useMemo(() => extractDraft(effectiveArgs), [effectiveArgs]);
 
-	// Per-automation model selection. The card always supplies models (chosen
-	// here, not snapshotted from the workspace), so Approve dispatches an
-	// `edit` decision carrying `definition.models`.
-	const workspaceId = useAtomValue(activeWorkspaceIdAtom);
-	const eligibleModels = useAutomationEligibleModels();
-	const [modelSelection, setModelSelection] = useState<AutomationModelSelection>({
-		chatModelId: null,
-		imageConfigId: 0,
-		visionConfigId: 0,
-	});
-	// Resolve each slot during render: an explicit pick wins, else the eligible
-	// default. No effect seeds async hook data into state.
-	const resolvedModels = useMemo<AutomationModelSelection>(
-		() => ({
-			chatModelId: modelSelection.chatModelId ?? eligibleModels.llm.defaultId,
-			imageConfigId: modelSelection.imageConfigId || eligibleModels.image.defaultId || 0,
-			visionConfigId: modelSelection.visionConfigId || eligibleModels.vision.defaultId || 0,
-		}),
-		[
-			modelSelection,
-			eligibleModels.llm.defaultId,
-			eligibleModels.image.defaultId,
-			eligibleModels.vision.defaultId,
-		]
-	);
-	const modelsResolved =
-		resolvedModels.chatModelId !== null &&
-		resolvedModels.imageConfigId !== 0 &&
-		resolvedModels.visionConfigId !== 0;
+	// The model picked on the card, by its proxy name; null runs the
+	// automation on the account's own chat model, and then nothing about a
+	// model is written into the definition.
+	const [chatModel, setChatModel] = useState<string | null>(null);
 
 	const handleApprove = useCallback(() => {
-		if (phase !== "pending" || !canApprove || isEditing || !modelsResolved) return;
+		if (phase !== "pending" || !canApprove || isEditing) return;
 		setProcessing();
 		const baseArgs = pendingEdits ?? args;
 		const baseDefinition = (baseArgs.definition ?? {}) as Record<string, unknown>;
-		const mergedArgs = {
-			...baseArgs,
-			definition: {
-				...baseDefinition,
-				models: {
-					chat_model_id: resolvedModels.chatModelId,
-					image_gen_model_id: resolvedModels.imageConfigId,
-					vision_model_id: resolvedModels.visionConfigId,
-				},
-			},
-		};
+		// A pick made here replaces whatever the draft named; no pick leaves
+		// the draft's definition as it was drafted or edited.
+		const mergedArgs =
+			chatModel === null
+				? baseArgs
+				: { ...baseArgs, definition: { ...baseDefinition, models: { chat: chatModel } } };
 		const plan = Array.isArray(baseDefinition.plan) ? baseDefinition.plan : [];
 		const triggers = Array.isArray(baseArgs.triggers) ? baseArgs.triggers : [];
 		trackAutomationChatApproved({
-			workspace_id: workspaceId ? Number(workspaceId) : undefined,
 			edited: pendingEdits !== null,
 			task_count: plan.length,
 			trigger_type:
 				(triggers[0] as { type?: string } | undefined)?.type ??
 				(triggers.length ? undefined : "none"),
-			chat_model_id: resolvedModels.chatModelId ?? undefined,
-			image_gen_model_id: resolvedModels.imageConfigId,
-			vision_model_id: resolvedModels.visionConfigId,
+			chat_model: chatModel ?? undefined,
 		});
 		onDecision({
 			type: "edit",
@@ -177,24 +136,20 @@ function ApprovalCard({ args, interruptData, onDecision }: ApprovalCardProps) {
 		phase,
 		canApprove,
 		isEditing,
-		modelsResolved,
 		setProcessing,
 		onDecision,
 		interruptData,
 		args,
 		pendingEdits,
-		resolvedModels,
-		workspaceId,
+		chatModel,
 	]);
 
 	const handleReject = useCallback(() => {
 		if (phase !== "pending" || !canReject || isEditing) return;
 		setRejected();
-		trackAutomationChatRejected({
-			workspace_id: workspaceId ? Number(workspaceId) : undefined,
-		});
+		trackAutomationChatRejected();
 		onDecision({ type: "reject", message: "User rejected the automation draft." });
-	}, [phase, canReject, isEditing, setRejected, onDecision, workspaceId]);
+	}, [phase, canReject, isEditing, setRejected, onDecision]);
 
 	useEffect(() => {
 		if (isEditing) return;
@@ -267,9 +222,7 @@ function ApprovalCard({ args, interruptData, onDecision }: ApprovalCardProps) {
 						onSave={(parsed) => {
 							setPendingEdits(parsed);
 							setIsEditing(false);
-							trackAutomationChatDraftEdited({
-								workspace_id: workspaceId ? Number(workspaceId) : undefined,
-							});
+							trackAutomationChatDraftEdited();
 						}}
 						onCancel={() => setIsEditing(false)}
 					/>
@@ -282,22 +235,12 @@ function ApprovalCard({ args, interruptData, onDecision }: ApprovalCardProps) {
 				<>
 					<div className="mx-5 h-px bg-border/50" />
 					<div className="px-5 py-4">
-						<p className="mb-3 text-xs font-medium text-foreground">Models</p>
-						<AutomationModelFields
-							workspaceId={Number(workspaceId)}
-							value={resolvedModels}
-							onChange={(patch) => setModelSelection((prev) => ({ ...prev, ...patch }))}
-						/>
+						<AutomationChatModelField value={chatModel} onChange={setChatModel} />
 					</div>
 					<div className="mx-5 h-px bg-border/50" />
 					<div className="px-5 py-4 flex items-center gap-2 select-none">
 						{canApprove && (
-							<Button
-								size="sm"
-								className="rounded-lg gap-1.5"
-								disabled={!modelsResolved}
-								onClick={handleApprove}
-							>
+							<Button size="sm" className="rounded-lg gap-1.5" onClick={handleApprove}>
 								Approve
 								<CornerDownLeftIcon className="size-3 opacity-60" />
 							</Button>
@@ -331,7 +274,7 @@ function JsonEditor({ initialValue, onSave, onCancel }: JsonEditorProps) {
 
 	function handleSave() {
 		setIssues([]);
-		const result = editArgsSchema.safeParse(value);
+		const result = automationCreateRequest.safeParse(value);
 		if (!result.success) {
 			setIssues(
 				result.error.issues.map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
@@ -385,7 +328,6 @@ function JsonEditor({ initialValue, onSave, onCancel }: JsonEditorProps) {
 // ----------------------------------------------------------------------------
 
 function SavedCard({ result }: { result: SavedResult }) {
-	const workspaceId = useAtomValue(activeWorkspaceIdAtom);
 	const tracked = useRef(false);
 	useEffect(() => {
 		if (tracked.current) return;
@@ -393,13 +335,8 @@ function SavedCard({ result }: { result: SavedResult }) {
 		trackAutomationChatCreateSucceeded({
 			automation_id: result.automation_id,
 			name: result.name,
-			workspace_id: workspaceId ? Number(workspaceId) : undefined,
 		});
-	}, [result.automation_id, result.name, workspaceId]);
-
-	const detailHref = workspaceId
-		? `/dashboard/${workspaceId}/automations/${result.automation_id}`
-		: null;
+	}, [result.automation_id, result.name]);
 
 	return (
 		<div className="my-4 max-w-lg overflow-hidden rounded-2xl border bg-muted/30 select-none">
@@ -410,26 +347,21 @@ function SavedCard({ result }: { result: SavedResult }) {
 					<p className="text-xs text-muted-foreground mt-0.5">{result.name}</p>
 				</div>
 			</div>
-			{detailHref && (
-				<>
-					<div className="mx-5 h-px bg-border/50" />
-					<div className="px-5 py-3">
-						<Link
-							href={detailHref}
-							className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
-						>
-							<ExternalLink className="h-3.5 w-3.5" aria-hidden />
-							Open automation #{result.automation_id}
-						</Link>
-					</div>
-				</>
-			)}
+			<div className="mx-5 h-px bg-border/50" />
+			<div className="px-5 py-3">
+				<Link
+					href={automationPath(result.automation_id)}
+					className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+				>
+					<ExternalLink className="h-3.5 w-3.5" aria-hidden />
+					Open automation #{result.automation_id}
+				</Link>
+			</div>
 		</div>
 	);
 }
 
 function InvalidCard({ result }: { result: InvalidResult }) {
-	const workspaceId = useAtomValue(activeWorkspaceIdAtom);
 	const tracked = useRef(false);
 	useEffect(() => {
 		if (tracked.current) return;
@@ -437,9 +369,8 @@ function InvalidCard({ result }: { result: InvalidResult }) {
 		trackAutomationChatCreateFailed({
 			reason: "invalid",
 			issue_count: result.issues.length,
-			workspace_id: workspaceId ? Number(workspaceId) : undefined,
 		});
-	}, [result.issues.length, workspaceId]);
+	}, [result.issues.length]);
 
 	return (
 		<div className="my-4 max-w-lg overflow-hidden rounded-2xl border bg-muted/30 select-none">
@@ -464,7 +395,6 @@ function InvalidCard({ result }: { result: InvalidResult }) {
 }
 
 function ErrorCard({ result }: { result: ErrorResult }) {
-	const workspaceId = useAtomValue(activeWorkspaceIdAtom);
 	const tracked = useRef(false);
 	useEffect(() => {
 		if (tracked.current) return;
@@ -472,9 +402,8 @@ function ErrorCard({ result }: { result: ErrorResult }) {
 		trackAutomationChatCreateFailed({
 			reason: "error",
 			message: result.message,
-			workspace_id: workspaceId ? Number(workspaceId) : undefined,
 		});
-	}, [result.message, workspaceId]);
+	}, [result.message]);
 
 	return (
 		<div className="my-4 max-w-lg overflow-hidden rounded-2xl border bg-muted/30 select-none">
@@ -530,8 +459,7 @@ export const CreateAutomationToolUI = ({
 /**
  * Project raw args into the shape ``AutomationDraftPreview`` expects.
  *
- * The args dict is the full ``AutomationCreate`` payload (minus
- * ``workspace_id`` which is injected server-side), so we trust the
+ * The args dict is the full ``AutomationCreate`` payload, so we trust the
  * top-level fields but defend against missing nested defaults.
  */
 function extractDraft(args: Record<string, unknown>) {

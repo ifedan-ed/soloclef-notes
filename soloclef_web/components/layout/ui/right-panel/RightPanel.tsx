@@ -47,14 +47,6 @@ const CitationPanelContent = dynamic(
 	{ ssr: false, loading: () => null }
 );
 
-const RunCitationPanelContent = dynamic(
-	() =>
-		import("@/components/citations/run-citation-panel").then((m) => ({
-			default: m.RunCitationPanelContent,
-		})),
-	{ ssr: false, loading: () => null }
-);
-
 const HitlEditPanelContent = dynamic(
 	() =>
 		import("@/features/chat-messages/hitl").then((m) => ({
@@ -107,16 +99,12 @@ export function useRightPanelLayout(): RightPanelLayout {
 	const supportsArtifactPanel = useMediaQuery("(min-width: 1024px)");
 	const artifactsOpen = supportsArtifactPanel && artifactsPanelOpen;
 	const artifactOpen = supportsArtifactPanel && artifactState.isOpen && !!artifactState.artifactId;
-	const documentOpen =
-		supportsArtifactPanel &&
-		documentState.isOpen &&
-		!!documentState.documentId &&
-		!!documentState.workspaceId;
+	const documentOpen = supportsArtifactPanel && documentState.isOpen && !!documentState.documentId;
 	const editorOpen =
 		editorState.isOpen &&
 		(editorState.kind === "memory" ? !!editorState.memoryScope : !!editorState.localFilePath);
 	const hitlEditOpen = hitlEditState.isOpen && !!hitlEditState.onSave;
-	const citationOpen = citationState.isOpen && citationState.target != null;
+	const citationOpen = citationState.isOpen && citationState.chunkId != null;
 	const openByTab: Record<RightPanelTab, boolean> = {
 		none: false,
 		document: documentOpen,
@@ -247,28 +235,23 @@ export function RightPanel({ layout }: RightPanelProps) {
 									/>
 								</div>
 							)}
-							{effectiveTab === "document" &&
-								documentOpen &&
-								documentState.documentId &&
-								documentState.workspaceId && (
-									<div className="flex h-full min-w-0 flex-col">
-										<DocumentViewerContent
-											documentId={documentState.documentId}
-											workspaceId={documentState.workspaceId}
-											title={documentState.title}
-											initialPage={documentState.initialPage}
-											highlightText={documentState.highlightText}
-											onClose={closeDocument}
-										/>
-									</div>
-								)}
+							{effectiveTab === "document" && documentOpen && documentState.documentId && (
+								<div className="flex h-full min-w-0 flex-col">
+									<DocumentViewerContent
+										documentId={documentState.documentId}
+										title={documentState.title}
+										initialPage={documentState.initialPage}
+										highlightText={documentState.highlightText}
+										onClose={closeDocument}
+									/>
+								</div>
+							)}
 							{effectiveTab === "editor" && editorOpen && (
 								<div className="flex h-full min-w-0 flex-col">
 									<EditorPanelContent
 										kind={editorState.kind}
 										localFilePath={editorState.localFilePath ?? undefined}
 										memoryScope={editorState.memoryScope ?? undefined}
-										workspaceId={editorState.workspaceId ?? undefined}
 										title={editorState.title}
 										onClose={closeEditor}
 									/>
@@ -287,19 +270,9 @@ export function RightPanel({ layout }: RightPanelProps) {
 									/>
 								</div>
 							)}
-							{effectiveTab === "citation" && citationOpen && citationState.target && (
+							{effectiveTab === "citation" && citationOpen && citationState.chunkId != null && (
 								<div className="flex h-full min-w-0 flex-col">
-									{citationState.target.kind === "run" ? (
-										<RunCitationPanelContent
-											runId={citationState.target.runId}
-											onClose={closeCitation}
-										/>
-									) : (
-										<CitationPanelContent
-											chunkId={citationState.target.chunkId}
-											onClose={closeCitation}
-										/>
-									)}
+									<CitationPanelContent chunkId={citationState.chunkId} onClose={closeCitation} />
 								</div>
 							)}
 							{effectiveTab === "artifacts" && artifactsOpen && (

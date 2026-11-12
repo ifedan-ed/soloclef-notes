@@ -16,6 +16,12 @@
 //   - The key is the same key. The counter lives in the Redis the Python tier
 //     uses, under the key the `limits` library builds, so a client's 1024 is
 //     one budget across both tiers rather than 1024 on each.
+//
+// One deliberate difference from SlowAPI (2026-11-12): an IPv6 client is
+// counted by its /64, not by its whole address (client_network.go), because
+// one machine owns every address of its /64 and SlowAPI's per-address count
+// let it take a fresh budget for each request. The Python tier no longer
+// serves the live site, so there is no second count for this to disagree with.
 package ratelimit
 
 import (

@@ -4,8 +4,6 @@ import { AppError } from "@/lib/error";
 export type ResetProblem =
 	| "reset_link_invalid"
 	| "password_too_short"
-	| "security_check_failed"
-	| "security_check_unavailable"
 	| "too_many_attempts"
 	| "reset_failed";
 
@@ -16,11 +14,10 @@ export function classifyResetError(error: unknown): ResetProblem {
 	const code = error instanceof AppError ? (error.code ?? "") : "";
 	const status = error instanceof AppError ? error.status : undefined;
 	if (message === "RESET_PASSWORD_BAD_TOKEN") return "reset_link_invalid";
-	if (code === "RESET_PASSWORD_INVALID_PASSWORD") return "password_too_short";
-	if (message === "TURNSTILE_REQUIRED" || message === "TURNSTILE_FAILED") {
-		return "security_check_failed";
+	// The API names the reason in the message; `code` only restates the status.
+	if (message === "RESET_PASSWORD_INVALID_PASSWORD" || code === "RESET_PASSWORD_INVALID_PASSWORD") {
+		return "password_too_short";
 	}
-	if (message === "TURNSTILE_UNAVAILABLE") return "security_check_unavailable";
 	if (status === 429 || message === "RATE_LIMIT_EXCEEDED") return "too_many_attempts";
 	return "reset_failed";
 }

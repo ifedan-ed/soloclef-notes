@@ -3,7 +3,8 @@ export interface CanSubmitChatInput {
 	isThreadRunning: boolean;
 	isBlockedByOtherUser: boolean;
 	isComposerEmpty: boolean;
-	isWorkspaceChatReady: boolean;
+	/** The account has a usable chat model; without one a send would only be refused. */
+	isChatModelReady: boolean;
 }
 
 export function canSubmitChat({
@@ -11,13 +12,13 @@ export function canSubmitChat({
 	isThreadRunning,
 	isBlockedByOtherUser,
 	isComposerEmpty,
-	isWorkspaceChatReady,
+	isChatModelReady,
 }: CanSubmitChatInput): boolean {
 	return (
 		!isLoadingMessages &&
 		!isThreadRunning &&
 		!isBlockedByOtherUser &&
 		!isComposerEmpty &&
-		isWorkspaceChatReady
+		isChatModelReady
 	);
 }

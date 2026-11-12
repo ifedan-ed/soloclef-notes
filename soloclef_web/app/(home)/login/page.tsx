@@ -10,7 +10,6 @@ import { useRuntimeConfig } from "@/components/providers/runtime-config";
 import { Button } from "@/components/ui/button";
 import { getAuthErrorDetails, shouldRetry } from "@/lib/auth-errors";
 import { setRedirectPath } from "@/lib/auth-utils";
-import { GoogleLoginButton } from "./GoogleLoginButton";
 import { LocalLoginForm } from "./LocalLoginForm";
 import { SsoLoginButton } from "./SsoLoginButton";
 
@@ -25,7 +24,7 @@ function LoginContent() {
 	const t = useTranslations("auth");
 	const tCommon = useTranslations("common");
 	const router = useRouter();
-	const { authType, oidcEnabled } = useRuntimeConfig();
+	const { oidcEnabled } = useRuntimeConfig();
 	const [urlError, setUrlError] = useState<{ title: string; message: string } | null>(null);
 	const searchParams = useSearchParams();
 
@@ -101,10 +100,6 @@ function LoginContent() {
 			});
 		}
 	}, [router, searchParams, t, tCommon]);
-
-	if (authType === "GOOGLE") {
-		return <GoogleLoginButton />;
-	}
 
 	return (
 		<section className="ss-home-hero ss-home-pad flex min-h-screen items-center justify-center">

@@ -49,10 +49,6 @@ export function SentAnnouncementsList({ items }: { items: SentAnnouncement[] }) 
 							</p>
 							<p className="line-clamp-1 text-sm text-muted-foreground">{plainTextOf(item.body)}</p>
 							<p className="mt-1 text-xs text-muted-foreground">
-								{item.audience === "all"
-									? "Everyone"
-									: `Workspace: ${item.workspace_name ?? `#${item.workspace_id}`}`}
-								{" · "}
 								{when(item.created_at)}
 								{" · "}
 								{item.status === "withdrawn"

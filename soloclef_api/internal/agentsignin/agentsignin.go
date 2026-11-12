@@ -1,14 +1,13 @@
 // Package agentsignin verifies an AI agent's access token from the identity
 // provider and finds the account it acts as, as app/agent_sign_in does.
 //
-// An agent (claude.ai, ChatGPT) signs in at Authentik and sends the access
-// token it got. Until this package existed, such a request was forwarded to the
-// Python tier, because refusing it would have logged every agent out and
-// accepting it unchecked would have been an auth bypass. Verifying it here is
-// the same decision taken twice, so every rule is mirrored rather than
-// reinvented: the accepted algorithms, the leeway, the required claims, the
-// audience and issuer checks, the key-rotation refresh and its cooldown, the
-// access claim, and which account an identity maps to.
+// An agent (claude.ai, ChatGPT) signs in at the identity provider and sends the
+// access token it got. This package is the only thing that verifies such a
+// token, so every rule the Python version had is kept rather than reinvented:
+// the accepted algorithms, the leeway, the required claims, the audience and
+// issuer checks, the key-rotation refresh and its cooldown, the access claim,
+// and which account an identity maps to. A difference in any of them would
+// have locked existing agents out, or let a token in that was refused before.
 //
 // The division of the files follows app/agent_sign_in's own: the token
 // (access_token.py), the account (account.py) and the HTTP verdict

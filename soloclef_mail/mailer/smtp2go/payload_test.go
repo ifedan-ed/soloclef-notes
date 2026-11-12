@@ -10,11 +10,12 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_mail/mailer"
 )
 
-// The request body is compared with the bytes app/mailer/smtp2go_api.py's
-// _payload() produces once httpx has encoded it, because the encoding is
-// httpx's own (ensure_ascii=False, compact separators) and Go's encoder
-// disagrees with it on the HTML in every message body. The fixtures come from
-// scripts/python_smtp2go_payload.py, run in the backend image.
+// The request body is compared with the bytes the Python sender produced once
+// httpx had encoded it, because the encoding is httpx's own
+// (ensure_ascii=False, compact separators) and Go's encoder disagrees with it
+// on the HTML in every message body. The fixtures in
+// testdata/python_request_body.json were recorded from it when the sender
+// moved to Go.
 
 type bodyFixture struct {
 	Name    string `json:"name"`

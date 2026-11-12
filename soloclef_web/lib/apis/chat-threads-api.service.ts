@@ -4,15 +4,13 @@ import {
 	type PublicChatSnapshotDeleteRequest,
 	type PublicChatSnapshotListRequest,
 	type PublicChatSnapshotListResponse,
-	type PublicChatSnapshotsBySpaceRequest,
-	type PublicChatSnapshotsBySpaceResponse,
+	type PublicChatSnapshotsAccountResponse,
 	publicChatSnapshotCreateRequest,
 	publicChatSnapshotCreateResponse,
 	publicChatSnapshotDeleteRequest,
 	publicChatSnapshotListRequest,
 	publicChatSnapshotListResponse,
-	publicChatSnapshotsBySpaceRequest,
-	publicChatSnapshotsBySpaceResponse,
+	publicChatSnapshotsAccountResponse,
 } from "@/contracts/types/chat-threads.types";
 import { ValidationError } from "../error";
 import { baseApiService } from "./base-api.service";
@@ -75,22 +73,11 @@ class ChatThreadsApiService {
 	};
 
 	/**
-	 * List all public chat snapshots for a workspace.
+	 * List every public chat snapshot of the signed-in account. The server
+	 * takes the owner from the session, so there is nothing to send.
 	 */
-	listPublicChatSnapshotsForWorkspace = async (
-		request: PublicChatSnapshotsBySpaceRequest
-	): Promise<PublicChatSnapshotsBySpaceResponse> => {
-		const parsed = publicChatSnapshotsBySpaceRequest.safeParse(request);
-
-		if (!parsed.success) {
-			const errorMessage = parsed.error.issues.map((issue) => issue.message).join(", ");
-			throw new ValidationError(`Invalid request: ${errorMessage}`);
-		}
-
-		return baseApiService.get(
-			`/api/v1/workspaces/${parsed.data.workspace_id}/snapshots`,
-			publicChatSnapshotsBySpaceResponse
-		);
+	listAccountPublicChatSnapshots = async (): Promise<PublicChatSnapshotsAccountResponse> => {
+		return baseApiService.get("/api/v1/snapshots", publicChatSnapshotsAccountResponse);
 	};
 }
 

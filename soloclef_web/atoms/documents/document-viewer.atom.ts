@@ -4,7 +4,6 @@ import { rightPanelCollapsedAtom, rightPanelTabAtom } from "@/atoms/layout/right
 interface DocumentViewerState {
 	isOpen: boolean;
 	documentId: number | null;
-	workspaceId: number | null;
 	title: string;
 	/** 1-based page of the original PDF to open at (a citation's page), or null for the first. */
 	initialPage: number | null;
@@ -14,7 +13,6 @@ interface DocumentViewerState {
 
 export interface OpenDocumentViewerPayload {
 	documentId: number;
-	workspaceId: number;
 	title: string;
 	initialPage?: number | null;
 	highlightText?: string | null;
@@ -23,7 +21,6 @@ export interface OpenDocumentViewerPayload {
 const initialState: DocumentViewerState = {
 	isOpen: false,
 	documentId: null,
-	workspaceId: null,
 	title: "",
 	initialPage: null,
 	highlightText: null,
@@ -34,18 +31,13 @@ const previousCollapsedAtom = atom<boolean | null>(null);
 
 export const openDocumentViewerAtom = atom(
 	null,
-	(
-		get,
-		set,
-		{ documentId, workspaceId, title, initialPage, highlightText }: OpenDocumentViewerPayload
-	) => {
+	(get, set, { documentId, title, initialPage, highlightText }: OpenDocumentViewerPayload) => {
 		if (!get(documentViewerAtom).isOpen) {
 			set(previousCollapsedAtom, get(rightPanelCollapsedAtom));
 		}
 		set(documentViewerAtom, {
 			isOpen: true,
 			documentId,
-			workspaceId,
 			title,
 			initialPage: initialPage && initialPage > 0 ? initialPage : null,
 			highlightText: highlightText || null,

@@ -151,7 +151,6 @@ export const podcastDetail = z.object({
 	duration_seconds: z.number().nullable(),
 	error: z.string().nullable(),
 	created_at: z.string(),
-	workspace_id: z.number(),
 	thread_id: z.number().nullable(),
 	artifact_id: z.number().int().positive().nullish(),
 });

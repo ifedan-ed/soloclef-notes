@@ -8,10 +8,6 @@
 
 import packageJson from "../package.json";
 
-// Build-time fallback for packaged clients. Docker/runtime deployments default to
-// local auth unless AUTH_TYPE/NEXT_PUBLIC_AUTH_TYPE explicitly selects Google.
-export const BUILD_TIME_AUTH_TYPE = process.env.NEXT_PUBLIC_AUTH_TYPE || "LOCAL";
-
 // Backend API URL. An empty string is valid in proxy mode and means
 // same-origin relative requests (e.g. /api/v1/... and /auth/...).
 export const BACKEND_URL = process.env.NEXT_PUBLIC_FASTAPI_BACKEND_URL ?? "";
@@ -73,11 +69,6 @@ export const SERVER_BACKEND_URL =
 	// TODO: Remove FASTAPI_BACKEND_INTERNAL_URL after the post-Caddy env migration window.
 	process.env.FASTAPI_BACKEND_INTERNAL_URL ||
 	"http://backend:8000";
-
-// Build-time fallback for packaged clients: the upload dialog's file list before
-// /etl/capabilities answers. Docker runtime derives it from ETL_DEFAULT_PARSER and
-// ETL_CLOUD_SERVICE first (lib/etl/fallback-service.ts), then falls back to this.
-export const BUILD_TIME_ETL_SERVICE = process.env.NEXT_PUBLIC_ETL_SERVICE || "PYMUPDF4LLM";
 
 // Build-time fallback for packaged clients. Docker runtime reads plain
 // DEPLOYMENT_MODE through the runtime config provider first, then falls back to this baked value.

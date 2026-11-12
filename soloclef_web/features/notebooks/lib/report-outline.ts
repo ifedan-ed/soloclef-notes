@@ -1,7 +1,7 @@
 /**
  * A Markdown report split into the sections its table of contents lists.
  *
- * Mirrors app/notebooks/studio/report_view/sections.py, so a suggestion the
+ * The API splits it by the same rule (soloclef_api/internal/studioviews/outline.go), so a suggestion the
  * backend stored against section n sits under the section shown as n: a
  * leading `#` heading is the title; the listed level is the shallowest heading
  * level occurring at least twice after it (else the shallowest present);

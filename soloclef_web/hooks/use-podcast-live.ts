@@ -19,7 +19,6 @@ export interface LivePodcast {
 	durationSeconds: number | null;
 	error: string | null;
 	artifactId: number | null;
-	workspaceId: number;
 	threadId: number | null;
 }
 
@@ -42,7 +41,6 @@ export function usePodcastLive(podcastId: number | undefined): UsePodcastLiveRes
 			durationSeconds: row.durationSeconds ?? null,
 			error: row.error ?? null,
 			artifactId: row.artifactId ?? null,
-			workspaceId: row.workspaceId,
 			threadId: row.threadId ?? null,
 		};
 	}, [podcastId, row]);

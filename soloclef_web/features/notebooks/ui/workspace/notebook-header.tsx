@@ -44,8 +44,15 @@ export function NotebookHeader({
 	const shown = useRef(notebook?.title ?? "");
 	useEffect(() => {
 		const next = notebook?.title ?? "";
-		setTitle((current) => (current === shown.current ? next : current));
+		// The title that was shown is read here, not inside the updater. React
+		// may run an updater later, during the next render, and by then the
+		// ref below already holds the new title: the comparison then failed,
+		// the box kept its old text, and a notebook whose page had another
+		// update waiting (an auto-named one, which is re-read for its name)
+		// opened with an empty title box.
+		const previous = shown.current;
 		shown.current = next;
+		setTitle((current) => (current === previous ? next : current));
 	}, [notebook?.title]);
 
 	const commit = () => {

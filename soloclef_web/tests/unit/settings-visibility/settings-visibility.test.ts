@@ -3,46 +3,45 @@ import { test } from "node:test";
 import {
 	audienceOf,
 	leavesTab,
-	showsUserSettingsTab,
-	showsWorkspaceSettingsTab,
+	showsSettingsTab,
 } from "../../../features/settings-visibility/settings-visibility";
 
 test("community prompts, agent permissions and announcements are for administrators", () => {
 	for (const tab of ["community-prompts", "agent-permissions", "announcements"]) {
-		assert.equal(showsUserSettingsTab(tab, "admin"), true);
-		assert.equal(showsUserSettingsTab(tab, "member"), false);
-		assert.equal(showsUserSettingsTab(tab, "unknown"), false);
+		assert.equal(showsSettingsTab(tab, "admin"), true);
+		assert.equal(showsSettingsTab(tab, "member"), false);
+		assert.equal(showsSettingsTab(tab, "unknown"), false);
 	}
-	assert.equal(showsUserSettingsTab("prompts", "member"), true);
-	assert.equal(showsUserSettingsTab("profile", "unknown"), true);
+	assert.equal(showsSettingsTab("prompts", "member"), true);
+	assert.equal(showsSettingsTab("profile", "unknown"), true);
 });
 
 test("everyone can open API keys, which Connect your agent tells them to use", () => {
 	for (const who of ["admin", "member", "unknown"] as const) {
-		assert.equal(showsUserSettingsTab("api-key", who), true);
+		assert.equal(showsSettingsTab("api-key", who), true);
 	}
 });
 
-test("no workspace settings tab is Owner-only now that the connected repo page is gone", () => {
+test("the account's own sections are shown to every account", () => {
 	for (const tab of [
-		"general",
+		"models",
+		"instructions",
+		"memory",
 		"connectors",
 		"automations",
 		"public-links",
-		"team-roles",
-		"prompts",
 	]) {
-		assert.equal(showsWorkspaceSettingsTab(tab, "member"), true);
+		assert.equal(showsSettingsTab(tab, "member"), true);
+		assert.equal(showsSettingsTab(tab, "unknown"), true);
 	}
 });
 
 test("an admin page leaves only once we know who is looking", () => {
 	assert.equal(audienceOf(undefined), "unknown");
 	assert.equal(audienceOf(false), "member");
-	assert.equal(leavesTab("agent-permissions", "unknown", showsUserSettingsTab), false);
-	assert.equal(leavesTab("agent-permissions", "member", showsUserSettingsTab), true);
-	assert.equal(leavesTab("agent-permissions", "admin", showsUserSettingsTab), false);
-	assert.equal(leavesTab("api-key", "member", showsUserSettingsTab), false);
-	assert.equal(leavesTab("general", "member", showsWorkspaceSettingsTab), false);
-	assert.equal(leavesTab("profile", "member", showsUserSettingsTab), false);
+	assert.equal(leavesTab("agent-permissions", "unknown", showsSettingsTab), false);
+	assert.equal(leavesTab("agent-permissions", "member", showsSettingsTab), true);
+	assert.equal(leavesTab("agent-permissions", "admin", showsSettingsTab), false);
+	assert.equal(leavesTab("api-key", "member", showsSettingsTab), false);
+	assert.equal(leavesTab("profile", "member", showsSettingsTab), false);
 });

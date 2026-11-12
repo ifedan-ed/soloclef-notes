@@ -21,6 +21,16 @@ export type PickerSession = z.infer<typeof pickerSessionSchema>;
 
 export type PickedDriveFile = { id: string; name: string; mime_type: string };
 
+/**
+ * The import request, field for field what the server's DriveImportRequest
+ * reads. The picks land in the signed-in account's library (the server takes
+ * the account from the session), and in the notebook too when one is named.
+ */
+export type DriveImportRequest = {
+	files: PickedDriveFile[];
+	notebook_id: number | null;
+};
+
 const importResultSchema = z.object({
 	document_ids: z.array(z.number()),
 	queued: z.number(),
@@ -30,7 +40,8 @@ export type DriveImportResult = z.infer<typeof importResultSchema>;
 
 const disconnectedSchema = z.object({ revoked: z.boolean() });
 
-const workspaceBase = (workspaceId: number) => `/api/v1/workspaces/${workspaceId}/google-drive`;
+// The account's own Drive connection: one per account, so no id in the path.
+const accountBase = "/api/v1/google-drive";
 const connectorBase = (connectorId: number) => `/api/v1/connectors/${connectorId}/google-drive`;
 
 /**
@@ -39,18 +50,15 @@ const connectorBase = (connectorId: number) => `/api/v1/connectors/${connectorId
  * leaves the server; the Picker gets a short-lived access token.
  */
 export const googleDriveApi = {
-	connection: (workspaceId: number) =>
-		baseApiService.get(`${workspaceBase(workspaceId)}/connection`, googleDriveConnectionSchema),
-	connect: (workspaceId: number, returnPath: string | null) =>
-		baseApiService.post(`${workspaceBase(workspaceId)}/connect`, connectStartedSchema, {
+	connection: () => baseApiService.get(`${accountBase}/connection`, googleDriveConnectionSchema),
+	connect: (returnPath: string | null) =>
+		baseApiService.post(`${accountBase}/connect`, connectStartedSchema, {
 			body: { return_path: returnPath },
 		}),
 	pickerSession: (connectorId: number) =>
 		baseApiService.get(`${connectorBase(connectorId)}/picker-session`, pickerSessionSchema),
-	importPicked: (connectorId: number, files: PickedDriveFile[], notebookId: number | null) =>
-		baseApiService.post(`${connectorBase(connectorId)}/import`, importResultSchema, {
-			body: { files, notebook_id: notebookId },
-		}),
+	importPicked: (connectorId: number, body: DriveImportRequest) =>
+		baseApiService.post(`${connectorBase(connectorId)}/import`, importResultSchema, { body }),
 	disconnect: (connectorId: number) =>
 		baseApiService.delete(`${connectorBase(connectorId)}/connection`, disconnectedSchema),
 };

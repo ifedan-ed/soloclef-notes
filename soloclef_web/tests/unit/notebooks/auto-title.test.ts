@@ -15,7 +15,6 @@ const NOW = 1_800_000_000_000;
 function notebook(overrides: Record<string, unknown> = {}) {
 	return notebookSchema.parse({
 		id: 7,
-		workspace_id: 1,
 		title: "Untitled notebook",
 		icon: "📓",
 		created_at: "2026-09-25T00:00:00Z",
@@ -30,7 +29,6 @@ function notebook(overrides: Record<string, unknown> = {}) {
 test("older servers without the fields read as user-named, never polled", () => {
 	const legacy = notebookSchema.parse({
 		id: 1,
-		workspace_id: 1,
 		title: "Untitled notebook",
 		icon: null,
 		created_at: "2026-09-25T00:00:00Z",

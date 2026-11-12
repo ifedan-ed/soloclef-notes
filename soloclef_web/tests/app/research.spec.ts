@@ -4,15 +4,15 @@ import { expectNoOverflow } from "../helpers/layout/overflow";
 import { expect, openNotebook, test } from "./fixtures";
 
 /**
- * Research box (top of the Sources panel): web, Exa, Tavily, PubMed, arXiv,
+ * Research box (top of the Sources panel): Exa, Tavily, PubMed, arXiv,
  * medRxiv and Google Scholar.
  *
  * The isolated stack has no internet, so a real search can only fail; that
  * failure path is tested against the real backend. The result list is tested
  * with a seeded stream: the search POST is answered in the browser with the
  * backend's SSE event shape (phase → results → done). The import that follows
- * goes to the real backend. Exa and Tavily need a key connected in the
- * workspace; the e2e workspace has none, so the real backend greys them out,
+ * goes to the real backend. Exa and Tavily need a key connected to the
+ * account; the e2e account has none, so the real backend greys them out,
  * and the result-list test stubs the availability check as well.
  */
 
@@ -30,8 +30,9 @@ function sse(events: unknown[]): string {
 }
 
 function resultsFor(source: string): Result[] {
+	// Exa and Tavily find web pages; the scholarly sources find papers.
 	const paper =
-		source === "web"
+		source === "exa" || source === "tavily"
 			? null
 			: {
 					pmid: source === "pubmed" ? "12345678" : null,
@@ -54,7 +55,7 @@ function resultsFor(source: string): Result[] {
 }
 
 async function mockSearch(page: Page, bodies: { source: string; query: string; mode: string }[]) {
-	// As if Exa and Tavily were connected in this workspace.
+	// As if Exa and Tavily were connected to this account.
 	await page.route("**/research/sources", (route: Route) =>
 		route.fulfill({ status: 200, json: { unavailable: {} } })
 	);
@@ -75,7 +76,6 @@ async function mockSearch(page: Page, bodies: { source: string; query: string; m
 }
 
 const SOURCES: [label: string | RegExp, id: string][] = [
-	["Web", "web"],
 	["Exa", "exa"],
 	["Tavily", "tavily"],
 	["PubMed", "pubmed"],
@@ -85,10 +85,10 @@ const SOURCES: [label: string | RegExp, id: string][] = [
 ];
 
 test.describe("Research", () => {
-	test("each source: pick it, search, see its results", async ({ page, workspace, notebook }) => {
+	test("each source: pick it, search, see its results", async ({ page, notebook }) => {
 		const bodies: { source: string; query: string; mode: string }[] = [];
 		await mockSearch(page, bodies);
-		await openNotebook(page, workspace.id, notebook.id, "Sources");
+		await openNotebook(page, notebook.id, "Sources");
 		const query = page.getByRole("textbox", { name: "Search the web for new sources" });
 		await expect(query).toBeVisible();
 
@@ -118,20 +118,25 @@ test.describe("Research", () => {
 		}
 	});
 
-	test("Exa and Tavily are greyed out when the workspace has no key for them", async ({
+	test("Exa and Tavily are greyed out when the account has no key for them", async ({
 		page,
-		workspace,
 		notebook,
 	}) => {
-		// Real backend: the e2e workspace has no Exa or Tavily connector.
+		// Real backend: the e2e account has no Exa or Tavily connector.
 		const status = page.waitForResponse(
 			(r) => r.url().endsWith("/research/sources") && r.request().method() === "GET"
 		);
-		await openNotebook(page, workspace.id, notebook.id, "Sources");
-		// page_reader: the e2e worker stands in a connected Browserbase.
+		await openNotebook(page, notebook.id, "Sources");
+		// Google Scholar has no source in this tier, so it is said to be
+		// unavailable here rather than offered and failing; a pasted page is
+		// read by the plain page reader (there is no Browserbase reader).
 		expect(await (await status).json()).toEqual({
-			unavailable: { exa: "not_connected", tavily: "not_connected" },
-			page_reader: "browserbase",
+			unavailable: {
+				exa: "not_connected",
+				tavily: "not_connected",
+				google_scholar: "not_available",
+			},
+			page_reader: "crawler",
 		});
 		await page.getByRole("button", { name: /^Search in:/ }).click();
 		for (const name of ["Exa", "Tavily"]) {
@@ -140,14 +145,14 @@ test.describe("Research", () => {
 			await expect(item).toContainText("Not connected");
 		}
 		await expect(page.getByText("To search with Exa or Tavily")).toBeVisible();
-		await expect(page.getByRole("menuitemradio", { name: /^Web/ }).first()).toBeEnabled();
+		await expect(page.getByRole("menuitemradio", { name: /^PubMed/ }).first()).toBeEnabled();
 		await expectNoOverflow(page, "research source menu (unavailable)");
 	});
 
-	test("deep research mode is sent with the request", async ({ page, workspace, notebook }) => {
+	test("deep research mode is sent with the request", async ({ page, notebook }) => {
 		const bodies: { source: string; query: string; mode: string }[] = [];
 		await mockSearch(page, bodies);
-		await openNotebook(page, workspace.id, notebook.id, "Sources");
+		await openNotebook(page, notebook.id, "Sources");
 		await page.getByRole("button", { name: /^Research mode:/ }).click();
 		await expectNoOverflow(page, "research mode menu");
 		await page.getByRole("menuitemradio", { name: /Deep research/ }).click();
@@ -159,13 +164,15 @@ test.describe("Research", () => {
 
 	test("select results and import them into the notebook", async ({
 		page,
-		workspace,
 		notebook,
 		request,
 		token,
 	}) => {
 		await mockSearch(page, []);
-		await openNotebook(page, workspace.id, notebook.id, "Sources");
+		await openNotebook(page, notebook.id, "Sources");
+		// Exa (connected, as far as the stubbed check says) finds web pages.
+		await page.getByRole("button", { name: /^Search in:/ }).click();
+		await page.getByRole("menuitemradio", { name: "Exa" }).click();
 		await page
 			.getByRole("textbox", { name: "Search the web for new sources" })
 			.fill("photosynthesis");
@@ -174,7 +181,7 @@ test.describe("Research", () => {
 		// Every result starts selected; untick one, then Select all again.
 		const all = results.getByRole("checkbox", { name: "Select all" });
 		await expect(all).toBeChecked();
-		await results.getByRole("checkbox", { name: "Select E2E web result 2" }).click();
+		await results.getByRole("checkbox", { name: "Select E2E exa result 2" }).click();
 		await expect(all).toHaveAttribute("aria-checked", "mixed");
 		await expect(results.getByRole("button", { name: /^Add 1 source/ })).toBeEnabled();
 		await all.click();
@@ -187,13 +194,13 @@ test.describe("Research", () => {
 			items: { url: string; title: string }[];
 		};
 		expect(sent.items.map((i) => i.url)).toEqual([
-			"https://example.org/web/1",
-			"https://example.org/web/2",
+			"https://example.org/exa/1",
+			"https://example.org/exa/2",
 		]);
 		// The backend adds the pages as sources (their reading fails offline,
 		// which is the backend's business; the rows exist).
 		await expect
-			.poll(async () => (await listSources(request, token, workspace.id, notebook.id)).length, {
+			.poll(async () => (await listSources(request, token, notebook.id)).length, {
 				timeout: 30_000,
 			})
 			.toBeGreaterThanOrEqual(1);
@@ -201,11 +208,10 @@ test.describe("Research", () => {
 
 	test("a real search with no internet ends inline (error or no results), no popup", async ({
 		page,
-		workspace,
 		notebook,
 	}) => {
 		// Real backend, no internet: the search fails.
-		await openNotebook(page, workspace.id, notebook.id, "Sources");
+		await openNotebook(page, notebook.id, "Sources");
 		await page
 			.getByRole("textbox", { name: "Search the web for new sources" })
 			.fill("offline search");

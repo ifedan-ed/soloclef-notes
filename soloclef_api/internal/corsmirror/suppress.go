@@ -2,6 +2,7 @@ package corsmirror
 
 import (
 	"context"
+	"io"
 	"net/http"
 )
 
@@ -23,8 +24,6 @@ import (
 //
 //	GET /api/v1/logs/2200000000              -> 500, CORS headers present
 //	                                            (read_log catches its own)
-//	GET /api/v1/workspaces/2200000000/memory -> 500, none
-//	                                            (get_team_memory catches nothing)
 //	DELETE /api/v1/pats/2200000000           -> 500, none
 //
 // Suppress is how a route says "this is the second kind". It cannot be done by
@@ -91,8 +90,28 @@ func (d *deferredHeaders) Write(body []byte) (int, error) {
 // Unwrap is how http.ResponseController reaches the real writer, which is what
 // a route that ever needs to flush or to set a deadline should use. This
 // wrapper deliberately does not implement http.Flusher itself: nothing here
-// streams, and claiming the interface would make httputil.ReverseProxy flush a
-// response it has no reason to.
+// flushes as it goes (the routes that stream a file send one body of a known
+// length), and claiming the interface would make httputil.ReverseProxy flush
+// a response it has no reason to.
 func (d *deferredHeaders) Unwrap() http.ResponseWriter {
 	return d.ResponseWriter
+}
+
+// ReadFrom passes a whole-body copy down to the writer underneath, which for
+// a file is how it reaches net/http's sendfile. The headers this wrapper
+// exists to add are added first, exactly as in Write: a body that arrives
+// this way starts the response too.
+//
+// It is not the Flusher that Unwrap's comment declines. Nothing consults
+// ReadFrom unless a handler copies a reader into the response, and the copy
+// it then does is the one the handler asked for.
+func (d *deferredHeaders) ReadFrom(source io.Reader) (int64, error) {
+	if !d.started {
+		d.WriteHeader(http.StatusOK)
+	}
+	if reader, offered := d.ResponseWriter.(io.ReaderFrom); offered {
+		return reader.ReadFrom(source)
+	}
+	// Shown to io.Copy as a plain writer, or it would find this method again.
+	return io.Copy(struct{ io.Writer }{d.ResponseWriter}, source)
 }

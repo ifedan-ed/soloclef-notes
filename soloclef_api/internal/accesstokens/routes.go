@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/jackc/pgx/v5"
@@ -20,7 +21,7 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/routeanalytics"
 )
 
-// The two routes handed over (custom/docs/go-api-tier.md).
+// The list and the revoke; the create is create_route.go's.
 const (
 	ListPath   = "/api/v1/pats"
 	RevokePath = "/api/v1/pats/{pat_id}"
@@ -38,7 +39,7 @@ type Tokens interface {
 	Tokens(ctx context.Context, userID string) ([]Token, error)
 }
 
-// Routes serves the list and the revoke.
+// Routes serves the create, the list and the revoke.
 type Routes struct {
 	// Pool is taken as well as the store because the revoke opens a
 	// transaction: the delete and the event it owes are one decision.
@@ -47,9 +48,13 @@ type Routes struct {
 	Analytics routeanalytics.Capture
 	Errors    errorenvelope.Writer
 	Logger    *slog.Logger
+	// Now is the clock a new key's expiry is counted from; nil is the
+	// real one. Overridable for tests.
+	Now func() time.Time
 }
 
 func (r Routes) Register(api huma.API) {
+	r.registerCreate(api)
 	huma.Register(api, huma.Operation{
 		OperationID: "read-personal-access-tokens",
 		Method:      http.MethodGet,

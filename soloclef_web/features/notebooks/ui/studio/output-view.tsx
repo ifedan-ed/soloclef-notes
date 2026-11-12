@@ -23,7 +23,7 @@ import {
 	resolveArtifactPresentation,
 } from "@/features/artifacts/rendering/artifact-renderer";
 import { ArtifactDownloadButton } from "@/features/artifacts/ui/artifact-download-button";
-import { publicLinksApi, ShareDialog, useCanCreatePublicLinks } from "@/features/public-sharing";
+import { publicLinksApi, ShareDialog } from "@/features/public-sharing";
 import { cn } from "@/lib/utils";
 import { useDelayedFlag } from "../../hooks/use-delayed-flag";
 import { useOutputView } from "../../hooks/use-output-view";
@@ -60,12 +60,10 @@ function useIsDesktop(): boolean {
  * Chat tab and leaves it mounted, so coming back finds it where it was.
  */
 export function OutputView({
-	workspaceId,
 	notebookId,
 	output,
 	onClose,
 }: {
-	workspaceId: number;
 	notebookId: number;
 	output: StudioOutput;
 	onClose: () => void;
@@ -85,10 +83,11 @@ export function OutputView({
 	const [details, setDetails] = useState(false);
 	const [controls, setControls] = useState<HTMLDivElement | null>(null);
 	const titleRef = useRef<HTMLHeadingElement>(null);
-	const { view } = useOutputView(workspaceId, notebookId, output.id);
+	const { view } = useOutputView(notebookId, output.id);
 	const isReport = output.kind === "report";
 	const tShare = useTranslations("publicSharing");
-	const canShare = useCanCreatePublicLinks() && output.status === "ready";
+	// Every output is the account's own: a finished one can always be shared.
+	const canShare = output.status === "ready";
 	const [shareOpen, setShareOpen] = useState(false);
 
 	useEffect(() => {
@@ -117,12 +116,9 @@ export function OutputView({
 				<ShareDialog
 					open={shareOpen}
 					onOpenChange={setShareOpen}
-					workspaceId={workspaceId}
 					subject="output"
 					itemTitle={output.title}
-					create={(expiry) =>
-						publicLinksApi.shareOutput(workspaceId, notebookId, output.id, expiry)
-					}
+					create={(expiry) => publicLinksApi.shareOutput(notebookId, output.id, expiry)}
 				/>
 			) : null}
 			{size === "expanded" ? (
@@ -186,9 +182,7 @@ export function OutputView({
 							<Globe className="size-4" />
 						</Button>
 					) : null}
-					{isReport ? null : (
-						<ArtifactActions workspaceId={workspaceId} artifactId={output.artifact_id ?? 0} />
-					)}
+					{isReport ? null : <ArtifactActions artifactId={output.artifact_id ?? 0} />}
 					<Button
 						variant="ghost"
 						size="icon"
@@ -274,18 +268,13 @@ export function OutputView({
 					<ExplainHostProvider onExplain={onExplain}>
 						{isReport ? (
 							<ReportBody
-								workspaceId={workspaceId}
 								notebookId={notebookId}
 								output={output}
 								compact={!expanded}
 								controls={controls}
 							/>
 						) : (
-							<ArtifactBody
-								workspaceId={workspaceId}
-								artifactId={output.artifact_id ?? 0}
-								controls={controls}
-							/>
+							<ArtifactBody artifactId={output.artifact_id ?? 0} controls={controls} />
 						)}
 					</ExplainHostProvider>
 				</div>
@@ -294,25 +283,25 @@ export function OutputView({
 	);
 }
 
-function useManifest(workspaceId: number, artifactId: number) {
+function useManifest(artifactId: number) {
 	return useQuery({
-		...artifactManifestQueryOptions(workspaceId, artifactId),
-		enabled: workspaceId > 0 && artifactId > 0,
+		...artifactManifestQueryOptions(artifactId),
+		enabled: artifactId > 0,
 	});
 }
 
 /** The viewer's own header actions (a deck's reset) and its download. */
-function ArtifactActions({ workspaceId, artifactId }: { workspaceId: number; artifactId: number }) {
-	const manifest = useManifest(workspaceId, artifactId);
+function ArtifactActions({ artifactId }: { artifactId: number }) {
+	const manifest = useManifest(artifactId);
 	if (!manifest.data) return null;
 	const { renderer } = resolveArtifactPresentation(manifest.data);
 	const Actions = renderer.Actions;
 	return (
 		<>
-			{Actions ? <Actions workspaceId={workspaceId} manifest={manifest.data} /> : null}
+			{Actions ? <Actions manifest={manifest.data} /> : null}
 			{renderer.downloadable ? (
 				<ArtifactDownloadButton
-					path={artifactDownloadPath(workspaceId, artifactId)}
+					path={artifactDownloadPath(artifactId)}
 					filename={artifactDownloadFilename(manifest.data, artifactId)}
 					className="size-8 shrink-0 rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
 				/>
@@ -322,22 +311,19 @@ function ArtifactActions({ workspaceId, artifactId }: { workspaceId: number; art
 }
 
 function ArtifactBody({
-	workspaceId,
 	artifactId,
 	controls,
 }: {
-	workspaceId: number;
 	artifactId: number;
 	controls: HTMLElement | null;
 }) {
 	const t = useTranslations("notebooks.output_view");
-	const manifest = useManifest(workspaceId, artifactId);
+	const manifest = useManifest(artifactId);
 	const showSpinner = useDelayedFlag(manifest.isPending);
 	if (manifest.data) {
 		return (
 			<div className="relative min-h-0 flex-1 overflow-hidden">
 				<ArtifactRenderer
-					workspaceId={workspaceId}
 					manifest={manifest.data}
 					zoomControlsContainer={controls}
 					presentation={resolveArtifactPresentation(manifest.data)}

@@ -49,9 +49,6 @@ class NotificationsApiService {
 		// Build query string from params
 		const params = new URLSearchParams();
 
-		if (queryParams.workspace_id !== undefined) {
-			params.append("workspace_id", String(queryParams.workspace_id));
-		}
 		if (queryParams.type) {
 			params.append("type", queryParams.type);
 		}
@@ -135,7 +132,7 @@ class NotificationsApiService {
 	};
 
 	/**
-	 * Delete every notification an inbox view lists (its workspace, category and filter)
+	 * Delete every notification an inbox view lists (its category and filter)
 	 */
 	clearNotifications = async (
 		request: ClearNotificationsRequest
@@ -150,9 +147,6 @@ class NotificationsApiService {
 
 		const { queryParams } = parsedRequest.data;
 		const params = new URLSearchParams();
-		if (queryParams.workspace_id !== undefined) {
-			params.append("workspace_id", String(queryParams.workspace_id));
-		}
 		if (queryParams.category) {
 			params.append("category", queryParams.category);
 		}
@@ -171,34 +165,20 @@ class NotificationsApiService {
 	 * Get distinct source types (connector + document types) across all
 	 * status notifications. Used to populate the inbox Status tab filter.
 	 */
-	getSourceTypes = async (workspaceId?: number): Promise<GetSourceTypesResponse> => {
-		const params = new URLSearchParams();
-		if (workspaceId !== undefined) {
-			params.append("workspace_id", String(workspaceId));
-		}
-		const queryString = params.toString();
-
-		return baseApiService.get(
-			`/api/v1/notifications/source-types${queryString ? `?${queryString}` : ""}`,
-			getSourceTypesResponse
-		);
+	getSourceTypes = async (): Promise<GetSourceTypesResponse> => {
+		return baseApiService.get(`/api/v1/notifications/source-types`, getSourceTypesResponse);
 	};
 
 	/**
 	 * Get unread notification count with split between total and recent
-	 * @param workspaceId - Optional workspace ID to filter by
 	 * @param type - Optional notification type to filter by (type-safe enum)
 	 * @param category - Optional category filter ('comments' or 'status')
 	 */
 	getUnreadCount = async (
-		workspaceId?: number,
 		type?: InboxItemTypeEnum,
 		category?: NotificationCategory
 	): Promise<GetUnreadCountResponse> => {
 		const params = new URLSearchParams();
-		if (workspaceId !== undefined) {
-			params.append("workspace_id", String(workspaceId));
-		}
 		if (type) {
 			params.append("type", type);
 		}
@@ -217,15 +197,9 @@ class NotificationsApiService {
 	 * Get unread counts for all categories in a single request.
 	 * Replaces 2 separate getUnreadCount calls (comments + status).
 	 */
-	getBatchUnreadCounts = async (workspaceId?: number): Promise<GetBatchUnreadCountResponse> => {
-		const params = new URLSearchParams();
-		if (workspaceId !== undefined) {
-			params.append("workspace_id", String(workspaceId));
-		}
-		const queryString = params.toString();
-
+	getBatchUnreadCounts = async (): Promise<GetBatchUnreadCountResponse> => {
 		return baseApiService.get(
-			`/api/v1/notifications/unread-counts-batch${queryString ? `?${queryString}` : ""}`,
+			`/api/v1/notifications/unread-counts-batch`,
 			getBatchUnreadCountResponse
 		);
 	};

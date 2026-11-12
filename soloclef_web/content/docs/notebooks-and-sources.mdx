@@ -10,10 +10,7 @@ that are ticked in the Sources panel. Untick a source to leave it out, or use
 AI-written summary of what it covers. A citation's **Summary** button shows
 the same guide (see [Chat and citations](/docs/chat-and-citations#citations)).
 A source's menu has **Remove from notebook**, which takes it out of this
-notebook only; the document stays in the workspace.
-
-Owners and Editors can create notebooks, add and remove sources, and import.
-Viewers can open notebooks and read them.
+notebook only; the document stays in your library.
 
 ## Uploading files
 
@@ -23,19 +20,20 @@ types it accepts under **Supported File Types**. The limit is 500 MB per file.
 
 ![The upload tab with the Vision and Parser choices](/docs/screens/add-sources-upload.png)
 
-### Local or Cloud parser
+### Choosing a parser
 
 Before uploading, choose how the file is read:
 
-- **Local** reads the text on this server, with OCR only where a page needs
-  it (PyMuPDF4LLM). It is free, and the file never leaves the server.
-- **Cloud** sends the file to the server's cloud parser for a closer read of
-  tables, figures and scans: Datalab or LlamaCloud, whichever the server is set
-  up with. With Datalab, the few file types it can't open (RTF, some
-  macro-enabled, binary and template Office formats, BMP, SVG, `.tif`, HWP),
-  and any file it fails to read, go to LlamaCloud instead. It is slower, and
-  it costs credits per page once billing is on (see
-  [Plans and credits](/docs/plans-and-credits)).
+- **Local** reads PDF, Word, PowerPoint and EPUB files on this server
+  (PyMuPDF4LLM). It is free, and the file never leaves the server. It reads
+  the text a file already has: a scan with no text layer is refused.
+- **Datalab**, **LlamaParse** and **Unstructured** are hosted parsers, offered
+  when the server has a key for them. The file is sent to that service, which
+  reads tables, figures and scans more closely. It is slower.
+
+A file is read by the parser you chose and by no other: if that parser cannot
+read it, the upload says so rather than trying another. Text, Markdown, CSV
+and web pages are read on the server whichever you choose.
 
 If a parser can't read a file type, the dialog tells you which files were
 skipped.
@@ -43,40 +41,25 @@ skipped.
 ### Vision
 
 **Enable Vision LLM** asks a vision model to describe the images in your
-files, so charts and figures can be searched and cited. It is slower and
-costs more, so it is off by default.
+files, so charts and figures can be searched and cited. It is slower, so it
+is off by default.
 
 ## Connectors
 
-Connectors are set up under **Workspace settings → Connectors**. Only the ones
-this server offers are listed: Google Drive, Nextcloud, Email (IMAP), and MCP
-servers.
+Connectors are set up in Settings → Connectors. Only the ones this server
+offers are listed: Google Drive, Nextcloud, Email (IMAP), and MCP servers.
 
-A Google Drive, Nextcloud or Email connection belongs to your account, not to
-one workspace. It is on in every workspace you belong to, including new ones
-and other people's workspaces you join, and it stays when you delete a
-workspace. In a workspace you share, the other members' chats and automations
-can use it too. Owners and Editors can add connections; Viewers can't.
+Every connection is your account's own, and it is used by all your notebooks,
+chats and automations. Your connectors, on the left of that page, lists them:
+pick one to open its settings; a type with more than one connection opens a
+list of them. Each connection has an Enabled switch: switched off, it stays
+connected but nothing uses it, and it is marked Off in the list and in the
+chat's MCP Connectors menu. A type with some connections off shows how many
+are on, such as "1 of 2 on".
 
-**Your connectors**, on the left of that page, lists every connection the
-workspace can use: its MCP servers and the Google Drive, Nextcloud and Email
-connections, yours and other members'. Pick one to open its settings; a type
-with more than one connection opens a list of them, each card marked
-**Yours** or **Another member's**. A connection switched off in this
-workspace is marked **Off**; a type with some connections off shows how many
-are on, such as "1 of 2 on". The chat's **MCP Connectors** menu marks them
-the same way.
-
-For a Google Drive, Nextcloud or Email connection, its owner sees an
-**Enabled in this workspace** switch in its settings. Switching it off needs
-the Owner role in that workspace, and removes from that workspace, without
-asking, the Google Drive files the connection brought in. Nextcloud files
-stay, and mail is never stored, so there is nothing to remove for Email.
-**Disconnect** in a connection's settings removes it from every workspace;
-Google Drive and Nextcloud files you already added stay. Email has no
-Disconnect there: its mailboxes are removed one by one on its card. Other
-members' connections open read-only, with no switch, and only their owner
-can manage them.
+Disconnect in a connection's settings removes it; Google Drive and Nextcloud
+files you already added stay. Email has no Disconnect there: its mailboxes are
+removed one by one on its card.
 
 ### Google Drive
 
@@ -90,10 +73,9 @@ again.
 
 Then choose **Choose files from Google Drive**. Google's own picker opens;
 pick the files and they are added as sources. Google Docs, Sheets and Slides
-are converted on the way in. Picked files are checked once a day, in the
-workspace you connected Drive from, and read again when they changed in
-Drive. **Disconnect** removes the app's access at Google, and the connection
-in every workspace; files you already added stay.
+are converted on the way in. Picked files are checked once a day and read
+again when they changed in Drive. **Disconnect** removes the app's access at
+Google and the connection; files you already added stay.
 If Google doesn't confirm that access was removed, the app says so: remove it
 yourself under **Security → Third-party connections** in your Google Account.
 
@@ -124,22 +106,15 @@ can then search Exa or Tavily, **Read a web page** can use a Browserbase
 server, and the chat's [Tools](/docs/chat-and-citations#tools) menu offers
 Exa, Tavily and, with a Browserbase server, Browserbase.
 
-Each MCP server belongs to the workspace it was added in, not to your
-account.
-
-A workspace's Owner or Editor can add their own MCP server, with their own
-key: paste its configuration (name, `url`, and the `headers` that carry your
+Each MCP server you add is your account's own, with your own key: paste its configuration (name, `url`, and the `headers` that carry your
 key) and use **Test Connection** first. Calls go to that server on your key,
 so their cost is on your bill with that service. The address must be
 `https` on the standard port, a public domain name (not an IP address or a
 name that only works inside a network), and reach only public addresses;
 anything else is refused. Keys show as `••••` plus their last four
 characters to everyone, and are kept when you save without retyping them.
-Only the person who added a server, or an administrator, can change it; the
-person who added it or the workspace's Owner can delete it. If you leave the
-workspace or are removed from it, the servers you added there are deleted, so
-your key is not used after you go. Connection tests are limited to 10 a
-minute.
+Only you, or an administrator, can change a server you added. Connection
+tests are limited to 10 a minute.
 
 The Exa, Tavily and Browserbase servers the site provides are added by an
 administrator and limited to an approved list of addresses. Every MCP tool
@@ -151,47 +126,30 @@ web address always ask.
 The **Search the web for new sources** box finds new material and imports it
 as sources. Choose where to search:
 
-- **Web and platforms:** the web, Google Search, YouTube, Reddit, Instagram,
-  TikTok, Google Maps, Indeed, Amazon and Walmart. Exa and Tavily are listed
-  too, and work once the workspace has their MCP connector. Until then they
-  show **Not connected**. They use the workspace's own API key.
+- **Web:** Exa and Tavily, which work once you have added their MCP
+  connector. Until then they show **Not connected**. They use your own API
+  key for that service.
 - **Academic:** PubMed, arXiv, medRxiv / bioRxiv and Google Scholar. Results
   marked **Open access** have a free full text, which is imported when it can
   be.
 
 **Fast research** looks for a handful of good sources. **Deep research** reads
 more widely and ranks what it finds, and takes longer. Tick the results you
-want and add them, up to 50 at a time.
+want and add them, up to 50 at a time. The box starts on PubMed, which needs
+no key.
 
-### What each platform finds
-
-- **YouTube:** videos, with the description and the transcript when the
-  video has one. A pasted video link becomes a source the same way.
-- **Reddit:** posts that match your words, from all of Reddit.
-- **Instagram:** public posts, reels and profiles that match your words,
-  found through Google. A single word that is an account's name gives that
-  account's latest posts instead. Comments, hashtags and Instagram's own
-  search need a login, so they aren't offered.
-- **TikTok:** your words are searched as hashtags, because TikTok's own search
-  needs a login. Unusual words may find nothing.
-- **Google Maps, Amazon, Walmart, Indeed:** places, products and job ads that
-  match. Indeed can take a minute or two.
-
-In chat, the assistant can also read comments on a YouTube or TikTok video
-(up to 100 TikTok comments at a time) and the details of an Instagram profile,
-with its latest 6 posts at most.
-
-Some sites block automated searches from time to time. If that happens, try
+Some sites, Google Scholar among them, block automated searches from time to
+time. If that happens, try
 again later or search a different source.
 
 ### Read a web page
 
 **Read a web page** is in the same menu, after Exa and Tavily. Paste a link
 and choose **Add page**: the page is added as a source and read in the
-background. If the workspace has a Browserbase MCP server, the page is opened
+background. If you have a Browserbase MCP server, the page is opened
 in a real browser, so pages built with JavaScript work too; otherwise it is
 read the same way as search results you add. Only public http and https
-addresses are accepted. A page the workspace already has is linked again, not
+addresses are accepted. A page already in your library is linked again, not
 read twice.
 
 ### Search several at once
@@ -202,26 +160,20 @@ Each result says where it came from, such as **From PubMed**, and if a source
 doesn't answer, the results say so. Your choice is remembered in this
 browser.
 
-### Limits and costs
+### Limits
 
 - A query can be up to 500 characters.
-- A workspace can make up to 120 searches a minute, pages read with **Read a
-  web page** included. Agents' scraper and academic searches count towards
-  the same limit (see [Connect your agent](/docs/connect-your-agent)).
-- **Web** asks the site's own search engine first, which is free. Only if
-  it finds nothing does Google Search run, at Google Search prices.
-- Google Search, the platforms and the web pages you import cost credits; see
-  [Plans and credits](/docs/plans-and-credits#research-and-scraping).
-  Academic searches are free.
-- If your credits have run out, the search says so.
+- An account can make up to 120 searches a minute, pages read with **Read a
+  web page** included. Agents' academic searches count towards the same limit
+  (see [Connect your agent](/docs/connect-your-agent)).
 
 ## Managing notebooks
 
 The notebook menu lets you **Copy notebook** (with its sources and notes),
 **Pin to featured** on the home page, **Configure chat**, **Customize
-notebook** (its name and emoji) and **Delete chat history**. Owners also see
-**Share notebook…** and **Share chat publicly…** (see
-[Workspaces and sharing](/docs/workspaces-and-sharing#public-links)). To
-delete a notebook, use **Delete** in its card's menu on the home page.
-Deleting a notebook removes its notes and source links, but your documents
-stay in the workspace. Only the workspace Owner can delete a notebook.
+notebook** (its name and emoji), **Delete chat history**, **Share
+notebook…** and **Share chat publicly…** (see
+[Settings and sharing](/docs/account-and-sharing#public-links)). To delete a
+notebook, use **Delete** in its card's menu on the home page. Deleting a
+notebook removes its source links; your documents, notes and chats stay in
+your library.

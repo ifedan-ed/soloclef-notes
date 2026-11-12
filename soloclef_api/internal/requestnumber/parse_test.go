@@ -2,6 +2,7 @@ package requestnumber
 
 import (
 	"errors"
+	"net/url"
 	"reflect"
 	"testing"
 
@@ -20,7 +21,7 @@ func TestParseAcceptsWhatPythonAcceptsAsAnIntLiteral(t *testing.T) {
 		// Past int32, so the query must be the thing that fails, not the parse.
 		"3000000000": 3000000000,
 	} {
-		got, failure, err := Parse(text, "path", "workspace_id")
+		got, failure, err := Parse(text, "path", "folder_id")
 		if err != nil || failure != nil {
 			t.Errorf("%q: got %v, %v", text, failure, err)
 			continue
@@ -54,7 +55,7 @@ func TestParseReportsANumberPastInt64AsOutOfRange(t *testing.T) {
 	// Python parses it and the route then fails on it, which is a 500 there and
 	// must be a 500 here.
 	for _, text := range []string{"99999999999999999999", "-99999999999999999999"} {
-		if _, _, err := Parse(text, "path", "workspace_id"); !errors.Is(err, ErrOutOfRange) {
+		if _, _, err := Parse(text, "path", "folder_id"); !errors.Is(err, ErrOutOfRange) {
 			t.Errorf("%q: got %v, want ErrOutOfRange", text, err)
 		}
 	}
@@ -62,7 +63,7 @@ func TestParseReportsANumberPastInt64AsOutOfRange(t *testing.T) {
 
 // The vectors below came out of the running Python tier through the log
 // summary's own `hours` parameter, which echoes the value it parsed, and out of
-// the `workspace_id` path parameter of a route already handed over. They are
+// the integer id in the path of a route already handed over. They are
 // the reason internal/requestnumber is not a regular expression.
 func TestParseReadsWhatPydanticReadsFromAString(t *testing.T) {
 	accepted := map[string]int64{
@@ -125,12 +126,35 @@ func TestParseReadsWhatPydanticReadsFromAString(t *testing.T) {
 // tier: it is the query or the arithmetic failing, and a sanitised 500.
 func TestParseReportsAnIntegerTooWideAsOutOfRangeRatherThanInvalid(t *testing.T) {
 	for _, text := range []string{"9999999999999999999999999", "-9999999999999999999999999", "9_999_999_999_999_999_999_999"} {
-		_, failure, err := Parse(text, "path", "workspace_id")
+		_, failure, err := Parse(text, "path", "folder_id")
 		if failure != nil {
 			t.Errorf("Parse(%q) answered 422; the Python tier answers 500", text)
 		}
 		if !errors.Is(err, ErrOutOfRange) {
 			t.Errorf("Parse(%q) error = %v, want ErrOutOfRange", text, err)
 		}
+	}
+}
+
+// Starlette reads a repeated query parameter as its last occurrence and
+// url.Values.Get returns its first, which is a difference of *which row* a
+// route answers about. Asked of the running Python tier through
+// GET /api/v1/folders: of a repeated id, the second is the one read there.
+func TestARepeatedParameterIsReadAsItsLastOccurrence(t *testing.T) {
+	query, err := url.ParseQuery("hours=1&hours=48&other=x")
+	if err != nil {
+		t.Fatalf("ParseQuery: %v", err)
+	}
+	if value, present := QueryValue(query, "hours"); !present || value != "48" {
+		t.Errorf("read %q (present=%v), want the last occurrence 48", value, present)
+	}
+	if value, present := QueryValue(query, "nothing"); present || value != "" {
+		t.Errorf("read %q (present=%v) for a parameter nobody sent", value, present)
+	}
+	// Present and empty is not absent, which is what separates a required
+	// parameter's "Field required" from its integer refusal.
+	empty, _ := url.ParseQuery("hours=")
+	if _, present := QueryValue(empty, "hours"); !present {
+		t.Error("an empty value was read as an absent parameter")
 	}
 }

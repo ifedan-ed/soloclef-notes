@@ -57,7 +57,16 @@ Use this order:
   shrink below 28 pt or a subtitle below 16 pt, shorten it, enlarge its region,
   or split the content across slides instead.
 - Keep every shape on the slide canvas. Intentional edge bleed may cross a slide
-  boundary, but do not park unused shapes off-canvas or hide backup slides.
+  boundary, but do not park unused shapes off-canvas or hide backup slides. A
+  picture stays wholly on the slide unless it covers the whole slide as a
+  background.
+- Route lines, connectors and freeform paths around text: a line may end at a
+  label but never pass through any text, footers and source lines included.
+- Draw text after the shapes and pictures it sits on; nothing filled is drawn
+  over text.
+- Nothing is set under 12 pt, footers and page numbers included, and a body of
+  three or more paragraphs is at least 16 pt.
+- Text contrasts with what it sits on: 4.5:1 under 24 pt, 3:1 from 24 pt.
 - Preserve image aspect ratios. When calling `add_picture`, derive the missing
   dimension from the source image instead of setting both width and height to
   unrelated values. Extended crop values are legal, but the left and right crop
@@ -77,12 +86,31 @@ failure must name the slide and shape so it can be repaired directly:
   zero extent but not two;
 - every shape intersects the slide canvas; and
 - fitted title and subtitle text remains above the minimum sizes above;
+- no line, connector or freeform's box crosses a text box it is not meant to
+  end at;
 - no visible TODOs, editor notes, design suggestions, or replacement
   placeholders remain in a finished deck.
 
 Save the PPTX to `output_path`, reopen it with `python-pptx`, and confirm the
 slide count and required content. Do not call `verify_artifact` after each slide;
-verification renders and reviews the whole deck.
+verification renders the whole deck once.
+
+## What verification measures
+
+`verify_artifact` renders the deck with LibreOffice and reads back where every
+word was drawn, then holds each slide to these rules. Each finding names the
+slide, the shape by its name and the start of its text:
+
+- each box's text is drawn whole inside its box (a box with `spAutoFit` may
+  grow downward);
+- no two boxes' text is drawn over each other, and no two words overlap;
+- no line, connector or unfilled freeform crosses a line of text;
+- no filled shape or picture drawn later hides text;
+- every picture lies on the slide or covers all of it, and no text runs off it;
+- nothing is under 12 pt, and a body of three or more paragraphs is at least
+  16 pt;
+- text has WCAG contrast with its ground (4.5:1 under 24 pt, 3:1 from 24 pt)
+  wherever both colours are known.
 
 ## Revisions
 
@@ -91,8 +119,7 @@ Start an in-place revision with `load_artifact_for_revision`. Open
 result to `expected_output_path`; for the revision, that path is `output_path`.
 Preserve unaffected slide masters, layouts, notes, relationships, and media.
 Use `markdown_path` as textual context, not as a replacement deck. Do not
-reconstruct slides with vision; `verify_artifact` may use vision after the
-revision is written.
+reconstruct slides with vision.
 
 A changed title, filename, or design is still the same artifact unless the user
 explicitly asks for a separate copy. After verification, save the revision with
@@ -102,9 +129,10 @@ the returned `artifact_id` and `expected_generation`.
 
 1. Call `verify_artifact(path=output_path, format="pptx")` once after local
    validation.
-2. If it returns blocking findings, fix all of them together. Repair the exact
-   offending shapes in place: update, resize, or delete obsolete elements before
-   adding replacements. Never cover an old element with a new one.
+2. If it returns findings, fix all of them together. Repair the exact offending
+   shapes in place, found by the names the findings give: move, resize, restyle
+   or delete them before adding replacements. Never cover an old element with
+   a new one.
 3. Rerun the local checks, overwrite the same `output_path`, and call
    `verify_artifact` once more. Warnings are advisory.
 4. If any blocker remains, stop and explain it. Do not enter another automatic
@@ -117,4 +145,6 @@ A failed verification invalidates every earlier pass: never attempt to save
 afterward. Working files may use any paths; no source file, preview file, or
 matching filename stem is part of the publication contract. The Markdown
 representation must faithfully contain the deck's substantive text for
-accessibility and search.
+accessibility and search. Pass the Markdown text itself in
+`markdown_representation`: tool arguments are not run by a shell, so
+`$(cat file)` or a file path is refused.

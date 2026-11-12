@@ -1,14 +1,13 @@
 // Package knowledgebase holds the knowledge-base tools: semantic search plus
 // the document lifecycle — list, read, add text, upload a file, update, and
-// delete — over a workspace's knowledge base.
+// delete — over the caller's own knowledge base.
 //
 // Read tools are in search_tools.go, mutations in document_tools.go.
 package knowledgebase
 
 import "git.danvics.com/danvics/soloclef/soloclef_mcp_go/internal/toolschema"
 
-// documentIDParameter addresses a document by an id that is unique across the
-// account, so the tools that take it need no workspace.
+// documentIDParameter addresses one of the caller's documents by its id.
 func documentIDParameter() toolschema.Parameter {
 	return toolschema.Parameter{
 		Name:  "document_id",

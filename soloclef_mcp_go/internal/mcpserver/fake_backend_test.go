@@ -26,33 +26,39 @@ func fakeBackend(t *testing.T) *httptest.Server {
 	return backend
 }
 
-const workspacesReply = `[
-  {"id": 1, "name": "Research", "description": "Synthetic space", "is_owner": true,
-   "member_count": 2},
-  {"id": 2, "name": "Research Archive", "description": null, "is_owner": false,
-   "member_count": 1}
-]`
-
+// cannedReply matches each path from its start, so a tool that put a scope
+// segment in front of a route would reach the 404 at the end and its case would
+// fail: whose data a call reads is the credential's to say, never a path's.
 func cannedReply(request *http.Request) (int, []byte, string) {
 	path := request.URL.Path
 	switch {
-	case path == "/api/v1/workspaces":
-		return 200, compact(workspacesReply), "application/json"
-	case strings.HasSuffix(path, "/academic-search/pubmed"):
+	case path == "/api/v1/academic-search/pubmed":
 		return 200, compact(`[{"title": "A synthetic paper",
 			"meta": "Doe J. · 2024 · J Synth",
 			"url": "https://example.invalid/p/1", "snippet": "Abstract text.",
 			"paper": {"doi": "10.0000/synthetic.1", "pmid": "11111111"}}]`),
 			"application/json"
-	case strings.Contains(path, "/academic-search/"):
+	case path == "/api/v1/academic-search/arxiv" || path == "/api/v1/academic-search/medrxiv":
 		return 200, compact(`[{"title": "Another synthetic paper",
 			"meta": "Roe R. · 2023", "url": "https://example.invalid/p/2",
 			"snippet": "More abstract.", "paper": {"arxiv_id": "2301.00001"}}]`),
 			"application/json"
 	case path == "/api/v1/documents/search-semantic":
 		return 200, compact(`{"items": [{"document_id": 7, "title": "Synthetic note",
-			"score": 0.4213, "chunks": [{"content": "  matched passage  "}]}]}`),
+			"document_type": "NOTE", "rank": 1,
+			"chunks": [{"chunk_id": 70, "content": "  matched passage  ", "position": 0, "page": null}]}]}`),
 			"application/json"
+	case path == "/api/v1/documents" && request.Method == "POST":
+		// The create route refuses a field it does not know; so does this.
+		var note map[string]any
+		if err := json.NewDecoder(request.Body).Decode(&note); err != nil || len(note) != 3 ||
+			note["title"] == nil || note["content"] == nil {
+			return 422, compact(`{"error": {"message": "the note body is not title, content and source_url"}}`), "application/json"
+		}
+		if _, sent := note["source_url"]; !sent {
+			return 422, compact(`{"error": {"message": "source_url was not sent"}}`), "application/json"
+		}
+		return 201, compact(`{"id": 8, "title": "Synthetic finding", "document_type": "NOTE"}`), "application/json"
 	case path == "/api/v1/documents" && request.Method == "GET":
 		return 200, compact(`{"items": [{"id": 7, "title": "Synthetic note",
 			"document_type": "EXTENSION", "updated_at": "2026-01-02T03:04:05+00:00"}],
@@ -62,27 +68,19 @@ func cannedReply(request *http.Request) (int, []byte, string) {
 			return 200, []byte("---\ntype: note\ntitle: Synthetic note\n---\n\nbody text\n"),
 				"text/markdown"
 		}
-		return 200, compact(`{"id": 7, "title": "Synthetic note", "workspace_id": 1,
+		return 200, compact(`{"id": 7, "title": "Synthetic note",
 			"content": "body text"}`), "application/json"
-	case strings.HasPrefix(path, "/api/v1/documents/") && request.Method == "DELETE":
+	case path == "/api/v1/documents/7" && request.Method == "DELETE":
 		return 200, nil, "application/json"
-	case strings.HasSuffix(path, "/save"):
-		return 200, compact(`{"ok": true}`), "application/json"
-	case strings.Contains(path, "/scrapers/runs/"):
-		return 200, compact(`{"id": "run-0001", "capability": "web.crawl",
-			"status": "success", "item_count": 1,
-			"created_at": "2026-01-02T03:04:05+00:00",
-			"output": {"items": [{"url": "https://example.invalid/a"}]}}`),
-			"application/json"
-	case strings.HasSuffix(path, "/scrapers/runs"):
-		return 200, compact(`[{"id": "run-0001", "capability": "web.crawl",
-			"status": "success", "item_count": 1,
-			"created_at": "2026-01-02T03:04:05+00:00"}]`), "application/json"
-	case strings.Contains(path, "/scrapers/"):
-		return 200, compact(`{"run_id": "run-0001", "items": [{
-			"url": "https://example.invalid/a", "title": "Synthetic page",
-			"body": "` + strings.Repeat("x", 1600) + `",
-			"html": "<p>duplicate</p>", "score": 12}]}`), "application/json"
+	case path == "/api/v1/documents/7/save" && request.Method == "POST":
+		// A save that pinned a title would be the old two-call update.
+		var save map[string]any
+		if err := json.NewDecoder(request.Body).Decode(&save); err != nil || len(save) != 1 || save["source_markdown"] == nil {
+			return 422, compact(`{"error": {"message": "the save body is not source_markdown alone"}}`), "application/json"
+		}
+		return 200, compact(`{"status": "saved", "document_id": 7,
+			"message": "Document saved and will be reindexed in the background",
+			"updated_at": "2026-01-02T03:04:05Z"}`), "application/json"
 	}
 	return 404, compact(`{"detail": "no stub for this path"}`), "application/json"
 }

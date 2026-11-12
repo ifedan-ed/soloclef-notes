@@ -3,25 +3,24 @@ import { ArtifactListSchema, ArtifactManifestSchema } from "@/features/artifacts
 import { authenticatedFetch } from "@/lib/auth-fetch";
 import { buildBackendUrl } from "@/lib/env-config";
 
-export const artifactManifestQueryKey = (workspaceId: number, artifactId: number) =>
-	["artifact-manifest", workspaceId, artifactId] as const;
+export const artifactManifestQueryKey = (artifactId: number) =>
+	["artifact-manifest", artifactId] as const;
 
-const artifactImageBlobQueryPrefix = (workspaceId: number, artifactId: number) =>
-	["artifact-image-blob", workspaceId, artifactId] as const;
+const artifactImageBlobQueryPrefix = (artifactId: number) =>
+	["artifact-image-blob", artifactId] as const;
 
 export const artifactImageBlobQueryKey = (
-	workspaceId: number,
 	artifactId: number,
 	shareToken: string | null,
 	fileId?: number
-) => [...artifactImageBlobQueryPrefix(workspaceId, artifactId), shareToken, fileId] as const;
+) => [...artifactImageBlobQueryPrefix(artifactId), shareToken, fileId] as const;
 
-export const artifactManifestQueryOptions = (workspaceId: number, artifactId: number) =>
+export const artifactManifestQueryOptions = (artifactId: number) =>
 	queryOptions({
-		queryKey: artifactManifestQueryKey(workspaceId, artifactId),
+		queryKey: artifactManifestQueryKey(artifactId),
 		queryFn: async () => {
 			const response = await authenticatedFetch(
-				buildBackendUrl(`/api/v1/workspaces/${workspaceId}/artifacts/${artifactId}/manifest`),
+				buildBackendUrl(`/api/v1/artifacts/${artifactId}/manifest`),
 				{ cache: "no-store" }
 			);
 			if (!response.ok) throw new Error("Artifact could not be loaded");
@@ -33,27 +32,24 @@ export const artifactManifestQueryOptions = (workspaceId: number, artifactId: nu
 		refetchOnWindowFocus: "always",
 	});
 
-export const artifactListQueryKey = (workspaceId: number, threadId?: number | null) =>
-	threadId == null
-		? (["artifact-list", workspaceId] as const)
-		: (["artifact-list", workspaceId, threadId] as const);
+export const artifactListQueryKey = (threadId?: number | null) =>
+	threadId == null ? (["artifact-list"] as const) : (["artifact-list", threadId] as const);
 
-export async function fetchArtifacts(workspaceId: number, threadId?: number | null) {
+export async function fetchArtifacts(threadId?: number | null) {
 	const query = threadId == null ? "" : `?thread_id=${encodeURIComponent(threadId)}`;
-	const response = await authenticatedFetch(
-		buildBackendUrl(`/api/v1/workspaces/${workspaceId}/artifacts${query}`),
-		{ cache: "no-store" }
-	);
+	const response = await authenticatedFetch(buildBackendUrl(`/api/v1/artifacts${query}`), {
+		cache: "no-store",
+	});
 	if (!response.ok) throw new Error("Artifacts could not be loaded");
 	const parsed = ArtifactListSchema.safeParse(await response.json());
 	if (!parsed.success) throw new Error("Artifact list response is invalid");
 	return parsed.data;
 }
 
-export const artifactListQueryOptions = (workspaceId: number, threadId?: number | null) =>
+export const artifactListQueryOptions = (threadId?: number | null) =>
 	queryOptions({
-		queryKey: artifactListQueryKey(workspaceId, threadId),
-		queryFn: () => fetchArtifacts(workspaceId, threadId),
+		queryKey: artifactListQueryKey(threadId),
+		queryFn: () => fetchArtifacts(threadId),
 		staleTime: 30_000,
 		refetchOnWindowFocus: "always",
 	});
@@ -61,10 +57,9 @@ export const artifactListQueryOptions = (workspaceId: number, threadId?: number 
 /** Refresh every cache surface that can retain an artifact revision. */
 export async function invalidatePublishedArtifact(
 	queryClient: QueryClient,
-	workspaceId: number,
 	artifactId: number
 ): Promise<void> {
-	const blobPrefixes = [artifactImageBlobQueryPrefix(workspaceId, artifactId)];
+	const blobPrefixes = [artifactImageBlobQueryPrefix(artifactId)];
 	await Promise.all(blobPrefixes.map((queryKey) => queryClient.cancelQueries({ queryKey })));
 	for (const queryKey of blobPrefixes) {
 		queryClient.setQueriesData<string | null>({ queryKey }, null);
@@ -73,9 +68,9 @@ export async function invalidatePublishedArtifact(
 
 	await Promise.all([
 		queryClient.resetQueries({
-			queryKey: artifactManifestQueryKey(workspaceId, artifactId),
+			queryKey: artifactManifestQueryKey(artifactId),
 			exact: true,
 		}),
-		queryClient.invalidateQueries({ queryKey: artifactListQueryKey(workspaceId) }),
+		queryClient.invalidateQueries({ queryKey: artifactListQueryKey() }),
 	]);
 }

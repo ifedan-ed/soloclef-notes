@@ -27,11 +27,7 @@ import {
 export const READ_ONLY_POSTS: { pattern: RegExp; why: string }[] = [
 	{ pattern: /\/api\/zero\/query$/, why: "Zero query resolution (reads)" },
 	{
-		pattern: /\/api\/v1\/messages\/comments\/batch$/,
-		why: "loads comment counts for visible messages",
-	},
-	{
-		pattern: /\/api\/v1\/workspaces\/\d+\/notebooks\/\d+\/followups$/,
+		pattern: /\/api\/v1\/notebooks\/\d+\/followups$/,
 		why: "follow-up questions (read)",
 	},
 ];
@@ -60,7 +56,16 @@ export async function installReadOnlyGuard(context: BrowserContext): Promise<Blo
 	return blocked;
 }
 
-const PROD_BASE_URL = process.env.PROD_BASE_URL || "https://notes.danvics.com";
+/**
+ * The server under test. Required, like the token: a default would be one
+ * particular deployment's address, and a smoke run aimed at a server nobody
+ * named is the wrong server.
+ */
+function prodBaseURL(): string {
+	const url = process.env.PROD_BASE_URL;
+	if (!url) throw new Error("PROD_BASE_URL is not set");
+	return url;
+}
 const SESSION_COOKIE = process.env.SESSION_COOKIE_NAME || "surfsense_session";
 
 /**
@@ -81,7 +86,6 @@ function extraCookies(): { name: string; value: string }[] {
 
 type ProdFixtures = {
 	blocked: BlockedRequest[];
-	ws: number;
 };
 
 export const test = base.extend<ProdFixtures>({
@@ -91,8 +95,8 @@ export const test = base.extend<ProdFixtures>({
 		await context.addCookies(
 			[{ name: SESSION_COOKIE, value: token }, ...extraCookies()].map((c) => ({
 				...c,
-				url: PROD_BASE_URL,
-				secure: PROD_BASE_URL.startsWith("https"),
+				url: prodBaseURL(),
+				secure: prodBaseURL().startsWith("https"),
 				sameSite: "Lax" as const,
 			}))
 		);
@@ -127,20 +131,13 @@ export const test = base.extend<ProdFixtures>({
 		},
 		{ auto: true },
 	],
-	ws: async ({ context, blocked: _blocked }, use) => {
-		const fromEnv = Number(process.env.PROD_WORKSPACE_ID);
-		if (fromEnv) return use(fromEnv);
-		const list = await prodGet<{ id: number }[]>(context.request, "/api/v1/workspaces");
-		expect(list.length, "the token's user has a workspace").toBeGreaterThan(0);
-		await use(list[0].id);
-	},
 });
 
 export { expect };
 
 /** GET with the prod token, through the context (so proxy cookies apply). */
 export async function prodGet<T>(request: APIRequestContext, path: string): Promise<T> {
-	const res = await request.get(`${PROD_BASE_URL}${path}`, {
+	const res = await request.get(`${prodBaseURL()}${path}`, {
 		headers: { Authorization: `Bearer ${process.env.PROD_E2E_TOKEN}` },
 	});
 	expect(res.ok(), `GET ${path} (${res.status()})`).toBeTruthy();

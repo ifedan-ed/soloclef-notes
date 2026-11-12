@@ -1,13 +1,14 @@
 import { useAtomValue } from "jotai";
-import { Eye, EyeOff, Settings } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Check, Eye, EyeOff, Settings } from "lucide-react";
+import { useId, useMemo, useState } from "react";
 import {
 	bulkUpdateModelsMutationAtom,
 	discoverConnectionModelsMutationAtom,
-	testPreviewModelMutationAtom,
+	testConnectionUpdateMutationAtom,
 	updateModelConnectionMutationAtom,
 	updateModelMutationAtom,
 } from "@/atoms/model-connections/model-connections-mutation.atoms";
+import { modelProvidersAtom } from "@/atoms/model-connections/model-connections-query.atoms";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -22,13 +23,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
-import type {
-	ConnectionRead,
-	ConnectionUpdateRequest,
-} from "@/contracts/types/model-connections.types";
+import type { ConnectionRead } from "@/contracts/types/model-connections.types";
+import { HeadersField } from "./connect-fields";
+import { type HeaderRow, headersFromRows, savedHeadersIntent } from "./connection-headers";
+import { hasModelCatalogue } from "./model-listing";
 import { capability, type SelectableModel } from "./model-utils";
 import { ModelsSelectionPanel } from "./models-selection-panel";
 import { providerIcon } from "./provider-metadata";
+import { connectionUpdateFor, hasConnectionChanges, savedKeyIntent } from "./saved-key-draft";
 
 interface ConnectionSettingsDialogProps {
 	connection: ConnectionRead;
@@ -43,20 +45,51 @@ function enabledModelIds(models: SelectableModel[]) {
 	);
 }
 
+/**
+ * Settings for a saved connection.
+ *
+ * The saved API key is never sent to the browser, so this dialog never has it.
+ * The key field therefore always opens empty, and what it shows about the
+ * saved key is words beside the field ("A key is saved"), never a mask of
+ * dots inside it: a mask is text in an input, and text in an input is what
+ * gets sent back as the key. What the person wants done with the key is one of
+ * three explicit things (./saved-key-draft): keep it, replace it with what
+ * they typed, or remove it.
+ *
+ * A change is tested before it is saved, by the server, which holds the key:
+ * the test request leaves `api_key` out unless a new one was typed.
+ */
 export function ConnectionSettingsDialog({
 	connection,
 	providerLabel,
 }: ConnectionSettingsDialogProps) {
 	const discoverModels = useAtomValue(discoverConnectionModelsMutationAtom);
-	const testPreviewModel = useAtomValue(testPreviewModelMutationAtom);
+	const { data: providers = [] } = useAtomValue(modelProvidersAtom);
+	// Only a provider with a list (the model service's catalogue, or an
+	// OpenAI-compatible endpoint's own GET /models) has anything to refresh;
+	// for a server the model service reaches by name the button would only
+	// ever fail.
+	const canRefreshModels = hasModelCatalogue(
+		providers.find((item) => item.provider === connection.provider)
+	);
+	const testConnectionUpdate = useAtomValue(testConnectionUpdateMutationAtom);
 	const updateConnection = useAtomValue(updateModelConnectionMutationAtom);
 	const updateModel = useAtomValue(updateModelMutationAtom);
 	const bulkUpdateModels = useAtomValue(bulkUpdateModelsMutationAtom);
 
 	const [isOpen, setIsOpen] = useState(false);
 	const [baseUrlDraft, setBaseUrlDraft] = useState(connection.base_url ?? "");
+	// Only ever what was typed here. It is never filled from the connection.
 	const [apiKeyDraft, setApiKeyDraft] = useState("");
+	const [removeSavedKey, setRemoveSavedKey] = useState(false);
+	// Only an OpenAI-compatible endpoint takes extra headers. Their saved
+	// values are never in the browser: the rows are only ever new headers.
+	const takesHeaders = connection.provider === "openai_compatible";
+	const [headerRows, setHeaderRows] = useState<HeaderRow[]>([]);
+	const [removeSavedHeaders, setRemoveSavedHeaders] = useState(false);
 	const [showApiKey, setShowApiKey] = useState(false);
+	const apiKeyFieldId = useId();
+	const apiKeyStatusId = useId();
 	const [isSavingConnectionSettings, setIsSavingConnectionSettings] = useState(false);
 	const [draftEnabledModelIds, setDraftEnabledModelIds] = useState(() =>
 		enabledModelIds(connection.models)
@@ -69,9 +102,18 @@ export function ConnectionSettingsDialog({
 		)
 	);
 
-	const hasConnectionChanges =
-		baseUrlDraft.trim() !== (connection.base_url ?? "") ||
-		apiKeyDraft.trim() !== (connection.api_key ?? "");
+	const keyIntent = savedKeyIntent(apiKeyDraft, removeSavedKey);
+	const headersRead = headersFromRows(headerRows);
+	const headersIntent = savedHeadersIntent(
+		headersRead.problem === null ? headersRead.headers : {},
+		removeSavedHeaders
+	);
+	const connectionChanged = hasConnectionChanges(
+		connection.base_url,
+		baseUrlDraft,
+		keyIntent,
+		headersIntent
+	);
 	const draftModels = useMemo(
 		() =>
 			connection.models.map((model) =>
@@ -93,14 +135,20 @@ export function ConnectionSettingsDialog({
 			typeof model.id === "number" &&
 			(draftContextLimits[model.id] ?? null) !== (model.max_input_tokens ?? null)
 	);
-	const canUpdate = hasConnectionChanges || hasModelChanges || hasContextChanges;
+	// Rows that do not read as headers block the save and are said under
+	// them; they are never saved as something else.
+	const canUpdate =
+		(connectionChanged || hasModelChanges || hasContextChanges) && headersRead.problem === null;
 
 	function handleOpenChange(open: boolean) {
 		setIsOpen(open);
 		if (open) {
 			setBaseUrlDraft(connection.base_url ?? "");
-			setApiKeyDraft(connection.api_key ?? "");
+			setApiKeyDraft("");
+			setRemoveSavedKey(false);
 			setShowApiKey(false);
+			setHeaderRows([]);
+			setRemoveSavedHeaders(false);
 			setIsSavingConnectionSettings(false);
 			setDraftEnabledModelIds(enabledModelIds(connection.models));
 			setDraftContextLimits(
@@ -156,38 +204,30 @@ export function ConnectionSettingsDialog({
 	async function saveConnectionSettings() {
 		if (isSavingConnectionSettings) return;
 
-		const data: ConnectionUpdateRequest = {
-			base_url: baseUrlDraft.trim() || null,
-		};
-
-		if (apiKeyDraft.trim() !== (connection.api_key ?? "")) {
-			data.api_key = apiKeyDraft.trim() || null;
-		}
-		const apiKeyForTest = Object.hasOwn(data, "api_key")
-			? (data.api_key ?? null)
-			: (connection.api_key ?? null);
+		// `api_key` is in here only if a key was typed or removal was asked
+		// for. Left out, the server keeps -- and tests with -- the saved key.
+		const data = connectionUpdateFor(baseUrlDraft, keyIntent, headersIntent);
 
 		const enabledModels = draftModels.filter((model) => model.enabled);
 		const testModel = enabledModels.find((model) => capability(model, "chat")) ?? enabledModels[0];
 		setIsSavingConnectionSettings(true);
 		try {
-			if (hasConnectionChanges) {
+			if (connectionChanged) {
 				if (testModel) {
-					const result = await testPreviewModel.mutateAsync({
-						provider: connection.provider,
-						base_url: data.base_url,
-						api_key: apiKeyForTest,
-						scope: "SEARCH_SPACE",
-						workspace_id: connection.workspace_id,
-						extra: connection.extra ?? {},
-						enabled: connection.enabled,
-						models: [],
-						model_id: testModel.model_id,
+					// The same fields the update below will send, so the test
+					// is of exactly what is about to be saved.
+					const result = await testConnectionUpdate.mutateAsync({
+						id: connection.id,
+						data: { ...data, model_id: testModel.model_id },
 					});
 					if (!result.ok) return;
 				}
 				await updateConnection.mutateAsync({ id: connection.id, data });
 				setApiKeyDraft("");
+				setRemoveSavedKey(false);
+				setShowApiKey(false);
+				setHeaderRows([]);
+				setRemoveSavedHeaders(false);
 			}
 
 			if (hasModelChanges) {
@@ -276,18 +316,46 @@ export function ConnectionSettingsDialog({
 								placeholder="https://api.example.com/v1"
 							/>
 							<p className="text-xs text-muted-foreground">
-								Leave empty to use the provider default endpoint.
+								{takesHeaders
+									? "The endpoint's public address, used as-is."
+									: "Leave empty to use the provider default endpoint."}
 							</p>
 						</div>
 
 						<div className="space-y-2">
-							<Label>API Key</Label>
+							<div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+								<Label htmlFor={apiKeyFieldId}>API Key</Label>
+								{connection.has_api_key && keyIntent.kind !== "remove" ? (
+									<span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+										<Check
+											className="size-3.5 text-emerald-600 dark:text-emerald-500"
+											aria-hidden
+										/>
+										A key is saved
+									</span>
+								) : null}
+							</div>
 							<div className="relative">
 								<Input
+									id={apiKeyFieldId}
 									value={apiKeyDraft}
-									onChange={(event) => setApiKeyDraft(event.target.value)}
-									placeholder={connection.has_api_key ? "Saved API key" : "Paste an API key"}
+									onChange={(event) => {
+										setApiKeyDraft(event.target.value);
+										// Typing a key replaces a request to remove the saved one.
+										setRemoveSavedKey(false);
+									}}
+									placeholder={
+										connection.has_api_key && keyIntent.kind !== "remove"
+											? "Enter a new key to replace it"
+											: "Paste an API key"
+									}
 									type={showApiKey ? "text" : "password"}
+									// An empty field means "keep the saved key", so the browser
+									// and password managers must not fill it in by themselves.
+									autoComplete="new-password"
+									data-1p-ignore
+									data-lpignore="true"
+									aria-describedby={apiKeyStatusId}
 									className="pr-11"
 								/>
 								<Button
@@ -302,7 +370,82 @@ export function ConnectionSettingsDialog({
 									{showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
 								</Button>
 							</div>
+							<div
+								id={apiKeyStatusId}
+								className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-muted-foreground"
+							>
+								{!connection.has_api_key ? (
+									<p>No key is saved for this provider.</p>
+								) : keyIntent.kind === "replace" ? (
+									<p>This key will replace the saved one when you update.</p>
+								) : keyIntent.kind === "remove" ? (
+									<>
+										<p>The saved key will be removed when you update.</p>
+										<Button
+											type="button"
+											variant="link"
+											size="sm"
+											className="h-auto p-0 text-xs"
+											onClick={() => setRemoveSavedKey(false)}
+										>
+											Keep the saved key
+										</Button>
+									</>
+								) : (
+									<>
+										<p>The saved key is never shown. Leave this empty to keep it.</p>
+										<Button
+											type="button"
+											variant="link"
+											size="sm"
+											className="h-auto p-0 text-xs text-muted-foreground hover:text-destructive"
+											onClick={() => setRemoveSavedKey(true)}
+										>
+											Remove saved key
+										</Button>
+									</>
+								)}
+							</div>
 						</div>
+
+						{takesHeaders ? (
+							<div className="space-y-2">
+								<HeadersField
+									rows={headerRows}
+									onChange={(rows) => {
+										setHeaderRows(rows);
+										// Typing headers replaces a request to remove the saved ones.
+										setRemoveSavedHeaders(false);
+									}}
+									problem={headersRead.problem}
+									hint={
+										headersIntent.kind === "replace" && connection.header_names.length > 0
+											? "These headers will replace the saved ones when you update."
+											: undefined
+									}
+								/>
+								{connection.header_names.length > 0 && headersIntent.kind !== "replace" ? (
+									<div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-muted-foreground">
+										<p className="min-w-0 break-words">
+											{headersIntent.kind === "remove"
+												? "The saved headers will be removed when you update."
+												: `Saved: ${connection.header_names.join(", ")}. Their values are never shown. Leave these rows empty to keep them.`}
+										</p>
+										<Button
+											type="button"
+											variant="link"
+											size="sm"
+											className="h-auto p-0 text-xs text-muted-foreground hover:text-destructive"
+											onClick={() => setRemoveSavedHeaders((current) => !current)}
+										>
+											{headersIntent.kind === "remove"
+												? "Keep the saved headers"
+												: "Remove saved headers"}
+										</Button>
+									</div>
+								) : null}
+							</div>
+						) : null}
 
 						<Separator className="bg-muted-foreground/20" />
 
@@ -313,7 +456,7 @@ export function ConnectionSettingsDialog({
 							isUpdatingModel={isSavingConnectionSettings}
 							isBulkUpdating={isSavingConnectionSettings || bulkUpdateModels.isPending}
 							refreshLabel={`Refresh ${providerLabel} models`}
-							onRefresh={() => discoverModels.mutate(connection.id)}
+							onRefresh={canRefreshModels ? () => discoverModels.mutate(connection.id) : undefined}
 							onToggleModel={handleToggleModel}
 							onBulkToggle={handleBulkToggle}
 							onMaxInputTokensChange={handleContextLimitChange}

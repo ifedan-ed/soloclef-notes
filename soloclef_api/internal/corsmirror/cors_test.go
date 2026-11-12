@@ -11,7 +11,7 @@ func serve(t *testing.T, policy Policy, origin string) *httptest.ResponseRecorde
 	handler := policy.Middleware(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
 		response.WriteHeader(http.StatusOK)
 	}))
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/logs/workspaces/1/summary", nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/logs/summary", nil)
 	if origin != "" {
 		request.Header.Set("Origin", origin)
 	}

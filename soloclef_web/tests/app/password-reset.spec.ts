@@ -1,7 +1,6 @@
 import type { APIRequestContext, Page } from "@playwright/test";
 import { BACKEND_URL } from "../helpers/api/auth";
 import { expectNoOverflow } from "../helpers/layout/overflow";
-import { waitForHumanCheck } from "../helpers/ui/human-check";
 import { expect, test } from "./fixtures";
 
 /**
@@ -20,8 +19,7 @@ async function registerFreshUser(request: APIRequestContext): Promise<string> {
 	const email = `reset-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}@example.com`;
 	const response = await request.post(`${BACKEND_URL}/auth/register`, {
 		data: { email, password: OLD_PASSWORD },
-		// The stack's Turnstile secret is Cloudflare's always-pass test key.
-		headers: { "Content-Type": "application/json", "X-Turnstile-Token": "XXXX.DUMMY.TOKEN.XXXX" },
+		headers: { "Content-Type": "application/json" },
 	});
 	expect(response.status(), await response.text()).toBe(201);
 	return email;
@@ -40,17 +38,14 @@ async function signIn(page: Page, email: string, password: string) {
 	await page.goto("/login");
 	await page.getByLabel("Email").fill(email);
 	await page.getByLabel("Password", { exact: true }).fill(password);
-	await waitForHumanCheck(page);
 	await page.getByRole("button", { name: "Sign In" }).click();
 }
 
 test("the sign-in page links to Forgot password, and that page fits", async ({ page }) => {
 	await page.goto("/login");
-	await expect(page.getByTestId("human-check")).toBeVisible();
 	await page.getByRole("link", { name: "Forgot Password?" }).click();
 	await expect(page).toHaveURL(/\/forgot-password$/);
 	await expect(page.getByRole("heading", { name: "Reset your password" })).toBeVisible();
-	await waitForHumanCheck(page);
 	await expectNoOverflow(page, "forgot password page");
 });
 
@@ -74,7 +69,6 @@ test("forgot password: email, link, new password, sign in; the link then stops w
 
 	await page.goto("/forgot-password");
 	await page.getByLabel("Email").fill(email);
-	await waitForHumanCheck(page);
 	await page.getByRole("button", { name: "Send reset link" }).click();
 	await expect(page.getByRole("status").filter({ hasText: "Check your email" })).toBeVisible();
 	await expect(page.getByRole("status").filter({ hasText: email })).toBeVisible();
@@ -88,21 +82,19 @@ test("forgot password: email, link, new password, sign in; the link then stops w
 
 	await page.getByLabel("New password", { exact: true }).fill(NEW_PASSWORD);
 	await page.getByLabel("Confirm new password").fill(NEW_PASSWORD);
-	await waitForHumanCheck(page);
 	await page.getByRole("button", { name: "Set new password" }).click();
 	await expect(page.getByRole("status").filter({ hasText: "Password changed" })).toBeVisible();
 	// The spent token is taken out of the address bar.
 	expect(new URL(page.url()).hash).toBe("");
 
 	await signIn(page, email, NEW_PASSWORD);
-	await expect(page).toHaveURL(/\/dashboard\/\d+\/notebooks/, { timeout: 30_000 });
+	await expect(page).toHaveURL(/\/dashboard\/notebooks/, { timeout: 30_000 });
 
 	// Same link again: refused, with a way to ask for a new one.
 	await page.context().clearCookies();
 	await page.goto(`${path.pathname}${path.hash}`);
 	await page.getByLabel("New password", { exact: true }).fill("Third password 3");
 	await page.getByLabel("Confirm new password").fill("Third password 3");
-	await waitForHumanCheck(page);
 	await page.getByRole("button", { name: "Set new password" }).click();
 	await expect(
 		page.getByRole("alert").filter({ hasText: "expired or was already used" })
@@ -115,7 +107,6 @@ test("an address with no account gets the same answer", async ({ page, isPhone }
 	const email = `nobody-${Date.now().toString(36)}@example.com`;
 	await page.goto("/forgot-password");
 	await page.getByLabel("Email").fill(email);
-	await waitForHumanCheck(page);
 	await page.getByRole("button", { name: "Send reset link" }).click();
 	await expect(page.getByRole("status").filter({ hasText: "Check your email" })).toBeVisible();
 	await expect(page.getByRole("status").filter({ hasText: email })).toBeVisible();

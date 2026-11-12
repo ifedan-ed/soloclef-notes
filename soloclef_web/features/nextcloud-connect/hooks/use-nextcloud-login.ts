@@ -16,10 +16,7 @@ import {
  * person open the login page, and poll the backend (which polls Nextcloud)
  * until it reports the connection saved. An abandoned attempt is cancelled.
  */
-export function useNextcloudLogin(
-	workspaceId: number,
-	onConnected: (connection: NextcloudConnection | null) => void
-) {
+export function useNextcloudLogin(onConnected: (connection: NextcloudConnection | null) => void) {
 	const [state, setState] = useState<LoginFlowState>(IDLE);
 	const connected = useRef(onConnected);
 	connected.current = onConnected;
@@ -28,20 +25,20 @@ export function useNextcloudLogin(
 	const start = useCallback(async () => {
 		setState({ phase: "starting" });
 		try {
-			const started = await nextcloudConnectApi.start(workspaceId);
+			const started = await nextcloudConnectApi.start();
 			waitingFlow.current = started.flow_id;
 			setState(waitingFor(started, Date.now()));
 		} catch (error) {
 			setState(afterError(error));
 		}
-	}, [workspaceId]);
+	}, []);
 
 	const cancel = useCallback(() => {
 		const flowId = waitingFlow.current;
 		waitingFlow.current = null;
 		setState(IDLE);
-		if (flowId) void nextcloudConnectApi.cancel(workspaceId, flowId).catch(() => undefined);
-	}, [workspaceId]);
+		if (flowId) void nextcloudConnectApi.cancel(flowId).catch(() => undefined);
+	}, []);
 
 	const flowId = state.phase === "waiting" ? state.flowId : null;
 	const expiresAt = state.phase === "waiting" ? state.expiresAt : 0;
@@ -58,7 +55,7 @@ export function useNextcloudLogin(
 				return;
 			}
 			try {
-				const progress = await nextcloudConnectApi.poll(workspaceId, flowId);
+				const progress = await nextcloudConnectApi.poll(flowId);
 				if (stopped) return;
 				if (progress.status === "connected") {
 					waitingFlow.current = null;
@@ -79,15 +76,15 @@ export function useNextcloudLogin(
 			stopped = true;
 			if (timer) clearTimeout(timer);
 		};
-	}, [flowId, expiresAt, workspaceId]);
+	}, [flowId, expiresAt]);
 
 	// Leaving the page mid-attempt: tell the backend to stop keeping it.
 	useEffect(
 		() => () => {
 			const pending = waitingFlow.current;
-			if (pending) void nextcloudConnectApi.cancel(workspaceId, pending).catch(() => undefined);
+			if (pending) void nextcloudConnectApi.cancel(pending).catch(() => undefined);
 		},
-		[workspaceId]
+		[]
 	);
 
 	return { state, start, cancel, reset: () => setState(IDLE) };

@@ -2,7 +2,7 @@
 
 import { useAtomValue } from "jotai";
 import { Plus, WandSparkles } from "lucide-react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
 	forwardRef,
@@ -25,7 +25,7 @@ import {
 	ComposerSuggestionSeparator,
 	ComposerSuggestionSkeleton,
 } from "@/components/new-chat/composer-suggestion-popup";
-import { getWorkspaceIdParam } from "@/lib/route-params";
+import { settingsPath } from "@/lib/dashboard-paths";
 
 export interface PromptPickerRef {
 	selectHighlighted: () => void;
@@ -45,7 +45,6 @@ export const PromptPicker = forwardRef<PromptPickerRef, PromptPickerProps>(funct
 ) {
 	const t = useTranslations("composer_tools");
 	const router = useRouter();
-	const params = useParams();
 	const { data: prompts, isLoading, isError } = useAtomValue(promptsAtom);
 	const [highlightedIndex, setHighlightedIndex] = useState(0);
 	const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -72,22 +71,19 @@ export const PromptPicker = forwardRef<PromptPickerRef, PromptPickerProps>(funct
 
 	const createPromptIndex = filtered.length;
 	const totalItems = filtered.length + 1;
-	const workspaceId = getWorkspaceIdParam(params);
 
 	const handleSelect = useCallback(
 		(index: number) => {
 			if (index === createPromptIndex) {
 				onDone();
-				if (workspaceId) {
-					router.push(`/dashboard/${workspaceId}/user-settings/prompts`);
-				}
+				router.push(settingsPath("prompts"));
 				return;
 			}
 			const action = filtered[index];
 			if (!action) return;
 			onSelect({ name: action.name, prompt: action.prompt, mode: action.mode });
 		},
-		[filtered, onSelect, createPromptIndex, onDone, router, workspaceId]
+		[filtered, onSelect, createPromptIndex, onDone, router]
 	);
 
 	useEffect(() => {

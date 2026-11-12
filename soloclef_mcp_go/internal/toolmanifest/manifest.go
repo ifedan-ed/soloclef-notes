@@ -23,29 +23,6 @@ import (
 // this list breaks a setup silently, so the list is written out rather than
 // derived from the code it checks.
 var Expected = []string{
-	// search-space selector
-	"soloclef_list_workspaces",
-	"soloclef_select_workspace",
-	// scrapers (all platforms) and run history
-	"soloclef_web_crawl",
-	"soloclef_google_search",
-	"soloclef_reddit_scrape",
-	"soloclef_youtube_scrape",
-	"soloclef_youtube_comments",
-	"soloclef_tiktok_scrape",
-	"soloclef_tiktok_comments",
-	"soloclef_tiktok_user_search",
-	"soloclef_tiktok_trending",
-	"soloclef_google_maps_scrape",
-	"soloclef_google_maps_reviews",
-	"soloclef_amazon_scrape",
-	"soloclef_instagram_scrape",
-	"soloclef_instagram_details",
-	"soloclef_indeed_scrape",
-	"soloclef_walmart_scrape",
-	"soloclef_walmart_reviews",
-	"soloclef_list_scraper_runs",
-	"soloclef_get_scraper_run",
 	// knowledge-base management
 	"soloclef_search_knowledge_base",
 	"soloclef_list_documents",
@@ -58,7 +35,6 @@ var Expected = []string{
 	"soloclef_pubmed_search",
 	"soloclef_arxiv_search",
 	"soloclef_preprint_search",
-	"soloclef_scholar_search",
 }
 
 // minDescriptionChars is the length below which a description is too thin for a

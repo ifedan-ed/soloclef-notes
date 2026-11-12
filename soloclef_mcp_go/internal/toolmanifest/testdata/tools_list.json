@@ -1,0 +1,475 @@
+[
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Search your knowledge base by meaning and keywords.\n\n        Use this FIRST when a question might be answered by content already\n        stored in Soloclef Notes — notes, uploaded files, saved pages, past\n        research. It reads only what is already stored and fetches nothing\n        new from the web. Returns the most relevant documents with the\n        passages that matched, ranked by relevance score.\n        Example: query='pricing feedback', top_k=5.\n        ",
+    "inputSchema": {
+      "properties": {
+        "document_types": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Restrict to these document types, e.g. ['FILE', 'CRAWLED_URL', 'YOUTUBE_VIDEO']. Omit for all types.",
+          "title": "Document Types"
+        },
+        "query": {
+          "description": "Natural-language search, e.g. 'notebooklm user complaints'.",
+          "minLength": 1,
+          "title": "Query",
+          "type": "string"
+        },
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        },
+        "top_k": {
+          "default": 5,
+          "description": "Maximum documents to return.",
+          "maximum": 20,
+          "minimum": 1,
+          "title": "Top K",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "title": "search_knowledge_baseArguments",
+      "type": "object"
+    },
+    "name": "soloclef_search_knowledge_base",
+    "title": "Search knowledge base"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "List documents in your knowledge base, newest first.\n\n        Use this to browse or inventory what is stored; to find documents\n        about a topic, prefer soloclef_search_knowledge_base. Returns each\n        document's title, id, type, and update time, plus a has_more flag —\n        request the next page by increasing page.\n        Example: document_types=['FILE'], page=0, page_size=20.\n        ",
+    "inputSchema": {
+      "properties": {
+        "document_types": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Restrict to these document types, e.g. ['FILE', 'CRAWLED_URL', 'YOUTUBE_VIDEO']. Omit for all types.",
+          "title": "Document Types"
+        },
+        "folder_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Only documents in this folder. Omit for all.",
+          "title": "Folder Id"
+        },
+        "page": {
+          "default": 0,
+          "description": "Zero-based page number.",
+          "minimum": 0,
+          "title": "Page",
+          "type": "integer"
+        },
+        "page_size": {
+          "default": 20,
+          "description": "Documents per page.",
+          "minimum": 1,
+          "title": "Page Size",
+          "type": "integer"
+        },
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        }
+      },
+      "title": "list_documentsArguments",
+      "type": "object"
+    },
+    "name": "soloclef_list_documents",
+    "title": "List documents"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Read one document's full content and metadata by id.\n\n        Use this after soloclef_search_knowledge_base or\n        soloclef_list_documents to open a specific document — search results\n        only include the matching passages, this returns the whole text.\n        The markdown form is an Open Knowledge Format (OKF) concept: a YAML\n        frontmatter block (type, title, tags, resource, timestamp) followed by\n        the document body.\n        ",
+    "inputSchema": {
+      "properties": {
+        "document_id": {
+          "description": "Document id from soloclef_search_knowledge_base or soloclef_list_documents results.",
+          "title": "Document Id",
+          "type": "integer"
+        },
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        }
+      },
+      "required": [
+        "document_id"
+      ],
+      "title": "get_documentArguments",
+      "type": "object"
+    },
+    "name": "soloclef_get_document",
+    "title": "Read one document"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Save a text or markdown note into your knowledge base.\n\n        Use this to store notes, summaries, or findings so they become\n        searchable later — e.g. after finishing a piece of research. For files\n        on disk use soloclef_upload_file instead. Indexing is asynchronous,\n        so the note may take a moment to appear in search.\n        Example: title='NotebookLM subreddits', content='- r/notebooklm ...'.\n        ",
+    "inputSchema": {
+      "properties": {
+        "content": {
+          "description": "The note's body; plain text or markdown.",
+          "minLength": 1,
+          "title": "Content",
+          "type": "string"
+        },
+        "source_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Where the text came from, if anywhere.",
+          "title": "Source Url"
+        },
+        "title": {
+          "description": "Short descriptive title for the note.",
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "content"
+      ],
+      "title": "add_documentArguments",
+      "type": "object"
+    },
+    "name": "soloclef_add_document",
+    "title": "Add a note"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Upload a local file (PDF, docx, markdown, etc.) into the knowledge base.\n\n        Use this to ingest a file from disk so its content becomes searchable;\n        for text you already have in hand use soloclef_add_document instead.\n        The file is parsed, chunked, and indexed asynchronously. Duplicate\n        files are detected and skipped.\n        Example: file_path='C:/Users/me/report.pdf'.\n        ",
+    "inputSchema": {
+      "properties": {
+        "file_path": {
+          "description": "Path to a local file, e.g. 'C:/Users/me/report.pdf' or '~/notes/summary.md'.",
+          "title": "File Path",
+          "type": "string"
+        },
+        "use_vision_llm": {
+          "default": false,
+          "description": "True reads scanned or image-heavy files with a vision model (slower).",
+          "title": "Use Vision Llm",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "file_path"
+      ],
+      "title": "upload_fileArguments",
+      "type": "object"
+    },
+    "name": "soloclef_upload_file",
+    "title": "Upload a file"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Replace a document's stored content by id.\n\n        Use this to correct or rewrite a document's text. The new content\n        REPLACES the old entirely — to append, read the document first with\n        soloclef_get_document and resend the combined text. The document\n        re-indexes in the background afterwards.\n        ",
+    "inputSchema": {
+      "properties": {
+        "content": {
+          "description": "New full text; replaces the existing content entirely.",
+          "minLength": 1,
+          "title": "Content",
+          "type": "string"
+        },
+        "document_id": {
+          "description": "Document id from soloclef_search_knowledge_base or soloclef_list_documents results.",
+          "title": "Document Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "document_id",
+        "content"
+      ],
+      "title": "update_documentArguments",
+      "type": "object"
+    },
+    "name": "soloclef_update_document",
+    "title": "Replace a document's content"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Permanently delete a document from the knowledge base by id.\n\n        Use this only when the user explicitly asks to remove a document —\n        deletion cannot be undone. The document stops appearing in searches\n        immediately.\n        ",
+    "inputSchema": {
+      "properties": {
+        "document_id": {
+          "description": "Document id from soloclef_search_knowledge_base or soloclef_list_documents results.",
+          "title": "Document Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "document_id"
+      ],
+      "title": "delete_documentArguments",
+      "type": "object"
+    },
+    "name": "soloclef_delete_document",
+    "title": "Delete a document"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Search PubMed (biomedical literature) by keyword.\n\n        Returns, per paper: title, authors, year, journal, PMID/PMCID/DOI, the\n        PubMed URL, and an abstract (or a full-text excerpt when\n        full_text=True and the paper is in PMC's open-access subset).\n        Example: query='bronchiolitis high flow nasal cannula', since=2018.\n        ",
+    "inputSchema": {
+      "properties": {
+        "full_text": {
+          "default": false,
+          "description": "When true, read PMC open-access full text for the top hits (where available) and return an excerpt instead of just the abstract.",
+          "title": "Full Text",
+          "type": "boolean"
+        },
+        "max_results": {
+          "default": 10,
+          "description": "Maximum papers to return.",
+          "maximum": 30,
+          "minimum": 1,
+          "title": "Max Results",
+          "type": "integer"
+        },
+        "query": {
+          "description": "Search query.",
+          "minLength": 1,
+          "title": "Query",
+          "type": "string"
+        },
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        },
+        "since": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Earliest publication year, inclusive.",
+          "title": "Since"
+        },
+        "until": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Latest publication year, inclusive.",
+          "title": "Until"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "title": "pubmed_searchArguments",
+      "type": "object"
+    },
+    "name": "soloclef_pubmed_search",
+    "title": "Search PubMed"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Search arXiv (preprints: physics, CS, math, stats, and more).\n\n        Returns, per paper: title, authors, year, arXiv id, DOI/journal-ref\n        when published, the arXiv URL, and the abstract.\n        Example: query='transformer attention mechanism'.\n        ",
+    "inputSchema": {
+      "properties": {
+        "max_results": {
+          "default": 10,
+          "description": "Maximum papers to return.",
+          "maximum": 30,
+          "minimum": 1,
+          "title": "Max Results",
+          "type": "integer"
+        },
+        "query": {
+          "description": "Search query.",
+          "minLength": 1,
+          "title": "Query",
+          "type": "string"
+        },
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "title": "arxiv_searchArguments",
+      "type": "object"
+    },
+    "name": "soloclef_arxiv_search",
+    "title": "Search arXiv"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Search medRxiv (health sciences) or bioRxiv (biology) preprints.\n\n        These are NOT peer reviewed. Returns, per preprint: title, authors,\n        year, DOI, the landing-page URL, and the abstract.\n        Example: query='pediatric asthma exacerbation', server='medrxiv'.\n        ",
+    "inputSchema": {
+      "properties": {
+        "max_results": {
+          "default": 10,
+          "description": "Maximum papers to return.",
+          "maximum": 30,
+          "minimum": 1,
+          "title": "Max Results",
+          "type": "integer"
+        },
+        "query": {
+          "description": "Search query.",
+          "minLength": 1,
+          "title": "Query",
+          "type": "string"
+        },
+        "response_format": {
+          "default": "markdown",
+          "description": "'markdown' (default, human-readable) or 'json' (raw data for post-processing).",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        },
+        "server": {
+          "description": "Which preprint server to search.",
+          "enum": [
+            "medrxiv",
+            "biorxiv"
+          ],
+          "title": "Server",
+          "type": "string"
+        }
+      },
+      "required": [
+        "query",
+        "server"
+      ],
+      "title": "preprint_searchArguments",
+      "type": "object"
+    },
+    "name": "soloclef_preprint_search",
+    "title": "Search medRxiv / bioRxiv"
+  }
+]

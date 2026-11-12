@@ -85,7 +85,6 @@ export const clonePublicChatRequest = z.object({
 
 export const clonePublicChatResponse = z.object({
 	thread_id: z.number(),
-	workspace_id: z.number(),
 	notebook_id: z.number().nullable().optional(),
 });
 

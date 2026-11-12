@@ -24,9 +24,6 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
-import { billingSettingsPath, isBillingRefusal } from "@/features/billing/lib/billing-errors";
-import { showBillingRefusalToast } from "@/features/billing/ui/billing-refusal-toast";
-import { StudioCostHint } from "@/features/billing/ui/studio-cost-hint";
 import { podcastsApiService } from "@/lib/apis/podcasts-api.service";
 import { notebookKeys } from "../../api/notebook-query-keys";
 import { notebooksApi } from "../../api/notebooks-api";
@@ -58,7 +55,6 @@ const DEFAULT_LANGUAGE = "__default__";
 interface GenerateDialogProps {
 	kind: StudioKind | null;
 	onOpenChange: (open: boolean) => void;
-	workspaceId: number;
 	notebookId: number;
 	notebookTitle: string;
 	sources: NotebookSource[];
@@ -153,7 +149,6 @@ export function NeedsSourcesBody({ kind, onAddSources, onResearch }: NeedsSource
 function GenerateForm({
 	kind,
 	onOpenChange,
-	workspaceId,
 	notebookId,
 	notebookTitle,
 	sources,
@@ -175,7 +170,6 @@ function GenerateForm({
 
 	const variant = suggestionVariant(kind, state.options);
 	const suggestions = useStudioSuggestions(
-		workspaceId,
 		notebookId,
 		kind,
 		{ variant, language: state.language },
@@ -206,13 +200,13 @@ function GenerateForm({
 		refreshingIdeasRef.current = true;
 		setRefreshingIdeas(true);
 		try {
-			const fresh = await notebooksApi.suggestions(workspaceId, notebookId, kind, {
+			const fresh = await notebooksApi.suggestions(notebookId, kind, {
 				variant,
 				language: state.language,
 				refresh: true,
 			});
 			queryClient.setQueryData(
-				notebookKeys.suggestions(workspaceId, notebookId, kind, variant, state.language),
+				notebookKeys.suggestions(notebookId, kind, variant, state.language),
 				fresh
 			);
 			rotation.restart();
@@ -224,7 +218,7 @@ function GenerateForm({
 		}
 	};
 	const focusRef = useRef<HTMLTextAreaElement>(null);
-	const templates = useReportTemplates(workspaceId, kind === "report");
+	const templates = useReportTemplates(kind === "report");
 	const podcastLanguages = useQuery({
 		queryKey: ["podcast-languages"],
 		queryFn: () => podcastsApiService.listLanguages(),
@@ -277,15 +271,7 @@ function GenerateForm({
 			);
 			onOpenChange(false);
 		} catch (error) {
-			if (isBillingRefusal(error)) {
-				showBillingRefusalToast({
-					code: (error as { code?: string }).code,
-					message: error instanceof Error ? error.message : "",
-					href: billingSettingsPath(workspaceId),
-				});
-			} else {
-				toast.error(error instanceof Error && error.message ? error.message : t("generate_failed"));
-			}
+			toast.error(error instanceof Error && error.message ? error.message : t("generate_failed"));
 			setSubmitting(false);
 		}
 	};
@@ -399,7 +385,6 @@ function GenerateForm({
 
 			{kind === "report" ? (
 				<ReportTemplates
-					workspaceId={workspaceId}
 					templates={visibleTemplates}
 					selectedKey={state.templateKey ?? null}
 					prompt={state.templatePrompt ?? null}
@@ -411,9 +396,7 @@ function GenerateForm({
 						}))
 					}
 					onPromptChange={(prompt) => setState((s) => ({ ...s, templatePrompt: prompt }))}
-					onSaved={(saved) =>
-						queryClient.setQueryData(notebookKeys.reportTemplates(workspaceId), saved)
-					}
+					onSaved={(saved) => queryClient.setQueryData(notebookKeys.reportTemplates(), saved)}
 				/>
 			) : null}
 
@@ -523,8 +506,6 @@ function GenerateForm({
 					</div>
 				) : null}
 			</div>
-
-			<StudioCostHint kind={kind} kindLabel={t(`kinds.${kind}.label`)} workspaceId={workspaceId} />
 
 			<div className="flex justify-end gap-2 pt-1">
 				<Button variant="ghost" onClick={() => onOpenChange(false)}>

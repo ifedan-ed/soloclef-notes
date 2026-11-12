@@ -116,10 +116,10 @@ export const MCPConfig: FC<MCPConfigProps> = ({ connector, onConfigChange, onNam
 		setIsTesting(true);
 		setTestResult(null);
 
-		const result = await testMCPConnection(serverConfig, connector.workspace_id, connector.id);
+		const result = await testMCPConnection(serverConfig, connector.id);
 		setTestResult(result);
 		setIsTesting(false);
-	}, [parseConfig, jsonError, onConfigChange, connector.workspace_id, connector.id]);
+	}, [parseConfig, jsonError, onConfigChange, connector.id]);
 
 	// Validate that this is an MCP connector - must be after all hooks
 	if (!isValidConnector) {

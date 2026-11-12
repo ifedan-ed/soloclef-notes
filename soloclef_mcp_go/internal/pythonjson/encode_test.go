@@ -66,17 +66,6 @@ func TestNumberSpellingSurvivesTheRoundTrip(t *testing.T) {
 	}
 }
 
-func TestWithoutNullsDropsOnlyNullMembers(t *testing.T) {
-	value, err := pythonjson.DecodeAny([]byte(`{"a":1,"b":null,"c":"","d":[],"e":false}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	const want = `{"a":1,"c":"","d":[],"e":false}`
-	if got := pythonjson.Compact(pythonjson.WithoutNulls(value)); got != want {
-		t.Errorf("got %s, want %s", got, want)
-	}
-}
-
 func TestEmptyAndNullArgumentsDecodeToAnEmptyObject(t *testing.T) {
 	for _, source := range []string{"", "   ", "null"} {
 		value, err := pythonjson.DecodeObject([]byte(source))

@@ -2,8 +2,8 @@ package knowledgebase
 
 // Knowledge-base write tools: add a note, upload a file, update, and delete.
 //
-// Add and upload target the active workspace; update and delete address a
-// document by its account-unique id, so they need no workspace.
+// Add and upload write into the caller's own library; update and delete address
+// one of the caller's documents by id.
 
 import (
 	"context"
@@ -12,18 +12,16 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
+	"git.danvics.com/danvics/soloclef/soloclef_mcp_go/internal/callercredential"
 	"git.danvics.com/danvics/soloclef/soloclef_mcp_go/internal/pythonjson"
 	"git.danvics.com/danvics/soloclef/soloclef_mcp_go/internal/restclient"
 	"git.danvics.com/danvics/soloclef/soloclef_mcp_go/internal/tooldefinition"
 	"git.danvics.com/danvics/soloclef/soloclef_mcp_go/internal/toolerror"
 	"git.danvics.com/danvics/soloclef/soloclef_mcp_go/internal/toolschema"
-	"git.danvics.com/danvics/soloclef/soloclef_mcp_go/internal/workspaceselection"
 )
 
-func writeDefinitions(client *restclient.Client,
-	selection *workspaceselection.Selection) []tooldefinition.Definition {
+func writeDefinitions(client *restclient.Client) []tooldefinition.Definition {
 	return []tooldefinition.Definition{
 		{
 			Name:        "soloclef_add_document",
@@ -56,11 +54,10 @@ func writeDefinitions(client *restclient.Client,
 						Kind:        toolschema.Text,
 						Nullable:    true,
 					},
-					workspaceselection.ReferenceParameter(),
 				},
 			},
 			Handle: func(ctx context.Context, arguments toolschema.Arguments) (string, error) {
-				return addDocument(ctx, client, selection, arguments)
+				return addDocument(ctx, client, arguments)
 			},
 		},
 		{
@@ -87,11 +84,10 @@ func writeDefinitions(client *restclient.Client,
 						Kind:    toolschema.Flag,
 						Default: false,
 					},
-					workspaceselection.ReferenceParameter(),
 				},
 			},
 			Handle: func(ctx context.Context, arguments toolschema.Arguments) (string, error) {
-				return uploadFile(ctx, client, selection, arguments)
+				return uploadFile(ctx, client, arguments)
 			},
 		},
 		{
@@ -133,32 +129,37 @@ func writeDefinitions(client *restclient.Client,
 	}
 }
 
-func addDocument(ctx context.Context, client *restclient.Client,
-	selection *workspaceselection.Selection, arguments toolschema.Arguments) (string, error) {
-	workspace, err := selection.Resolve(ctx, arguments.Text("workspace"))
-	if err != nil {
-		return "", err
-	}
-	sourceURL, _ := arguments.OptionalText("source_url")
-	_, err = client.Do(ctx, restclient.Call{
-		Method: "POST",
-		Path:   "/documents",
-		JSONBody: buildNoteDocument(workspace.ID, arguments.Text("title"),
-			arguments.Text("content"), sourceURL, time.Now()),
+func addDocument(ctx context.Context, client *restclient.Client, arguments toolschema.Arguments) (string, error) {
+	sourceURL, given := arguments.OptionalText("source_url")
+	_, err := client.Do(ctx, restclient.Call{
+		Method:   "POST",
+		Path:     "/documents",
+		JSONBody: noteBody(arguments.Text("title"), arguments.Text("content"), sourceURL, given),
 	})
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf(
-		"Queued '%s' for indexing in '%s'. It will be searchable once processing completes.",
-		arguments.Text("title"), workspace.Name), nil
+		"Queued '%s' for indexing. It will be searchable once processing completes.",
+		arguments.Text("title")), nil
 }
 
-func uploadFile(ctx context.Context, client *restclient.Client,
-	selection *workspaceselection.Selection, arguments toolschema.Arguments) (string, error) {
-	workspace, err := selection.Resolve(ctx, arguments.Text("workspace"))
-	if err != nil {
-		return "", err
+// remoteUploadRefused is what a remote caller is told instead of having a
+// path on this server's disk read for them.
+const remoteUploadRefused = "soloclef_upload_file reads a file from the computer this server runs " +
+	"on, so it works only when the server runs on your own computer (stdio). Over the " +
+	"remote server, send the text with soloclef_add_document, or upload the file in the app."
+
+func uploadFile(ctx context.Context, client *restclient.Client, arguments toolschema.Arguments) (string, error) {
+	// A credential bound to the request means the caller is remote
+	// (streamable HTTP): their file_path names a file on this server, not on
+	// their machine. Reading it would let any API key holder copy the
+	// server's own files (/proc/self/environ, the image, any mount) into
+	// their library, so the path is refused before it is touched. Under
+	// stdio nothing is bound, the server is the caller's own process, and
+	// the path is theirs to read.
+	if callercredential.Credential(ctx) != "" {
+		return "", toolerror.New(remoteUploadRefused)
 	}
 	path := arguments.Text("file_path")
 	upload, err := readUpload(path)
@@ -169,9 +170,7 @@ func uploadFile(ctx context.Context, client *restclient.Client,
 		Method: "POST",
 		Path:   "/documents/fileupload",
 		FormFields: []restclient.FormField{
-			{Name: "workspace_id", Value: fmt.Sprintf("%d", workspace.ID)},
 			{Name: "use_vision_llm", Value: boolText(arguments.Flag("use_vision_llm"))},
-			{Name: "processing_mode", Value: "basic"},
 		},
 		Files: []restclient.Upload{upload},
 	})
@@ -185,40 +184,27 @@ func uploadFile(ctx context.Context, client *restclient.Client,
 		note = " (already present, skipped)"
 	}
 	return fmt.Sprintf(
-		"Uploaded '%s' to '%s'%s. It will be searchable once processing completes.",
-		filepath.Base(path), workspace.Name, note), nil
+		"Uploaded '%s'%s. It will be searchable once processing completes.",
+		filepath.Base(path), note), nil
 }
 
 func updateDocument(ctx context.Context, client *restclient.Client,
 	arguments toolschema.Arguments) (string, error) {
 	documentID := arguments.Number("document_id")
-	existing, err := client.Do(ctx, restclient.Call{
-		Method: "GET", Path: fmt.Sprintf("/documents/%d", documentID),
-	})
-	if err != nil {
-		return "", err
-	}
-	workspaceID, present := existing.Lookup("workspace_id")
-	if !present {
-		return "", toolerror.New(fmt.Sprintf(
-			"Soloclef Notes returned a document %d with no workspace_id.", documentID))
-	}
-	title, _ := existing.Lookup("title")
-	_, err = client.Do(ctx, restclient.Call{
+	// One call. The save keeps the document's title when it is sent none,
+	// so the document no longer has to be read first to pin it: a content
+	// replace never reheadings a note, and never did.
+	_, err := client.Do(ctx, restclient.Call{
 		Method: "POST",
-		Path: fmt.Sprintf("/workspaces/%s/documents/%d/save",
-			pythonjson.PythonText(workspaceID), documentID),
-		// The title is pinned so a content replace never reheadings a note.
+		Path:   fmt.Sprintf("/documents/%d/save", documentID),
 		JSONBody: pythonjson.NewObject(
 			pythonjson.Field("source_markdown", pythonjson.Str(arguments.Text("content"))),
-			pythonjson.Field("title", title),
 		),
 	})
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("Updated document %d ('%s').",
-		documentID, pythonjson.Text(existing, "title", "")), nil
+	return fmt.Sprintf("Updated document %d.", documentID), nil
 }
 
 func deleteDocument(ctx context.Context, client *restclient.Client,

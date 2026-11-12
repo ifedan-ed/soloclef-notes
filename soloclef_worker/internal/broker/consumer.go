@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"git.danvics.com/danvics/soloclef/soloclef_celery/celery"
@@ -53,8 +52,7 @@ type Consumer struct {
 	clock    Clock
 	log      *slog.Logger
 
-	running       sync.WaitGroup
-	waitingForETA atomic.Int64
+	running sync.WaitGroup
 
 	// coolUntil holds back a queue whose last message was put back, so a full
 	// task class cannot be polled in a loop.
@@ -97,9 +95,10 @@ func (c *Consumer) Run(ctx context.Context) error {
 
 	background, stopBackground := context.WithCancel(context.WithoutCancel(ctx))
 	var background0 sync.WaitGroup
-	background0.Add(2)
+	background0.Add(3)
 	go func() { defer background0.Done(); c.renewClaims(background) }()
 	go func() { defer background0.Done(); c.restoreLost(background) }()
+	go func() { defer background0.Done(); c.promoteScheduled(background) }()
 
 	c.poll(ctx, runCtx)
 
@@ -124,7 +123,6 @@ func (c *Consumer) Snapshot(ctx context.Context) (Snapshot, error) {
 		InFlightByQueue: byQueue,
 		InFlightByTask:  byTask,
 		HeldClaims:      c.claims.size(),
-		WaitingForETA:   int(c.waitingForETA.Load()),
 	}
 	c.metrics.fill(&snapshot)
 
@@ -133,6 +131,9 @@ func (c *Consumer) Snapshot(ctx context.Context) (Snapshot, error) {
 		return snapshot, err
 	}
 	snapshot.QueueDepth = depths
+	if snapshot.Scheduled, err = c.registry.Scheduled(ctx); err != nil {
+		return snapshot, err
+	}
 	return snapshot, nil
 }
 
@@ -195,13 +196,15 @@ func (c *Consumer) take(ctx context.Context, wanted []string) (*celery.Message, 
 		return nil, "", false, err
 	}
 	c.claims.add(msg.DeliveryTag)
-	c.observeWait(msg)
 	return msg, key, true, nil
 }
 
 // dispatch takes the queue slot and starts the job. The queue slot is taken
 // here rather than before the pop because only this goroutine takes slots, so
 // a queue that openQueues found open is still open now.
+//
+// A message that is not due yet takes no slot at all: it goes to the
+// scheduled set (scheduled.go) and comes back to its list when it is due.
 func (c *Consumer) dispatch(runCtx context.Context, msg *celery.Message, queue string) {
 	due, expired := msg.Due(time.Now())
 	if expired {
@@ -210,6 +213,11 @@ func (c *Consumer) dispatch(runCtx context.Context, msg *celery.Message, queue s
 		c.finish(msg, "", "")
 		return
 	}
+	if !due {
+		c.schedule(msg)
+		return
+	}
+	c.observeWait(msg)
 
 	if !c.slots.takeQueue(queue) {
 		// Cannot happen while one goroutine owns the slots, but putting the
@@ -218,46 +226,35 @@ func (c *Consumer) dispatch(runCtx context.Context, msg *celery.Message, queue s
 		return
 	}
 
-	if !due {
-		waitFor := time.Until(msg.ETA)
-		if waitFor > c.cfg.ETAHoldHorizon {
-			c.log.Info("putting back a message that is not due for a while",
-				"task", msg.Task, "id", msg.ID, "eta", msg.ETA)
-			c.putBack(msg, queue, "")
-			c.coolDown(queue, c.cfg.DeferredRetryDelay)
-			return
-		}
-	}
-
 	c.running.Add(1)
 	go func() {
 		defer c.running.Done()
-		c.hold(runCtx, msg, queue)
+		c.execute(runCtx, msg, queue)
 	}()
 }
 
-// hold waits for the message's eta if it has one, then runs it.
-func (c *Consumer) hold(runCtx context.Context, msg *celery.Message, queue string) {
-	if due, _ := msg.Due(time.Now()); !due {
-		c.waitingForETA.Add(1)
-		timer := time.NewTimer(time.Until(msg.ETA))
-		defer timer.Stop()
-		select {
-		case <-timer.C:
-			c.waitingForETA.Add(-1)
-		case <-runCtx.Done():
-			// It never started, so putting it back loses nothing.
-			c.waitingForETA.Add(-1)
-			c.putBack(msg, queue, "")
-			return
-		}
-		if _, expired := msg.Due(time.Now()); expired {
-			c.metrics.count(&c.metrics.expired, 1)
-			c.finish(msg, queue, "")
-			return
-		}
+// schedule hands a message that is not due yet to the scheduled set and
+// lets go of it. If that cannot be written, the claim is still in Redis and
+// the message is restored after the visibility window, like a job whose ack
+// failed: late, and not lost. Holding it here instead is what this replaces.
+func (c *Consumer) schedule(msg *celery.Message) {
+	ctx, done := context.WithTimeout(context.Background(), 10*time.Second)
+	defer done()
+	won, err := c.registry.Schedule(ctx, msg)
+	switch {
+	case err != nil:
+		c.log.Error("could not schedule a message that is not due yet; its claim stays, to be restored after the visibility window",
+			"task", msg.Task, "id", msg.ID, "eta", msg.ETA, "error", err)
+	case !won:
+		c.log.Warn("a message's claim was gone before it could be scheduled; another worker has it", "task", msg.Task, "id", msg.ID)
+	default:
+		c.metrics.count(&c.metrics.delayed, 1)
 	}
+	c.claims.drop(msg.DeliveryTag)
+}
 
+// execute runs a message that is due, once its task class has room.
+func (c *Consumer) execute(runCtx context.Context, msg *celery.Message, queue string) {
 	if !c.slots.takeTask(msg.Task) {
 		c.metrics.count(&c.metrics.deferred, 1)
 		c.log.Info("putting back a message whose task class is full", "task", msg.Task, "id", msg.ID)
@@ -305,7 +302,15 @@ func (c *Consumer) putBack(msg *celery.Message, queue, task string) {
 	c.slots.release(queue, task)
 }
 
+// observeWait records how long a due message waited to be taken. A message
+// with an eta could not be taken before it, so its wait is counted from the
+// eta, not from when it was sent: the delay was asked for, and is not the
+// queue being slow.
 func (c *Consumer) observeWait(msg *celery.Message) {
+	if !msg.ETA.IsZero() {
+		c.metrics.observeWait(msg.Task, max(0, time.Since(msg.ETA)))
+		return
+	}
 	waited, err := QueueWait(msg, c.clock)
 	if err != nil {
 		c.metrics.count(&c.metrics.waitUnknown, 1)
@@ -395,6 +400,24 @@ func (c *Consumer) restoreLost(ctx context.Context) {
 			if restored > 0 {
 				c.metrics.count(&c.metrics.restored, uint64(restored))
 				c.log.Warn("made messages visible again after their claims went stale", "count", restored)
+			}
+		}
+	}
+}
+
+// promoteScheduled moves due messages from the scheduled set back to their
+// lists. Every consumer does it, and the scripts make that safe; a worker
+// that is the only one left still brings back what another one scheduled.
+func (c *Consumer) promoteScheduled(ctx context.Context) {
+	ticker := time.NewTicker(promoteInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if _, err := c.registry.PromoteDue(ctx); err != nil && ctx.Err() == nil {
+				c.log.Error("could not move due messages back to their queues", "error", err)
 			}
 		}
 	}

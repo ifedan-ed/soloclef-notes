@@ -1,0 +1,23 @@
+[project]
+name = "soloclef-parse-service"
+version = "0.1.0"
+description = "pymupdf4llm behind one HTTP endpoint: a file in, Markdown pages or a typed refusal out."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    # Exact, not a range: the Markdown this produces is what gets chunked and
+    # embedded, so a parser upgrade is a decision (re-read some documents and
+    # compare), never a side effect of rebuilding the image.
+    "pymupdf4llm==1.28.2",
+]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "container: builds the image and runs it in a throwaway container (opt in with PARSE_SERVICE_CONTAINER_TEST=1)",
+]
+
+[tool.uv]
+package = false

@@ -47,38 +47,3 @@ func TestPythonSplitLinesBreaksWhereStrSplitLinesBreaks(t *testing.T) {
 		t.Errorf("an empty document is no lines: %q", got)
 	}
 }
-
-// str.isalnum() is what normalize_heading keeps, and it counts the numeric
-// categories as well as the letters — so "Preferences²" normalises with that
-// character kept and still is not the forbidden heading.
-func TestPythonIsAlphanumericCountsTheNumericCategories(t *testing.T) {
-	for _, character := range []rune{'a', 'Z', '7', 0x00e9, 0x00b2, 0x3007, 0x0662} {
-		if !pythonIsAlphanumeric(character) {
-			t.Errorf("pythonIsAlphanumeric(%q) = false, want true", character)
-		}
-	}
-	for _, character := range []rune{' ', '-', '!', 0x2014, 0x00a0} {
-		if pythonIsAlphanumeric(character) {
-			t.Errorf("pythonIsAlphanumeric(%q) = true, want false", character)
-		}
-	}
-}
-
-// The normalisation the forbidden-heading rule compares. The last two came out
-// of the Python tier: "## personal   instructions!" is refused in team memory
-// and "## Pre-fer-ences" is not, because the first normalises onto a forbidden
-// heading and the second does not.
-func TestNormaliseHeadingIsNormalizeHeading(t *testing.T) {
-	for heading, want := range map[string]string{
-		"Preferences":              "preferences",
-		"  Personal   Notes!  ":    "personal notes",
-		"personal   instructions!": "personal instructions",
-		"Pre-fer-ences":            "pre fer ences",
-		"":                         "",
-		"---":                      "",
-	} {
-		if got := normaliseHeading(heading); got != want {
-			t.Errorf("normaliseHeading(%q) = %q, want %q", heading, got, want)
-		}
-	}
-}

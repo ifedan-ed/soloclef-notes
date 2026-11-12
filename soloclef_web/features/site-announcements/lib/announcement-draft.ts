@@ -16,8 +16,6 @@ export interface AnnouncementDraft {
 	link: string;
 	/** A datetime-local value ("2026-10-01T09:00"), in the admin's own time zone; "" for none. */
 	expiresAt: string;
-	audience: "all" | "workspace";
-	workspaceId: number | null;
 }
 
 export const emptyDraft: AnnouncementDraft = {
@@ -25,8 +23,6 @@ export const emptyDraft: AnnouncementDraft = {
 	body: "",
 	link: "",
 	expiresAt: "",
-	audience: "all",
-	workspaceId: null,
 };
 
 export function draftProblems(draft: AnnouncementDraft, now: Date = new Date()): string[] {
@@ -45,8 +41,6 @@ export function draftProblems(draft: AnnouncementDraft, now: Date = new Date()):
 		if (Number.isNaN(when.getTime()) || when.getTime() <= now.getTime())
 			problems.push("The expiry must be in the future.");
 	}
-	if (draft.audience === "workspace" && draft.workspaceId === null)
-		problems.push("Choose the workspace to send to.");
 	return problems;
 }
 
@@ -56,7 +50,5 @@ export function draftToBody(draft: AnnouncementDraft): AnnouncementBody {
 		body: draft.body.trim(),
 		link: draft.link.trim() || null,
 		expires_at: draft.expiresAt ? new Date(draft.expiresAt).toISOString() : null,
-		audience: draft.audience,
-		workspace_id: draft.audience === "workspace" ? draft.workspaceId : null,
 	};
 }

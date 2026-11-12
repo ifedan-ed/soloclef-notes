@@ -1,94 +1,32 @@
 "use client";
 
-import { useAtom, useAtomValue } from "jotai";
-import { Dot } from "lucide-react";
-import { updateModelRolesMutationAtom } from "@/atoms/model-connections/model-connections-mutation.atoms";
-import {
-	globalModelConnectionsAtom,
-	modelConnectionsAtom,
-	modelRolesAtom,
-} from "@/atoms/model-connections/model-connections-query.atoms";
-import { Label } from "@/components/ui/label";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
+import { useAtom } from "jotai";
+import { useTranslations } from "next-intl";
+import { modelConnectionsAtom } from "@/atoms/model-connections/model-connections-query.atoms";
 import { Separator } from "@/components/ui/separator";
-import type { ConnectionRead, ModelRead } from "@/contracts/types/model-connections.types";
-import { useBillingMe } from "@/features/billing/hooks/use-billing-queries";
-import { AUTO_PROVIDER_ICON_KEY, getProviderIcon } from "@/lib/provider-icons";
+import { ChatModelSetting } from "@/features/chat-model/ui/chat-model-setting";
+import { ModelJobSetting, ModelRoleSetting } from "@/features/model-choice/ui/model-choice-setting";
+import { useSiteAdmin } from "@/hooks/use-site-admin";
 import { ModelProviderConnectionsPanel } from "./model-connections/model-provider-connections-panel";
-import {
-	capability,
-	modelLabel,
-	modelTag,
-	usableConnections,
-} from "./model-connections/model-utils";
-import { providerDisplay, providerIcon } from "./model-connections/provider-metadata";
-import { QuickTasksModelSetting } from "./model-connections/quick-tasks-model";
-import { StudioOutputsModelSetting } from "./model-connections/studio-outputs-model";
 
-function flattenModels(connections: ConnectionRead[]) {
-	return connections.flatMap((connection) =>
-		connection.models.map((model) => ({
-			...model,
-			tag: modelTag(model, connection, (provider) => providerDisplay(provider).name),
-			connectionId: connection.id,
-			provider: connection.provider,
-		}))
-	);
-}
-
-function roleSelectValue(modelId: number | null | undefined, models: Array<{ id: number }>) {
-	if (!modelId) return "0";
-	return models.some((model) => model.id === modelId) ? String(modelId) : "0";
-}
-
-function renderAutoModeOption() {
-	return (
-		<SelectItem value="0">
-			<span className="inline-flex items-center gap-2">
-				{getProviderIcon(AUTO_PROVIDER_ICON_KEY)}
-				<span>Auto mode</span>
-			</span>
-		</SelectItem>
-	);
-}
-
-export function ModelConnectionsSettings({ workspaceId }: { workspaceId: number }) {
-	const [{ data: globalConnections = [] }] = useAtom(globalModelConnectionsAtom);
+/**
+ * The model settings page: which model does each of the account's jobs, and
+ * the account's own provider connections.
+ *
+ * Every job's model is chosen from one menu, the server's proxy models and
+ * the models of the account's own connections, so the five pickers are one
+ * control over five settings (features/chat-model, features/model-choice).
+ *
+ * Every account may connect an OpenAI-compatible endpoint with its own key;
+ * the server calls it directly and its models join the account's menus. The
+ * other providers are an administrator's to connect, so only an
+ * administrator is offered them (the panel filters by `any_account`).
+ */
+export function ModelConnectionsSettings() {
 	const [{ data: connections = [] }] = useAtom(modelConnectionsAtom);
-	const [{ data: roles }] = useAtom(modelRolesAtom);
-	const updateRoles = useAtomValue(updateModelRolesMutationAtom);
-	const isAdmin = useBillingMe().data?.is_admin === true;
-
-	const allConnections = [...globalConnections, ...usableConnections(connections)];
-	const enabledModels = flattenModels(allConnections).filter((model) => model.enabled);
-	const chatModels = enabledModels.filter((model) => capability(model, "chat"));
-	const visionModels = enabledModels.filter((model) => capability(model, "vision"));
-	const imageModels = enabledModels.filter((model) => capability(model, "image_gen"));
-
-	function renderModelOption(model: ModelRead & { tag: string | null; provider: string }) {
-		return (
-			<SelectItem key={model.id} value={String(model.id)}>
-				<span className="inline-flex items-center gap-2">
-					{providerIcon(model.provider)}
-					<span className="inline-flex items-center gap-1">
-						<span>{modelLabel(model)}</span>
-						{model.tag ? (
-							<>
-								<Dot className="size-4 text-muted-foreground" aria-hidden="true" />
-								<span>{model.tag}</span>
-							</>
-						) : null}
-					</span>
-				</span>
-			</SelectItem>
-		);
-	}
+	const isAdmin = useSiteAdmin().isAdmin === true;
+	const quick = useTranslations("quick_model");
+	const studio = useTranslations("studio_model");
 
 	return (
 		<div className="flex flex-col gap-6">
@@ -96,85 +34,42 @@ export function ModelConnectionsSettings({ workspaceId }: { workspaceId: number 
 				<div>
 					<h3 className="text-base font-semibold">Model Roles</h3>
 					<p className="text-sm text-muted-foreground">
-						Pick which of the available models powers chat, vision, and image generation in this
-						workspace.
+						Pick which of the available models powers chat, quick tasks, Studio, vision, and image
+						generation.
 					</p>
 				</div>
 				<div className="flex w-full max-w-2xl flex-col gap-4">
-					<div className="flex flex-col gap-2">
-						<Label>Chat model</Label>
-						<p className="text-xs text-muted-foreground">
-							Primary model for chat responses and agent tasks. You can also change it from the
-							chat.
-						</p>
-						<Select
-							value={roleSelectValue(roles?.chat_model_id, chatModels)}
-							onValueChange={(value) => updateRoles.mutate({ chat_model_id: Number(value) })}
-						>
-							<SelectTrigger className="w-full">
-								<SelectValue />
-							</SelectTrigger>
-							<SelectContent>
-								{renderAutoModeOption()}
-								{chatModels.map(renderModelOption)}
-							</SelectContent>
-						</Select>
-					</div>
-					<QuickTasksModelSetting
-						workspaceId={workspaceId}
-						models={chatModels}
-						renderOption={renderModelOption}
+					<ChatModelSetting />
+					<ModelJobSetting job="quick" label={quick("title")} description={quick("description")} />
+					<ModelJobSetting
+						job="studio"
+						label={studio("title")}
+						description={studio("description")}
 					/>
-					<StudioOutputsModelSetting
-						workspaceId={workspaceId}
-						models={chatModels}
-						renderOption={renderModelOption}
+					<ModelRoleSetting
+						kind="vision"
+						label="Vision model"
+						description="Used to understand images in uploads and documents."
 					/>
-					<div className="flex flex-col gap-2">
-						<Label>Vision model</Label>
-						<p className="text-xs text-muted-foreground">
-							Used to understand images in uploads, documents, connectors, and automations. Falls
-							back to chat model when possible.
-						</p>
-						<Select
-							value={roleSelectValue(roles?.vision_model_id, visionModels)}
-							onValueChange={(value) => updateRoles.mutate({ vision_model_id: Number(value) })}
-						>
-							<SelectTrigger className="w-full">
-								<SelectValue />
-							</SelectTrigger>
-							<SelectContent>
-								{renderAutoModeOption()}
-								{visionModels.map(renderModelOption)}
-							</SelectContent>
-						</Select>
-					</div>
-					<div className="flex flex-col gap-2">
-						<Label>Image generation model</Label>
-						<p className="text-xs text-muted-foreground">Used when generating images in chat.</p>
-						<Select
-							value={roleSelectValue(roles?.image_gen_model_id, imageModels)}
-							onValueChange={(value) => updateRoles.mutate({ image_gen_model_id: Number(value) })}
-						>
-							<SelectTrigger className="w-full">
-								<SelectValue />
-							</SelectTrigger>
-							<SelectContent>
-								{renderAutoModeOption()}
-								{imageModels.map(renderModelOption)}
-							</SelectContent>
-						</Select>
-					</div>
+					<ModelRoleSetting
+						kind="image"
+						label="Image generation model"
+						description="Used when generating images in chat."
+					/>
 				</div>
 			</div>
 
-			{/* Everyone gets the shared models; connecting providers is admin-only. */}
-			{isAdmin ? (
-				<>
-					<Separator />
-					<ModelProviderConnectionsPanel workspaceId={workspaceId} connections={connections} />
-				</>
-			) : null}
+			<Separator />
+			<ModelProviderConnectionsPanel
+				connections={connections}
+				isAdmin={isAdmin}
+				addProviderTitle={isAdmin ? undefined : "Your own models"}
+				addProviderDescription={
+					isAdmin
+						? undefined
+						: "Connect any OpenAI-compatible endpoint with your own key. Its models join your model menus, marked as yours."
+				}
+			/>
 		</div>
 	);
 }

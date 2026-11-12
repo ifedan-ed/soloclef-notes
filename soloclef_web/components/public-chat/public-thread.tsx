@@ -18,6 +18,7 @@ import { LegacyDeliverableToolUI } from "@/components/tool-ui/legacy-deliverable
 import { GeneratePodcastToolUI } from "@/components/tool-ui/podcast";
 import { SaveArtifactToolUI } from "@/components/tool-ui/save-artifact";
 import { InterleavedMessageParts } from "@/features/chat-messages/timeline";
+import { PageReaderToolUI } from "@/features/page-reader/ui/page-reader-card";
 import { copyToClipboard } from "@/lib/utils";
 
 const GenerateVideoPresentationToolUI = dynamic(
@@ -36,6 +37,8 @@ const PUBLIC_BODY_TOOLS = {
 	generate_video_presentation: GenerateVideoPresentationToolUI,
 	display_image: GenerateImageToolUI,
 	generate_image: GenerateImageToolUI,
+	// The card's payload is built for sharing: addresses and previews only.
+	web_crawl: PageReaderToolUI,
 } as const;
 
 type BodyTools = Readonly<Record<string, ToolCallMessagePartComponent>>;

@@ -1,9 +1,7 @@
 "use client";
 
-import { useAtomValue } from "jotai";
 import { useTranslations } from "next-intl";
 import { type FC, useState } from "react";
-import { activeWorkspaceIdAtom } from "@/atoms/workspaces/workspace-query.atoms";
 import type { ConnectorConfigProps } from "@/components/assistant-ui/connector-popup/connector-configs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,7 +16,6 @@ const card = "rounded-xl border border-border bg-slate-400/5 dark:bg-white/5 p-3
  */
 export const NextcloudConnectorConfig: FC<ConnectorConfigProps> = ({ connector, onNameChange }) => {
 	const t = useTranslations("nextcloud_connect");
-	const workspaceId = useAtomValue(activeWorkspaceIdAtom);
 	const [name, setName] = useState(connector.name || "");
 
 	return (
@@ -33,12 +30,10 @@ export const NextcloudConnectorConfig: FC<ConnectorConfigProps> = ({ connector, 
 					}}
 				/>
 			</div>
-			{workspaceId != null && (
-				<div className={card}>
-					<NextcloudConnectionControls workspaceId={Number(workspaceId)} showDisconnect={false} />
-					<p className="text-xs text-muted-foreground">{t("how_to_use")}</p>
-				</div>
-			)}
+			<div className={card}>
+				<NextcloudConnectionControls showDisconnect={false} />
+				<p className="text-xs text-muted-foreground">{t("how_to_use")}</p>
+			</div>
 		</div>
 	);
 };

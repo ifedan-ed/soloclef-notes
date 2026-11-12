@@ -1,94 +1,57 @@
 "use client";
 
-import { AlarmClock, FileText, MessageSquare, NotebookPen } from "lucide-react";
+import { Pin } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
-import { Fragment, type ReactNode } from "react";
 import { relativeTime } from "@/features/notebooks/lib/relative-time";
 import { cn } from "@/lib/utils";
-import type { NotesView } from "../lib/note-groups";
-import type { WorkspaceNote } from "../model/workspace-note";
+import { previewLine } from "../lib/note-text";
+import type { NoteSummary } from "../model/note";
+import { NotebookLabel, OriginLabel, SourceMark } from "./note-where";
 
 interface NoteListRowProps {
-	note: WorkspaceNote;
+	note: NoteSummary;
+	selected: boolean;
 	onOpen: () => void;
-	/** The group heading above the row already names the notebook (by
-	 *  folder) or the automation (by automation), so the row leaves it out. */
-	groupedBy?: NotesView;
-	/** It is being opened: its text and the editor are on their way. */
-	busy?: boolean;
+	/** In one notebook's own list the notebook goes without saying. */
+	showNotebook?: boolean;
 }
 
-/** One note: title, opening words, where it lives, what made it, when. */
-export function NoteListRow({ note, onOpen, groupedBy, busy = false }: NoteListRowProps) {
+/** One note in a list: its title, two lines of its text, where it lives and when it was edited. */
+export function NoteListRow({ note, selected, onOpen, showNotebook = true }: NoteListRowProps) {
 	const t = useTranslations("notes");
 	const locale = useLocale();
-	const Icon = note.kind === "document" ? FileText : NotebookPen;
-	const made =
-		note.origin === "automation"
-			? t("by_automation", { automation: note.automation?.name ?? t("an_automation") })
-			: note.origin === "chat"
-				? t("from_chat")
-				: t("by_hand");
-	const MadeIcon = note.origin === "automation" ? AlarmClock : MessageSquare;
-	const where = note.notebook
-		? `${note.notebook.icon ? `${note.notebook.icon} ` : ""}${note.notebook.title}`
-		: t("not_in_notebook");
-	const sourceIn = note.source_in.map((ref) => ref.title).join(", ");
-
-	const details: { key: string; node: ReactNode }[] = [];
-	if (!(groupedBy === "folders" && note.notebook)) {
-		details.push({
-			key: "where",
-			node: <span className={note.notebook ? "truncate" : "truncate italic"}>{where}</span>,
-		});
-	}
-	if (groupedBy !== "automations") {
-		details.push({
-			key: "made",
-			node: (
-				<span className="inline-flex min-w-0 items-center gap-1">
-					{note.origin === "hand" ? null : <MadeIcon className="size-3 shrink-0" aria-hidden />}
-					<span className="truncate">{made}</span>
-				</span>
-			),
-		});
-	}
-	if (sourceIn) {
-		details.push({
-			key: "source",
-			node: <span className="truncate">{t("source_in", { notebooks: sourceIn })}</span>,
-		});
-	}
-	details.push({
-		key: "when",
-		node: <time dateTime={note.created_at}>{relativeTime(note.created_at, locale)}</time>,
-	});
-
+	const preview = previewLine(note.preview);
 	return (
 		<button
 			type="button"
 			onClick={onOpen}
-			aria-busy={busy}
+			aria-current={selected ? "page" : undefined}
 			className={cn(
-				"flex w-full min-w-0 items-start gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none",
-				busy && "cursor-progress bg-accent"
+				"group flex w-full min-w-0 flex-col gap-1 rounded-xl px-3 py-2.5 text-left transition-colors",
+				"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+				selected ? "bg-accent" : "hover:bg-accent/60"
 			)}
 		>
-			<span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-				<Icon className="size-4" aria-hidden />
-			</span>
-			<span className="min-w-0 flex-1 space-y-0.5">
-				<span className="block truncate text-sm font-medium">{note.title}</span>
-				{note.preview ? (
-					<span className="block truncate text-xs text-muted-foreground">{note.preview}</span>
+			<span className="flex min-w-0 items-center gap-1.5">
+				{note.pinned ? (
+					<Pin className="size-3.5 shrink-0 fill-current text-primary" aria-label={t("pinned")} />
 				) : null}
-				<span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-					{details.map((detail, index) => (
-						<Fragment key={detail.key}>
-							{index > 0 ? <span aria-hidden>·</span> : null}
-							{detail.node}
-						</Fragment>
-					))}
+				<span className="truncate text-sm font-medium text-foreground">{note.title}</span>
+			</span>
+			<span
+				className={cn(
+					"line-clamp-2 text-[13px] leading-5 text-muted-foreground",
+					!preview && "italic"
+				)}
+			>
+				{preview || t("empty_note")}
+			</span>
+			<span className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground/90">
+				{showNotebook ? <NotebookLabel notebook={note.notebook} className="max-w-[55%]" /> : null}
+				<OriginLabel origin={note.origin} />
+				<SourceMark count={note.sources.length} />
+				<span className="ml-auto shrink-0 tabular-nums">
+					{relativeTime(note.updated_at, locale)}
 				</span>
 			</span>
 		</button>

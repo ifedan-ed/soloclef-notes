@@ -11,7 +11,7 @@ test("the Unread tab clears only unread items; every other tab clears all of its
 	const read = { read: true };
 	const unread = { read: false };
 
-	for (const tab of ["all", "mentions", "announcements"] as const) {
+	for (const tab of ["all", "announcements"] as const) {
 		assert.equal(isCleared(read, clearScopeFor(tab)), true, tab);
 		assert.equal(isCleared(unread, clearScopeFor(tab)), true, tab);
 	}
@@ -21,7 +21,7 @@ test("the Unread tab clears only unread items; every other tab clears all of its
 
 test("a running job's item is never cleared, read or not, on any tab", () => {
 	const running = { metadata: { status: "in_progress" } };
-	for (const tab of ["all", "mentions", "announcements", "unread"] as const) {
+	for (const tab of ["all", "announcements", "unread"] as const) {
 		assert.equal(isCleared({ ...running, read: false }, clearScopeFor(tab)), false, tab);
 		assert.equal(isCleared({ ...running, read: true }, clearScopeFor(tab)), false, tab);
 	}
@@ -35,7 +35,6 @@ test("a running job's item is never cleared, read or not, on any tab", () => {
 
 test("the question names what the tab clears", () => {
 	assert.equal(clearConfirmTitle("all"), "Clear all notifications?");
-	assert.equal(clearConfirmTitle("mentions"), "Clear all mentions?");
 	assert.equal(clearConfirmTitle("announcements"), "Clear all announcements?");
 	assert.equal(clearConfirmTitle("unread"), "Clear all unread notifications?");
 });

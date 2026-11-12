@@ -35,14 +35,13 @@ function isSourcePick(mention: MentionedDocumentInfo): mention is Pick {
 interface AddSourcesDialogProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	workspaceId: number;
 	notebookId: number;
 	onAdd: (targets: SourceTarget[]) => Promise<unknown>;
 	/** Files imported from a connector were already linked; refresh the list. */
 	onImported: () => void;
 	/**
 	 * Files dropped on the notebook (Sources panel or chat). The dialog opens
-	 * on the Upload tab with them pre-filled, so the Local/Cloud parser and
+	 * on the Upload tab with them pre-filled, so the parser and
 	 * vision choices are made before anything uploads.
 	 */
 	dropped?: DroppedFiles | null;
@@ -57,14 +56,13 @@ export interface DroppedFiles {
 }
 
 /**
- * Upload new files (the regular upload tab, with its Local/Cloud parser
+ * Upload new files (the regular upload tab, with its four-parser
  * choice), pick existing documents and folders with the composer's picker,
  * or pick files straight from a connected Nextcloud.
  */
 export function AddSourcesDialog({
 	open,
 	onOpenChange,
-	workspaceId,
 	notebookId,
 	onAdd,
 	onImported,
@@ -153,7 +151,6 @@ export function AddSourcesDialog({
 						/>
 						<div className="min-h-64 flex-1 overflow-y-auto rounded-lg border">
 							<DocumentMentionPicker
-								workspaceId={workspaceId}
 								documentsOnly
 								onSelectionChange={handlePicked}
 								onDone={() => {}}
@@ -202,14 +199,12 @@ export function AddSourcesDialog({
 					<TabsContent value="upload" className="min-h-0 flex-1 overflow-y-auto">
 						<DocumentUploadTab
 							key={dropped?.id ?? "picked"}
-							workspaceId={String(workspaceId)}
 							onSuccess={onUploaded}
 							initialFiles={dropped?.files}
 						/>
 					</TabsContent>
 					<TabsContent value="connector" className="flex min-h-0 flex-1 flex-col overflow-y-auto">
 						<ConnectorSourcesTab
-							workspaceId={workspaceId}
 							notebookId={notebookId}
 							onLeave={() => onOpenChange(false)}
 							onPickFromLibrary={() => setTab("library")}

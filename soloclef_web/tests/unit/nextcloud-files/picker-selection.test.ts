@@ -7,7 +7,10 @@ import {
 	fileKind,
 	formatBytes,
 	isPickable,
+	MAX_PICKED_ITEMS,
+	nextcloudImportRequest,
 	parentPath,
+	pickProblem,
 	toggleAll,
 	toggleEntry,
 	withoutUnreadable,
@@ -76,4 +79,37 @@ test("sizes read like a file manager and icons follow the type", () => {
 	assert.equal(fileKind(entry("/F", true)), "folder");
 	assert.equal(fileKind(entry("/deck.pptx")), "slides");
 	assert.equal(fileKind(entry("/x.unknown")), "other");
+});
+
+test("the import request names its picks, parser and notebook, and no owner", () => {
+	// The picks land in the signed-in account's library; the body says
+	// nothing about whose that is.
+	const items = [{ path: "/Notes/a.md", kind: "file" as const }];
+	assert.deepEqual(
+		nextcloudImportRequest({
+			notebookId: 7,
+			items,
+			parser: "local",
+			useVision: true,
+		}),
+		{ items, parser: "local", use_vision_llm: true, notebook_id: 7 }
+	);
+	// No notebook is said outright (library only), not left out.
+	assert.equal(
+		nextcloudImportRequest({
+			notebookId: null,
+			items,
+			parser: "unstructured",
+			useVision: false,
+		}).notebook_id,
+		null
+	);
+});
+
+test("more ticks than one request takes are caught before they are sent", () => {
+	const ticks = (count: number) =>
+		Array.from({ length: count }, (_, n) => ({ path: `/f${n}.md`, kind: "file" as const }));
+	assert.equal(pickProblem(ticks(1)), null);
+	assert.equal(pickProblem(ticks(MAX_PICKED_ITEMS)), null);
+	assert.equal(pickProblem(ticks(MAX_PICKED_ITEMS + 1)), "too_many");
 });

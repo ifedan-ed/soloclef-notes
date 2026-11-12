@@ -37,7 +37,7 @@ setup("authenticate", async ({ page, request, baseURL }) => {
 		{
 			name: SESSION_COOKIE_NAME,
 			value: access_token,
-			url: baseURL ?? "http://127.0.0.1:3940",
+			url: baseURL ?? "http://127.0.0.1:3945",
 			httpOnly: true,
 			sameSite: "Lax",
 		},

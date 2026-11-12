@@ -10,30 +10,78 @@ import (
 	"time"
 )
 
-const documentsInFoldersNotDeleting = `-- name: DocumentsInFoldersNotDeleting :many
-SELECT id FROM documents
-WHERE folder_id = ANY($1::int[])
-  AND status ->> 'state' <> 'deleting'
+const clearWatchedFlag = `-- name: ClearWatchedFlag :execrows
+UPDATE folders
+SET metadata = jsonb_set(metadata, '{watched}', 'false'::jsonb),
+    updated_at = $1
+WHERE id = $2 AND user_id = $3
+  AND metadata -> 'watched' = 'true'::jsonb
 `
 
-// delete_folder's document read. `Document.status["state"].as_string() !=
-// "deleting"` is `status ->> 'state' <> 'deleting'`, and that is NULL — so the
-// row is **excluded** — for a document whose status has no state at all. A
-// document with `{}` is therefore left alone and not queued, which was checked
-// against the running tier rather than reasoned about.
-func (q *Queries) DocumentsInFoldersNotDeleting(ctx context.Context, folderIds []int64) ([]int64, error) {
-	rows, err := q.db.Query(ctx, documentsInFoldersNotDeleting, folderIds)
+type ClearWatchedFlagParams struct {
+	UpdatedAt time.Time
+	FolderID  int64
+	UserID    string
+}
+
+// Stop keeping a folder in step with a folder on someone's computer. Only
+// the one key is written, so every other value in the metadata keeps its own
+// text, and only a folder that is watched is touched: asking twice changes
+// nothing the second time, `updated_at` included.
+func (q *Queries) ClearWatchedFlag(ctx context.Context, arg ClearWatchedFlagParams) (int64, error) {
+	result, err := q.db.Exec(ctx, clearWatchedFlag, arg.UpdatedAt, arg.FolderID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const documentsOwned = `-- name: DocumentsOwned :many
+SELECT id, folder_id, title, connector_id, status, document_type::text AS document_type
+FROM documents
+WHERE user_id = $1
+  AND id = ANY($2::bigint[])
+ORDER BY id
+`
+
+type DocumentsOwnedParams struct {
+	UserID      string
+	DocumentIds []int64
+}
+
+type DocumentsOwnedRow struct {
+	ID           int64
+	FolderID     *int64
+	Title        string
+	ConnectorID  *int64
+	Status       []byte
+	DocumentType string
+}
+
+// The documents among these ids that are this account's, in id order: a
+// move announces each arrival in the order the rows come back, so the order
+// has to be one the rows carry. `document_type` is read as text because the
+// arrival carries the type's name.
+func (q *Queries) DocumentsOwned(ctx context.Context, arg DocumentsOwnedParams) ([]DocumentsOwnedRow, error) {
+	rows, err := q.db.Query(ctx, documentsOwned, arg.UserID, arg.DocumentIds)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []int64
+	var items []DocumentsOwnedRow
 	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
+		var i DocumentsOwnedRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FolderID,
+			&i.Title,
+			&i.ConnectorID,
+			&i.Status,
+			&i.DocumentType,
+		); err != nil {
 			return nil, err
 		}
-		items = append(items, id)
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -44,30 +92,33 @@ func (q *Queries) DocumentsInFoldersNotDeleting(ctx context.Context, folderIds [
 const folderAncestors = `-- name: FolderAncestors :many
 WITH RECURSIVE ancestors AS (
     SELECT f.id, f.name, f.parent_id, 0 AS depth
-    FROM folders f WHERE f.id = $1
+    FROM folders f
+    WHERE f.id = $1 AND f.user_id = $2
     UNION ALL
     SELECT f.id, f.name, f.parent_id, a.depth + 1
-    FROM folders f JOIN ancestors a ON f.id = a.parent_id
+    FROM folders f
+    JOIN ancestors a ON f.id = a.parent_id
+    WHERE f.user_id = $2
 )
 SELECT a.id, a.name FROM ancestors a ORDER BY a.depth DESC
 `
+
+type FolderAncestorsParams struct {
+	FolderID int64
+	UserID   string
+}
 
 type FolderAncestorsRow struct {
 	ID   int64
 	Name string
 }
 
-// get_folder_breadcrumb's own recursive CTE, word for word, including the
-// ordering by depth so the root comes first.
-//
-// move_folder's check_no_circular_reference asks the *same* chain, in its own
-// copy of this CTE, and then only whether one id is in it. This statement
-// answers that too, so the slice runs one query where the Python route has two
-// spellings of it: the extra name column and the ordering cannot change a
-// set-membership answer, and the self row the chain starts with is the case
-// move_folder has already refused by then with its own equality check.
-func (q *Queries) FolderAncestors(ctx context.Context, id int64) ([]FolderAncestorsRow, error) {
-	rows, err := q.db.Query(ctx, folderAncestors, id)
+// The chain from the root down to the folder itself: the breadcrumb, and the
+// set a move asks "is the folder being moved among the target's ancestors?"
+// of. The owner is named on every step, not only the first, so the walk can
+// never leave the account even if a parent link were ever wrong.
+func (q *Queries) FolderAncestors(ctx context.Context, arg FolderAncestorsParams) ([]FolderAncestorsRow, error) {
+	rows, err := q.db.Query(ctx, folderAncestors, arg.FolderID, arg.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -86,41 +137,70 @@ func (q *Queries) FolderAncestors(ctx context.Context, id int64) ([]FolderAncest
 	return items, nil
 }
 
-const folderByID = `-- name: FolderByID :one
-SELECT id, name, position, parent_id, workspace_id, created_by_id,
-       created_at, updated_at, metadata
-FROM folders WHERE id = $1
+const folderDepth = `-- name: FolderDepth :one
+WITH RECURSIVE ancestors AS (
+    SELECT f.id, f.parent_id, 1 AS depth
+    FROM folders f
+    WHERE f.id = $1 AND f.user_id = $2
+    UNION ALL
+    SELECT f.id, f.parent_id, a.depth + 1
+    FROM folders f
+    JOIN ancestors a ON f.id = a.parent_id
+    WHERE f.user_id = $2
+)
+SELECT COALESCE(MAX(a.depth), 0)::int AS depth FROM ancestors a
 `
 
-type FolderByIDRow struct {
-	ID          int64
-	Name        string
-	Position    string
-	ParentID    *int64
-	WorkspaceID int64
-	CreatedByID *string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	Metadata    []byte
+type FolderDepthParams struct {
+	FolderID int64
+	UserID   string
 }
 
-// `session.get(Folder, folder_id)`, which is what every route but the list and
-// the create begins with. The predicate is deliberately **unscoped**: all five
-// of those routes load the row before asking whether the caller may see it, so
-// a folder of another workspace is a 403 and an absent one is a 404. That is a
-// folder-existence oracle and it is the Python routes' own shape
-// (custom/docs/go-api-tier.md, "defects the port exposed"); scoping it here
-// would answer 404 where that tier answers 403.
-func (q *Queries) FolderByID(ctx context.Context, id int64) (FolderByIDRow, error) {
-	row := q.db.QueryRow(ctx, folderByID, id)
-	var i FolderByIDRow
+// How deep a folder sits: 1 for a top-level folder, 0 for one that is not
+// this account's.
+func (q *Queries) FolderDepth(ctx context.Context, arg FolderDepthParams) (int64, error) {
+	row := q.db.QueryRow(ctx, folderDepth, arg.FolderID, arg.UserID)
+	var depth int64
+	err := row.Scan(&depth)
+	return depth, err
+}
+
+const folderOwned = `-- name: FolderOwned :one
+
+SELECT id, name, position, parent_id, created_at, updated_at, metadata
+FROM folders
+WHERE id = $1 AND user_id = $2
+`
+
+type FolderOwnedParams struct {
+	FolderID int64
+	UserID   string
+}
+
+type FolderOwnedRow struct {
+	ID        int64
+	Name      string
+	Position  string
+	ParentID  *int64
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	Metadata  []byte
+}
+
+// Every statement here names the owner. A folder or a document is the
+// caller's or it does not exist: there is no second check after the read,
+// so there is nothing to forget, and another account's row answers exactly
+// as a row that was never made.
+// One folder of this account. The row a route is about, and equally the
+// parent or the target a write names: all of them must be the caller's.
+func (q *Queries) FolderOwned(ctx context.Context, arg FolderOwnedParams) (FolderOwnedRow, error) {
+	row := q.db.QueryRow(ctx, folderOwned, arg.FolderID, arg.UserID)
+	var i FolderOwnedRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Position,
 		&i.ParentID,
-		&i.WorkspaceID,
-		&i.CreatedByID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Metadata,
@@ -128,41 +208,28 @@ func (q *Queries) FolderByID(ctx context.Context, id int64) (FolderByIDRow, erro
 	return i, err
 }
 
-const folderDepth = `-- name: FolderDepth :one
-WITH RECURSIVE ancestors AS (
-    SELECT f.id, f.parent_id, 1 AS depth
-    FROM folders f
-    WHERE f.id = $1
-    UNION ALL
-    SELECT f.id, f.parent_id, a.depth + 1
-    FROM folders f
-    JOIN ancestors a ON f.id = a.parent_id
-)
-SELECT COALESCE(MAX(a.depth), 0)::int AS depth FROM ancestors a
-`
-
-// app/services/folder_service.py:get_folder_depth. A root folder is 1.
-func (q *Queries) FolderDepth(ctx context.Context, id int64) (int64, error) {
-	row := q.db.QueryRow(ctx, folderDepth, id)
-	var depth int64
-	err := row.Scan(&depth)
-	return depth, err
-}
-
 const folderSubtreeIDs = `-- name: FolderSubtreeIDs :many
 WITH RECURSIVE subtree AS (
-    SELECT f.id FROM folders f WHERE f.id = $1
+    SELECT f.id, 0 AS depth
+    FROM folders f
+    WHERE f.id = $1 AND f.user_id = $2
     UNION ALL
-    SELECT f.id FROM folders f JOIN subtree s ON f.parent_id = s.id
+    SELECT f.id, s.depth + 1
+    FROM folders f
+    JOIN subtree s ON f.parent_id = s.id
+    WHERE f.user_id = $2
 )
-SELECT s.id FROM subtree s
+SELECT s.id FROM subtree s ORDER BY s.depth, s.id
 `
 
-// delete_folder's get_folder_subtree_ids, inclusive of the folder itself. The
-// order is the worktable's and is in the enqueued message, so it is this
-// statement and not a sort in Go.
-func (q *Queries) FolderSubtreeIDs(ctx context.Context, id int64) ([]int64, error) {
-	rows, err := q.db.Query(ctx, folderSubtreeIDs, id)
+type FolderSubtreeIDsParams struct {
+	FolderID int64
+	UserID   string
+}
+
+// The folder and everything under it, the folder itself first.
+func (q *Queries) FolderSubtreeIDs(ctx context.Context, arg FolderSubtreeIDsParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, folderSubtreeIDs, arg.FolderID, arg.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -181,48 +248,90 @@ func (q *Queries) FolderSubtreeIDs(ctx context.Context, id int64) ([]int64, erro
 	return items, nil
 }
 
+const foldersOwned = `-- name: FoldersOwned :many
+SELECT id, name, position, parent_id, created_at, updated_at, metadata
+FROM folders
+WHERE user_id = $1
+ORDER BY position, id
+`
+
+type FoldersOwnedRow struct {
+	ID        int64
+	Name      string
+	Position  string
+	ParentID  *int64
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	Metadata  []byte
+}
+
+// The account's whole tree, flat. `position` ties (every first child of
+// every parent gets the same first key), so `id` is what makes the order
+// total and the same on every request.
+func (q *Queries) FoldersOwned(ctx context.Context, userID string) ([]FoldersOwnedRow, error) {
+	rows, err := q.db.Query(ctx, foldersOwned, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FoldersOwnedRow
+	for rows.Next() {
+		var i FoldersOwnedRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Position,
+			&i.ParentID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Metadata,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const insertFolder = `-- name: InsertFolder :one
-INSERT INTO folders (name, position, parent_id, workspace_id, created_by_id,
-                     created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, name, position, parent_id, workspace_id, created_by_id,
-          created_at, updated_at, metadata
+INSERT INTO folders (user_id, name, position, parent_id, created_at, updated_at)
+VALUES ($1, $2, $3,
+        $4, $5, $6)
+RETURNING id, name, position, parent_id, created_at, updated_at, metadata
 `
 
 type InsertFolderParams struct {
-	Name        string
-	Position    string
-	ParentID    *int64
-	WorkspaceID int64
-	CreatedByID *string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	UserID    string
+	Name      string
+	Position  string
+	ParentID  *int64
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type InsertFolderRow struct {
-	ID          int64
-	Name        string
-	Position    string
-	ParentID    *int64
-	WorkspaceID int64
-	CreatedByID *string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	Metadata    []byte
+	ID        int64
+	Name      string
+	Position  string
+	ParentID  *int64
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	Metadata  []byte
 }
 
-// create_folder's insert. created_at and updated_at are Python-side defaults
-// evaluated in the application rather than column defaults, so they are passed
-// in; the Python model declares updated_at before the created_at its mixin
-// adds, so that tier's two clock readings come in that order and differ by a
-// few microseconds.
+// A new folder. The two times are passed and not left to the column
+// defaults so that the answer and the row carry the same instant, and so a
+// test can hold the clock still. A parent of another account cannot be
+// named: the composite foreign key (parent_id, user_id) refuses it.
 func (q *Queries) InsertFolder(ctx context.Context, arg InsertFolderParams) (InsertFolderRow, error) {
 	row := q.db.QueryRow(ctx, insertFolder,
+		arg.UserID,
 		arg.Name,
 		arg.Position,
 		arg.ParentID,
-		arg.WorkspaceID,
-		arg.CreatedByID,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
@@ -232,8 +341,6 @@ func (q *Queries) InsertFolder(ctx context.Context, arg InsertFolderParams) (Ins
 		&i.Name,
 		&i.Position,
 		&i.ParentID,
-		&i.WorkspaceID,
-		&i.CreatedByID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Metadata,
@@ -243,144 +350,237 @@ func (q *Queries) InsertFolder(ctx context.Context, arg InsertFolderParams) (Ins
 
 const lastSiblingPosition = `-- name: LastSiblingPosition :one
 SELECT position FROM folders
-WHERE workspace_id = $1
-  AND (parent_id = $2
-       OR ($2 IS NULL AND parent_id IS NULL))
-ORDER BY position DESC LIMIT 1
+WHERE user_id = $1
+  AND (parent_id = $2::bigint
+       OR ($2::bigint IS NULL AND parent_id IS NULL))
+ORDER BY position DESC, id DESC
+LIMIT 1
 `
 
 type LastSiblingPositionParams struct {
-	WorkspaceID int64
-	ParentID    *int64
+	UserID   string
+	ParentID *int64
 }
 
-// generate_folder_position's own query for the append case. The ordering is the
-// column's collation on both tiers, which is why it is the same statement and
-// not a sort in Go.
+// The last key among the folders under one parent (NULL for the top level),
+// which a new or a moved folder is placed after. Sorted by Postgres and not
+// in Go because the keys are compared by the column's collation everywhere
+// else they are ordered.
 func (q *Queries) LastSiblingPosition(ctx context.Context, arg LastSiblingPositionParams) (string, error) {
-	row := q.db.QueryRow(ctx, lastSiblingPosition, arg.WorkspaceID, arg.ParentID)
+	row := q.db.QueryRow(ctx, lastSiblingPosition, arg.UserID, arg.ParentID)
 	var position string
 	err := row.Scan(&position)
 	return position, err
 }
 
+const lockDocumentsInFolders = `-- name: LockDocumentsInFolders :many
+SELECT id, status FROM documents
+WHERE user_id = $1
+  AND folder_id = ANY($2::bigint[])
+  AND status ->> 'state' <> 'deleting'
+ORDER BY id
+FOR UPDATE
+`
+
+type LockDocumentsInFoldersParams struct {
+	UserID    string
+	FolderIds []int64
+}
+
+type LockDocumentsInFoldersRow struct {
+	ID     int64
+	Status []byte
+}
+
+// The documents a folder delete will remove, with the status each holds
+// now, locked until the marker below is written. The status is read so that
+// a delete whose job could not be queued puts each document back exactly as
+// it was, not as "ready". A document already being deleted is someone
+// else's and is left out.
+func (q *Queries) LockDocumentsInFolders(ctx context.Context, arg LockDocumentsInFoldersParams) ([]LockDocumentsInFoldersRow, error) {
+	rows, err := q.db.Query(ctx, lockDocumentsInFolders, arg.UserID, arg.FolderIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []LockDocumentsInFoldersRow
+	for rows.Next() {
+		var i LockDocumentsInFoldersRow
+		if err := rows.Scan(&i.ID, &i.Status); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markDocumentsDeleting = `-- name: MarkDocumentsDeleting :exec
 UPDATE documents SET status = '{"state": "deleting"}'::jsonb
-WHERE id = ANY($1::int[])
+WHERE user_id = $1
+  AND id = ANY($2::bigint[])
 `
 
-// The marker, over the ids just read.
-func (q *Queries) MarkDocumentsDeleting(ctx context.Context, documentIds []int64) error {
-	_, err := q.db.Exec(ctx, markDocumentsDeleting, documentIds)
+type MarkDocumentsDeletingParams struct {
+	UserID      string
+	DocumentIds []int64
+}
+
+// The marker: it takes the documents out of search at once and tells the
+// indexer to leave them alone.
+func (q *Queries) MarkDocumentsDeleting(ctx context.Context, arg MarkDocumentsDeletingParams) error {
+	_, err := q.db.Exec(ctx, markDocumentsDeleting, arg.UserID, arg.DocumentIds)
 	return err
 }
 
-const markDocumentsReady = `-- name: MarkDocumentsReady :exec
-UPDATE documents SET status = '{"state": "ready"}'::jsonb
-WHERE id = ANY($1::int[])
+const moveDocuments = `-- name: MoveDocuments :exec
+UPDATE documents SET folder_id = $1
+WHERE user_id = $2
+  AND id = ANY($3::bigint[])
 `
 
-// The compensation for an enqueue that did not happen. It writes "ready" over
-// whatever each state was, exactly as the Python route's own revert does.
-func (q *Queries) MarkDocumentsReady(ctx context.Context, documentIds []int64) error {
-	_, err := q.db.Exec(ctx, markDocumentsReady, documentIds)
+type MoveDocumentsParams struct {
+	FolderID    *int64
+	UserID      string
+	DocumentIds []int64
+}
+
+// The one column a move writes. `updated_at` is left alone: where a
+// document is filed is not a change to the document. A folder of another
+// account cannot be named: the composite foreign key (folder_id, user_id)
+// refuses it.
+func (q *Queries) MoveDocuments(ctx context.Context, arg MoveDocumentsParams) error {
+	_, err := q.db.Exec(ctx, moveDocuments, arg.FolderID, arg.UserID, arg.DocumentIds)
 	return err
 }
 
-const renameFolder = `-- name: RenameFolder :exec
-UPDATE folders SET name = $2, updated_at = $3 WHERE id = $1
+const renameFolder = `-- name: RenameFolder :execrows
+UPDATE folders SET name = $1, updated_at = $2
+WHERE id = $3 AND user_id = $4
 `
 
 type RenameFolderParams struct {
-	ID        int64
 	Name      string
 	UpdatedAt time.Time
+	FolderID  int64
+	UserID    string
 }
 
-// update_folder's flush. The route only runs it when the name actually
-// changes, because SQLAlchemy emits no UPDATE for an attribute reassigned to
-// an equal value — and so leaves updated_at alone, which a row diff sees.
-func (q *Queries) RenameFolder(ctx context.Context, arg RenameFolderParams) error {
-	_, err := q.db.Exec(ctx, renameFolder, arg.ID, arg.Name, arg.UpdatedAt)
-	return err
+func (q *Queries) RenameFolder(ctx context.Context, arg RenameFolderParams) (int64, error) {
+	result, err := q.db.Exec(ctx, renameFolder,
+		arg.Name,
+		arg.UpdatedAt,
+		arg.FolderID,
+		arg.UserID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const reparentFolder = `-- name: ReparentFolder :exec
-UPDATE folders SET parent_id = $2, position = $3, updated_at = $4 WHERE id = $1
+const reparentFolder = `-- name: ReparentFolder :execrows
+UPDATE folders
+SET parent_id = $1, position = $2,
+    updated_at = $3
+WHERE id = $4 AND user_id = $5
 `
 
 type ReparentFolderParams struct {
-	ID        int64
 	ParentID  *int64
 	Position  string
 	UpdatedAt time.Time
+	FolderID  int64
+	UserID    string
 }
 
-// move_folder's flush: the new parent and the position generated for it.
-func (q *Queries) ReparentFolder(ctx context.Context, arg ReparentFolderParams) error {
-	_, err := q.db.Exec(ctx, reparentFolder,
-		arg.ID,
+// A move: the new parent and the position generated under it.
+func (q *Queries) ReparentFolder(ctx context.Context, arg ReparentFolderParams) (int64, error) {
+	result, err := q.db.Exec(ctx, reparentFolder,
 		arg.ParentID,
 		arg.Position,
 		arg.UpdatedAt,
+		arg.FolderID,
+		arg.UserID,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const repositionFolder = `-- name: RepositionFolder :exec
-UPDATE folders SET position = $2, updated_at = $3 WHERE id = $1
+const repositionFolder = `-- name: RepositionFolder :execrows
+UPDATE folders SET position = $1, updated_at = $2
+WHERE id = $3 AND user_id = $4
 `
 
 type RepositionFolderParams struct {
-	ID        int64
 	Position  string
 	UpdatedAt time.Time
+	FolderID  int64
+	UserID    string
 }
 
-// reorder_folder's flush.
-func (q *Queries) RepositionFolder(ctx context.Context, arg RepositionFolderParams) error {
-	_, err := q.db.Exec(ctx, repositionFolder, arg.ID, arg.Position, arg.UpdatedAt)
-	return err
+func (q *Queries) RepositionFolder(ctx context.Context, arg RepositionFolderParams) (int64, error) {
+	result, err := q.db.Exec(ctx, repositionFolder,
+		arg.Position,
+		arg.UpdatedAt,
+		arg.FolderID,
+		arg.UserID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const setFolderMetadata = `-- name: SetFolderMetadata :exec
-UPDATE folders SET metadata = $2::jsonb, updated_at = $3 WHERE id = $1
+const restoreDocumentStatuses = `-- name: RestoreDocumentStatuses :exec
+UPDATE documents AS d
+SET status = restored.status
+FROM jsonb_each($2::jsonb) AS restored(id, status)
+WHERE d.id = restored.id::bigint
+  AND d.user_id = $1
+  AND d.status ->> 'state' = 'deleting'
 `
 
-type SetFolderMetadataParams struct {
-	ID        int64
-	Column2   []byte
-	UpdatedAt time.Time
+type RestoreDocumentStatusesParams struct {
+	UserID   string
+	Statuses []byte
 }
 
-// stop_watching_folder's flush. The value is the whole column rewritten rather
-// than a jsonb_set, because that is what `folder.folder_metadata = {**m,
-// "watched": False}` stores: the dict goes back out through json.dumps, so a
-// number the column held more precisely than a float64 comes back rounded
-// (internal/pythonjson.MarshalColumn). jsonb_set would have kept it, which
-// would have been a different row.
-func (q *Queries) SetFolderMetadata(ctx context.Context, arg SetFolderMetadataParams) error {
-	_, err := q.db.Exec(ctx, setFolderMetadata, arg.ID, arg.Column2, arg.UpdatedAt)
+// The compensation for a delete that could not be queued: each document
+// gets back the status it had, from one object of document id to status.
+// Only a row still carrying the marker is written, so a document something
+// else has moved since is left alone.
+func (q *Queries) RestoreDocumentStatuses(ctx context.Context, arg RestoreDocumentStatusesParams) error {
+	_, err := q.db.Exec(ctx, restoreDocumentStatuses, arg.UserID, arg.Statuses)
 	return err
 }
 
-const subtreeMaxDepth = `-- name: SubtreeMaxDepth :one
+const subtreeDepth = `-- name: SubtreeDepth :one
 WITH RECURSIVE descendants AS (
-    SELECT f.id, 0 AS depth
+    SELECT f.id, 1 AS depth
     FROM folders f
-    WHERE f.parent_id = $1
+    WHERE f.parent_id = $1::bigint AND f.user_id = $2
     UNION ALL
     SELECT f.id, d.depth + 1
     FROM folders f
     JOIN descendants d ON f.parent_id = d.id
+    WHERE f.user_id = $2
 )
-SELECT COALESCE(MAX(d.depth), -1)::int AS depth FROM descendants d
+SELECT COALESCE(MAX(d.depth), 0)::int AS depth FROM descendants d
 `
 
-// get_subtree_max_depth. -1 means the folder has no children at all, which the
-// caller turns into a subtree depth of 0.
-func (q *Queries) SubtreeMaxDepth(ctx context.Context, parentID *int64) (int64, error) {
-	row := q.db.QueryRow(ctx, subtreeMaxDepth, parentID)
+type SubtreeDepthParams struct {
+	FolderID int64
+	UserID   string
+}
+
+// How many levels hang below a folder: 0 for a leaf.
+func (q *Queries) SubtreeDepth(ctx context.Context, arg SubtreeDepthParams) (int64, error) {
+	row := q.db.QueryRow(ctx, subtreeDepth, arg.FolderID, arg.UserID)
 	var depth int64
 	err := row.Scan(&depth)
 	return depth, err

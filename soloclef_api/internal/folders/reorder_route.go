@@ -7,28 +7,23 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
-	"git.danvics.com/danvics/soloclef/soloclef_api/internal/database"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/errorenvelope"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/fractionalindex"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/humawriter"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/requestbody"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/requestcontext"
 )
 
-// ReorderRoute serves the reorder among siblings.
+// ReorderRoute serves the reorder among siblings: the folder is given a
+// position between the two the client names.
 //
-// It is the one route in the slice whose body reaches a *library* rather than a
-// column: `before_position` and `after_position` are unconstrained strings and
-// go straight to fractional_indexing, which raises for a key it did not
-// produce. So a made-up key, a pair in the wrong order and the empty string are
-// each a sanitised 500 on both tiers rather than a 422
-// (internal/fractionalindex).
+// The two positions come from the client, which read them off its
+// neighbours, so they can be anything. A pair no position lies between (a
+// made-up key, the two in the wrong order, an empty string) is the
+// client's mistake and is answered 400, not 500.
 type ReorderRoute struct {
-	Pool    *pgxpool.Pool
-	Folders Store
-	Access  Access
+	Folders Rows
 	Errors  errorenvelope.Writer
 	Logger  *slog.Logger
 	Now     func() time.Time
@@ -40,12 +35,10 @@ func (r ReorderRoute) Register(api huma.API) {
 		Method:      http.MethodPut,
 		Path:        ReorderPath,
 		Summary:     "Reorder a folder among its siblings",
-		Description: "The same response as the Python tier's " +
-			"PUT /api/v1/folders/{folder_id}/reorder, byte for byte, and the same row.",
+		Description: "Places a folder of the caller's between `before_position` and `after_position`; " +
+			"with neither, after its last sibling.",
 		Tags: []string{"folders"},
-	}, func(ctx context.Context, _ *struct {
-		FolderID string `path:"folder_id" doc:"The folder's id"`
-	}) (*huma.StreamResponse, error) {
+	}, func(ctx context.Context, _ *folderPath) (*huma.StreamResponse, error) {
 		return &huma.StreamResponse{Body: r.serve}, nil
 	})
 }
@@ -58,41 +51,42 @@ func (r ReorderRoute) serve(ctx huma.Context) {
 	requested, validation, decodeErr := ReadReorderRequest(
 		ctx.Header("Content-Type"), requestbody.Buffered(ctx.Context()))
 	if decodeErr != nil {
-		fail.fail(ctx, response, requestID, "a body reached the route that should have been forwarded", decodeErr)
+		fail.fail(ctx, response, requestID, "a body reached the route that should not have", decodeErr)
 		return
 	}
-
-	gate := folderGate{Folders: r.Folders, Access: r.Access, Errors: r.Errors}
-	_, folder, open := gate.open(ctx, response, requestID, fail, validation,
-		DocumentsUpdate, ReorderDenied)
+	caller, folder, open := opening{Folders: r.Folders, Errors: r.Errors}.open(ctx, response, requestID, fail, validation)
 	if !open {
 		return
 	}
 
-	place := positions{Folders: r.Folders}
-	position, err := place.next(ctx.Context(), folder.WorkspaceID, folder.ParentID,
-		requested.Before, requested.After)
-	if err != nil {
-		fail.fail(ctx, response, requestID, "could not place the folder among its siblings", err)
-		return
+	var position string
+	if requested.Before != nil || requested.After != nil {
+		// Naming either neighbour decides the position without reading the
+		// siblings at all.
+		between, err := fractionalindex.KeyBetween(requested.Before, requested.After)
+		if err != nil {
+			r.Errors.Write(response, http.StatusBadRequest, InvalidPosition, requestID)
+			return
+		}
+		position = between
+	} else {
+		last, err := positions{Folders: r.Folders, UserID: caller.UserID}.last(ctx.Context(), folder.ParentID)
+		if err != nil {
+			fail.fail(ctx, response, requestID, "could not place the folder among its siblings", err)
+			return
+		}
+		position = last
 	}
 
-	// A key that happens to be the one the folder already holds writes
-	// nothing: `before_position: "a0", after_position: "a1"` against a folder
-	// at "a0V" is a 200 with `updated_at` untouched on both tiers, which only
-	// a row diff sees.
+	// A position the folder already holds writes nothing.
 	if position != folder.Position {
 		at := nowOr(r.Now)
-		if _, err := database.Write(ctx.Context(), r.Pool,
-			func(ctx context.Context, tx pgx.Tx, _ *database.Effects) (struct{}, error) {
-				return struct{}{}, Reposition(ctx, tx, folder.ID, position, at)
-			}); err != nil {
+		if err := r.Folders.Reposition(ctx.Context(), caller.UserID, folder.ID, position, at); err != nil {
 			fail.fail(ctx, response, requestID, "could not reorder the folder", err)
 			return
 		}
 		folder.Position = position
 		folder.UpdatedAt = at
 	}
-
 	sendFolder(ctx, response, requestID, fail, *folder)
 }

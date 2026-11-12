@@ -15,7 +15,6 @@ const noop = () => undefined;
 function pane(threadId: number) {
 	return NotebookThreadPane({
 		view: StubView,
-		workspaceId: 1,
 		threadId,
 		onThreadNotFound: noop,
 	}) as ReactElement<ThreadViewProps>;
@@ -28,7 +27,6 @@ test("each notebook chat mounts its own chat view, keyed by thread", () => {
 	const first = pane(15);
 	const second = pane(12);
 	assert.equal(first.type, StubView);
-	assert.equal(first.props.workspaceId, 1);
 	assert.equal(first.props.chatId, 15);
 	assert.equal(first.props.onThreadNotFound, noop);
 	assert.equal(first.key, "15");

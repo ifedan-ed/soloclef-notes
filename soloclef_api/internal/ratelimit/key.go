@@ -15,7 +15,7 @@ const namespace = "LIMITER"
 // It is RateLimitItem.key_for(client, endpoint) behind RedisStorage's
 // prefixed_key: the identifiers the limiter passes are the client key and the
 // limit's scope, which for a default limit is the request's own path — not the
-// route template, so each workspace id is counted separately, exactly as there.
+// route template, so each notebook or document id is counted separately.
 func Key(limit Limit, clientIP, path string) string {
 	return fmt.Sprintf("%s:%s/%s/%s/%d/%d/%s",
 		storagePrefix, namespace, clientIP, path, limit.Amount, limit.Multiples, limit.Granularity)

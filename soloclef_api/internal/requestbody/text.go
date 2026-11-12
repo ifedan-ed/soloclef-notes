@@ -41,15 +41,21 @@ func (m *Model) OptionalText(name string, maxLength int) *string {
 	return &text
 }
 
-func (m *Model) checkLength(name, text string, minLength, maxLength int) {
+// checkLength applies pydantic's min_length and max_length, and reports
+// whether the value passed both — which is what a field that also carries a
+// pattern needs, since pydantic checks the two lengths before the pattern
+// (internal/requestbody/pattern.go).
+func (m *Model) checkLength(name, text string, minLength, maxLength int) bool {
 	length := utf8.RuneCountInString(text)
 	if minLength > 0 && length < minLength {
 		m.reject("String should have at least "+characters(minLength), name)
-		return
+		return false
 	}
 	if maxLength > 0 && length > maxLength {
 		m.reject("String should have at most "+characters(maxLength), name)
+		return false
 	}
+	return true
 }
 
 // characters words a length the way pydantic words it, which pluralises: the

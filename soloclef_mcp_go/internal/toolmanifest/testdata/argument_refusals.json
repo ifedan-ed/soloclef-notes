@@ -1,0 +1,365 @@
+[
+  {
+    "label": "missing_required",
+    "tool": "soloclef_search_knowledge_base",
+    "arguments": {},
+    "refusal": "1 validation error for search_knowledge_baseArguments\nquery\n  Field required [type=missing, input_value={}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing"
+  },
+  {
+    "label": "missing_two",
+    "tool": "soloclef_preprint_search",
+    "arguments": {},
+    "refusal": "2 validation errors for preprint_searchArguments\nquery\n  Field required [type=missing, input_value={}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nserver\n  Field required [type=missing, input_value={}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing"
+  },
+  {
+    "label": "missing_with_other_args",
+    "tool": "soloclef_search_knowledge_base",
+    "arguments": {
+      "top_k": 3,
+      "zzz": [
+        1,
+        2
+      ]
+    },
+    "refusal": "1 validation error for search_knowledge_baseArguments\nquery\n  Field required [type=missing, input_value={'top_k': 3, 'zzz': [1, 2]}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing"
+  },
+  {
+    "label": "missing_with_long_arg",
+    "tool": "soloclef_preprint_search",
+    "arguments": {
+      "query": "abababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababab"
+    },
+    "refusal": "1 validation error for preprint_searchArguments\nserver\n  Field required [type=missing, input_value={'query': 'ababababababab...ababababababababababab'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing"
+  },
+  {
+    "label": "missing_boundary_37",
+    "tool": "soloclef_preprint_search",
+    "arguments": {
+      "query": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    "refusal": "1 validation error for preprint_searchArguments\nserver\n  Field required [type=missing, input_value={'query': 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing"
+  },
+  {
+    "label": "missing_boundary_38",
+    "tool": "soloclef_preprint_search",
+    "arguments": {
+      "query": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    "refusal": "1 validation error for preprint_searchArguments\nserver\n  Field required [type=missing, input_value={'query': 'xxxxxxxxxxxxxx...xxxxxxxxxxxxxxxxxxxxxx'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing"
+  },
+  {
+    "label": "missing_quote_in_arg",
+    "tool": "soloclef_preprint_search",
+    "arguments": {
+      "query": "it's \"here\""
+    },
+    "refusal": "1 validation error for preprint_searchArguments\nserver\n  Field required [type=missing, input_value={'query': 'it\\'s \"here\"'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing"
+  },
+  {
+    "label": "missing_newline_in_arg",
+    "tool": "soloclef_preprint_search",
+    "arguments": {
+      "query": "a\nb\tc"
+    },
+    "refusal": "1 validation error for preprint_searchArguments\nserver\n  Field required [type=missing, input_value={'query': 'a\\nb\\tc'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing"
+  },
+  {
+    "label": "missing_unicode_arg",
+    "tool": "soloclef_preprint_search",
+    "arguments": {
+      "query": "café ☕"
+    },
+    "refusal": "1 validation error for preprint_searchArguments\nserver\n  Field required [type=missing, input_value={'query': 'café ☕'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing"
+  },
+  {
+    "label": "null_required",
+    "tool": "soloclef_search_knowledge_base",
+    "arguments": {
+      "query": null
+    },
+    "refusal": "1 validation error for search_knowledge_baseArguments\nquery\n  Input should be a valid string [type=string_type, input_value=None, input_type=NoneType]\n    For further information visit https://errors.pydantic.dev/2.13/v/string_type"
+  },
+  {
+    "label": "int_from_text",
+    "tool": "soloclef_search_knowledge_base",
+    "arguments": {
+      "query": "x",
+      "top_k": "many"
+    },
+    "refusal": "1 validation error for search_knowledge_baseArguments\ntop_k\n  Input should be a valid integer, unable to parse string as an integer [type=int_parsing, input_value='many', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/int_parsing"
+  },
+  {
+    "label": "int_from_float",
+    "tool": "soloclef_search_knowledge_base",
+    "arguments": {
+      "query": "x",
+      "top_k": 2.5
+    },
+    "refusal": "1 validation error for search_knowledge_baseArguments\ntop_k\n  Input should be a valid integer, got a number with a fractional part [type=int_from_float, input_value=2.5, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.13/v/int_from_float"
+  },
+  {
+    "label": "int_from_frac_text",
+    "tool": "soloclef_search_knowledge_base",
+    "arguments": {
+      "query": "x",
+      "top_k": "2.5"
+    },
+    "refusal": "1 validation error for search_knowledge_baseArguments\ntop_k\n  Input should be a valid integer, unable to parse string as an integer [type=int_parsing, input_value='2.5', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/int_parsing"
+  },
+  {
+    "label": "int_from_null",
+    "tool": "soloclef_search_knowledge_base",
+    "arguments": {
+      "query": "x",
+      "top_k": null
+    },
+    "refusal": "1 validation error for search_knowledge_baseArguments\ntop_k\n  Input should be a valid integer [type=int_type, input_value=None, input_type=NoneType]\n    For further information visit https://errors.pydantic.dev/2.13/v/int_type"
+  },
+  {
+    "label": "int_from_list",
+    "tool": "soloclef_search_knowledge_base",
+    "arguments": {
+      "query": "x",
+      "top_k": [
+        1
+      ]
+    },
+    "refusal": "1 validation error for search_knowledge_baseArguments\ntop_k\n  Input should be a valid integer [type=int_type, input_value=[1], input_type=list]\n    For further information visit https://errors.pydantic.dev/2.13/v/int_type"
+  },
+  {
+    "label": "int_from_dict",
+    "tool": "soloclef_search_knowledge_base",
+    "arguments": {
+      "query": "x",
+      "top_k": {}
+    },
+    "refusal": "1 validation error for search_knowledge_baseArguments\ntop_k\n  Input should be a valid integer [type=int_type, input_value={}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/int_type"
+  },
+  {
+    "label": "int_from_empty_text",
+    "tool": "soloclef_search_knowledge_base",
+    "arguments": {
+      "query": "x",
+      "top_k": ""
+    },
+    "refusal": "1 validation error for search_knowledge_baseArguments\ntop_k\n  Input should be a valid integer, unable to parse string as an integer [type=int_parsing, input_value='', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/int_parsing"
+  },
+  {
+    "label": "int_below_min",
+    "tool": "soloclef_search_knowledge_base",
+    "arguments": {
+      "query": "x",
+      "top_k": 0
+    },
+    "refusal": "1 validation error for search_knowledge_baseArguments\ntop_k\n  Input should be greater than or equal to 1 [type=greater_than_equal, input_value=0, input_type=int]\n    For further information visit https://errors.pydantic.dev/2.13/v/greater_than_equal"
+  },
+  {
+    "label": "int_above_max",
+    "tool": "soloclef_search_knowledge_base",
+    "arguments": {
+      "query": "x",
+      "top_k": 99
+    },
+    "refusal": "1 validation error for search_knowledge_baseArguments\ntop_k\n  Input should be less than or equal to 20 [type=less_than_equal, input_value=99, input_type=int]\n    For further information visit https://errors.pydantic.dev/2.13/v/less_than_equal"
+  },
+  {
+    "label": "str_from_int",
+    "tool": "soloclef_search_knowledge_base",
+    "arguments": {
+      "query": 5
+    },
+    "refusal": "1 validation error for search_knowledge_baseArguments\nquery\n  Input should be a valid string [type=string_type, input_value=5, input_type=int]\n    For further information visit https://errors.pydantic.dev/2.13/v/string_type"
+  },
+  {
+    "label": "str_from_bool",
+    "tool": "soloclef_search_knowledge_base",
+    "arguments": {
+      "query": true
+    },
+    "refusal": "1 validation error for search_knowledge_baseArguments\nquery\n  Input should be a valid string [type=string_type, input_value=True, input_type=bool]\n    For further information visit https://errors.pydantic.dev/2.13/v/string_type"
+  },
+  {
+    "label": "str_from_list",
+    "tool": "soloclef_search_knowledge_base",
+    "arguments": {
+      "query": [
+        "a"
+      ]
+    },
+    "refusal": "1 validation error for search_knowledge_baseArguments\nquery\n  Input should be a valid string [type=string_type, input_value=['a'], input_type=list]\n    For further information visit https://errors.pydantic.dev/2.13/v/string_type"
+  },
+  {
+    "label": "str_from_dict",
+    "tool": "soloclef_search_knowledge_base",
+    "arguments": {
+      "query": {
+        "a": 1
+      }
+    },
+    "refusal": "1 validation error for search_knowledge_baseArguments\nquery\n  Input should be a valid string [type=string_type, input_value={'a': 1}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/string_type"
+  },
+  {
+    "label": "str_too_short",
+    "tool": "soloclef_search_knowledge_base",
+    "arguments": {
+      "query": ""
+    },
+    "refusal": "1 validation error for search_knowledge_baseArguments\nquery\n  String should have at least 1 character [type=string_too_short, input_value='', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/string_too_short"
+  },
+  {
+    "label": "bool_from_bad_text",
+    "tool": "soloclef_pubmed_search",
+    "arguments": {
+      "query": "x",
+      "full_text": "maybe"
+    },
+    "refusal": "1 validation error for pubmed_searchArguments\nfull_text\n  Input should be a valid boolean, unable to interpret input [type=bool_parsing, input_value='maybe', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/bool_parsing"
+  },
+  {
+    "label": "bool_from_two",
+    "tool": "soloclef_pubmed_search",
+    "arguments": {
+      "query": "x",
+      "full_text": 2
+    },
+    "refusal": "1 validation error for pubmed_searchArguments\nfull_text\n  Input should be a valid boolean, unable to interpret input [type=bool_parsing, input_value=2, input_type=int]\n    For further information visit https://errors.pydantic.dev/2.13/v/bool_parsing"
+  },
+  {
+    "label": "bool_from_null",
+    "tool": "soloclef_pubmed_search",
+    "arguments": {
+      "query": "x",
+      "full_text": null
+    },
+    "refusal": "1 validation error for pubmed_searchArguments\nfull_text\n  Input should be a valid boolean [type=bool_type, input_value=None, input_type=NoneType]\n    For further information visit https://errors.pydantic.dev/2.13/v/bool_type"
+  },
+  {
+    "label": "bool_from_list",
+    "tool": "soloclef_pubmed_search",
+    "arguments": {
+      "query": "x",
+      "full_text": []
+    },
+    "refusal": "1 validation error for pubmed_searchArguments\nfull_text\n  Input should be a valid boolean [type=bool_type, input_value=[], input_type=list]\n    For further information visit https://errors.pydantic.dev/2.13/v/bool_type"
+  },
+  {
+    "label": "bool_from_frac",
+    "tool": "soloclef_pubmed_search",
+    "arguments": {
+      "query": "x",
+      "full_text": 0.5
+    },
+    "refusal": "1 validation error for pubmed_searchArguments\nfull_text\n  Input should be a valid boolean [type=bool_type, input_value=0.5, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.13/v/bool_type"
+  },
+  {
+    "label": "bool_from_space",
+    "tool": "soloclef_pubmed_search",
+    "arguments": {
+      "query": "x",
+      "full_text": " true "
+    },
+    "refusal": "1 validation error for pubmed_searchArguments\nfull_text\n  Input should be a valid boolean, unable to interpret input [type=bool_parsing, input_value=' true ', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/bool_parsing"
+  },
+  {
+    "label": "enum_wrong",
+    "tool": "soloclef_search_knowledge_base",
+    "arguments": {
+      "query": "x",
+      "response_format": "xml"
+    },
+    "refusal": "1 validation error for search_knowledge_baseArguments\nresponse_format\n  Input should be 'markdown' or 'json' [type=literal_error, input_value='xml', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/literal_error"
+  },
+  {
+    "label": "enum_from_int",
+    "tool": "soloclef_search_knowledge_base",
+    "arguments": {
+      "query": "x",
+      "response_format": 1
+    },
+    "refusal": "1 validation error for search_knowledge_baseArguments\nresponse_format\n  Input should be 'markdown' or 'json' [type=literal_error, input_value=1, input_type=int]\n    For further information visit https://errors.pydantic.dev/2.13/v/literal_error"
+  },
+  {
+    "label": "enum_from_null",
+    "tool": "soloclef_search_knowledge_base",
+    "arguments": {
+      "query": "x",
+      "response_format": null
+    },
+    "refusal": "1 validation error for search_knowledge_baseArguments\nresponse_format\n  Input should be 'markdown' or 'json' [type=literal_error, input_value=None, input_type=NoneType]\n    For further information visit https://errors.pydantic.dev/2.13/v/literal_error"
+  },
+  {
+    "label": "optional_int_wrong",
+    "tool": "soloclef_pubmed_search",
+    "arguments": {
+      "query": "x",
+      "since": "soon"
+    },
+    "refusal": "1 validation error for pubmed_searchArguments\nsince\n  Input should be a valid integer, unable to parse string as an integer [type=int_parsing, input_value='soon', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/int_parsing"
+  },
+  {
+    "label": "optional_list_wrong",
+    "tool": "soloclef_list_documents",
+    "arguments": {
+      "document_types": 3
+    },
+    "refusal": "1 validation error for list_documentsArguments\ndocument_types\n  Input should be a valid list [type=list_type, input_value=3, input_type=int]\n    For further information visit https://errors.pydantic.dev/2.13/v/list_type"
+  },
+  {
+    "label": "list_from_str",
+    "tool": "soloclef_list_documents",
+    "arguments": {
+      "document_types": "FILE"
+    },
+    "refusal": "1 validation error for list_documentsArguments\ndocument_types\n  Input should be a valid list [type=list_type, input_value='FILE', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/list_type"
+  },
+  {
+    "label": "list_from_dict",
+    "tool": "soloclef_list_documents",
+    "arguments": {
+      "document_types": {
+        "a": 1
+      }
+    },
+    "refusal": "1 validation error for list_documentsArguments\ndocument_types\n  Input should be a valid list [type=list_type, input_value={'a': 1}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/list_type"
+  },
+  {
+    "label": "list_item_wrong",
+    "tool": "soloclef_list_documents",
+    "arguments": {
+      "document_types": [
+        7
+      ]
+    },
+    "refusal": "1 validation error for list_documentsArguments\ndocument_types.0\n  Input should be a valid string [type=string_type, input_value=7, input_type=int]\n    For further information visit https://errors.pydantic.dev/2.13/v/string_type"
+  },
+  {
+    "label": "list_item_null",
+    "tool": "soloclef_list_documents",
+    "arguments": {
+      "document_types": [
+        null
+      ]
+    },
+    "refusal": "1 validation error for list_documentsArguments\ndocument_types.0\n  Input should be a valid string [type=string_type, input_value=None, input_type=NoneType]\n    For further information visit https://errors.pydantic.dev/2.13/v/string_type"
+  },
+  {
+    "label": "list_item_bool",
+    "tool": "soloclef_list_documents",
+    "arguments": {
+      "document_types": [
+        "FILE",
+        true
+      ]
+    },
+    "refusal": "1 validation error for list_documentsArguments\ndocument_types.1\n  Input should be a valid string [type=string_type, input_value=True, input_type=bool]\n    For further information visit https://errors.pydantic.dev/2.13/v/string_type"
+  },
+  {
+    "label": "many_faults",
+    "tool": "soloclef_add_document",
+    "arguments": {
+      "title": "",
+      "content": 5
+    },
+    "refusal": "2 validation errors for add_documentArguments\ntitle\n  String should have at least 1 character [type=string_too_short, input_value='', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/string_too_short\ncontent\n  Input should be a valid string [type=string_type, input_value=5, input_type=int]\n    For further information visit https://errors.pydantic.dev/2.13/v/string_type"
+  }
+]

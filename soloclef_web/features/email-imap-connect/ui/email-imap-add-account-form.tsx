@@ -16,7 +16,6 @@ import {
 } from "../api/email-imap-api";
 
 interface EmailImapAddAccountFormProps {
-	workspaceId: number;
 	onSave: (account: NewEmailImapAccount) => Promise<EmailImapAccount>;
 	onAdded: (label: string) => void;
 	onCancel: () => void;
@@ -28,7 +27,6 @@ interface EmailImapAddAccountFormProps {
  * (the backend encrypts the password the moment it arrives).
  */
 export const EmailImapAddAccountForm: FC<EmailImapAddAccountFormProps> = ({
-	workspaceId,
 	onSave,
 	onAdded,
 	onCancel,
@@ -73,7 +71,7 @@ export const EmailImapAddAccountForm: FC<EmailImapAddAccountFormProps> = ({
 		setTesting(true);
 		setTestResult(null);
 		try {
-			const result = await emailImapApi.testUnsaved(workspaceId, payload);
+			const result = await emailImapApi.testUnsaved(payload);
 			if (result.status === "ok") {
 				setTestResult({ ok: true, folderCount: result.folder_count ?? 0 });
 			} else {

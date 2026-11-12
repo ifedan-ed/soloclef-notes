@@ -2,10 +2,9 @@
 
 import { useAtomValue } from "jotai";
 import { ArrowLeft, Plus, RefreshCw, Server } from "lucide-react";
-import { type FC, useCallback, useEffect, useMemo, useState } from "react";
+import { type FC, useCallback, useState } from "react";
 import { toast } from "sonner";
 import { setConnectorEnabledMutationAtom } from "@/atoms/connectors/connector-mutation.atoms";
-import { activeWorkspaceIdAtom } from "@/atoms/workspaces/workspace-query.atoms";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { EnumConnectorName } from "@/contracts/enums/connector";
@@ -17,11 +16,10 @@ import { buildBackendUrl } from "@/lib/env-config";
 import { formatRelativeDate } from "@/lib/format-date";
 import { cn } from "@/lib/utils";
 import { connectsNothing } from "../constants/connector-constants";
+import { EnabledSwitch } from "../enablement/enabled-switch";
 import { useConnectorStatus } from "../hooks/use-connector-status";
 import { getConnectorDisplayName } from "../tabs/all-connectors-tab";
-import { isEnabledInWorkspace } from "../workspace-enablement/enabled-in-workspace";
-import { EnabledInWorkspaceSwitch } from "../workspace-enablement/enabled-in-workspace-switch";
-import { accountOwnerLabel, showsIndexedLine } from "../your-connectors/account-card";
+import { showsIndexedLine } from "../your-connectors/account-card";
 
 interface ConnectorAccountsListViewProps {
 	connectorType: string;
@@ -49,11 +47,12 @@ export const ConnectorAccountsListView: FC<ConnectorAccountsListViewProps> = ({
 	isConnecting = false,
 	addButtonText,
 }) => {
-	const workspaceId = useAtomValue(activeWorkspaceIdAtom);
 	const [reauthingId, setReauthingId] = useState<number | null>(null);
 	const [confirmDisconnectId, setConfirmDisconnectId] = useState<number | null>(null);
 	const [disconnectingId, setDisconnectingId] = useState<number | null>(null);
-	const [togglingId, setTogglingId] = useState<number | null>(null);
+	// The switch being saved and the state asked for: shown at once, then
+	// replaced by the listed row once the server has answered.
+	const [toggling, setToggling] = useState<{ id: number; enabled: boolean } | null>(null);
 	const { mutateAsync: setConnectorEnabled } = useAtomValue(setConnectorEnabledMutationAtom);
 
 	// Get connector status
@@ -62,48 +61,40 @@ export const ConnectorAccountsListView: FC<ConnectorAccountsListViewProps> = ({
 	const isEnabled = isConnectorEnabled(connectorType);
 	const statusMessage = getConnectorStatusMessage(connectorType);
 
-	const handleReauth = useCallback(
-		async (connector: SearchSourceConnector) => {
-			const endpoint = getReauthEndpoint(connector);
-			if (!workspaceId || !endpoint) return;
-			setReauthingId(connector.id);
-			try {
-				const response = await authenticatedFetch(
-					buildBackendUrl(endpoint, {
-						connector_id: connector.id,
-						space_id: workspaceId,
-						return_url: window.location.pathname,
-					})
-				);
-				if (!response.ok) {
-					const data = await response.json().catch(() => ({}));
-					toast.error(data.detail ?? "Failed to initiate re-authentication.");
-					return;
-				}
-				const data = await response.json();
-				if (data.auth_url) {
-					window.location.href = data.auth_url;
-				} else if (data.success) {
-					toast.success(data.message ?? "Authentication refreshed successfully.");
-					window.location.reload();
-				}
-			} catch {
-				toast.error("Failed to initiate re-authentication.");
-			} finally {
-				setReauthingId(null);
+	const handleReauth = useCallback(async (connector: SearchSourceConnector) => {
+		const endpoint = getReauthEndpoint(connector);
+		if (!endpoint) return;
+		setReauthingId(connector.id);
+		try {
+			const response = await authenticatedFetch(
+				buildBackendUrl(endpoint, {
+					connector_id: connector.id,
+					return_url: window.location.pathname,
+				})
+			);
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				toast.error(data.detail ?? "Failed to initiate re-authentication.");
+				return;
 			}
-		},
-		[workspaceId]
-	);
+			const data = await response.json();
+			if (data.auth_url) {
+				window.location.href = data.auth_url;
+			} else if (data.success) {
+				toast.success(data.message ?? "Authentication refreshed successfully.");
+				window.location.reload();
+			}
+		} catch {
+			toast.error("Failed to initiate re-authentication.");
+		} finally {
+			setReauthingId(null);
+		}
+	}, []);
 
 	// Filter connectors to only show those of this type (and not an Email
 	// connection whose last mailbox was removed: connectsNothing)
 	const typeConnectors = connectors.filter(
 		(c) => c.connector_type === connectorType && !connectsNothing(c)
-	);
-	const typeConnectorIds = useMemo(
-		() => typeConnectors.map((c) => c.id).join(","),
-		[typeConnectors]
 	);
 
 	// Determine button text - default to "Add Account" unless specified
@@ -112,58 +103,22 @@ export const ConnectorAccountsListView: FC<ConnectorAccountsListViewProps> = ({
 		(connectorType === EnumConnectorName.MCP_CONNECTOR ? "Add New MCP Server" : "Add Account");
 	const isMCP = connectorType === EnumConnectorName.MCP_CONNECTOR;
 
-	// Each row's `enabled_in_workspace` (from the REST list) is shown until
-	// the status endpoint answers for it; the endpoint's answer, and then each
-	// toggle, win over a list that may be stale.
-	const [enabledStatus, setEnabledStatus] = useState<Record<number, boolean>>({});
-	useEffect(() => {
-		if (isMCP || !workspaceId || !typeConnectorIds) return;
-		const ids = typeConnectorIds.split(",").map(Number);
-		let cancelled = false;
-		Promise.all(
-			ids.map((id) =>
-				authenticatedFetch(
-					buildBackendUrl(`/api/v1/search-source-connectors/${id}/workspaces/${workspaceId}`)
-				)
-					.then((res) => (res.ok ? res.json() : null))
-					.then((data) => [id, data?.enabled] as const)
-					.catch(() => [id, undefined] as const)
-			)
-		).then((results) => {
-			if (cancelled) return;
-			setEnabledStatus((prev) => {
-				const next = { ...prev };
-				for (const [id, enabled] of results) {
-					if (typeof enabled === "boolean") next[id] = enabled;
-				}
-				return next;
-			});
-		});
-		return () => {
-			cancelled = true;
-		};
-	}, [isMCP, workspaceId, typeConnectorIds]);
-
+	// Each row's switch reads the row's own `enabled`: the list carries it,
+	// so there is no status request per connection. A change is saved with
+	// one PUT whose answer the mutation writes back into the cached list, and
+	// that is what the row shows next; a failed save leaves the list as it was.
 	const handleToggleEnabled = useCallback(
 		async (connector: SearchSourceConnector, enabled: boolean) => {
-			if (!workspaceId) return;
-			setTogglingId(connector.id);
-			const previous = enabledStatus[connector.id] ?? isEnabledInWorkspace(connector);
-			setEnabledStatus((prev) => ({ ...prev, [connector.id]: enabled }));
+			setToggling({ id: connector.id, enabled });
 			try {
-				await setConnectorEnabled({
-					connectorId: connector.id,
-					workspaceId: Number(workspaceId),
-					enabled,
-				});
+				await setConnectorEnabled({ connectorId: connector.id, enabled });
 			} catch {
-				setEnabledStatus((prev) => ({ ...prev, [connector.id]: previous }));
 				toast.error(`Failed to ${enabled ? "enable" : "disable"} ${connector.name}.`);
 			} finally {
-				setTogglingId(null);
+				setToggling(null);
 			}
 		},
-		[workspaceId, setConnectorEnabled, enabledStatus]
+		[setConnectorEnabled]
 	);
 
 	// Helper to get display name for connector (handles MCP server name extraction)
@@ -263,8 +218,7 @@ export const ConnectorAccountsListView: FC<ConnectorAccountsListViewProps> = ({
 							const isAuthExpired =
 								!!connectorReauthEndpoint && connector.config?.auth_expired === true;
 							const isLive = Boolean(connector.config?.server_config);
-							const showsSwitch = !isMCP && connector.is_mine !== false;
-							const ownerLabel = accountOwnerLabel(connector);
+							const showsSwitch = !isMCP;
 
 							return (
 								<div
@@ -291,11 +245,6 @@ export const ConnectorAccountsListView: FC<ConnectorAccountsListViewProps> = ({
 											<p className="text-[14px] font-semibold leading-tight truncate">
 												{getDisplayName(connector)}
 											</p>
-											{ownerLabel && (
-												<p className="text-[11px] mt-1 truncate text-muted-foreground">
-													{ownerLabel}
-												</p>
-											)}
 											{isIndexing ? (
 												<p className="text-[11px] text-primary mt-1 flex items-center gap-1.5">
 													<Spinner size="xs" />
@@ -309,7 +258,7 @@ export const ConnectorAccountsListView: FC<ConnectorAccountsListViewProps> = ({
 												</p>
 											) : null}
 										</div>
-										{connector.is_mine === false ? null : isAuthExpired ? (
+										{isAuthExpired ? (
 											<Button
 												size="sm"
 												className="h-8 text-[11px] px-3 font-medium bg-amber-600 hover:bg-amber-700 text-white border-0 shadow-xs shrink-0"
@@ -377,10 +326,10 @@ export const ConnectorAccountsListView: FC<ConnectorAccountsListViewProps> = ({
 										)}
 									</div>
 									{showsSwitch && (
-										<EnabledInWorkspaceSwitch
+										<EnabledSwitch
 											className="justify-between border-t border-border/60 pt-3"
-											checked={enabledStatus[connector.id] ?? isEnabledInWorkspace(connector)}
-											disabled={togglingId === connector.id}
+											checked={toggling?.id === connector.id ? toggling.enabled : connector.enabled}
+											disabled={toggling?.id === connector.id}
 											onCheckedChange={(checked) => handleToggleEnabled(connector, checked)}
 										/>
 									)}

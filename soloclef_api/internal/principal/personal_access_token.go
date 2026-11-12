@@ -32,6 +32,9 @@ type PersonalAccessTokenOwner struct {
 	TokenID    int64
 	UserID     string
 	LastUsedAt time.Time
+	// APIAccessEnabled is the account's switch, read with the key so the
+	// check costs no query of its own.
+	APIAccessEnabled bool
 }
 
 // NeedsLastUsedTouch mirrors maybe_touch_last_used.

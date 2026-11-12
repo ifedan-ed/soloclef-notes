@@ -1,6 +1,10 @@
 package pythonjson
 
-import "testing"
+import (
+	"math"
+	"strings"
+	"testing"
+)
 
 func TestDecodeThenMarshalMatchesPythonRoundTrip(t *testing.T) {
 	// json.dumps(json.loads(stored), ensure_ascii=False, separators=(",", ":")):
@@ -50,5 +54,26 @@ func TestDecodeReadsFieldsOutOfAnObject(t *testing.T) {
 func TestDecodeRefusesTrailingData(t *testing.T) {
 	if _, err := Decode([]byte(`{} {}`)); err == nil {
 		t.Error("want an error, got none")
+	}
+}
+
+// A number past float64 is read, as json.loads reads it, and refused only when
+// it is written, as json.dumps(allow_nan=False) refuses it. The text is the
+// shape a jsonb column prints such a number in: no exponent, every digit.
+func TestDecodeReadsANumberTooLargeForAFloatAndMarshalRefusesIt(t *testing.T) {
+	huge := "1" + strings.Repeat("0", 320) + ".5"
+	value, err := Decode([]byte(`{"kept": "text", "huge": ` + huge + `}`))
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	object := value.(*Object)
+	if number, isFloat := object.GetOrNil("huge").(float64); !isFloat || !math.IsInf(number, 1) {
+		t.Errorf("huge: got %#v, want +Inf", object.GetOrNil("huge"))
+	}
+	if kept := object.GetString("kept", ""); kept != "text" {
+		t.Errorf("the rest of the document was not read: %q", kept)
+	}
+	if _, err := Marshal(value); err == nil {
+		t.Error("Marshal wrote an infinity, which json.dumps refuses")
 	}
 }

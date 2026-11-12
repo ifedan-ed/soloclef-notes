@@ -1,0 +1,51 @@
+# The queries of this module, generated from the migrations in
+# ../soloclef_schema/migrations, as every tier's are (soloclef_api/sqlc.yaml
+# says why there is no copy of the schema).
+#
+#   sqlc generate
+#
+# The overrides are the API tier's, so that a row reads as the same Go types
+# in both modules: uuid as text, int4 as int64, timestamptz as time.Time.
+version: "2"
+sql:
+  - engine: postgresql
+    schema: ../soloclef_schema/migrations
+    queries: artifactsave/queries.sql
+    gen:
+      go:
+        package: artifactsave
+        out: artifactsave
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_pointers_for_null_types: true
+        output_db_file_name: connection.sql.go
+        output_models_file_name: tables.sql.go
+        overrides:
+          - db_type: uuid
+            go_type: string
+          - db_type: uuid
+            nullable: true
+            go_type:
+              type: string
+              pointer: true
+          - db_type: pg_catalog.int4
+            go_type: int64
+          - db_type: pg_catalog.int4
+            nullable: true
+            go_type:
+              type: int64
+              pointer: true
+          - db_type: pg_catalog.timestamptz
+            go_type: time.Time
+          - db_type: pg_catalog.timestamptz
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true
+          - db_type: timestamptz
+            go_type: time.Time
+          - db_type: timestamptz
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true

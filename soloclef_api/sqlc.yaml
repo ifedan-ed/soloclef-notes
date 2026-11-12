@@ -1,31 +1,43 @@
-# Every query this tier runs is generated from internal/schema/schema.sql, which
-# is the schema Soloclef's Alembic migrations produce
-# (internal/schema/dump_from_migrations.sh keeps it honest). A query that names a
-# column the migrations no longer create fails here, at generate time, instead
-# of at request time on a live route.
+# Every query this tier runs is generated from the migrations in
+# ../soloclef_schema/migrations: the same numbered SQL files the migrate
+# command applies to a database. There is no copy of the schema and nothing
+# to keep in step with one; a query that names a column no migration
+# creates fails here, at generate time, instead of at request time.
 #
-# One block per vertical slice: a slice owns its SQL and its generated code, and
-# nothing generates into a package that two routes share by accident.
+#   sqlc generate
+#
+# regenerates every package. ../soloclef_schema/scripts/sqlc_status.sh runs
+# each block on its own and says which, if any, no longer compiles against
+# the migrations, which is quicker to read than sqlc's first error.
+#
+# One block per vertical slice: a slice owns its SQL and its generated code,
+# and nothing generates into a package that two routes share by accident.
+# A package that is deleted has its block deleted with it, or the next
+# generate writes its code back.
+#
+# The first block carries the anchors the others merge (&slice, &slice_go,
+# &slice_overrides), and sqlc_status.sh reads it as the template for one
+# block. It is accesstokens because that package stays.
 #
 # The overrides are the same in every block because they are about this
 # database, not about one slice:
-#   uuid  -> string, because every caller id in this tier is the text form the
-#            session token carries (internal/principal).
-#   int4  -> int64, because a workspace id past int32 must reach Postgres and
-#            make the query fail, as it does on the Python tier: narrowing it in
-#            Go would silently answer about a different workspace.
+#   uuid  -> string, because every caller id in this tier is the text form
+#            the session token carries (internal/principal).
+#   int4  -> int64, so that a count or a position is the same Go type as an
+#            id (ids are bigint, which sqlc already makes int64) and nothing
+#            is narrowed on its way to Postgres.
 #   timestamptz -> time.Time, because every timestamp here is rendered by
 #            internal/pythonjson, which formats a time.Time.
 version: "2"
 sql:
   - &slice
     engine: postgresql
-    schema: internal/schema/schema.sql
-    queries: internal/workspaceaccess/queries.sql
+    schema: ../soloclef_schema/migrations
+    queries: internal/accesstokens/queries.sql
     gen:
       go: &slice_go
-        package: workspaceaccess
-        out: internal/workspaceaccess
+        package: accesstokens
+        out: internal/accesstokens
         sql_package: pgx/v5
         omit_unused_structs: true
         emit_pointers_for_null_types: true
@@ -53,20 +65,25 @@ sql:
             go_type:
               type: time.Time
               pointer: true
+          # The migrations spell the type `timestamptz`, and sqlc matches an
+          # override on the spelling it read, not on the type it resolves to:
+          # without this pair a timestamp column of the new schema comes out
+          # as pgtype.Timestamptz. The pg_catalog pair above still covers a
+          # cast written `::pg_catalog.timestamptz` in a query.
+          - db_type: timestamptz
+            go_type: time.Time
+          - db_type: timestamptz
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true
   - <<: *slice
-    queries: internal/logsummary/queries.sql
+    queries: internal/activitysummary/queries.sql
     gen:
       go:
         <<: *slice_go
-        package: logsummary
-        out: internal/logsummary
-  - <<: *slice
-    queries: internal/workspacemembers/queries.sql
-    gen:
-      go:
-        <<: *slice_go
-        package: workspacemembers
-        out: internal/workspacemembers
+        package: activitysummary
+        out: internal/activitysummary
   - <<: *slice
     queries: internal/agentsignin/queries.sql
     gen:
@@ -75,20 +92,6 @@ sql:
         package: agentsignin
         out: internal/agentsignin
   - <<: *slice
-    queries: internal/workspaceroles/queries.sql
-    gen:
-      go:
-        <<: *slice_go
-        package: workspaceroles
-        out: internal/workspaceroles
-  - <<: *slice
-    queries: internal/accesstokens/queries.sql
-    gen:
-      go:
-        <<: *slice_go
-        package: accesstokens
-        out: internal/accesstokens
-  - <<: *slice
     queries: internal/documentdeletion/queries.sql
     gen:
       go:
@@ -96,19 +99,12 @@ sql:
         package: documentdeletion
         out: internal/documentdeletion
   - <<: *slice
-    queries: internal/workspacedeletion/queries.sql
+    queries: internal/activitylogs/queries.sql
     gen:
       go:
         <<: *slice_go
-        package: workspacedeletion
-        out: internal/workspacedeletion
-  - <<: *slice
-    queries: internal/workspacelogs/queries.sql
-    gen:
-      go:
-        <<: *slice_go
-        package: workspacelogs
-        out: internal/workspacelogs
+        package: activitylogs
+        out: internal/activitylogs
   - <<: *slice
     queries: internal/markdownmemory/queries.sql
     gen:
@@ -123,3 +119,381 @@ sql:
         <<: *slice_go
         package: folders
         out: internal/folders
+  - <<: *slice
+    queries: internal/prompts/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: prompts
+        out: internal/prompts
+  - <<: *slice
+    queries: internal/publiclinks/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: publiclinks
+        out: internal/publiclinks
+  - <<: *slice
+    queries: internal/agentrules/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: agentrules
+        out: internal/agentrules
+  - <<: *slice
+    queries: internal/notes/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: notes
+        out: internal/notes
+  - <<: *slice
+    queries: internal/accountprofile/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: accountprofile
+        out: internal/accountprofile
+  - <<: *slice
+    queries: internal/signin/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: signin
+        out: internal/signin
+  - <<: *slice
+    queries: internal/oidcsignin/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: oidcsignin
+        out: internal/oidcsignin
+  - <<: *slice
+    queries: internal/artifacts/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: artifacts
+        out: internal/artifacts
+  - <<: *slice
+    queries: internal/documentcontent/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: documentcontent
+        out: internal/documentcontent
+  - <<: *slice
+    queries: internal/notebooksources/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: notebooksources
+        out: internal/notebooksources
+  - <<: *slice
+    queries: internal/studiooutputs/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: studiooutputs
+        out: internal/studiooutputs
+  - <<: *slice
+    queries: internal/deliverablejobs/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: deliverablejobs
+        out: internal/deliverablejobs
+  - <<: *slice
+    queries: internal/pushdevices/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: pushdevices
+        out: internal/pushdevices
+  - <<: *slice
+    queries: internal/documents/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: documents
+        out: internal/documents
+  - <<: *slice
+    queries: internal/searchconnectors/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: searchconnectors
+        out: internal/searchconnectors
+  - <<: *slice
+    queries: internal/modelconnections/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: modelconnections
+        out: internal/modelconnections
+  - <<: *slice
+    queries: internal/modelchoices/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: modelchoices
+        out: internal/modelchoices
+  - <<: *slice
+    queries: internal/publicchat/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: publicchat
+        out: internal/publicchat
+  - <<: *slice
+    queries: internal/notebooks/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: notebooks
+        out: internal/notebooks
+  - <<: *slice
+    queries: internal/podcasts/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: podcasts
+        out: internal/podcasts
+  - <<: *slice
+    queries: internal/chat/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: chat
+        out: internal/chat
+  - <<: *slice
+    queries: internal/chat/memory/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: memory
+        out: internal/chat/memory
+  - <<: *slice
+    queries: internal/chat/threads/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: threads
+        out: internal/chat/threads
+  - <<: *slice
+    queries: internal/folderchain/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: folderchain
+        out: internal/folderchain
+  - <<: *slice
+    queries: internal/indexqueue/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: indexqueue
+        out: internal/indexqueue
+  - <<: *slice
+    queries: internal/uploads/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: uploads
+        out: internal/uploads
+  - <<: *slice
+    queries: internal/documentreindex/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: documentreindex
+        out: internal/documentreindex
+  - <<: *slice
+    queries: internal/connectorparser/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: connectorparser
+        out: internal/connectorparser
+  - <<: *slice
+    queries: internal/nextcloudimport/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: nextcloudimport
+        out: internal/nextcloudimport
+  - <<: *slice
+    queries: internal/notifications/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: notifications
+        out: internal/notifications
+  - <<: *slice
+    queries: internal/agentactions/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: agentactions
+        out: internal/agentactions
+  - <<: *slice
+    queries: internal/knowledgebase/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: knowledgebase
+        out: internal/knowledgebase
+  - <<: *slice
+    queries: internal/notebookfollowups/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: notebookfollowups
+        out: internal/notebookfollowups
+  - <<: *slice
+    queries: internal/sourceguides/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: sourceguides
+        out: internal/sourceguides
+  - <<: *slice
+    queries: internal/notebooksearch/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: notebooksearch
+        out: internal/notebooksearch
+  - <<: *slice
+    queries: internal/nextcloudconnect/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: nextcloudconnect
+        out: internal/nextcloudconnect
+  - <<: *slice
+    queries: internal/documentlibrary/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: documentlibrary
+        out: internal/documentlibrary
+  - <<: *slice
+    queries: internal/documentfiles/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: documentfiles
+        out: internal/documentfiles
+  - <<: *slice
+    queries: internal/documentsearch/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: documentsearch
+        out: internal/documentsearch
+  - <<: *slice
+    queries: internal/notebookresearch/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: notebookresearch
+        out: internal/notebookresearch
+  - <<: *slice
+    queries: internal/mailaccounts/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: mailaccounts
+        out: internal/mailaccounts
+  - <<: *slice
+    queries: internal/microsoftmail/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: microsoftmail
+        out: internal/microsoftmail
+  - <<: *slice
+    queries: internal/studiogenerate/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: studiogenerate
+        out: internal/studiogenerate
+  - <<: *slice
+    queries: internal/driveconnect/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: driveconnect
+        out: internal/driveconnect
+  - <<: *slice
+    queries: internal/drivesync/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: drivesync
+        out: internal/drivesync
+  - <<: *slice
+    queries: internal/siteannouncements/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: siteannouncements
+        out: internal/siteannouncements
+  - <<: *slice
+    queries: internal/notebooklinks/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: notebooklinks
+        out: internal/notebooklinks
+  - <<: *slice
+    queries: internal/notebookcopy/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: notebookcopy
+        out: internal/notebookcopy
+  - <<: *slice
+    queries: internal/studioviews/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: studioviews
+        out: internal/studioviews
+  - <<: *slice
+    queries: internal/publicshare/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: publicshare
+        out: internal/publicshare
+  - <<: *slice
+    queries: internal/medialinks/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: medialinks
+        out: internal/medialinks
+  - <<: *slice
+    queries: internal/e2eseed/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: e2eseed
+        out: internal/e2eseed
+  - <<: *slice
+    queries: internal/automations/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: automations
+        out: internal/automations
+  - <<: *slice
+    queries: internal/automationmail/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: automationmail
+        out: internal/automationmail

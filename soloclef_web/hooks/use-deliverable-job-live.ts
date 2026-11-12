@@ -21,7 +21,6 @@ export interface LiveDeliverableJob {
 	progress: number;
 	failureCode: string | null;
 	artifactId: number | null;
-	workspaceId: number;
 	threadId: number | null;
 }
 
@@ -39,7 +38,6 @@ export function useDeliverableJobLive(jobId: number | undefined) {
 			progress: row.progress,
 			failureCode: row.failureCode ?? null,
 			artifactId: row.artifactId ?? null,
-			workspaceId: row.workspaceId,
 			threadId: row.threadId ?? null,
 		};
 	}, [jobId, row]);

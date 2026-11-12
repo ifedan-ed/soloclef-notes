@@ -7,8 +7,8 @@ import { expect, openNotebook, test } from "./fixtures";
 /** "@" mentions list only this notebook's sources; "/" lists saved prompts. */
 
 test.describe("Composer @ mentions", () => {
-	test("an empty notebook has nothing to mention", async ({ page, workspace, notebook }) => {
-		await openNotebook(page, workspace.id, notebook.id, "Chat");
+	test("an empty notebook has nothing to mention", async ({ page, notebook }) => {
+		await openNotebook(page, notebook.id, "Chat");
 		await composer(page).click();
 		await composer(page).pressSequentially("@");
 		await expect(page.getByText("This notebook has no sources to mention yet.")).toBeVisible();
@@ -17,7 +17,6 @@ test.describe("Composer @ mentions", () => {
 
 	test("@ lists only notebook sources, and the pick is sent with the message", async ({
 		page,
-		workspace,
 		notebook,
 		request,
 		token,
@@ -25,20 +24,19 @@ test.describe("Composer @ mentions", () => {
 		const mine = await addNoteSource(
 			request,
 			token,
-			workspace.id,
 			notebook.id,
 			"Enzyme kinetics",
 			"Km and Vmax."
 		);
-		// A document in the same workspace but a different notebook must not be offered.
-		const other = await request.post(`/api/v1/workspaces/${workspace.id}/notebooks`, {
+		// A document of the same account but in a different notebook must not be offered.
+		const other = await request.post(`/api/v1/notebooks`, {
 			headers: authHeaders(token),
 			data: { title: "Other" },
 		});
 		const otherId = ((await other.json()) as { id: number }).id;
-		await addNoteSource(request, token, workspace.id, otherId, "Unrelated geology", "Rocks.");
+		await addNoteSource(request, token, otherId, "Unrelated geology", "Rocks.");
 
-		await openNotebook(page, workspace.id, notebook.id, "Chat");
+		await openNotebook(page, notebook.id, "Chat");
 		await composer(page).click();
 		await composer(page).pressSequentially("Explain @");
 		const list = page.getByRole("listbox").filter({ hasText: "Sources in this notebook" });
@@ -69,7 +67,6 @@ test.describe("Composer @ mentions", () => {
 test.describe("Composer / saved prompts", () => {
 	test("/ lists saved prompts; picking one fills the composer", async ({
 		page,
-		workspace,
 		notebook,
 		request,
 		token,
@@ -82,7 +79,7 @@ test.describe("Composer / saved prompts", () => {
 		expect(created.ok()).toBeTruthy();
 		const promptId = ((await created.json()) as { id: number }).id;
 		try {
-			await openNotebook(page, workspace.id, notebook.id, "Chat");
+			await openNotebook(page, notebook.id, "Chat");
 			await composer(page).click();
 			await composer(page).pressSequentially("/");
 			await expect(page.getByText("Saved prompts")).toBeVisible();
@@ -99,13 +96,12 @@ test.describe("Composer / saved prompts", () => {
 test.describe("Composer: sources only", () => {
 	test("no Sources / + Web switch on desktop or in the phone + menu; the Tools menu stays", async ({
 		page,
-		workspace,
 		notebook,
 		isPhone,
 	}) => {
 		// A notebook chat answers from its sources only, so the composer offers
 		// no search scope. The Tools menu (one web tool for one message) stays.
-		await openNotebook(page, workspace.id, notebook.id, "Chat");
+		await openNotebook(page, notebook.id, "Chat");
 		const root = page.locator(".aui-composer-root");
 		await expect(
 			root.getByRole("button", { name: "Pick a tool for the next message" })

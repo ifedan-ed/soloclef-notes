@@ -58,13 +58,6 @@ export default function TermsPage() {
 			</ul>
 			<p>Accounts that break these rules may be suspended.</p>
 
-			<h2>Plans and credits</h2>
-			<p>
-				Plans and credit costs are listed on the <Link href="/pricing">pricing page</Link>. Payments
-				are not switched on yet; the payment terms, including renewals and refunds, will be added
-				here before they are.
-			</p>
-
 			<h2>Changes and contact</h2>
 			<p>
 				These terms may be updated; the date above shows when. Questions go to the address on the{" "}

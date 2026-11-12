@@ -26,11 +26,9 @@ const jotaiStore = getDefaultStore();
 export function RetrievalScopeProvider({
 	children,
 	initialScope,
-	workspaceId,
 }: {
 	children: ReactNode;
 	initialScope: RetrievalScope;
-	workspaceId: number;
 }) {
 	const [scope, setScopeState] = useState(initialScope);
 	const { data: currentUser } = useAtomValue(currentUserAtom);
@@ -43,17 +41,17 @@ export function RetrievalScopeProvider({
 	useEffect(() => {
 		if (!currentUser?.id || !pendingPersistence.current) return;
 		pendingPersistence.current = false;
-		persistRetrievalScopeCookie(currentUser.id, workspaceId, scope);
-	}, [currentUser?.id, scope, workspaceId]);
+		persistRetrievalScopeCookie(currentUser.id, scope);
+	}, [currentUser?.id, scope]);
 
 	const setScope = useCallback(
 		(nextScope: RetrievalScope) => {
 			setScopeState(nextScope);
 			jotaiStore.set(retrievalScopeAtom, nextScope);
 			pendingPersistence.current = !currentUser?.id;
-			persistRetrievalScopeCookie(currentUser?.id, workspaceId, nextScope);
+			persistRetrievalScopeCookie(currentUser?.id, nextScope);
 		},
-		[currentUser?.id, workspaceId]
+		[currentUser?.id]
 	);
 
 	return (

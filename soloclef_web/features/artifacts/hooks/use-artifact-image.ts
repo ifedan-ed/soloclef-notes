@@ -12,20 +12,20 @@ import { baseApiService } from "@/lib/apis/base-api.service";
 import { authenticatedFetch } from "@/lib/auth-fetch";
 import { buildBackendUrl } from "@/lib/env-config";
 
-export function useArtifactImage(workspaceId: number, artifactId: number) {
+export function useArtifactImage(artifactId: number) {
 	const params = useParams();
 	const pathname = usePathname();
 	const shareToken =
 		pathname?.startsWith("/public/") && typeof params?.token === "string" ? params.token : null;
 
 	const manifestQuery = useQuery({
-		...artifactManifestQueryOptions(workspaceId, artifactId),
+		...artifactManifestQueryOptions(artifactId),
 		enabled: shareToken == null,
 	});
 	const primary = selectPrimaryArtifactFile(manifestQuery.data);
 
 	const imageQuery = useQuery({
-		queryKey: artifactImageBlobQueryKey(workspaceId, artifactId, shareToken, primary?.file_id),
+		queryKey: artifactImageBlobQueryKey(artifactId, shareToken, primary?.file_id),
 		enabled: shareToken != null || primary != null,
 		queryFn: async () => {
 			const blob = shareToken

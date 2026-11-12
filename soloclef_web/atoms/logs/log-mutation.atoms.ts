@@ -1,5 +1,4 @@
 import { atomWithMutation } from "jotai-tanstack-query";
-import { activeWorkspaceIdAtom } from "@/atoms/workspaces/workspace-query.atoms";
 import type {
 	CreateLogRequest,
 	DeleteLogRequest,
@@ -12,11 +11,9 @@ import { queryClient } from "@/lib/query-client/client";
 /**
  * Create Log Mutation
  */
-export const createLogMutationAtom = atomWithMutation((get) => {
-	const workspaceId = get(activeWorkspaceIdAtom);
+export const createLogMutationAtom = atomWithMutation(() => {
 	return {
-		mutationKey: cacheKeys.logs.list(workspaceId ?? undefined),
-		enabled: !!workspaceId,
+		mutationKey: cacheKeys.logs.list(),
 		mutationFn: async (request: CreateLogRequest) => logsApiService.createLog(request),
 		onSuccess: () => {
 			// Invalidate all log-related queries (list, summary, detail, withQueryParams)
@@ -28,11 +25,9 @@ export const createLogMutationAtom = atomWithMutation((get) => {
 /**
  * Update Log Mutation
  */
-export const updateLogMutationAtom = atomWithMutation((get) => {
-	const workspaceId = get(activeWorkspaceIdAtom);
+export const updateLogMutationAtom = atomWithMutation(() => {
 	return {
-		mutationKey: cacheKeys.logs.list(workspaceId ?? undefined),
-		enabled: !!workspaceId,
+		mutationKey: cacheKeys.logs.list(),
 		mutationFn: async ({ logId, data }: { logId: number; data: UpdateLogRequest }) =>
 			logsApiService.updateLog(logId, data),
 		onSuccess: (_data, variables) => {
@@ -44,11 +39,9 @@ export const updateLogMutationAtom = atomWithMutation((get) => {
 /**
  * Delete Log Mutation
  */
-export const deleteLogMutationAtom = atomWithMutation((get) => {
-	const workspaceId = get(activeWorkspaceIdAtom);
+export const deleteLogMutationAtom = atomWithMutation(() => {
 	return {
-		mutationKey: cacheKeys.logs.list(workspaceId ?? undefined),
-		enabled: !!workspaceId,
+		mutationKey: cacheKeys.logs.list(),
 		mutationFn: async (request: DeleteLogRequest) => logsApiService.deleteLog(request),
 		onSuccess: (_data, request) => {
 			queryClient.invalidateQueries({ queryKey: ["logs"] });

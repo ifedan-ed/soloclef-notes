@@ -12,15 +12,9 @@ import { ValidationError } from "@/lib/error";
 import { baseApiService } from "./base-api.service";
 
 class PromptsApiService {
-	list = async (workspaceId?: number) => {
-		const params = new URLSearchParams();
-		if (workspaceId !== undefined) {
-			params.set("workspace_id", String(workspaceId));
-		}
-		const queryString = params.toString();
-		const url = queryString ? `/api/v1/prompts?${queryString}` : "/api/v1/prompts";
-
-		return baseApiService.get(url, promptsListResponse);
+	// The signed-in account's own prompts.
+	list = async () => {
+		return baseApiService.get("/api/v1/prompts", promptsListResponse);
 	};
 
 	create = async (request: PromptCreateRequest) => {
@@ -30,9 +24,8 @@ class PromptsApiService {
 			throw new ValidationError(`Invalid request: ${errorMessage}`);
 		}
 
-		const { workspace_id, ...body } = parsed.data;
 		return baseApiService.post("/api/v1/prompts", promptRead, {
-			body: { ...body, workspace_id },
+			body: parsed.data,
 		});
 	};
 

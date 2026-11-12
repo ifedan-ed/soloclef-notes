@@ -9,8 +9,8 @@ import { buildHtmlArtifactDocument } from "./html-artifact-document";
 import {
 	applyMediaLinks,
 	findMediaRefs,
+	isAccountArtifactUrl,
 	mediaOrigins,
-	workspaceIdFromContentUrl,
 } from "./html-media-links";
 import { fetchMediaLinks } from "./media-links-api";
 import type { FileViewerProps } from "./model";
@@ -86,10 +86,9 @@ export function useHtmlArtifactDocument(
 					throw new InvalidHtmlEncodingError();
 				}
 				const refs = findMediaRefs(fragment);
-				const workspaceId = workspaceIdFromContentUrl(primary.content_url);
 				let links = new Map<string, string>();
-				if (refs.length && workspaceId !== null) {
-					links = await fetchMediaLinks(workspaceId, refs, controller.signal);
+				if (refs.length && isAccountArtifactUrl(primary.content_url)) {
+					links = await fetchMediaLinks(refs, controller.signal);
 					if (controller.signal.aborted) return;
 				}
 				setState({

@@ -21,7 +21,7 @@ export function isSafeHref(href: string): boolean {
 	if (!value || /\s/.test(value)) return false;
 	// "//host" and "/\\host" both leave the site: browsers read either as a
 	// protocol-relative address. A page in the app is one slash, then a path.
-	if (value.startsWith("/")) return !/^\/[\/\\]/.test(value);
+	if (value.startsWith("/")) return !/^\/[/\\]/.test(value);
 	return /^https?:\/\//i.test(value);
 }
 

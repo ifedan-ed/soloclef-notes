@@ -48,7 +48,7 @@ func recording(t *testing.T, reply string) (*restclient.Client, *capture) {
 func TestEveryRequestCarriesTheClientHeader(t *testing.T) {
 	client, seen := recording(t, `{}`)
 	if _, err := client.Do(context.Background(),
-		restclient.Call{Method: "GET", Path: "/workspaces"}); err != nil {
+		restclient.Call{Method: "GET", Path: "/documents"}); err != nil {
 		t.Fatal(err)
 	}
 	if seen.clientTag != "mcp" {
@@ -57,7 +57,7 @@ func TestEveryRequestCarriesTheClientHeader(t *testing.T) {
 	if seen.accept != "application/json" {
 		t.Errorf("Accept is %q", seen.accept)
 	}
-	if seen.path != "/api/v1/workspaces" {
+	if seen.path != "/api/v1/documents" {
 		t.Errorf("path is %q", seen.path)
 	}
 }
@@ -71,7 +71,6 @@ func TestQueryParametersKeepTheOrderTheCallWroteThem(t *testing.T) {
 		Method: "GET",
 		Path:   "/documents",
 		Query: []restclient.QueryParameter{
-			restclient.Number("workspace_id", 1),
 			restclient.Number("page", 1),
 			restclient.Number("page_size", 5),
 			restclient.Text("document_types", "FILE"),
@@ -81,7 +80,7 @@ func TestQueryParametersKeepTheOrderTheCallWroteThem(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const want = "workspace_id=1&page=1&page_size=5&document_types=FILE&folder_id=4"
+	const want = "page=1&page_size=5&document_types=FILE&folder_id=4"
 	if seen.query != want {
 		t.Errorf("query is\n %s\nwant\n %s", seen.query, want)
 	}
@@ -114,7 +113,6 @@ func TestAJSONBodyKeepsItsMemberOrder(t *testing.T) {
 		Method: "POST",
 		Path:   "/documents/search-semantic",
 		JSONBody: pythonjson.NewObject(
-			pythonjson.Field("workspace_id", pythonjson.Num(1)),
 			pythonjson.Field("query", pythonjson.Str("x")),
 			pythonjson.Field("top_k", pythonjson.Num(5)),
 			pythonjson.Field("document_types", pythonjson.Nothing()),
@@ -123,7 +121,7 @@ func TestAJSONBodyKeepsItsMemberOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const want = `{"workspace_id":1,"query":"x","top_k":5,"document_types":null}`
+	const want = `{"query":"x","top_k":5,"document_types":null}`
 	if seen.body != want {
 		t.Errorf("body is\n %s\nwant\n %s", seen.body, want)
 	}
@@ -138,9 +136,8 @@ func TestAnUploadIsSentAsMultipartFormData(t *testing.T) {
 		Method: "POST",
 		Path:   "/documents/fileupload",
 		FormFields: []restclient.FormField{
-			{Name: "workspace_id", Value: "1"},
+			{Name: "parser", Value: "docling"},
 			{Name: "use_vision_llm", Value: "false"},
-			{Name: "processing_mode", Value: "basic"},
 		},
 		Files: []restclient.Upload{{
 			FieldName:   "files",
@@ -156,7 +153,7 @@ func TestAnUploadIsSentAsMultipartFormData(t *testing.T) {
 		t.Errorf("content type is %q", seen.contentType)
 	}
 	for _, fragment := range []string{
-		`name="workspace_id"`, `name="use_vision_llm"`, `name="processing_mode"`,
+		`name="parser"`, `name="use_vision_llm"`,
 		`name="files"; filename="synthetic.md"`, "Content-Type: text/markdown", "body",
 	} {
 		if !strings.Contains(seen.body, fragment) {

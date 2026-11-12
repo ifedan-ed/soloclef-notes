@@ -17,13 +17,11 @@ type Paginated<T> = {
 export async function listDocuments(
 	request: APIRequestContext,
 	token: string,
-	workspaceId: number,
 	limit = 100
 ): Promise<DocumentRow[]> {
-	const response = await request.get(
-		`${BACKEND_URL}/api/v1/documents?workspace_id=${workspaceId}&limit=${limit}`,
-		{ headers: authHeaders(token) }
-	);
+	const response = await request.get(`${BACKEND_URL}/api/v1/documents?page_size=${limit}`, {
+		headers: authHeaders(token),
+	});
 	if (!response.ok()) {
 		throw new Error(`listDocuments failed (${response.status()}): ${await response.text()}`);
 	}
@@ -51,11 +49,10 @@ export type EditorContent = {
 export async function getEditorContent(
 	request: APIRequestContext,
 	token: string,
-	workspaceId: number,
 	documentId: number
 ): Promise<EditorContent> {
 	const response = await request.get(
-		`${BACKEND_URL}/api/v1/workspaces/${workspaceId}/documents/${documentId}/editor-content`,
+		`${BACKEND_URL}/api/v1/documents/${documentId}/editor-content`,
 		{ headers: authHeaders(token) }
 	);
 	if (!response.ok()) {

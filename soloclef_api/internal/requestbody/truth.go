@@ -63,15 +63,12 @@ func (m *Model) readTruth(name string, value any) (bool, bool) {
 		}
 		return m.truthOfWholeNumber(name, int64(typed))
 	case string:
-		word := strings.ToLower(typed)
-		if trueWords[word] {
-			return true, true
+		truth, readable := truthOfText(typed)
+		if !readable {
+			m.reject(BooleanUnreadable, name)
+			return false, false
 		}
-		if falseWords[word] {
-			return false, true
-		}
-		m.reject(BooleanUnreadable, name)
-		return false, false
+		return truth, true
 	default:
 		m.reject(NotABoolean, name)
 		return false, false
@@ -88,4 +85,38 @@ func (m *Model) truthOfWholeNumber(name string, number int64) (bool, bool) {
 		m.reject(BooleanUnreadable, name)
 		return false, false
 	}
+}
+
+// RequiredTruth reads a `bool` field that has no default, so an absent one is
+// "Field required" rather than a value — which Truth above cannot say, because
+// a field with a default is never missing.
+//
+// The difference is what a client sees for the body `{}`: a 422 naming the
+// field, where the same body on a partial-update model writes nothing and
+// answers 200.
+func (m *Model) RequiredTruth(name string) bool {
+	value, present := m.body.Get(name)
+	if !present {
+		m.reject(FieldRequired, name)
+		return false
+	}
+	truth, readable := m.readTruth(name, value)
+	if !readable {
+		return false
+	}
+	return truth
+}
+
+// truthOfText is pydantic's string branch on its own. Matching is
+// case-insensitive and does **not** trim, so " true " names no truth — which
+// looks like a bug and is what the Python tier does.
+func truthOfText(text string) (bool, bool) {
+	word := strings.ToLower(text)
+	if trueWords[word] {
+		return true, true
+	}
+	if falseWords[word] {
+		return false, true
+	}
+	return false, false
 }

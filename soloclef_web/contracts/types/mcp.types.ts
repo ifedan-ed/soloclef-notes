@@ -30,7 +30,7 @@ export const mcpConnectorRead = z.object({
 	name: z.string(),
 	connector_type: z.literal("MCP_CONNECTOR"),
 	server_config: mcpServerConfig,
-	workspace_id: z.number(),
+	enabled: z.boolean(),
 	user_id: z.string(),
 	created_at: z.string(),
 	updated_at: z.string(),
@@ -41,20 +41,11 @@ export const mcpConnectorRead = z.object({
  */
 export const createMCPConnectorRequest = z.object({
 	data: mcpConnectorCreate,
-	queryParams: z.object({
-		workspace_id: z.number().or(z.string()),
-	}),
 });
 
 export const updateMCPConnectorRequest = z.object({
 	id: z.number(),
 	data: mcpConnectorUpdate,
-});
-
-export const getMCPConnectorsRequest = z.object({
-	queryParams: z.object({
-		workspace_id: z.number().or(z.string()),
-	}),
 });
 
 // Inferred Types
@@ -64,7 +55,6 @@ export type MCPConnectorUpdate = z.infer<typeof mcpConnectorUpdate>;
 export type MCPConnectorRead = z.infer<typeof mcpConnectorRead>;
 export type CreateMCPConnectorRequest = z.infer<typeof createMCPConnectorRequest>;
 export type UpdateMCPConnectorRequest = z.infer<typeof updateMCPConnectorRequest>;
-export type GetMCPConnectorsRequest = z.infer<typeof getMCPConnectorsRequest>;
 
 /**
  * Tool definition from MCP server

@@ -1,0 +1,55 @@
+# The site's routes, imported inside a site block by ./Caddyfile and by the
+# web e2e stack's (e2e-web-go/Caddyfile). Each upstream is named by its
+# container ({$SOLOCLEF_STACK} is the Compose project), as everywhere in the
+# Go stack.
+#
+# Caddy tries the more specific path first whatever the order here, so
+# /auth/callback reaches the web app and the rest of /auth the API.
+
+# The web app's own page a sign-in comes back to.
+reverse_proxy /auth/callback* {$SOLOCLEF_STACK}-frontend-1:3000
+
+# Sign-in, sign-up, password reset and single sign-on, and the account.
+reverse_proxy /auth/* {$SOLOCLEF_STACK}-api-1:8080 {
+	# The API counts sign-in attempts by CF-Connecting-IP, then X-Real-IP.
+	# Set them here from the client address Caddy trusts (trusted_proxies in
+	# ./Caddyfile), so the limit holds whatever is in front of this proxy.
+	header_up -CF-Connecting-IP
+	header_up X-Real-IP {client_ip}
+}
+reverse_proxy /users/* {$SOLOCLEF_STACK}-api-1:8080 {
+	header_up -CF-Connecting-IP
+	header_up X-Real-IP {client_ip}
+}
+
+# Everything else the API serves. flush_interval -1: a chat answer is a
+# stream, and a proxy that waits for a full buffer turns it into one late
+# lump.
+reverse_proxy /api/v1/* {$SOLOCLEF_STACK}-api-1:8080 {
+	flush_interval -1
+	header_up -CF-Connecting-IP
+	header_up X-Real-IP {client_ip}
+}
+
+# The live sync. zero-cache takes one path component as its base, so /zero
+# is passed on as it is.
+reverse_proxy /zero/* {$SOLOCLEF_STACK}-zero-cache-1:4848
+
+# The MCP server for agents; it streams, so nothing is buffered. /mcp and
+# what is under /mcp/ only: a prefix match (/mcp*) would also take the web
+# app's own pages that begin with the same letters, such as /mcp-server.
+reverse_proxy /mcp {$SOLOCLEF_STACK}-mcp-1:8080 {
+	flush_interval -1
+}
+reverse_proxy /mcp/* {$SOLOCLEF_STACK}-mcp-1:8080 {
+	flush_interval -1
+}
+
+# The MCP server's protected-resource document (RFC 9728), which claude.ai
+# and ChatGPT read to find where to sign in. Served only when agent sign-in
+# is set up (SOLOCLEF_API_AGENT_ISSUER); otherwise it answers 404.
+reverse_proxy /.well-known/oauth-protected-resource* {$SOLOCLEF_STACK}-mcp-1:8080
+
+# The web app: its pages and its own routes (/api/zero/*, /verify-token,
+# /api/search, /api/contact and the rest).
+reverse_proxy /* {$SOLOCLEF_STACK}-frontend-1:3000

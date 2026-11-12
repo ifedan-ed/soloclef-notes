@@ -38,7 +38,7 @@ func TestTheBatchIsTheOneThePythonLibraryPosts(t *testing.T) {
 	sink.Now = func() time.Time { return time.Date(2026, 11, 8, 12, 0, 0, 0, time.UTC) }
 	sink.Record(Event{
 		Account:    "aaaaaaaa-0000-4000-8000-000000000001",
-		Route:      "/api/v1/workspaces/{workspace_id}/my-access",
+		Route:      "/api/v1/notebooks/{notebook_id}/feature",
 		Method:     http.MethodGet,
 		Status:     http.StatusOK,
 		AuthMethod: "agent",
@@ -94,7 +94,7 @@ func TestTheBatchIsTheOneThePythonLibraryPosts(t *testing.T) {
 		"source":         "backend",
 		"auth_method":    "agent",
 		"client":         "mcp",
-		"route":          "/api/v1/workspaces/{workspace_id}/my-access",
+		"route":          "/api/v1/notebooks/{notebook_id}/feature",
 		"method":         "GET",
 		"status_code":    float64(200),
 		"$geoip_disable": true,

@@ -2,7 +2,7 @@ import type { RetrievalScope } from "@/contracts/types/retrieval-scope.types";
 import type { ComposerToolId } from "./composer-tools";
 
 /**
- * A forced tool reaches outside the workspace, so a documents-only turn
+ * A forced tool reaches outside your own documents, so a documents-only turn
  * widens to "all" (as the backend does). The user's saved scope is untouched.
  */
 export function scopeForPreferredTool(

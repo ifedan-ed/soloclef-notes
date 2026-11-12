@@ -9,37 +9,50 @@ import (
 	"context"
 )
 
-const accountIsActive = `-- name: AccountIsActive :one
-SELECT is_active FROM "user" WHERE id = $1
+const accountStanding = `-- name: AccountStanding :one
+SELECT is_active, api_access_enabled FROM "user" WHERE id = $1
 `
 
-// Whether a linked account still exists and is still usable. A row that is gone
-// and a row that is deactivated are the same refusal there.
-func (q *Queries) AccountIsActive(ctx context.Context, id string) (bool, error) {
-	row := q.db.QueryRow(ctx, accountIsActive, id)
-	var is_active bool
-	err := row.Scan(&is_active)
-	return is_active, err
+type AccountStandingRow struct {
+	IsActive         bool
+	ApiAccessEnabled bool
+}
+
+// Whether a linked account still exists and is still usable (a row that is
+// gone and a row that is deactivated are the same refusal), and its
+// API-access switch, for the same reason as above.
+func (q *Queries) AccountStanding(ctx context.Context, id string) (AccountStandingRow, error) {
+	row := q.db.QueryRow(ctx, accountStanding, id)
+	var i AccountStandingRow
+	err := row.Scan(&i.IsActive, &i.ApiAccessEnabled)
+	return i, err
 }
 
 const accountWithEmail = `-- name: AccountWithEmail :one
-SELECT id, is_verified, is_active FROM "user"
+SELECT id, is_verified, is_active, api_access_enabled FROM "user"
 WHERE lower(email) = $1
 `
 
 type AccountWithEmailRow struct {
-	ID         string
-	IsVerified bool
-	IsActive   bool
+	ID               string
+	IsVerified       bool
+	IsActive         bool
+	ApiAccessEnabled bool
 }
 
-// The account whose address is this one, with the two flags the rule needs: the
-// Python tier reads the id with this filter and then loads the row by its
-// primary key, which is this row.
+// The account whose address is this one, with the two flags the rule needs
+// and the account's API-access switch, which the gate checks for every agent
+// (internal/principal). The switch rides on this row so the gate asks nothing
+// of its own. uq_user_email_lower answers the filter.
 func (q *Queries) AccountWithEmail(ctx context.Context, email string) (AccountWithEmailRow, error) {
 	row := q.db.QueryRow(ctx, accountWithEmail, email)
 	var i AccountWithEmailRow
-	err := row.Scan(&i.ID, &i.IsVerified, &i.IsActive)
+	err := row.Scan(
+		&i.ID,
+		&i.IsVerified,
+		&i.IsActive,
+		&i.ApiAccessEnabled,
+	)
 	return i, err
 }
 

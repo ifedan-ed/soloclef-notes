@@ -85,6 +85,23 @@ test("the file list opens folders, shows size and date, and disables unreadable 
 	assert.equal((html.match(/data-unsupported/g) ?? []).length, 1);
 });
 
+test("with no parser chosen a file says to choose one, not that a nameless parser refused it", () => {
+	const html = render(
+		createElement(NextcloudFileList, {
+			entries,
+			selection: new Map(),
+			// No parser, so nothing is accepted.
+			accepted: null,
+			parserName: null,
+			showLocation: false,
+			onToggle: noop,
+			onOpenFolder: noop,
+		})
+	);
+	assert.match(html, /Choose a parser to pick files/);
+	assert.doesNotMatch(html, /Not supported by the/);
+});
+
 test("search results say where each file lives", () => {
 	const html = render(
 		createElement(NextcloudFileList, {
@@ -158,7 +175,7 @@ test("the add-sources tabs fit a phone: three equal columns with one-word labels
 		/class="[^"]*\bgrid\b[^"]*\bw-full\b[^"]*\bgrid-cols-3\b[^"]*sm:inline-flex[^"]*sm:w-fit/
 	);
 	for (const [short, long] of [
-		["Workspace", "From your workspace"],
+		["Library", "From your library"],
 		["Upload", "Upload files"],
 		["Connector", "From a connector"],
 	]) {

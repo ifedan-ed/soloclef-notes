@@ -14,7 +14,6 @@ const GenerateImageArgsSchema = z.object({
 const GenerateImageResultSchema = z.object({
 	id: z.string(),
 	artifact_id: z.number(),
-	workspace_id: z.number(),
 	alt: z.string().nullish(),
 	title: z.string().nullish(),
 	description: z.string().nullish(),
@@ -57,7 +56,7 @@ function ImageCancelledState({ prompt }: { prompt: string }) {
 }
 
 function ArtifactImage({ result }: { result: GenerateImageResult }) {
-	const { src, loading, error } = useArtifactImage(result.workspace_id, result.artifact_id);
+	const { src, loading, error } = useArtifactImage(result.artifact_id);
 
 	if (loading) return <ImageLoading title="Loading image" maxWidth="512px" />;
 	if (error || !src) {

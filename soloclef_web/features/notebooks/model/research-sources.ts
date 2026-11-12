@@ -1,42 +1,26 @@
-import { SCRAPER_TOOL_IDS } from "@/features/scraper-tools/scraper-tools";
-
-/** Scholarly sources, searched through their own APIs rather than a scraper. */
+/** Scholarly sources, searched through their own APIs. */
 export const ACADEMIC_SOURCE_IDS = ["pubmed", "arxiv", "medrxiv", "google_scholar"] as const;
 export type AcademicSourceId = (typeof ACADEMIC_SOURCE_IDS)[number];
 
-/** Web search APIs answered with the workspace's own key (its Exa / Tavily connector). */
+/** Web search APIs answered with the account's own key (its Exa / Tavily connector). */
 export const WEB_API_SOURCE_IDS = ["exa", "tavily"] as const;
 export type WebApiSourceId = (typeof WEB_API_SOURCE_IDS)[number];
 
-/** Everything the "Search the web for new sources" box can search. */
-export const RESEARCH_SOURCE_IDS = [
-	...SCRAPER_TOOL_IDS,
-	...WEB_API_SOURCE_IDS,
-	...ACADEMIC_SOURCE_IDS,
-] as const;
-export type ResearchSourceId = (typeof RESEARCH_SOURCE_IDS)[number];
-
 /**
- * Sources that can come back empty for reasons outside Soloclef: TikTok
- * shows search results only to signed-in users, so its research reads hashtag
- * feeds instead, and unusual words often have none.
+ * Everything the "Search the web for new sources" box can search. The
+ * platform scrapers it used to list (the open web, Google Search, YouTube,
+ * Reddit and the rest) were cut from the product, so the web side is the
+ * account's own keyed search APIs only.
  */
-export const MAY_RETURN_NOTHING: ReadonlySet<ResearchSourceId> = new Set(["tiktok"]);
+export const RESEARCH_SOURCE_IDS = [...WEB_API_SOURCE_IDS, ...ACADEMIC_SOURCE_IDS] as const;
+export type ResearchSourceId = (typeof RESEARCH_SOURCE_IDS)[number];
 
 export function isResearchSourceId(value: unknown): value is ResearchSourceId {
 	return typeof value === "string" && (RESEARCH_SOURCE_IDS as readonly string[]).includes(value);
 }
 
-/** The web group in menu order: the general web searches first, then the platforms. */
-export const WEB_GROUP_SOURCE_IDS: readonly ResearchSourceId[] = [
-	"web",
-	"google_search",
-	...WEB_API_SOURCE_IDS,
-	...SCRAPER_TOOL_IDS.filter((id) => id !== "web" && id !== "google_search"),
-];
-
-/** Why a source cannot be searched in this workspace (only "no key connected" today). */
-export type SourceUnavailableReason = "not_connected";
+/** Why a source cannot be searched: no key connected, or not searched by this server. */
+export type SourceUnavailableReason = "not_connected" | "not_available";
 export type UnavailableSources = Partial<Record<ResearchSourceId, SourceUnavailableReason>>;
 
 export function isWebApiSourceId(value: unknown): value is WebApiSourceId {
@@ -49,7 +33,7 @@ export function isAcademicSourceId(value: unknown): value is AcademicSourceId {
 
 /**
  * Not a search: "Read a web page" adds one pasted URL as a source. Browserbase
- * opens it in a real browser when the workspace has it connected, so pages
+ * opens it in a real browser when the account has it connected, so pages
  * built with JavaScript work; otherwise the ordinary crawler reads it.
  */
 export const READ_PAGE_ID = "page" as const;
@@ -62,14 +46,11 @@ export function isResearchBoxSource(value: unknown): value is ResearchBoxSource 
 
 /** The web group of the menu: "Read a web page" sits right after Exa and Tavily. */
 export const WEB_GROUP_MENU_IDS: readonly ResearchBoxSource[] = [
-	"web",
-	"google_search",
 	...WEB_API_SOURCE_IDS,
 	READ_PAGE_ID,
-	...SCRAPER_TOOL_IDS.filter((id) => id !== "web" && id !== "google_search"),
 ];
 
-/** What reads a pasted page in this workspace. */
+/** What reads a pasted page for this account. */
 export type PageReader = "browserbase" | "crawler";
 
 /** A pasted page URL the backend will accept the shape of (it checks the host). */

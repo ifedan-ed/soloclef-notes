@@ -9,9 +9,6 @@ export const inboxItemTypeEnum = z.enum([
 	"connector_indexing",
 	"connector_deletion",
 	"document_processing",
-	"new_mention",
-	"comment_reply",
-	"insufficient_credits",
 	"site_announcement",
 ]);
 
@@ -88,56 +85,6 @@ export const documentProcessingMetadata = baseInboxItemMetadata.extend({
 });
 
 /**
- * New mention metadata schema
- */
-export const newMentionMetadata = z.object({
-	mention_id: z.number(),
-	comment_id: z.number(),
-	message_id: z.number(),
-	thread_id: z.number(),
-	thread_title: z.string(),
-	/** The chat's notebook; absent on notifications from before notebooks. */
-	notebook_id: z.number().nullable().optional(),
-	author_id: z.string(),
-	author_name: z.string(),
-	author_avatar_url: z.string().nullable().optional(),
-	author_email: z.string().optional(),
-	content_preview: z.string(),
-});
-
-export const commentReplyMetadata = z.object({
-	reply_id: z.number(),
-	parent_comment_id: z.number(),
-	message_id: z.number(),
-	thread_id: z.number(),
-	thread_title: z.string(),
-	/** The chat's notebook; absent on notifications from before notebooks. */
-	notebook_id: z.number().nullable().optional(),
-	author_id: z.string(),
-	author_name: z.string(),
-	author_avatar_url: z.string().nullable().optional(),
-	author_email: z.string().optional(),
-	content_preview: z.string(),
-});
-
-/**
- * Insufficient credits metadata schema.
- *
- * ``balance_micros`` / ``required_micros`` are integer micro-USD
- * (1_000_000 == $1.00); the UI divides by 1M when displaying.
- */
-export const insufficientCreditsMetadata = baseInboxItemMetadata.extend({
-	document_name: z.string(),
-	document_type: z.string(),
-	balance_micros: z.number(),
-	required_micros: z.number(),
-	error_type: z.literal("insufficient_credits"),
-	// Navigation target for frontend
-	action_url: z.string(),
-	action_label: z.string(),
-});
-
-/**
  * An administrator's announcement: where it points and when it stops showing.
  */
 export const siteAnnouncementMetadata = z.object({
@@ -154,9 +101,6 @@ export const inboxItemMetadata = z.union([
 	connectorIndexingMetadata,
 	connectorDeletionMetadata,
 	documentProcessingMetadata,
-	newMentionMetadata,
-	commentReplyMetadata,
-	insufficientCreditsMetadata,
 	siteAnnouncementMetadata,
 	baseInboxItemMetadata,
 ]);
@@ -167,7 +111,6 @@ export const inboxItemMetadata = z.union([
 export const inboxItem = z.object({
 	id: z.number(),
 	user_id: z.string(),
-	workspace_id: z.number().nullable(),
 	type: inboxItemTypeEnum,
 	title: z.string(),
 	message: z.string(),
@@ -195,21 +138,6 @@ export const documentProcessingInboxItem = inboxItem.extend({
 	metadata: documentProcessingMetadata,
 });
 
-export const newMentionInboxItem = inboxItem.extend({
-	type: z.literal("new_mention"),
-	metadata: newMentionMetadata,
-});
-
-export const commentReplyInboxItem = inboxItem.extend({
-	type: z.literal("comment_reply"),
-	metadata: commentReplyMetadata,
-});
-
-export const insufficientCreditsInboxItem = inboxItem.extend({
-	type: z.literal("insufficient_credits"),
-	metadata: insufficientCreditsMetadata,
-});
-
 // =============================================================================
 // API Request/Response Schemas
 // =============================================================================
@@ -217,7 +145,7 @@ export const insufficientCreditsInboxItem = inboxItem.extend({
 /**
  * Notification category for tab-level filtering
  */
-export const notificationCategory = z.enum(["comments", "status", "announcements"]);
+export const notificationCategory = z.enum(["status", "announcements"]);
 export type NotificationCategory = z.infer<typeof notificationCategory>;
 
 /**
@@ -225,7 +153,6 @@ export type NotificationCategory = z.infer<typeof notificationCategory>;
  */
 export const getNotificationsRequest = z.object({
 	queryParams: z.object({
-		workspace_id: z.number().optional(),
 		type: inboxItemTypeEnum.optional(),
 		category: notificationCategory.optional(),
 		source_type: z.string().optional(),
@@ -289,7 +216,6 @@ export const deleteNotificationResponse = z.object({
  */
 export const clearNotificationsRequest = z.object({
 	queryParams: z.object({
-		workspace_id: z.number().optional(),
 		category: notificationCategory.optional(),
 		filter: z.enum(["unread", "errors"]).optional(),
 	}),
@@ -299,13 +225,6 @@ export const clearNotificationsResponse = z.object({
 	success: z.boolean(),
 	message: z.string(),
 	deleted_count: z.number(),
-});
-
-/**
- * Request schema for getting unread count
- */
-export const getUnreadCountRequest = z.object({
-	workspace_id: z.number().optional(),
 });
 
 /**
@@ -332,8 +251,8 @@ export const getSourceTypesResponse = z.object({
 });
 
 /**
- * Batched unread counts for all categories in a single response.
- * Replaces 2 separate /unread-count calls (comments + status).
+ * Batched unread counts for every category in a single response, instead of
+ * one /unread-count call per category.
  */
 export const categoryUnreadCount = z.object({
 	total_unread: z.number(),
@@ -341,7 +260,6 @@ export const categoryUnreadCount = z.object({
 });
 
 export const getBatchUnreadCountResponse = z.object({
-	comments: categoryUnreadCount,
 	status: categoryUnreadCount,
 	announcements: categoryUnreadCount.default({ total_unread: 0, recent_unread: 0 }),
 });
@@ -377,26 +295,6 @@ export function isDocumentProcessingMetadata(
 	return documentProcessingMetadata.safeParse(metadata).success;
 }
 
-/**
- * Type guard for NewMentionMetadata
- */
-export function isNewMentionMetadata(metadata: unknown): metadata is NewMentionMetadata {
-	return newMentionMetadata.safeParse(metadata).success;
-}
-
-export function isCommentReplyMetadata(metadata: unknown): metadata is CommentReplyMetadata {
-	return commentReplyMetadata.safeParse(metadata).success;
-}
-
-/**
- * Type guard for InsufficientCreditsMetadata
- */
-export function isInsufficientCreditsMetadata(
-	metadata: unknown
-): metadata is InsufficientCreditsMetadata {
-	return insufficientCreditsMetadata.safeParse(metadata).success;
-}
-
 export function isSiteAnnouncementMetadata(
 	metadata: unknown
 ): metadata is SiteAnnouncementMetadata {
@@ -409,14 +307,7 @@ export function isSiteAnnouncementMetadata(
 export function parseInboxItemMetadata(
 	type: InboxItemTypeEnum,
 	metadata: unknown
-):
-	| ConnectorIndexingMetadata
-	| ConnectorDeletionMetadata
-	| DocumentProcessingMetadata
-	| NewMentionMetadata
-	| CommentReplyMetadata
-	| InsufficientCreditsMetadata
-	| null {
+): ConnectorIndexingMetadata | ConnectorDeletionMetadata | DocumentProcessingMetadata | null {
 	switch (type) {
 		case "connector_indexing": {
 			const result = connectorIndexingMetadata.safeParse(metadata);
@@ -428,18 +319,6 @@ export function parseInboxItemMetadata(
 		}
 		case "document_processing": {
 			const result = documentProcessingMetadata.safeParse(metadata);
-			return result.success ? result.data : null;
-		}
-		case "new_mention": {
-			const result = newMentionMetadata.safeParse(metadata);
-			return result.success ? result.data : null;
-		}
-		case "comment_reply": {
-			const result = commentReplyMetadata.safeParse(metadata);
-			return result.success ? result.data : null;
-		}
-		case "insufficient_credits": {
-			const result = insufficientCreditsMetadata.safeParse(metadata);
 			return result.success ? result.data : null;
 		}
 		default:
@@ -458,18 +337,12 @@ export type BaseInboxItemMetadata = z.infer<typeof baseInboxItemMetadata>;
 export type ConnectorIndexingMetadata = z.infer<typeof connectorIndexingMetadata>;
 export type ConnectorDeletionMetadata = z.infer<typeof connectorDeletionMetadata>;
 export type DocumentProcessingMetadata = z.infer<typeof documentProcessingMetadata>;
-export type NewMentionMetadata = z.infer<typeof newMentionMetadata>;
-export type CommentReplyMetadata = z.infer<typeof commentReplyMetadata>;
-export type InsufficientCreditsMetadata = z.infer<typeof insufficientCreditsMetadata>;
 export type SiteAnnouncementMetadata = z.infer<typeof siteAnnouncementMetadata>;
 export type InboxItemMetadata = z.infer<typeof inboxItemMetadata>;
 export type InboxItem = z.infer<typeof inboxItem>;
 export type ConnectorIndexingInboxItem = z.infer<typeof connectorIndexingInboxItem>;
 export type ConnectorDeletionInboxItem = z.infer<typeof connectorDeletionInboxItem>;
 export type DocumentProcessingInboxItem = z.infer<typeof documentProcessingInboxItem>;
-export type NewMentionInboxItem = z.infer<typeof newMentionInboxItem>;
-export type CommentReplyInboxItem = z.infer<typeof commentReplyInboxItem>;
-export type InsufficientCreditsInboxItem = z.infer<typeof insufficientCreditsInboxItem>;
 
 // API Request/Response types
 export type GetNotificationsRequest = z.infer<typeof getNotificationsRequest>;
@@ -481,7 +354,6 @@ export type DeleteNotificationRequest = z.infer<typeof deleteNotificationRequest
 export type DeleteNotificationResponse = z.infer<typeof deleteNotificationResponse>;
 export type ClearNotificationsRequest = z.infer<typeof clearNotificationsRequest>;
 export type ClearNotificationsResponse = z.infer<typeof clearNotificationsResponse>;
-export type GetUnreadCountRequest = z.infer<typeof getUnreadCountRequest>;
 export type GetUnreadCountResponse = z.infer<typeof getUnreadCountResponse>;
 export type SourceTypeItem = z.infer<typeof sourceTypeItem>;
 export type GetSourceTypesResponse = z.infer<typeof getSourceTypesResponse>;

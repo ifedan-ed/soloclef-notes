@@ -8,8 +8,8 @@ import {
 	isResearchBoxSource,
 	isResearchSourceId,
 	READ_PAGE_ID,
+	WEB_API_SOURCE_IDS,
 	WEB_GROUP_MENU_IDS,
-	WEB_GROUP_SOURCE_IDS,
 } from "@/features/notebooks/model/research-sources";
 
 const LOCALES = ["en", "es", "hi", "ko", "pt", "zh"] as const;
@@ -26,16 +26,10 @@ const PAGE_KEYS = [
 ];
 
 test("Read a web page sits right after Exa and Tavily in the web group", () => {
-	assert.deepEqual(WEB_GROUP_MENU_IDS.slice(0, 5), [
-		"web",
-		"google_search",
-		"exa",
-		"tavily",
-		READ_PAGE_ID,
-	]);
+	assert.deepEqual(WEB_GROUP_MENU_IDS, ["exa", "tavily", READ_PAGE_ID]);
 	assert.deepEqual(
 		WEB_GROUP_MENU_IDS.filter((id) => id !== READ_PAGE_ID),
-		[...WEB_GROUP_SOURCE_IDS]
+		[...WEB_API_SOURCE_IDS]
 	);
 });
 

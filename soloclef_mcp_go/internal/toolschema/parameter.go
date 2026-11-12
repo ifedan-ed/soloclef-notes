@@ -44,7 +44,6 @@ type Parameter struct {
 	Minimum   *int
 	Maximum   *int
 	MinLength *int
-	MinItems  *int
 }
 
 // Signature is a tool's whole parameter list, in declaration order.

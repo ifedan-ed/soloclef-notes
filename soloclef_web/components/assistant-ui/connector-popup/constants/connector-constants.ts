@@ -1,6 +1,5 @@
 import { EnumConnectorName } from "@/contracts/enums/connector";
 import type { SearchSourceConnector } from "@/contracts/types/connector.types";
-import { isEnabledInWorkspace } from "../workspace-enablement/enabled-in-workspace";
 
 /**
  * Connectors kept in the code but hidden from the catalog unless the user
@@ -34,7 +33,7 @@ export const OAUTH_CONNECTORS = [
 		title: "Google Drive",
 		description: "Search your Drive files",
 		connectorType: EnumConnectorName.GOOGLE_DRIVE_CONNECTOR,
-		authEndpoint: "/api/v1/auth/google/drive/connector/add/",
+		authEndpoint: "/api/v1/auth/google/drive/connector/add",
 		selfHostedOnly: true,
 	},
 ] as const;
@@ -76,8 +75,8 @@ export function getConnectorTitle(connectorType: string): string {
 /**
  * The accounts list to open for a connector type with several connections,
  * or null for MCP servers (they have their own list). Every type gets one,
- * not only the OAuth ones: in a shared workspace each member's Email (IMAP)
- * or Nextcloud is its own connection.
+ * not only the OAuth ones: an account may hold several Email (IMAP) or
+ * Nextcloud connections.
  */
 export function accountsListFor(
 	connectorType: string,
@@ -97,7 +96,7 @@ export interface ConnectorTypeRow {
 	title: string;
 	connectors: SearchSourceConnector[];
 	accountCount: number;
-	/** How many of `connectors` are switched on in the listed workspace. */
+	/** How many of `connectors` are switched on. */
 	enabledCount: number;
 }
 
@@ -135,7 +134,7 @@ export function groupConnectorsByType(connectors: SearchSourceConnector[]): Conn
 			title: type === EnumConnectorName.MCP_CONNECTOR ? "MCP Servers" : getConnectorTitle(type),
 			connectors: list,
 			accountCount: list.length,
-			enabledCount: list.filter(isEnabledInWorkspace).length,
+			enabledCount: list.filter((c) => c.enabled).length,
 		}))
 		.sort((a, b) => a.title.localeCompare(b.title));
 }

@@ -18,7 +18,6 @@ const (
 	EnvRenewInterval      = "SOLOCLEF_WORKER_RENEW_INTERVAL"
 	EnvRestoreInterval    = "SOLOCLEF_WORKER_RESTORE_INTERVAL"
 	EnvPopTimeout         = "SOLOCLEF_WORKER_POP_TIMEOUT"
-	EnvETAHoldHorizon     = "SOLOCLEF_WORKER_ETA_HOLD_HORIZON"
 	EnvShutdownGrace      = "SOLOCLEF_WORKER_SHUTDOWN_GRACE"
 	EnvDeferredRetryDelay = "SOLOCLEF_WORKER_DEFERRED_RETRY_DELAY"
 	EnvName               = "SOLOCLEF_WORKER_NAME"
@@ -51,7 +50,6 @@ func LoadConfig(getenv func(string) string) (Config, error) {
 		{EnvRenewInterval, &cfg.RenewInterval},
 		{EnvRestoreInterval, &cfg.RestoreInterval},
 		{EnvPopTimeout, &cfg.PopTimeout},
-		{EnvETAHoldHorizon, &cfg.ETAHoldHorizon},
 		{EnvShutdownGrace, &cfg.ShutdownGrace},
 		{EnvDeferredRetryDelay, &cfg.DeferredRetryDelay},
 	}

@@ -21,15 +21,13 @@ import { publicLinkUrl } from "@/features/public-sharing/lib/public-link-url";
 
 interface PublicChatSnapshotRowProps {
 	snapshot: PublicChatSnapshotDetail;
-	canRevoke: boolean;
 	onRevoke: (snapshot: PublicChatSnapshotDetail) => Promise<void>;
 	revoking: boolean;
 }
 
-/** One public link: what it shows, who made it, when it ends, copy and revoke. */
+/** One public link: what it shows, when it ends, copy and revoke. */
 export function PublicChatSnapshotRow({
 	snapshot,
-	canRevoke,
 	onRevoke,
 	revoking,
 }: PublicChatSnapshotRowProps) {
@@ -104,38 +102,36 @@ export function PublicChatSnapshotRow({
 						</a>
 					</Button>
 				)}
-				{canRevoke ? (
-					<AlertDialog>
-						<AlertDialogTrigger asChild>
-							<Button
-								variant="ghost"
-								size="icon"
-								className="size-8 text-muted-foreground hover:text-destructive"
-								aria-label={t("revoke")}
-								disabled={revoking}
+				<AlertDialog>
+					<AlertDialogTrigger asChild>
+						<Button
+							variant="ghost"
+							size="icon"
+							className="size-8 text-muted-foreground hover:text-destructive"
+							aria-label={t("revoke")}
+							disabled={revoking}
+						>
+							<Trash2 className="size-4" />
+						</Button>
+					</AlertDialogTrigger>
+					<AlertDialogContent>
+						<AlertDialogHeader>
+							<AlertDialogTitle>{t("revoke_title")}</AlertDialogTitle>
+							<AlertDialogDescription>
+								{t("revoke_body", { title: snapshot.thread_title })}
+							</AlertDialogDescription>
+						</AlertDialogHeader>
+						<AlertDialogFooter>
+							<AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
+							<AlertDialogAction
+								onClick={() => void onRevoke(snapshot)}
+								className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
 							>
-								<Trash2 className="size-4" />
-							</Button>
-						</AlertDialogTrigger>
-						<AlertDialogContent>
-							<AlertDialogHeader>
-								<AlertDialogTitle>{t("revoke_title")}</AlertDialogTitle>
-								<AlertDialogDescription>
-									{t("revoke_body", { title: snapshot.thread_title })}
-								</AlertDialogDescription>
-							</AlertDialogHeader>
-							<AlertDialogFooter>
-								<AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
-								<AlertDialogAction
-									onClick={() => void onRevoke(snapshot)}
-									className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-								>
-									{t("revoke")}
-								</AlertDialogAction>
-							</AlertDialogFooter>
-						</AlertDialogContent>
-					</AlertDialog>
-				) : null}
+								{t("revoke")}
+							</AlertDialogAction>
+						</AlertDialogFooter>
+					</AlertDialogContent>
+				</AlertDialog>
 			</div>
 		</li>
 	);

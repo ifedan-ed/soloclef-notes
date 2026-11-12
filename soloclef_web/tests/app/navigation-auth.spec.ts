@@ -1,56 +1,45 @@
 import { expectNoOverflow } from "../helpers/layout/overflow";
-import { waitForHumanCheck } from "../helpers/ui/human-check";
 import { expect, test } from "./fixtures";
 
-/** Legacy redirects, the app shell's navigation, sign-in and sign-out. */
+/** The dashboard redirect, the app shell's navigation, sign-in and sign-out. */
 
 test.describe("Redirects", () => {
-	for (const [from, to] of [
-		["", "/notebooks"],
-		["/chats", "/notebooks"],
-		["/new-chat", "/notebooks"],
-		["/connectors", "/workspace-settings/connectors"],
-		["/automations", "/workspace-settings/automations"],
-		["/user-settings", "/user-settings/profile"],
-		["/workspace-settings", "/workspace-settings/general"],
-	] as const) {
-		test(`/dashboard/<ws>${from || "/"} → ${to}`, async ({ page, workspace }) => {
-			await page.goto(`/dashboard/${workspace.id}${from}`);
-			await expect(page).toHaveURL(new RegExp(`/dashboard/${workspace.id}${to}$`));
-		});
-	}
-
-	test("an unknown workspace falls back to one of yours", async ({ page }) => {
-		await page.goto("/dashboard/999999/notebooks");
-		await expect(page).toHaveURL(/\/dashboard\/(?!999999)\d+\/notebooks$/);
-	});
-
-	test("a legacy link to a chat that does not exist lands on the home, inline", async ({
-		page,
-		workspace,
-	}) => {
-		await page.goto(`/dashboard/${workspace.id}/new-chat/987654`);
-		await expect(page).toHaveURL(new RegExp(`/dashboard/${workspace.id}/notebooks$`));
+	// The dashboard's own address opens the notebooks home. Addresses from
+	// before workspaces were removed (/dashboard/<id>/...) are no longer
+	// forwarded: the owner retired them, so they are not listed here.
+	test("/dashboard → /dashboard/notebooks", async ({ page }) => {
+		await page.goto("/dashboard");
+		await expect(page).toHaveURL(/\/dashboard\/notebooks$/);
 	});
 });
 
 test.describe("App shell", () => {
-	test("navigation: home, workspace menu, settings", async ({ page, workspace, isPhone }) => {
-		await page.goto(`/dashboard/${workspace.id}/notebooks`);
+	test("navigation: home, notes and the account menu's Settings", async ({ page, isPhone }) => {
+		await page.goto("/dashboard/notebooks");
 		await expect(page.getByRole("heading", { name: "Notebooks", level: 1 })).toBeVisible();
+		const sheet = page.getByRole("dialog", { name: "Navigation" });
+		const scope = isPhone ? sheet : page;
 		if (isPhone) {
 			await page.getByRole("button", { name: "Open menu" }).click();
-			const sheet = page.getByRole("dialog", { name: "Navigation" });
 			await expect(sheet).toBeVisible();
 			await expectNoOverflow(page, "phone navigation sheet");
-			await sheet.getByRole("button", { name: workspace.name }).first().click();
-		} else {
-			await page.getByRole("button", { name: workspace.name }).first().click();
 		}
-		await expect(page.getByRole("menuitem", { name: "Manage members" })).toBeVisible();
-		await expectNoOverflow(page, "workspace menu");
-		await page.getByRole("menuitem", { name: "Workspace settings" }).click();
-		await expect(page).toHaveURL(/\/workspace-settings\/general$/);
+		// Home and Notes, and nothing of a workspace: no switcher, no "Add workspace".
+		await expect(scope.getByRole("button", { name: "Home" }).first()).toBeVisible();
+		await expect(scope.getByRole("button", { name: "Notes" }).first()).toBeVisible();
+		await expect(scope.getByRole("button", { name: /workspace/i })).toHaveCount(0);
+
+		// The avatar button is named by the user's display name or email prefix.
+		await scope
+			.getByRole("button", { name: /e2e-test|E2E/i })
+			.last()
+			.click();
+		await expectNoOverflow(page, "account menu");
+		for (const gone of ["Manage members", "Workspace settings", "Switch workspace"]) {
+			await expect(page.getByRole("menuitem", { name: gone })).toHaveCount(0);
+		}
+		await page.getByRole("menuitem", { name: "Settings" }).click();
+		await expect(page).toHaveURL(/\/dashboard\/settings\/profile$/);
 	});
 });
 
@@ -70,9 +59,8 @@ test.describe("Auth", () => {
 		await page
 			.getByLabel("Password", { exact: true })
 			.fill(process.env.PLAYWRIGHT_TEST_PASSWORD ?? "");
-		await waitForHumanCheck(page);
 		await page.getByRole("button", { name: "Sign In" }).click();
-		await expect(page).toHaveURL(/\/dashboard\/\d+\/notebooks/, { timeout: 30_000 });
+		await expect(page).toHaveURL(/\/dashboard\/notebooks/, { timeout: 30_000 });
 
 		if (isPhone) {
 			await page.getByRole("button", { name: "Open menu" }).click();
@@ -95,7 +83,6 @@ test.describe("Auth", () => {
 		await page.goto("/login");
 		await page.getByLabel("Email").fill(process.env.PLAYWRIGHT_TEST_EMAIL ?? "");
 		await page.getByLabel("Password", { exact: true }).fill("not-the-password");
-		await waitForHumanCheck(page);
 		await page.getByRole("button", { name: "Sign In" }).click();
 		await expect(page.getByRole("button", { name: "Dismiss error" })).toBeVisible();
 		await expect(page).toHaveURL(/\/login/);

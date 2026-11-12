@@ -1,0 +1,65 @@
+[
+  {
+    "type": "Header",
+    "element_id": "0a1f6c3d2b7e4f5a8c9d0e1f2a3b4c5d",
+    "text": "Ward formulary 2026",
+    "metadata": {"filename": "guide.pdf", "filetype": "application/pdf", "languages": ["eng"], "page_number": 1}
+  },
+  {
+    "type": "Title",
+    "element_id": "5ef1d1117721f0472c1ad825991d7d37",
+    "text": "Dosing guide",
+    "metadata": {"filename": "guide.pdf", "filetype": "application/pdf", "languages": ["eng"], "page_number": 1, "category_depth": 0}
+  },
+  {
+    "type": "NarrativeText",
+    "element_id": "56f24319ae258b735cac3ec2a271b1d9",
+    "text": "Give once daily unless the table says otherwise.",
+    "metadata": {"filename": "guide.pdf", "filetype": "application/pdf", "languages": ["eng"], "page_number": 1, "parent_id": "5ef1d1117721f0472c1ad825991d7d37"}
+  },
+  {
+    "type": "ListItem",
+    "element_id": "a3c1d5e7f9b2468ace13579bdf024680",
+    "text": "Check allergies",
+    "metadata": {"filename": "guide.pdf", "filetype": "application/pdf", "languages": ["eng"], "page_number": 1, "parent_id": "5ef1d1117721f0472c1ad825991d7d37"}
+  },
+  {
+    "type": "ListItem",
+    "element_id": "b4d2e6f8a0c3579bdf124680ace13579",
+    "text": "Check renal function",
+    "metadata": {"filename": "guide.pdf", "filetype": "application/pdf", "languages": ["eng"], "page_number": 1, "parent_id": "5ef1d1117721f0472c1ad825991d7d37"}
+  },
+  {
+    "type": "PageNumber",
+    "element_id": "c5e3f7a9b1d4680ace235791bdf02468",
+    "text": "1",
+    "metadata": {"filename": "guide.pdf", "filetype": "application/pdf", "page_number": 1}
+  },
+  {
+    "type": "Title",
+    "element_id": "d6f4a8b0c2e5791bdf346802ace13579",
+    "text": "Antibiotics",
+    "metadata": {"filename": "guide.pdf", "filetype": "application/pdf", "languages": ["eng"], "page_number": 2, "category_depth": 1}
+  },
+  {
+    "type": "Table",
+    "element_id": "e7a5b9c1d3f6802ace457913bdf02468",
+    "text": "Drug Dose Amoxicillin 500 mg",
+    "metadata": {
+      "filename": "guide.pdf", "filetype": "application/pdf", "languages": ["eng"], "page_number": 2,
+      "text_as_html": "<table><thead><tr><th>Drug</th><th>Dose</th></tr></thead><tbody><tr><td>Amoxicillin</td><td>500 mg</td></tr></tbody></table>"
+    }
+  },
+  {
+    "type": "Formula",
+    "element_id": "f8b6c0d2e4a7913bdf568024ace13579",
+    "text": "dose = weight * 25",
+    "metadata": {"filename": "guide.pdf", "filetype": "application/pdf", "page_number": 2}
+  },
+  {
+    "type": "Footer",
+    "element_id": "a9c7d1e3f5b8024ace679135bdf02468",
+    "text": "Printed copies are uncontrolled",
+    "metadata": {"filename": "guide.pdf", "filetype": "application/pdf", "page_number": 2}
+  }
+]

@@ -1,5 +1,5 @@
 import dynamic from "next/dynamic";
-import type { FC } from "react";
+import type { ComponentType, FC } from "react";
 
 export interface ConnectFormProps {
 	onSubmit: (data: {
@@ -22,7 +22,8 @@ export interface ConnectFormProps {
 	onFormSubmit?: () => void;
 }
 
-export type ConnectFormComponent = FC<ConnectFormProps>;
+// What next/dynamic hands back: a component of either kind, not only a function.
+export type ConnectFormComponent = ComponentType<ConnectFormProps>;
 
 const formMap: Record<string, () => Promise<{ default: FC<ConnectFormProps> }>> = {
 	MCP_CONNECTOR: () =>

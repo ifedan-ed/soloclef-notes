@@ -40,16 +40,8 @@ function DocumentLoading() {
 	);
 }
 
-function MarkdownDocument({
-	workspaceId,
-	documentId,
-}: {
-	workspaceId: number;
-	documentId: number;
-}) {
-	const { data, error, isPending, refetch } = useQuery(
-		documentContentQueryOptions(workspaceId, documentId)
-	);
+function MarkdownDocument({ documentId }: { documentId: number }) {
+	const { data, error, isPending, refetch } = useQuery(documentContentQueryOptions(documentId));
 
 	if (isPending) return <DocumentLoading />;
 	if (error || !data) {
@@ -111,14 +103,12 @@ function DocumentHeader({
 	manifest,
 	title,
 	documentId,
-	workspaceId,
 	onClose,
 	zoomControlsContainerRef,
 }: {
 	manifest?: DocumentViewManifest;
 	title: string;
 	documentId: number;
-	workspaceId: number;
 	onClose?: () => void;
 	zoomControlsContainerRef: (node: HTMLDivElement | null) => void;
 }) {
@@ -136,7 +126,7 @@ function DocumentHeader({
 				{manifest?.document_type ? (
 					<VersionHistoryButton documentId={documentId} documentType={manifest.document_type} />
 				) : null}
-				<DownloadOriginalButton documentId={documentId} workspaceId={workspaceId} />
+				<DownloadOriginalButton documentId={documentId} />
 				{onClose ? (
 					<>
 						<Separator
@@ -160,14 +150,12 @@ function DocumentHeader({
 }
 
 export function DocumentViewerContent({
-	workspaceId,
 	documentId,
 	title,
 	initialPage,
 	highlightText,
 	onClose,
 }: {
-	workspaceId: number;
 	documentId: number;
 	title: string;
 	/** 1-based page to open an original PDF at (a citation's page). */
@@ -182,7 +170,7 @@ export function DocumentViewerContent({
 		error,
 		isPending,
 		refetch,
-	} = useQuery(documentViewQueryOptions(workspaceId, documentId));
+	} = useQuery(documentViewQueryOptions(documentId));
 	const file = manifest?.file;
 	const Viewer = file ? FILE_VIEWERS[file.mime_type] : undefined;
 
@@ -192,7 +180,6 @@ export function DocumentViewerContent({
 				manifest={manifest}
 				title={title}
 				documentId={documentId}
-				workspaceId={workspaceId}
 				onClose={onClose}
 				zoomControlsContainerRef={setZoomControlsContainer}
 			/>
@@ -210,7 +197,7 @@ export function DocumentViewerContent({
 						</Button>
 					</div>
 				) : manifest.presentation === "text" ? (
-					<MarkdownDocument workspaceId={workspaceId} documentId={documentId} />
+					<MarkdownDocument documentId={documentId} />
 				) : manifest.presentation === "missing_original" ? (
 					<UnviewableFile
 						message={
@@ -238,7 +225,7 @@ export function DocumentViewerContent({
 function MobileDocumentDrawer() {
 	const state = useAtomValue(documentViewerAtom);
 	const close = useSetAtom(closeDocumentViewerAtom);
-	if (!state.documentId || !state.workspaceId) return null;
+	if (!state.documentId) return null;
 
 	return (
 		<Drawer
@@ -254,7 +241,6 @@ function MobileDocumentDrawer() {
 				<DrawerTitle className="sr-only">{state.title || "Document"}</DrawerTitle>
 				<div className="flex min-h-0 flex-1 flex-col overflow-hidden">
 					<DocumentViewerContent
-						workspaceId={state.workspaceId}
 						documentId={state.documentId}
 						title={state.title}
 						initialPage={state.initialPage}
@@ -269,6 +255,6 @@ function MobileDocumentDrawer() {
 export function MobileDocumentViewerPanel() {
 	const state = useAtomValue(documentViewerAtom);
 	const isDesktop = useMediaQuery("(min-width: 1024px)");
-	if (isDesktop || !state.isOpen || !state.documentId || !state.workspaceId) return null;
+	if (isDesktop || !state.isOpen || !state.documentId) return null;
 	return <MobileDocumentDrawer />;
 }

@@ -12,7 +12,7 @@ import { expect, openNotebook, test } from "./fixtures";
  * signed-out visitor sees the chat with its citation, the finished outputs
  * and the sources; opens an output and the cited PDF; then a new output
  * appears on the visitor's page without sharing again. Expiry shows the
- * expired page; a new link revoked from Workspace settings › Public links is
+ * expired page; a new link revoked from Settings › Public links is
  * gone, and "Stop sharing" from the Shared badge ends the next one.
  */
 
@@ -27,10 +27,10 @@ function seedHeaders() {
 	};
 }
 
-async function seedPdfSource(request: APIRequestContext, ws: number, nb: number, title: string) {
+async function seedPdfSource(request: APIRequestContext, nb: number, title: string) {
 	const response = await request.post(`${BACKEND_URL}/__e2e__/seed/source-pdf`, {
 		headers: seedHeaders(),
-		data: { workspace_id: ws, notebook_id: nb, title },
+		data: { notebook_id: nb, title },
 	});
 	expect(response.ok(), await response.text()).toBeTruthy();
 	return (await response.json()) as { document_id: number; chunk_id: number };
@@ -44,11 +44,10 @@ async function expireLink(request: APIRequestContext, linkId: number) {
 	expect(response.ok(), await response.text()).toBeTruthy();
 }
 
-async function linkState(request: APIRequestContext, token: string, ws: number, nb: number) {
-	const response = await request.get(
-		`${BACKEND_URL}/api/v1/workspaces/${ws}/notebooks/${nb}/public-link`,
-		{ headers: authHeaders(token) }
-	);
+async function linkState(request: APIRequestContext, token: string, nb: number) {
+	const response = await request.get(`${BACKEND_URL}/api/v1/notebooks/${nb}/public-link`, {
+		headers: authHeaders(token),
+	});
 	expect(response.ok(), await response.text()).toBeTruthy();
 	return ((await response.json()) as { link: { id: number; share_token: string } | null }).link;
 }
@@ -87,17 +86,16 @@ test("share a notebook live, read it signed out, watch it update, expire and rev
 	browser,
 	request,
 	token,
-	workspace,
 	notebook,
 	isPhone,
 }) => {
 	test.setTimeout(180_000);
-	const source = await seedPdfSource(request, workspace.id, notebook.id, "Asthma guideline");
-	await seedOutput(request, workspace.id, notebook.id, "report", "ready", "Discharge teaching");
-	await seedOutput(request, workspace.id, notebook.id, "quiz", "running", "Quiz in progress");
+	const source = await seedPdfSource(request, notebook.id, "Asthma guideline");
+	await seedOutput(request, notebook.id, "report", "ready", "Discharge teaching");
+	await seedOutput(request, notebook.id, "quiz", "running", "Quiz in progress");
 
 	// The Owner asks something; the fake answer cites the PDF's chunk.
-	await openNotebook(page, workspace.id, notebook.id, "Chat");
+	await openNotebook(page, notebook.id, "Chat");
 	await send(page, `E2E_CITE:${source.chunk_id} what does the guideline say?`);
 	await expect(
 		page.getByRole("button", { name: `View cited chunk ${source.chunk_id}` })
@@ -124,7 +122,7 @@ test("share a notebook live, read it signed out, watch it update, expire and rev
 	// A signed-out visitor.
 	const { page: visitor, errors } = await visitorPage(browser, page);
 	await visitor.goto(url);
-	await expect(visitor.getByTestId("live-title")).toHaveText("E2E notebook", { timeout: 30_000 });
+	await expect(visitor.getByTestId("live-title")).toHaveText(notebook.title, { timeout: 30_000 });
 	await expect(visitor.getByTestId("shared-notice")).toContainText("Shared read-only");
 	await expect(visitor.locator('[data-role="user"]').first()).toContainText("E2E_CITE");
 	const citation = visitor.getByTestId("public-citation").first();
@@ -176,12 +174,12 @@ test("share a notebook live, read it signed out, watch it update, expire and rev
 
 	// A new output appears without sharing again or reloading.
 	await showVisitorTab(visitor, isPhone, "Studio");
-	await seedOutput(request, workspace.id, notebook.id, "mindmap", "ready", "Spacer mind map");
+	await seedOutput(request, notebook.id, "mindmap", "ready", "Spacer mind map");
 	await expect(outputs).toContainText("Spacer mind map", { timeout: 30_000 });
 	await expect(outputs.getByTestId("live-output")).toHaveCount(2);
 
 	// Expired: the page says so.
-	const first = await linkState(request, token, workspace.id, notebook.id);
+	const first = await linkState(request, token, notebook.id);
 	expect(first?.share_token).toBe(shareToken);
 	await expireLink(request, first?.id ?? 0);
 	await visitor.reload();
@@ -198,12 +196,12 @@ test("share a notebook live, read it signed out, watch it update, expire and rev
 	await dialog.getByRole("button", { name: "Done" }).click();
 
 	await visitor.goto(second);
-	await expect(visitor.getByTestId("live-title")).toHaveText("E2E notebook", { timeout: 30_000 });
+	await expect(visitor.getByTestId("live-title")).toHaveText(notebook.title, { timeout: 30_000 });
 
-	await page.goto(`/dashboard/${workspace.id}/workspace-settings/public-links`);
+	await page.goto(`/dashboard/settings/public-links`);
 	const row = page.locator('[data-testid="public-link-row"][data-kind="notebook"]');
 	await expect(row).toContainText("Live notebook");
-	await expect(row).toContainText("E2E notebook");
+	await expect(row).toContainText(notebook.title);
 	await row.getByRole("button", { name: "Revoke" }).click();
 	await page.getByRole("alertdialog").getByRole("button", { name: "Revoke" }).click();
 	await expect(row).toHaveCount(0);
@@ -213,13 +211,13 @@ test("share a notebook live, read it signed out, watch it update, expire and rev
 	).toBeVisible();
 
 	// Stop sharing from the Shared badge.
-	const created = await request.post(
-		`${BACKEND_URL}/api/v1/workspaces/${workspace.id}/notebooks/${notebook.id}/public-link`,
-		{ headers: authHeaders(token), data: { expires_in_days: 30 } }
-	);
+	const created = await request.post(`${BACKEND_URL}/api/v1/notebooks/${notebook.id}/public-link`, {
+		headers: authHeaders(token),
+		data: { expires_in_days: 30 },
+	});
 	expect(created.ok(), await created.text()).toBeTruthy();
 	const third = ((await created.json()) as { share_token: string }).share_token;
-	await openNotebook(page, workspace.id, notebook.id);
+	await openNotebook(page, notebook.id);
 	await page.getByTestId("notebook-shared-badge").click();
 	await page.getByTestId("notebook-shared-stop").click();
 	await page.getByTestId("notebook-stop-sharing-confirm").click();

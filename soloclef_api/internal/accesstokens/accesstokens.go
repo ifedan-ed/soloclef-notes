@@ -1,19 +1,14 @@
-// Package accesstokens serves a person's own API keys: the list of them, and
-// the write that revokes one.
+// Package accesstokens serves a person's own API keys: making one, the list
+// of them, and the revoke.
 //
-// The revoke is DELETE /api/v1/pats/{pat_id}
-// (app/routes/personal_access_tokens_routes.py:delete_personal_access_token).
-// It is the second write handed over and it was chosen for the one thing the
-// first does not have: a PostHog event of the route's own. The Python route
-// deletes the row, commits, and then captures pat_revoked through capture_for —
-// so this is where the gated-request middleware stops being the only thing this
-// tier tells PostHog, and where an event has to fire after a commit and not
-// before (internal/routeanalytics, internal/database.Effects).
-//
-// Minting a key is deliberately **not** here. create_personal_access_token
-// generates the credential, and a second implementation of credential minting is
-// a second place to get it wrong — the same reason fastapi-users' own routes
-// stay where they are (custom/docs/go-api-tier.md, "What cannot move").
+// A key is shown whole once, in the answer that makes it, and only its hash
+// (principal.HashToken, what the gate looks a presented key up by) and its
+// first sixteen characters are stored. Every row is its owner's: each query
+// is keyed by the caller's user_id, so one person's key id names nothing of
+// another's. All three routes take a browser session and refuse a key, so a
+// key can neither list its siblings nor mint successors; using a key is the
+// gate's business, and the gate also requires the account's API-access
+// switch (internal/principal).
 package accesstokens
 
 import "time"

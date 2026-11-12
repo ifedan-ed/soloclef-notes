@@ -44,31 +44,12 @@ func OptionalNum(number int, given bool) Value {
 	return Num(number)
 }
 
-// OptionalStr is a string value, or null when the caller omitted it.
+// OptionalStr is a string value, or null when the caller gave none.
 func OptionalStr(text string, given bool) Value {
 	if !given {
 		return Nothing()
 	}
 	return Str(text)
-}
-
-// WithoutNulls drops every member whose value is null.
-//
-// The scraper door is called this way and the knowledge-base and academic doors
-// are not, so it is a choice each call site makes rather than a property of the
-// client.
-func WithoutNulls(value Value) Value {
-	if value.Kind != Object {
-		return value
-	}
-	kept := Value{Kind: Object, Members: make([]Member, 0, len(value.Members))}
-	for _, member := range value.Members {
-		if member.Value.Kind == Null {
-			continue
-		}
-		kept.Members = append(kept.Members, member)
-	}
-	return kept
 }
 
 // Compact renders a value with no whitespace, for a request body.

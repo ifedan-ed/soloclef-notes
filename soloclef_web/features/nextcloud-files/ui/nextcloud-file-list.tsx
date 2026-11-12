@@ -13,7 +13,8 @@ interface NextcloudFileListProps {
 	/** Extensions the chosen parser reads; null while capabilities load. */
 	accepted: Set<string> | null;
 	/** Parser name for the "not supported" hint. */
-	parserName: string;
+	/** The chosen parser's name, or null while there is none to read anything. */
+	parserName: string | null;
 	/** Search results show where each entry lives. */
 	showLocation?: boolean;
 	onToggle: (entry: RemoteEntry) => void;
@@ -91,7 +92,9 @@ export function NextcloudFileList({
 								<span className="block truncate text-xs text-muted-foreground">
 									{pickable
 										? [location, meta].filter(Boolean).join(" · ")
-										: t("unsupported_by", { parser: parserName })}
+										: parserName === null
+											? t("needs_parser")
+											: t("unsupported_by", { parser: parserName })}
 								</span>
 							</label>
 						)}

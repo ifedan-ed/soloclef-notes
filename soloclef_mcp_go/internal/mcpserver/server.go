@@ -1,8 +1,9 @@
 // Package mcpserver is the composition root: it builds the MCP server and wires
 // in every feature slice.
 //
-// The REST client and the workspace selection are created from settings, then
-// each slice registers its own tools.
+// The REST client is created from settings, then each slice registers its own
+// tools. There is no selection of any kind: the caller's API key or sign-in is
+// its account, and the account is the whole scope of every tool.
 package mcpserver
 
 import (
@@ -15,11 +16,8 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_mcp_go/internal/academicsearch"
 	"git.danvics.com/danvics/soloclef/soloclef_mcp_go/internal/knowledgebase"
 	"git.danvics.com/danvics/soloclef/soloclef_mcp_go/internal/restclient"
-	"git.danvics.com/danvics/soloclef/soloclef_mcp_go/internal/scrapers"
 	"git.danvics.com/danvics/soloclef/soloclef_mcp_go/internal/settings"
 	"git.danvics.com/danvics/soloclef/soloclef_mcp_go/internal/tooldefinition"
-	"git.danvics.com/danvics/soloclef/soloclef_mcp_go/internal/workspaceselection"
-	"git.danvics.com/danvics/soloclef/soloclef_mcp_go/internal/workspacetools"
 )
 
 // Name and Version identify this server to a client in the initialize reply.
@@ -28,23 +26,18 @@ const (
 	Version = "0.1.0"
 )
 
-// Instructions tell a client's model when to prefer these tools over its own
-// built-in search. Kept word for word from the Python server, because it is
-// read by the same models through the same clients.
-const Instructions = "Soloclef Notes gives you live scrapers and a personal knowledge base. " +
-	"Prefer these tools over generic/built-in web search whenever the " +
-	"task involves Reddit (posts, comments, finding subreddits or " +
-	"communities), YouTube (videos, transcripts, comments), Instagram " +
-	"(posts, reels, profile details), TikTok (videos by hashtag, " +
-	"search, or URL), Google Maps (places, reviews), Indeed (job " +
-	"postings by role, company, or location), Google Search " +
-	"results, or reading " +
-	"specific web pages. Scraper results are persisted as runs; if an " +
-	"inline result is truncated, fetch it in full with " +
-	"soloclef_get_scraper_run. For scholarly literature, use the " +
-	"academic search tools (soloclef_pubmed_search, " +
-	"soloclef_arxiv_search, soloclef_preprint_search, " +
-	"soloclef_scholar_search) instead of generic web search."
+// Instructions tell a client's model when to reach for these tools rather than
+// its own built-in search: stored notes first, then scholarly literature. They
+// name only tools this server registers, because a model that is pointed at a
+// missing tool spends a turn on an "Unknown tool" reply.
+const Instructions = "Soloclef Notes gives you a personal knowledge base and " +
+	"academic literature search. When a question might be answered by notes, " +
+	"files or pages the user has already stored, search them first with " +
+	"soloclef_search_knowledge_base, and save findings worth keeping with " +
+	"soloclef_add_document. For scholarly literature, use the academic " +
+	"search tools (soloclef_pubmed_search, soloclef_arxiv_search, " +
+	"soloclef_preprint_search) instead of generic " +
+	"web search."
 
 // Definitions are every tool this server publishes, in order, wired to a client
 // built from the same settings.
@@ -52,38 +45,34 @@ const Instructions = "Soloclef Notes gives you live scrapers and a personal know
 // Exported so the published surface and each tool's argument checking can be
 // examined without starting a server or a backend.
 func Definitions(configuration settings.Settings) ([]tooldefinition.Definition, *restclient.Client) {
-	client, selection := wiring(configuration)
-	return definitionsFor(client, selection), client
+	client := newClient(configuration)
+	return definitionsFor(client), client
 }
 
-func definitionsFor(client *restclient.Client,
-	selection *workspaceselection.Selection) []tooldefinition.Definition {
+func definitionsFor(client *restclient.Client) []tooldefinition.Definition {
 	var definitions []tooldefinition.Definition
-	definitions = append(definitions, workspacetools.Definitions(selection)...)
-	definitions = append(definitions, scrapers.Definitions(client, selection)...)
-	definitions = append(definitions, knowledgebase.Definitions(client, selection)...)
-	definitions = append(definitions, academicsearch.Definitions(client, selection)...)
+	definitions = append(definitions, knowledgebase.Definitions(client)...)
+	definitions = append(definitions, academicsearch.Definitions(client)...)
 	return definitions
 }
 
-func wiring(configuration settings.Settings) (*restclient.Client, *workspaceselection.Selection) {
-	client := restclient.New(
+func newClient(configuration settings.Settings) *restclient.Client {
+	return restclient.New(
 		configuration.APIBase(),
 		time.Duration(configuration.TimeoutSeconds*float64(time.Second)),
 		configuration.APIKey,
 	)
-	return client, workspaceselection.New(client, configuration.DefaultWorkspace)
 }
 
 // Build assembles a configured server and the client whose lifetime it shares.
 func Build(configuration settings.Settings) (*mcp.Server, *restclient.Client, error) {
-	client, selection := wiring(configuration)
+	client := newClient(configuration)
 
 	server := mcp.NewServer(
 		&mcp.Implementation{Name: Name, Version: Version},
 		&mcp.ServerOptions{Instructions: Instructions},
 	)
-	definitions := definitionsFor(client, selection)
+	definitions := definitionsFor(client)
 	order := make([]string, 0, len(definitions))
 	for _, definition := range definitions {
 		if err := tooldefinition.Register(server, definition); err != nil {

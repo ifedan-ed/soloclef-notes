@@ -1,6 +1,9 @@
 import { z } from "zod";
 
-/** A notebook's live link, as its Owner (or any member who may see links) reads it. */
+/**
+ * A notebook's live link, as its owner reads it. A notebook has one owner, so
+ * the link carries no "made by" and no "may revoke": the owner made it and may.
+ */
 export const liveLinkSchema = z.object({
 	id: z.number(),
 	notebook_id: z.number(),
@@ -11,9 +14,6 @@ export const liveLinkSchema = z.object({
 	created_at: z.string(),
 	expires_at: z.string().nullable(),
 	is_expired: z.boolean(),
-	created_by_user_id: z.string().nullable(),
-	created_by_name: z.string().nullable(),
-	can_revoke: z.boolean(),
 });
 export type LiveLink = z.infer<typeof liveLinkSchema>;
 

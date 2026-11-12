@@ -1,35 +1,42 @@
-import { listSources } from "../helpers/api/notebooks";
+import { authHeaders, BACKEND_URL } from "../helpers/api/auth";
+import { listSources, type SourceDetail } from "../helpers/api/notebooks";
 import { expectNoOverflow } from "../helpers/layout/overflow";
 import { expect, openNotebook, test } from "./fixtures";
 
 /**
  * "Read a web page" in the research box: paste a link and it is added as a
- * source. The e2e worker's Browserbase is the stand-in in
- * soloclef_backend/tests/e2e/fakes/browserbase.py (its REST API faked at the
- * HTTP boundary, its browser rendering a fixed page), and every workspace
- * counts as having Browserbase connected. The route, the pending source, the
- * background read, indexing and the sources list are all real.
+ * source, read in the background by the API's own page reader
+ * (soloclef_assistant/pagereader). There is no Browserbase reader in this
+ * tier, so the menu names none and the hint is the plain reader's.
+ *
+ * The route, the pending source and the sources list are real. The read
+ * itself cannot succeed here: the stack has no route out, and the reader
+ * will not connect to anything but a public address, so no stand-in page
+ * can be put in front of it. What the spec can and does see is the other
+ * half: the link is accepted at once, and the read that could not happen
+ * ends with its reason written on the document, not as a row that spins
+ * for ever.
  */
 
-const PAGE_URL = "https://93.184.215.14/e2e-js-page";
-const PAGE_TITLE = "E2E rendered page";
+// TEST-NET-free on purpose: a documentation address is refused as "not a
+// public web page", which is the next test's subject. This one is public.
+const PAGE_URL = "https://93.184.215.14/e2e-page";
 const SHOTS = process.env.E2E_SCREENSHOT_DIR;
 
-test("a pasted page is read with Browserbase and becomes a source", async ({
+test("a pasted page is taken as a source; a read that cannot happen ends, and says so", async ({
 	page,
 	request,
 	token,
-	workspace,
 	notebook,
 }, testInfo) => {
-	test.setTimeout(120_000);
-	await openNotebook(page, workspace.id, notebook.id, "Sources");
+	test.setTimeout(150_000);
+	await openNotebook(page, notebook.id, "Sources");
 
 	await page.getByRole("button", { name: /^Search in:/ }).click();
 	const item = page.getByRole("menuitemradio", { name: /Read a web page/ });
 	await expect(item).toBeVisible();
-	// Browserbase is connected here, so the menu says what reads the page.
-	await expect(item).toContainText("Browserbase");
+	// Nothing but the plain reader here, so the menu names no other.
+	await expect(item).not.toContainText("Browserbase");
 	await expectNoOverflow(page, "research menu with Read a web page");
 	if (SHOTS && testInfo.project.name === "desktop") {
 		await page.screenshot({ path: `${SHOTS}/00-research-menu-read-a-web-page.png` });
@@ -49,26 +56,41 @@ test("a pasted page is read with Browserbase and becomes a source", async ({
 	await page.getByRole("button", { name: "Add page" }).click();
 
 	await expect(page.getByText("Page added.", { exact: false })).toBeVisible();
-	await expect(page.getByText(/Browserbase opens it in a real browser/)).toBeVisible();
+	await expect(page.getByText(/read the same way as search results you add/)).toBeVisible();
 	await expect(box).toHaveValue("");
 	await expectNoOverflow(page, "read a web page: added");
 
-	// Read in the background: the pending row takes the page's own title.
+	// Accepted at once: the notebook has the source before anything is read.
+	await expect
+		.poll(async () => (await listSources(request, token, notebook.id)).length, {
+			timeout: 15_000,
+		})
+		.toBe(1);
+	// The read has nowhere to go from this stack, and ends: the document
+	// says it was not fetched and why, and is never left waiting. (The
+	// source stays in the notebook, holding its address.)
+	const [source] = (await listSources(request, token, notebook.id)) as SourceDetail[];
 	await expect
 		.poll(
-			async () =>
-				(await listSources(request, token, workspace.id, notebook.id)).map((s) => s.title),
-			{ timeout: 60_000, intervals: [1_000] }
+			async () => {
+				const response = await request.get(`${BACKEND_URL}/api/v1/documents/${source.target_id}`, {
+					headers: authHeaders(token),
+				});
+				const document = (await response.json()) as {
+					document_metadata?: { fetched?: boolean; fetch_problem?: string };
+				};
+				return document.document_metadata;
+			},
+			{ timeout: 120_000, intervals: [2_000] }
 		)
-		.toContain(PAGE_TITLE);
-	await expect(page.getByText(PAGE_TITLE).first()).toBeVisible({ timeout: 30_000 });
+		.toMatchObject({ fetched: false, fetch_problem: "The site could not be reached." });
 	if (SHOTS && testInfo.project.name === "desktop") {
-		await page.screenshot({ path: `${SHOTS}/02-page-added-as-source.png` });
+		await page.screenshot({ path: `${SHOTS}/02-page-read-failed.png` });
 	}
 });
 
-test("a private address is refused inline", async ({ page, workspace, notebook }) => {
-	await openNotebook(page, workspace.id, notebook.id, "Sources");
+test("a private address is refused inline", async ({ page, notebook }) => {
+	await openNotebook(page, notebook.id, "Sources");
 	await page.getByRole("button", { name: /^Search in:/ }).click();
 	await page.getByRole("menuitemradio", { name: /Read a web page/ }).click();
 	await page

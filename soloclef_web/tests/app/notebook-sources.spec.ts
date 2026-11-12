@@ -1,22 +1,23 @@
 import path from "node:path";
-import { addNoteSource, createNotebook, getNotebook, listSources } from "../helpers/api/notebooks";
+import {
+	addNoteSource,
+	createNotebook,
+	deleteNotebook,
+	getNotebook,
+	listSources,
+} from "../helpers/api/notebooks";
 import { expectHeaderClearsSafeArea, expectNoOverflow } from "../helpers/layout/overflow";
 import { send } from "../helpers/ui/chat";
 import { dropFiles } from "../helpers/ui/drop";
-import { expect, openNotebook, showPanel, test } from "./fixtures";
+import { expect, openNotebook, showPanel, test, uniqueName } from "./fixtures";
 
 /** Notebook page layout and the Sources panel. */
 
 const FIXTURES = path.join(__dirname, "..", "fixtures-files");
 
 test.describe("Notebook page", () => {
-	test("layout: header, panels / phone tabs, safe area", async ({
-		page,
-		workspace,
-		notebook,
-		isPhone,
-	}) => {
-		await openNotebook(page, workspace.id, notebook.id);
+	test("layout: header, panels / phone tabs, safe area", async ({ page, notebook, isPhone }) => {
+		await openNotebook(page, notebook.id);
 		const header = page.locator("header").filter({
 			has: page.getByRole("textbox", { name: "Notebook title" }),
 		});
@@ -40,7 +41,13 @@ test.describe("Notebook page", () => {
 			}
 		} else {
 			await expect(page.getByRole("heading", { name: "Sources", level: 2 })).toBeVisible();
-			await expect(page.getByRole("heading", { name: "Studio", level: 2 })).toBeVisible();
+			// The right panel is headed by its two tabs, Studio and Notes.
+			const right = page.getByRole("tablist", { name: "Studio" });
+			await expect(right.getByRole("tab", { name: "Studio" })).toHaveAttribute(
+				"aria-selected",
+				"true"
+			);
+			await expect(right.getByRole("tab", { name: /^Notes/ })).toBeVisible();
 			await page.getByRole("button", { name: "Collapse sources" }).click();
 			await expect(page.getByRole("button", { name: "Expand sources" })).toBeVisible();
 			await page.getByRole("button", { name: "Expand sources" }).click();
@@ -51,14 +58,14 @@ test.describe("Notebook page", () => {
 		}
 	});
 
-	test("rename in the header persists", async ({ page, workspace, notebook, request, token }) => {
-		await openNotebook(page, workspace.id, notebook.id);
+	test("rename in the header persists", async ({ page, notebook, request, token }) => {
+		await openNotebook(page, notebook.id);
 		const title = page.getByRole("textbox", { name: "Notebook title" }).first();
 		await title.fill("Renamed from header");
 		await title.press("Enter");
 		await expect
 			.poll(async () => {
-				const r = await request.get(`/api/v1/workspaces/${workspace.id}/notebooks/${notebook.id}`, {
+				const r = await request.get(`/api/v1/notebooks/${notebook.id}`, {
 					headers: { Authorization: `Bearer ${token}` },
 				});
 				return ((await r.json()) as { title: string }).title;
@@ -66,16 +73,16 @@ test.describe("Notebook page", () => {
 			.toBe("Renamed from header");
 	});
 
-	test("back link returns to the notebooks home", async ({ page, workspace, notebook }) => {
-		await openNotebook(page, workspace.id, notebook.id);
+	test("back link returns to the notebooks home", async ({ page, notebook }) => {
+		await openNotebook(page, notebook.id);
 		await page.getByRole("link", { name: "Back to notebooks" }).click();
-		await expect(page).toHaveURL(new RegExp(`/dashboard/${workspace.id}/notebooks$`));
+		await expect(page).toHaveURL(/\/dashboard\/notebooks$/);
 	});
 });
 
 test.describe("Sources panel", () => {
-	test("empty state and the Add sources dialog tabs", async ({ page, workspace, notebook }) => {
-		await openNotebook(page, workspace.id, notebook.id, "Sources");
+	test("empty state and the Add sources dialog tabs", async ({ page, notebook }) => {
+		await openNotebook(page, notebook.id, "Sources");
 		await expect(page.getByText("Saved sources will appear here")).toBeVisible();
 		await expectNoOverflow(page, "sources panel (empty)");
 
@@ -88,7 +95,7 @@ test.describe("Sources panel", () => {
 		// Documents and folders only: a connector account is not a source.
 		await expect(dialog.getByText("Choose the exact account for tool use")).toHaveCount(0);
 		await expect(dialog.getByText("Browse your knowledge base")).toHaveCount(0);
-		await expectNoOverflow(page, "Add sources dialog: workspace tab");
+		await expectNoOverflow(page, "Add sources dialog: library tab");
 
 		await dialog.getByRole("tab", { name: /Upload/ }).click();
 		await expect(dialog.getByRole("tab", { name: /Upload/ })).toHaveAttribute(
@@ -108,12 +115,11 @@ test.describe("Sources panel", () => {
 
 	test("upload a markdown file with the Local parser adds a source", async ({
 		page,
-		workspace,
 		notebook,
 		request,
 		token,
 	}) => {
-		await openNotebook(page, workspace.id, notebook.id, "Sources");
+		await openNotebook(page, notebook.id, "Sources");
 		await page.getByRole("button", { name: "Add sources" }).first().click();
 		const dialog = page.getByRole("dialog", { name: "Add sources" });
 		await dialog.getByRole("tab", { name: /Upload/ }).click();
@@ -130,26 +136,21 @@ test.describe("Sources panel", () => {
 		}
 		await dialog.getByRole("button", { name: /^Upload 1 file/ }).click();
 		await expect
-			.poll(
-				async () =>
-					(await listSources(request, token, workspace.id, notebook.id)).map((s) => s.title),
-				{
-					timeout: 60_000,
-				}
-			)
+			.poll(async () => (await listSources(request, token, notebook.id)).map((s) => s.title), {
+				timeout: 60_000,
+			})
 			.toContainEqual(expect.stringContaining("e2e-upload"));
 	});
 
-	test("dropping a file asks for the parser and vision before uploading", async ({
+	test("dropping a file asks for the parser before uploading", async ({
 		page,
-		workspace,
 		notebook,
 		request,
 		token,
 	}) => {
-		// Regression: a drop uploaded at once with the default parser and no
-		// vision, skipping the choices Add sources → Upload offers.
-		await openNotebook(page, workspace.id, notebook.id, "Sources");
+		// Regression: a drop uploaded at once with the default parser,
+		// skipping the choice Add sources → Upload offers.
+		await openNotebook(page, notebook.id, "Sources");
 		await dropFiles(page, page.getByText("Saved sources will appear here"), [
 			{ name: "dropped-notes.md", type: "text/markdown", text: "# Dropped\n\nDropped notes." },
 		]);
@@ -161,11 +162,14 @@ test.describe("Sources panel", () => {
 			"true"
 		);
 		await expect(dialog.getByText("dropped-notes.md")).toBeVisible();
-		// Same defaults as the Upload tab: vision off.
-		await expect(dialog.getByRole("switch")).toHaveAttribute("aria-checked", "false");
+		// The same choice the Upload tab offers: which parser reads the file,
+		// with this server's own (Local) picked and the ones it has no key for
+		// greyed out. (There is no vision switch any more.)
+		const parser = dialog.getByRole("radiogroup", { name: "Parser" });
+		await expect(parser.getByRole("radio", { name: /^Local/ })).toBeChecked();
 		await expectNoOverflow(page, "upload tab with a dropped file");
 		// Nothing was uploaded or linked by the drop itself.
-		expect(await listSources(request, token, workspace.id, notebook.id)).toEqual([]);
+		expect(await listSources(request, token, notebook.id)).toEqual([]);
 
 		const local = dialog.getByRole("button", { name: /^Local/ });
 		if (await local.isVisible()) {
@@ -174,23 +178,15 @@ test.describe("Sources panel", () => {
 		}
 		await dialog.getByRole("button", { name: /^Upload 1 file/ }).click();
 		await expect
-			.poll(
-				async () =>
-					(await listSources(request, token, workspace.id, notebook.id)).map((s) => s.title),
-				{ timeout: 60_000 }
-			)
+			.poll(async () => (await listSources(request, token, notebook.id)).map((s) => s.title), {
+				timeout: 60_000,
+			})
 			.toContainEqual(expect.stringContaining("dropped-notes"));
 		await expect(dialog).toBeHidden();
 	});
 
-	test("cancelling a dropped file uploads nothing", async ({
-		page,
-		workspace,
-		notebook,
-		request,
-		token,
-	}) => {
-		await openNotebook(page, workspace.id, notebook.id, "Sources");
+	test("cancelling a dropped file uploads nothing", async ({ page, notebook, request, token }) => {
+		await openNotebook(page, notebook.id, "Sources");
 		await dropFiles(page, page.getByText("Saved sources will appear here"), [
 			{ name: "never-sent.md", type: "text/markdown", text: "never sent" },
 		]);
@@ -198,7 +194,7 @@ test.describe("Sources panel", () => {
 		await expect(dialog.getByText("never-sent.md")).toBeVisible();
 		await page.keyboard.press("Escape");
 		await expect(dialog).toBeHidden();
-		expect(await listSources(request, token, workspace.id, notebook.id)).toEqual([]);
+		expect(await listSources(request, token, notebook.id)).toEqual([]);
 
 		// Add sources opened by hand starts clean, not with the old drop.
 		await page.getByRole("button", { name: "Add sources" }).first().click();
@@ -208,7 +204,6 @@ test.describe("Sources panel", () => {
 
 	test("sources list: toggle, select all, guide, remove", async ({
 		page,
-		workspace,
 		notebook,
 		request,
 		token,
@@ -216,20 +211,12 @@ test.describe("Sources panel", () => {
 		await addNoteSource(
 			request,
 			token,
-			workspace.id,
 			notebook.id,
 			"Cell biology notes",
 			"Mitochondria make ATP."
 		);
-		await addNoteSource(
-			request,
-			token,
-			workspace.id,
-			notebook.id,
-			"Genetics notes",
-			"DNA is a double helix."
-		);
-		await openNotebook(page, workspace.id, notebook.id, "Sources");
+		await addNoteSource(request, token, notebook.id, "Genetics notes", "DNA is a double helix.");
+		await openNotebook(page, notebook.id, "Sources");
 
 		const use = (title: string) => page.getByRole("checkbox", { name: `Use ${title}` });
 		await expect(use("Cell biology notes")).toBeChecked();
@@ -246,9 +233,8 @@ test.describe("Sources panel", () => {
 		await expect
 			.poll(
 				async () =>
-					(await listSources(request, token, workspace.id, notebook.id)).find(
-						(s) => s.title === "Genetics notes"
-					)?.enabled
+					(await listSources(request, token, notebook.id)).find((s) => s.title === "Genetics notes")
+						?.enabled
 			)
 			.toBe(false);
 
@@ -258,7 +244,7 @@ test.describe("Sources panel", () => {
 
 		// Source guide.
 		await page.getByRole("button", { name: "Cell biology notes", exact: true }).click();
-		await expect(page.getByText("Source guide")).toBeVisible();
+		await expect(page.getByText("Source guide", { exact: true })).toBeVisible();
 		await expect(page.getByText(/E2E source guide/)).toBeVisible({ timeout: 30_000 });
 		await expectNoOverflow(page, "source guide");
 		await page.getByRole("button", { name: "Back to sources" }).click();
@@ -274,44 +260,31 @@ test.describe("Sources panel", () => {
 		await page.getByRole("menuitem", { name: "Remove from notebook" }).click();
 		await expect(use("Genetics notes")).toBeHidden();
 		await expect
-			.poll(async () =>
-				(await listSources(request, token, workspace.id, notebook.id)).map((s) => s.title)
-			)
+			.poll(async () => (await listSources(request, token, notebook.id)).map((s) => s.title))
 			.toEqual(["Cell biology notes"]);
 	});
 
-	test("the workspace tab links an existing document", async ({
-		page,
-		workspace,
-		notebook,
-		request,
-		token,
-	}) => {
-		// A document that exists in the workspace but not in this notebook: add
-		// it as a source of a second notebook, then pick it from this one.
-		const other = await request.post(`/api/v1/workspaces/${workspace.id}/notebooks`, {
-			headers: { Authorization: `Bearer ${token}` },
-			data: { title: "Other notebook" },
-		});
-		const otherId = ((await other.json()) as { id: number }).id;
-		await addNoteSource(
-			request,
-			token,
-			workspace.id,
-			otherId,
-			"Shared ecology notes",
-			"Food webs."
-		);
+	test("the library tab links an existing document", async ({ page, notebook, request, token }) => {
+		// A document in the account's library but not in this notebook: add it
+		// as a source of a second notebook, then pick it from this one. Named
+		// uniquely: the library is the whole account's, shared by every test.
+		const ecology = uniqueName("Shared ecology notes");
+		const other = await createNotebook(request, token, uniqueName("Other notebook"));
+		try {
+			await addNoteSource(request, token, other.id, ecology, "Food webs.");
 
-		await openNotebook(page, workspace.id, notebook.id, "Sources");
-		await page.getByRole("button", { name: "Add sources" }).first().click();
-		const dialog = page.getByRole("dialog", { name: "Add sources" });
-		await dialog.getByRole("textbox", { name: "Search documents and folders" }).fill("ecology");
-		await dialog.getByText("Shared ecology notes").first().click();
-		await expectNoOverflow(page, "workspace tab with a pick");
-		await dialog.getByRole("button", { name: /^Add 1 source/ }).click();
-		await expect(dialog).toBeHidden();
-		await expect(page.getByRole("checkbox", { name: "Use Shared ecology notes" })).toBeVisible();
+			await openNotebook(page, notebook.id, "Sources");
+			await page.getByRole("button", { name: "Add sources" }).first().click();
+			const dialog = page.getByRole("dialog", { name: "Add sources" });
+			await dialog.getByRole("textbox", { name: "Search documents and folders" }).fill(ecology);
+			await dialog.getByText(ecology).first().click();
+			await expectNoOverflow(page, "library tab with a pick");
+			await dialog.getByRole("button", { name: /^Add 1 source/ }).click();
+			await expect(dialog).toBeHidden();
+			await expect(page.getByRole("checkbox", { name: `Use ${ecology}` })).toBeVisible();
+		} finally {
+			await deleteNotebook(request, token, other.id).catch(() => undefined);
+		}
 	});
 });
 
@@ -325,12 +298,11 @@ test.describe("Automatic notebook name", () => {
 
 	test("the first ready source names it; a rename stops automatic naming", async ({
 		page,
-		workspace,
 		request,
 		token,
 	}) => {
-		const notebook = await createNotebook(request, token, workspace.id, "Untitled notebook");
-		await openNotebook(page, workspace.id, notebook.id, "Sources");
+		const notebook = await createNotebook(request, token, "Untitled notebook");
+		await openNotebook(page, notebook.id, "Sources");
 		const title = page.getByRole("textbox", { name: "Notebook title" }).first();
 		await expect(title).toHaveValue("Untitled notebook");
 
@@ -348,27 +320,24 @@ test.describe("Automatic notebook name", () => {
 		// No reload: the page notices the source became ready and picks up the name.
 		await expect(title).toHaveValue(NAMED, { timeout: 90_000 });
 		await expect(page.getByRole("button", { name: "Change icon" }).first()).toHaveText("🔬");
-		expect((await getNotebook(request, token, workspace.id, notebook.id)).title_source).toBe(
-			"auto"
-		);
+		expect((await getNotebook(request, token, notebook.id)).title_source).toBe("auto");
 
 		// The user renames it: from now on it keeps the user's name.
 		await title.fill("My premature birth notes");
 		await title.press("Enter");
 		await expect
-			.poll(async () => (await getNotebook(request, token, workspace.id, notebook.id)).title_source)
+			.poll(async () => (await getNotebook(request, token, notebook.id)).title_source)
 			.toBe("user");
 		await addNoteSource(
 			request,
 			token,
-			workspace.id,
 			notebook.id,
 			"Later notes",
 			"More material after the rename."
 		);
 		// The naming task waits a few seconds after a source is ready; give it time.
 		await page.waitForTimeout(8_000);
-		const after = await getNotebook(request, token, workspace.id, notebook.id);
+		const after = await getNotebook(request, token, notebook.id);
 		expect(after.title).toBe("My premature birth notes");
 		await expect(title).toHaveValue("My premature birth notes");
 
@@ -379,21 +348,14 @@ test.describe("Automatic notebook name", () => {
 		).toBeVisible();
 	});
 
-	test("with no source yet, the first question names it", async ({
-		page,
-		workspace,
-		request,
-		token,
-	}) => {
-		const notebook = await createNotebook(request, token, workspace.id, "Untitled notebook");
-		await openNotebook(page, workspace.id, notebook.id, "Chat");
+	test("with no source yet, the first question names it", async ({ page, request, token }) => {
+		const notebook = await createNotebook(request, token, "Untitled notebook");
+		await openNotebook(page, notebook.id, "Chat");
 		const title = page.getByRole("textbox", { name: "Notebook title" }).first();
 		await expect(title).toHaveValue("Untitled notebook");
 
 		await send(page, "E2E_ANSWER what respiratory problems follow premature birth?");
 		await expect(title).toHaveValue(NAMED, { timeout: 60_000 });
-		expect((await getNotebook(request, token, workspace.id, notebook.id)).title_source).toBe(
-			"auto"
-		);
+		expect((await getNotebook(request, token, notebook.id)).title_source).toBe("auto");
 	});
 });

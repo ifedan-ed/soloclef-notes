@@ -26,40 +26,26 @@ repos:
         exclude: |
           (?x)^(
             .*\.env\.example|
+            .*\.env\.go\.example|
             .*\.env\.template|
             .*/tests/.*|
-            .*test.*\.py|
-            test_.*\.py|
+            .*_test\.go|
             .forgejo/workflows/.*\.yml|
             .forgejo/workflows/.*\.yaml|
             .*pnpm-lock\.yaml|
-            .*alembic\.ini|
-            .*alembic/versions/.*\.py|
             .*\.mdx$|
             .*/messages/.*\.json$
           )$
 
-  # Python Backend Hooks (soloclef_backend) - Using Ruff for linting and formatting
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.12.5
+  # Go: gofmt over every module. The repo has no Go workspace, so the hook
+  # runs gofmt on the changed files themselves rather than `go fmt` per module.
+  - repo: local
     hooks:
-      - id: ruff
-        name: ruff-check
-        files: ^soloclef_backend/
-        exclude: ^soloclef_backend/(test_.*\.py|.*test.*\.py)
-        args: [--fix]
-      - id: ruff-format
-        name: ruff-format
-        files: ^soloclef_backend/
-        exclude: ^soloclef_backend/(test_.*\.py|.*test.*\.py)
-
-  - repo: https://github.com/PyCQA/bandit
-    rev: 1.8.6
-    hooks:
-      - id: bandit
-        files: ^soloclef_backend/
-        args: ['-f', 'json', '--severity-level', 'high', '--confidence-level', 'high']
-        exclude: ^soloclef_backend/(tests/|test_.*\.py|.*test.*\.py|alembic/)
+      - id: gofmt
+        name: gofmt
+        entry: bash -c 'unformatted=$(gofmt -l "$@"); [ -z "$unformatted" ] || { echo "not gofmt-ed:"; echo "$unformatted"; exit 1; }' --
+        language: system
+        files: \.go$
 
   # Biome hooks for TypeScript/JavaScript projects
   - repo: local

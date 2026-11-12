@@ -25,13 +25,21 @@ type Writer struct {
 // Write sends the refusal. The message is the text the Python route would have
 // put in HTTPException(detail=...), word for word.
 func (w Writer) Write(response http.ResponseWriter, status int, message, requestID string) {
+	w.WriteCoded(response, status, CodeForStatus(status), message, requestID)
+}
+
+// WriteCoded sends a refusal whose `code` is the route's own word and not
+// the status's. It is for the few refusals a client tells apart by code
+// because the status alone does not say which they are: two different 502s
+// of one flow, say. Everything else about the body is Write's.
+func (w Writer) WriteCoded(response http.ResponseWriter, status int, code, message, requestID string) {
 	now := w.Now
 	if now == nil {
 		now = time.Now
 	}
 
 	details := pythonjson.NewObject()
-	details.Set("code", CodeForStatus(status))
+	details.Set("code", code)
 	details.Set("message", message)
 	details.Set("status", status)
 	details.Set("request_id", requestID)

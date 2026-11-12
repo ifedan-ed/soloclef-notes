@@ -91,8 +91,5 @@ func (p Parameter) constraintSchema() map[string]any {
 	if p.MinLength != nil {
 		constraints["minLength"] = *p.MinLength
 	}
-	if p.MinItems != nil {
-		constraints["minItems"] = *p.MinItems
-	}
 	return constraints
 }

@@ -6,11 +6,8 @@ import { cacheKeys } from "@/lib/query-client/cache-keys";
 export const registerMutationAtom = atomWithMutation(() => {
 	return {
 		mutationKey: cacheKeys.auth.user,
-		mutationFn: async ({
-			humanCheckToken,
-			...request
-		}: RegisterRequest & { humanCheckToken?: string | null }) => {
-			return authApiService.register(request, humanCheckToken);
+		mutationFn: async (request: RegisterRequest) => {
+			return authApiService.register(request);
 		},
 	};
 });
@@ -18,11 +15,8 @@ export const registerMutationAtom = atomWithMutation(() => {
 export const loginMutationAtom = atomWithMutation(() => {
 	return {
 		mutationKey: cacheKeys.auth.user,
-		mutationFn: async ({
-			humanCheckToken,
-			...request
-		}: LoginRequest & { humanCheckToken?: string | null }) => {
-			return authApiService.login(request, humanCheckToken);
+		mutationFn: async (request: LoginRequest) => {
+			return authApiService.login(request);
 		},
 	};
 });

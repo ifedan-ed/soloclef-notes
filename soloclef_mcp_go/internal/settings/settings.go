@@ -31,12 +31,11 @@ type Settings struct {
 	BaseURL string
 	// APIKey is optional: a remote caller passes its own key per request, and
 	// only stdio, which has no header, needs one here.
-	APIKey           string
-	APIPrefix        string
-	TimeoutSeconds   float64
-	DefaultWorkspace string
-	Host             string
-	Port             int
+	APIKey         string
+	APIPrefix      string
+	TimeoutSeconds float64
+	Host           string
+	Port           int
 
 	// PublicURL is this server's address exactly as people paste it into
 	// claude.ai or ChatGPT; AuthorizationServer is the identity provider's
@@ -63,7 +62,6 @@ func FromEnvironment() Settings {
 		BaseURL:             strings.TrimRight(withDefault("SURFSENSE_BASE_URL", DefaultBaseURL), "/"),
 		APIPrefix:           "/" + strings.Trim(withDefault("SURFSENSE_API_PREFIX", DefaultAPIPrefix), "/"),
 		TimeoutSeconds:      seconds("SURFSENSE_TIMEOUT", DefaultTimeoutSeconds),
-		DefaultWorkspace:    trimmed("SURFSENSE_WORKSPACE"),
 		Host:                withDefault("SURFSENSE_MCP_HOST", DefaultHTTPHost),
 		Port:                port("SURFSENSE_MCP_PORT", DefaultHTTPPort),
 		AuthorizationServer: trimmed("MCP_OAUTH_ISSUER"),

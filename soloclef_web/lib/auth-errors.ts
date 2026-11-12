@@ -44,7 +44,7 @@ const AUTH_ERROR_MESSAGES: AuthErrorMapping = {
 		description: "Login service is temporarily down",
 	},
 
-	// FastAPI specific errors
+	// Sign-in and sign-up refusals, as the API names them in the message
 	LOGIN_BAD_CREDENTIALS: {
 		title: "Login failed",
 		description: "Invalid email or password. If you don't have an account, please sign up.",
@@ -64,6 +64,14 @@ const AUTH_ERROR_MESSAGES: AuthErrorMapping = {
 	REGISTER_INVALID_PASSWORD: {
 		title: "Invalid password",
 		description: "Password must meet security requirements",
+	},
+	REGISTER_INVALID_EMAIL: {
+		title: "Invalid email address",
+		description: "Enter the address as you would write it on an email",
+	},
+	REGISTER_DISABLED: {
+		title: "Sign-up is closed",
+		description: "This server is not taking new sign-ups. Ask the administrator for an account.",
 	},
 
 	// OAuth errors
@@ -96,9 +104,9 @@ const AUTH_ERROR_MESSAGES: AuthErrorMapping = {
 		description: "Login is temporarily unavailable. Please try again later",
 	},
 
-	// Single sign-on (OIDC) refusals: the backend's /auth/oidc/callback sends
+	// Single sign-on (OIDC) refusals: the API's /auth/oidc/callback sends
 	// the browser to /login?error=<code>. Keep in step with
-	// soloclef_backend/app/auth_oidc/errors.py.
+	// soloclef_api/internal/oidcsignin.
 	OIDC_NO_ACCOUNT: {
 		title: "No account for this address",
 		description:

@@ -5,10 +5,10 @@ export interface SearchSourceConnector {
 	id: number;
 	name: string;
 	connector_type: string;
+	enabled: boolean;
 	is_indexable: boolean;
 	last_indexed_at: string | null;
 	config: Record<string, unknown>;
-	workspace_id: number;
 	user_id?: string;
 	created_at?: string;
 	periodic_indexing_enabled: boolean;
@@ -24,11 +24,10 @@ export interface ConnectorSourceItem {
 }
 
 /**
- * Hook to fetch search source connectors from the API
+ * Hook to fetch the signed-in account's search source connectors from the API
  * @param lazy - If true, connectors won't be fetched on mount
- * @param workspaceId - Optional workspace ID to filter connectors
  */
-export const useSearchSourceConnectors = (lazy: boolean = false, workspaceId?: number) => {
+export const useSearchSourceConnectors = (lazy: boolean = false) => {
 	const [connectors, setConnectors] = useState<SearchSourceConnector[]>([]);
 	const [isLoading, setIsLoading] = useState(!lazy); // Don't show loading initially for lazy mode
 	const [isLoaded, setIsLoaded] = useState(false); // Memoization flag
@@ -98,77 +97,62 @@ export const useSearchSourceConnectors = (lazy: boolean = false, workspaceId?: n
 		setConnectorSourceItems([...defaultConnectors, ...apiConnectors]);
 	}, []);
 
-	const fetchConnectors = useCallback(
-		async (spaceId?: number) => {
-			if (isLoaded && lazy) return; // Avoid redundant calls in lazy mode
+	const fetchConnectors = useCallback(async () => {
+		if (isLoaded && lazy) return; // Avoid redundant calls in lazy mode
 
-			try {
-				setIsLoading(true);
-				setError(null);
+		try {
+			setIsLoading(true);
+			setError(null);
 
-				const response = await authenticatedFetch(
-					buildBackendUrl("/api/v1/search-source-connectors", {
-						workspace_id: spaceId,
-					}),
-					{
-						method: "GET",
-						headers: { "Content-Type": "application/json" },
-					}
-				);
-
-				if (!response.ok) {
-					throw new Error(`Failed to fetch connectors: ${response.statusText}`);
+			const response = await authenticatedFetch(
+				buildBackendUrl("/api/v1/search-source-connectors"),
+				{
+					method: "GET",
+					headers: { "Content-Type": "application/json" },
 				}
+			);
 
-				const data = await response.json();
-				setConnectors(data);
-				setIsLoaded(true);
-
-				// Update connector source items when connectors change
-				updateConnectorSourceItems(data);
-
-				return data;
-			} catch (err) {
-				setError(err instanceof Error ? err : new Error("An unknown error occurred"));
-				console.error("Error fetching search source connectors:", err);
-			} finally {
-				setIsLoading(false);
+			if (!response.ok) {
+				throw new Error(`Failed to fetch connectors: ${response.statusText}`);
 			}
-		},
-		[isLoaded, lazy, updateConnectorSourceItems]
-	);
+
+			const data = await response.json();
+			setConnectors(data);
+			setIsLoaded(true);
+
+			// Update connector source items when connectors change
+			updateConnectorSourceItems(data);
+
+			return data;
+		} catch (err) {
+			setError(err instanceof Error ? err : new Error("An unknown error occurred"));
+			console.error("Error fetching search source connectors:", err);
+		} finally {
+			setIsLoading(false);
+		}
+	}, [isLoaded, lazy, updateConnectorSourceItems]);
 
 	useEffect(() => {
-		// Only auto-fetch if lazy is false AND workspaceId is provided
-		// This prevents 400 errors when the hook is used without a workspaceId
-		if (!lazy && workspaceId !== undefined) {
-			fetchConnectors(workspaceId);
+		if (!lazy) {
+			fetchConnectors();
 		}
-	}, [lazy, fetchConnectors, workspaceId]);
+	}, [lazy, fetchConnectors]);
 
 	// Function to refresh the connectors list
-	const refreshConnectors = useCallback(
-		async (spaceId?: number) => {
-			setIsLoaded(false); // Reset memoization flag to allow refetch
-			await fetchConnectors(spaceId !== undefined ? spaceId : workspaceId);
-		},
-		[fetchConnectors, workspaceId]
-	);
+	const refreshConnectors = useCallback(async () => {
+		setIsLoaded(false); // Reset memoization flag to allow refetch
+		await fetchConnectors();
+	}, [fetchConnectors]);
 
 	/**
-	 * Create a new search source connector
-	 * @param connectorData - The connector data (excluding workspace_id)
-	 * @param spaceId - The workspace ID to associate the connector with
+	 * Create a new search source connector for the signed-in account
 	 */
 	const createConnector = async (
-		connectorData: Omit<SearchSourceConnector, "id" | "user_id" | "created_at" | "workspace_id">,
-		spaceId: number
+		connectorData: Omit<SearchSourceConnector, "id" | "user_id" | "created_at" | "enabled">
 	) => {
 		try {
 			const response = await authenticatedFetch(
-				buildBackendUrl("/api/v1/search-source-connectors", {
-					workspace_id: spaceId,
-				}),
+				buildBackendUrl("/api/v1/search-source-connectors"),
 				{
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
@@ -198,9 +182,7 @@ export const useSearchSourceConnectors = (lazy: boolean = false, workspaceId?: n
 	 */
 	const updateConnector = async (
 		connectorId: number,
-		connectorData: Partial<
-			Omit<SearchSourceConnector, "id" | "user_id" | "created_at" | "workspace_id">
-		>
+		connectorData: Partial<Omit<SearchSourceConnector, "id" | "user_id" | "created_at" | "enabled">>
 	) => {
 		try {
 			const response = await authenticatedFetch(
@@ -258,18 +240,12 @@ export const useSearchSourceConnectors = (lazy: boolean = false, workspaceId?: n
 	};
 
 	/**
-	 * Index content from a connector to a workspace
+	 * Index content from a connector
 	 */
-	const indexConnector = async (
-		connectorId: number,
-		workspaceId: string | number,
-		startDate?: string,
-		endDate?: string
-	) => {
+	const indexConnector = async (connectorId: number, startDate?: string, endDate?: string) => {
 		try {
 			const response = await authenticatedFetch(
 				buildBackendUrl(`/api/v1/search-source-connectors/${connectorId}/index`, {
-					workspace_id: workspaceId,
 					start_date: startDate,
 					end_date: endDate,
 				}),

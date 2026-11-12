@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { RightPanel, useRightPanelLayout } from "../right-panel/RightPanel";
 
 /**
- * A full-screen page with no app sidebars (the notebook workspace). What
+ * A full-screen page with no app sidebars (a notebook). What
  * normally opens in the right-hand column — an artifact, a document, a
  * citation — opens as a wide drawer over the page instead, so the page's own
  * columns keep their width.

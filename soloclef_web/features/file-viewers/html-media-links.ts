@@ -47,10 +47,13 @@ export function applyMediaLinks(fragment: string, links: ReadonlyMap<string, str
 	);
 }
 
-/** The workspace an artifact file belongs to, read from its content URL. */
-export function workspaceIdFromContentUrl(contentUrl: string): number | null {
-	const match = /\/workspaces\/(\d+)\/artifacts\//.exec(contentUrl);
-	return match ? Number(match[1]) : null;
+/**
+ * Whether a content URL is the signed-in account's own artifact route. Only
+ * then can media links be asked for: a public link's copy is served under
+ * /public/, to a reader with no session to ask with.
+ */
+export function isAccountArtifactUrl(contentUrl: string): boolean {
+	return /\/api\/v1\/artifacts\/\d+\//.test(contentUrl);
 }
 
 /** Origins the frame's CSP must allow media from: exactly those of the links. */

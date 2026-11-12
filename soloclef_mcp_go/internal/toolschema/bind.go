@@ -283,13 +283,6 @@ func (p Parameter) constrain(accepted any, given pythonjson.Value) []Fault {
 					*p.MinLength, plural("character", *p.MinLength)),
 				"string_too_short"))
 		}
-	case []string:
-		if p.MinItems != nil && len(typed) < *p.MinItems {
-			faults = append(faults, *p.fault(given,
-				fmt.Sprintf("List should have at least %d %s after validation, not %d",
-					*p.MinItems, plural("item", *p.MinItems), len(typed)),
-				"too_short"))
-		}
 	}
 	return faults
 }

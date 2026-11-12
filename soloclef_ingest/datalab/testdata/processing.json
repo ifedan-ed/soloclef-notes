@@ -1,0 +1,14 @@
+{
+  "status": "processing",
+  "progress_percent": 40,
+  "success": null,
+  "error": null,
+  "output_format": null,
+  "markdown": null,
+  "html": null,
+  "json": null,
+  "chunks": null,
+  "images": null,
+  "metadata": null,
+  "page_count": null
+}

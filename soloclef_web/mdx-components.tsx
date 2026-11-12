@@ -2,7 +2,6 @@ import defaultMdxComponents from "fumadocs-ui/mdx";
 import type { MDXComponents } from "mdx/types";
 import Image, { type ImageProps } from "next/image";
 import { BrandName } from "@/components/docs/brand-name";
-import { CreditCostTable, PackTable, PlanTable } from "@/components/docs/pricing-tables";
 import {
 	SsoAccountsFor,
 	SsoButtonLabel,
@@ -38,9 +37,6 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
 		AccordionTrigger,
 		AccordionContent,
 		BrandName,
-		PlanTable,
-		PackTable,
-		CreditCostTable,
 		// This server's own address and single sign-on, never one server's names.
 		SiteAddress,
 		SsoAccountsFor,

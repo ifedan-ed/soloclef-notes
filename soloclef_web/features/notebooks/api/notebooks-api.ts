@@ -3,7 +3,6 @@ import { baseApiService } from "@/lib/apis/base-api.service";
 import type { StudioRequestBody } from "../lib/studio-request";
 import {
 	type ChatGoal,
-	notebookNoteSchema,
 	notebookSchema,
 	notebookSearchSchema,
 	notebookSourceSchema,
@@ -17,8 +16,8 @@ import {
 	studioSuggestionsSchema,
 } from "../model/notebook";
 
-const base = (workspaceId: number) => `/api/v1/workspaces/${workspaceId}/notebooks`;
-const one = (workspaceId: number, notebookId: number) => `${base(workspaceId)}/${notebookId}`;
+const base = "/api/v1/notebooks";
+const one = (notebookId: number) => `${base}/${notebookId}`;
 
 export type SourceTarget = { kind: "document" | "folder"; id: number };
 
@@ -33,126 +32,72 @@ export type NotebookChanges = {
 };
 
 export const notebooksApi = {
-	list: (workspaceId: number) => baseApiService.get(base(workspaceId), z.array(notebookSchema)),
-	/** Passages inside the workspace's notebooks (sources and notes) that match ``query``. */
-	search: (workspaceId: number, query: string, limit?: number) => {
+	list: () => baseApiService.get(base, z.array(notebookSchema)),
+	/** Passages inside the account's notebooks (sources and notes) that match ``query``. */
+	search: (query: string, limit?: number) => {
 		const params = new URLSearchParams({ q: query });
 		if (limit) params.set("limit", String(limit));
-		return baseApiService.get(
-			`${base(workspaceId)}/search?${params.toString()}`,
-			notebookSearchSchema
-		);
+		return baseApiService.get(`${base}/search?${params.toString()}`, notebookSearchSchema);
 	},
-	get: (workspaceId: number, notebookId: number) =>
-		baseApiService.get(one(workspaceId, notebookId), notebookSchema),
-	create: (workspaceId: number, body: { title: string; icon?: string | null }) =>
-		baseApiService.post(base(workspaceId), notebookSchema, { body }),
-	update: (workspaceId: number, notebookId: number, body: NotebookChanges) =>
-		baseApiService.patch(one(workspaceId, notebookId), notebookSchema, { body }),
-	remove: (workspaceId: number, notebookId: number) =>
-		baseApiService.delete(one(workspaceId, notebookId)),
-	copy: (workspaceId: number, notebookId: number, title: string) =>
-		baseApiService.post(`${one(workspaceId, notebookId)}/copy`, notebookSchema, {
+	get: (notebookId: number) => baseApiService.get(one(notebookId), notebookSchema),
+	create: (body: { title: string; icon?: string | null }) =>
+		baseApiService.post(base, notebookSchema, { body }),
+	update: (notebookId: number, body: NotebookChanges) =>
+		baseApiService.patch(one(notebookId), notebookSchema, { body }),
+	remove: (notebookId: number) => baseApiService.delete(one(notebookId)),
+	copy: (notebookId: number, title: string) =>
+		baseApiService.post(`${one(notebookId)}/copy`, notebookSchema, {
 			body: { title },
 		}),
-	setFeatured: (workspaceId: number, notebookId: number, featured: boolean) =>
+	setFeatured: (notebookId: number, featured: boolean) =>
 		featured
-			? baseApiService.put(`${one(workspaceId, notebookId)}/feature`, notebookSchema)
-			: baseApiService.delete(`${one(workspaceId, notebookId)}/feature`, notebookSchema),
-	deleteChatHistory: (workspaceId: number, notebookId: number) =>
-		baseApiService.delete(`${one(workspaceId, notebookId)}/threads`),
-	followups: (workspaceId: number, notebookId: number, answer: string) =>
+			? baseApiService.put(`${one(notebookId)}/feature`, notebookSchema)
+			: baseApiService.delete(`${one(notebookId)}/feature`, notebookSchema),
+	deleteChatHistory: (notebookId: number) => baseApiService.delete(`${one(notebookId)}/threads`),
+	followups: (notebookId: number, answer: string) =>
 		baseApiService.post(
-			`${one(workspaceId, notebookId)}/followups`,
+			`${one(notebookId)}/followups`,
 			z.object({ suggestions: z.array(z.string()) }),
 			{ body: { answer } }
 		),
 
-	sources: (workspaceId: number, notebookId: number) =>
-		baseApiService.get(`${one(workspaceId, notebookId)}/sources`, z.array(notebookSourceSchema)),
-	addSources: (workspaceId: number, notebookId: number, targets: SourceTarget[]) =>
-		baseApiService.post(`${one(workspaceId, notebookId)}/sources`, z.array(notebookSourceSchema), {
+	sources: (notebookId: number) =>
+		baseApiService.get(`${one(notebookId)}/sources`, z.array(notebookSourceSchema)),
+	addSources: (notebookId: number, targets: SourceTarget[]) =>
+		baseApiService.post(`${one(notebookId)}/sources`, z.array(notebookSourceSchema), {
 			body: { targets },
 		}),
-	toggleSource: (workspaceId: number, notebookId: number, sourceId: number, enabled: boolean) =>
-		baseApiService.patch(
-			`${one(workspaceId, notebookId)}/sources/${sourceId}`,
-			notebookSourceSchema,
-			{ body: { enabled } }
-		),
-	toggleAllSources: (workspaceId: number, notebookId: number, enabled: boolean) =>
-		baseApiService.post(
-			`${one(workspaceId, notebookId)}/sources/toggle`,
-			z.array(notebookSourceSchema),
-			{ body: { enabled } }
-		),
-	removeSource: (workspaceId: number, notebookId: number, sourceId: number) =>
-		baseApiService.delete(`${one(workspaceId, notebookId)}/sources/${sourceId}`),
-	sourceGuide: (workspaceId: number, notebookId: number, sourceId: number) =>
-		baseApiService.get(
-			`${one(workspaceId, notebookId)}/sources/${sourceId}/guide`,
-			sourceGuideSchema
-		),
+	toggleSource: (notebookId: number, sourceId: number, enabled: boolean) =>
+		baseApiService.patch(`${one(notebookId)}/sources/${sourceId}`, notebookSourceSchema, {
+			body: { enabled },
+		}),
+	toggleAllSources: (notebookId: number, enabled: boolean) =>
+		baseApiService.post(`${one(notebookId)}/sources/toggle`, z.array(notebookSourceSchema), {
+			body: { enabled },
+		}),
+	removeSource: (notebookId: number, sourceId: number) =>
+		baseApiService.delete(`${one(notebookId)}/sources/${sourceId}`),
+	sourceGuide: (notebookId: number, sourceId: number) =>
+		baseApiService.get(`${one(notebookId)}/sources/${sourceId}/guide`, sourceGuideSchema),
 
-	notes: (workspaceId: number, notebookId: number) =>
-		baseApiService.get(`${one(workspaceId, notebookId)}/notes`, z.array(notebookNoteSchema)),
-	createNote: (
-		workspaceId: number,
-		notebookId: number,
-		body: { title: string; content: string; origin?: "hand" | "chat" }
-	) => baseApiService.post(`${one(workspaceId, notebookId)}/notes`, notebookNoteSchema, { body }),
-	note: (workspaceId: number, notebookId: number, noteId: number) =>
-		baseApiService.get(`${one(workspaceId, notebookId)}/notes/${noteId}`, notebookNoteSchema),
-	/** A copy of the note in another notebook of the workspace. */
-	copyNote: (workspaceId: number, notebookId: number, noteId: number, targetNotebookId: number) =>
-		baseApiService.post(
-			`${one(workspaceId, notebookId)}/notes/${noteId}/copy`,
-			notebookNoteSchema,
-			{
-				body: { notebook_id: targetNotebookId },
-			}
-		),
-	updateNote: (
-		workspaceId: number,
-		notebookId: number,
-		noteId: number,
-		body: { title?: string; content?: string }
-	) =>
-		baseApiService.patch(`${one(workspaceId, notebookId)}/notes/${noteId}`, notebookNoteSchema, {
+	threads: (notebookId: number) =>
+		baseApiService.get(`${one(notebookId)}/threads`, z.array(notebookThreadSchema)),
+	createThread: (notebookId: number) =>
+		baseApiService.post(`${one(notebookId)}/threads`, notebookThreadSchema),
+
+	outputs: (notebookId: number) =>
+		baseApiService.get(`${one(notebookId)}/studio/outputs`, z.array(studioOutputSchema)),
+	generate: (notebookId: number, body: StudioRequestBody) =>
+		baseApiService.post(`${one(notebookId)}/studio/generate`, studioOutputSchema, {
 			body,
 		}),
-	deleteNote: (workspaceId: number, notebookId: number, noteId: number) =>
-		baseApiService.delete(`${one(workspaceId, notebookId)}/notes/${noteId}`),
-	convertNote: (workspaceId: number, notebookId: number, noteId: number) =>
-		baseApiService.post(
-			`${one(workspaceId, notebookId)}/notes/${noteId}/convert`,
-			z.array(notebookSourceSchema)
-		),
-
-	threads: (workspaceId: number, notebookId: number) =>
-		baseApiService.get(`${one(workspaceId, notebookId)}/threads`, z.array(notebookThreadSchema)),
-	createThread: (workspaceId: number, notebookId: number) =>
-		baseApiService.post(`${one(workspaceId, notebookId)}/threads`, notebookThreadSchema),
-
-	outputs: (workspaceId: number, notebookId: number) =>
-		baseApiService.get(
-			`${one(workspaceId, notebookId)}/studio/outputs`,
-			z.array(studioOutputSchema)
-		),
-	generate: (workspaceId: number, notebookId: number, body: StudioRequestBody) =>
-		baseApiService.post(`${one(workspaceId, notebookId)}/studio/generate`, studioOutputSchema, {
-			body,
+	renameOutput: (notebookId: number, outputId: number, title: string) =>
+		baseApiService.patch(`${one(notebookId)}/studio/outputs/${outputId}`, studioOutputSchema, {
+			body: { title },
 		}),
-	renameOutput: (workspaceId: number, notebookId: number, outputId: number, title: string) =>
-		baseApiService.patch(
-			`${one(workspaceId, notebookId)}/studio/outputs/${outputId}`,
-			studioOutputSchema,
-			{ body: { title } }
-		),
-	deleteOutput: (workspaceId: number, notebookId: number, outputId: number) =>
-		baseApiService.delete(`${one(workspaceId, notebookId)}/studio/outputs/${outputId}`),
+	deleteOutput: (notebookId: number, outputId: number) =>
+		baseApiService.delete(`${one(notebookId)}/studio/outputs/${outputId}`),
 	suggestions: (
-		workspaceId: number,
 		notebookId: number,
 		kind: string,
 		{ variant, language, refresh }: SuggestionsQuery = {}
@@ -162,54 +107,35 @@ export const notebooksApi = {
 		if (language) query.set("language", language);
 		if (refresh) query.set("refresh", "true");
 		return baseApiService.get(
-			`${one(workspaceId, notebookId)}/studio/suggestions?${query}`,
+			`${one(notebookId)}/studio/suggestions?${query}`,
 			studioSuggestionsSchema
 		);
 	},
 
-	reportView: (workspaceId: number, notebookId: number, outputId: number) =>
+	reportView: (notebookId: number, outputId: number) =>
 		baseApiService.get(
-			`${one(workspaceId, notebookId)}/studio/outputs/${outputId}/report-view`,
+			`${one(notebookId)}/studio/outputs/${outputId}/report-view`,
 			reportViewSchema
 		),
-	addReportSuggestion: (
-		workspaceId: number,
-		notebookId: number,
-		outputId: number,
-		suggestionId: string
-	) =>
+	addReportSuggestion: (notebookId: number, outputId: number, suggestionId: string) =>
 		baseApiService.post(
-			`${one(workspaceId, notebookId)}/studio/outputs/${outputId}/report-suggestions/${encodeURIComponent(suggestionId)}/add`,
+			`${one(notebookId)}/studio/outputs/${outputId}/report-suggestions/${encodeURIComponent(suggestionId)}/add`,
 			reportViewSchema
 		),
-	dismissReportSuggestion: (
-		workspaceId: number,
-		notebookId: number,
-		outputId: number,
-		suggestionId: string
-	) =>
+	dismissReportSuggestion: (notebookId: number, outputId: number, suggestionId: string) =>
 		baseApiService.post(
-			`${one(workspaceId, notebookId)}/studio/outputs/${outputId}/report-suggestions/${encodeURIComponent(suggestionId)}/dismiss`,
+			`${one(notebookId)}/studio/outputs/${outputId}/report-suggestions/${encodeURIComponent(suggestionId)}/dismiss`,
 			reportViewSchema
 		),
-	outputView: (workspaceId: number, notebookId: number, outputId: number) =>
-		baseApiService.get(
-			`${one(workspaceId, notebookId)}/studio/outputs/${outputId}/view`,
-			outputViewSchema
-		),
-	reportTemplates: (workspaceId: number) =>
-		baseApiService.get(
-			`/api/v1/workspaces/${workspaceId}/notebook-report-templates`,
-			z.array(reportTemplateSchema)
-		),
+	outputView: (notebookId: number, outputId: number) =>
+		baseApiService.get(`${one(notebookId)}/studio/outputs/${outputId}/view`, outputViewSchema),
+	reportTemplates: () =>
+		baseApiService.get(`/api/v1/notebook-report-templates`, z.array(reportTemplateSchema)),
 	saveReportTemplate: (
-		workspaceId: number,
 		key: string,
 		body: { title?: string; description?: string; prompt: string }
 	) =>
-		baseApiService.put(
-			`/api/v1/workspaces/${workspaceId}/notebook-report-templates/${key}`,
-			z.array(reportTemplateSchema),
-			{ body }
-		),
+		baseApiService.put(`/api/v1/notebook-report-templates/${key}`, z.array(reportTemplateSchema), {
+			body,
+		}),
 };

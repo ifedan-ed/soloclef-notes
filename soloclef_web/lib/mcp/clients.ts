@@ -18,10 +18,10 @@ export interface McpSnippetOptions {
 	remoteUrl: string;
 	/** API key value or placeholder to show in the snippet. */
 	apiKey: string;
-	/** Soloclef backend URL a self-hosted server should call. */
+	/** The Soloclef server's address a self-hosted MCP server should call. */
 	baseUrl: string;
-	/** Absolute path to the soloclef_mcp directory (self-host). */
-	serverDir: string;
+	/** Absolute path to the soloclef-mcp binary (self-host). */
+	serverCommand: string;
 }
 
 export interface McpSnippet {
@@ -42,7 +42,10 @@ export interface McpClient {
 // Shown only until the caller passes this server's own `/mcp` (the dialog
 // uses the page's origin): a placeholder, never some other server's address.
 export const REMOTE_URL = "https://your-server.example/mcp";
-export const DEFAULT_SERVER_DIR = "/path/to/Soloclef/soloclef_mcp";
+// The Go MCP server, built from soloclef_mcp_go
+// (`go build -o soloclef-mcp ./cmd/mcp`). One static binary, so a client
+// launches it directly: no interpreter or package manager in between.
+export const DEFAULT_SERVER_COMMAND = "/path/to/soloclef-mcp";
 export const API_KEY_PLACEHOLDER = "ss_pat_your_key_here";
 
 function json(value: unknown): string {
@@ -53,8 +56,12 @@ function bearer(apiKey: string): string {
 	return `Bearer ${apiKey}`;
 }
 
-function serverArgs(serverDir: string): string[] {
-	return ["run", "--directory", serverDir, "python", "-m", "mcp_server"];
+/**
+ * The environment the binary reads (soloclef_mcp_go/internal/settings). It
+ * starts on stdio when no transport is named, so the two are all it needs.
+ */
+function serverEnv(baseUrl: string, apiKey: string): Record<string, string> {
+	return { SURFSENSE_BASE_URL: baseUrl, SURFSENSE_API_KEY: apiKey };
 }
 
 /** The `mcpServers` remote shape shared by Cursor, Windsurf, and Gemini CLI. */
@@ -71,13 +78,12 @@ function remoteMcpServers(urlField: "url" | "serverUrl" | "httpUrl") {
 }
 
 /** The `mcpServers` stdio shape shared by Cursor, Claude Desktop, Windsurf, Gemini CLI. */
-function stdioMcpServers({ baseUrl, apiKey, serverDir }: McpSnippetOptions): string {
+function stdioMcpServers({ baseUrl, apiKey, serverCommand }: McpSnippetOptions): string {
 	return json({
 		mcpServers: {
 			soloclef: {
-				command: "uv",
-				args: serverArgs(serverDir),
-				env: { SOLOCLEF_BASE_URL: baseUrl, SOLOCLEF_API_KEY: apiKey },
+				command: serverCommand,
+				env: serverEnv(baseUrl, apiKey),
 			},
 		},
 	});
@@ -107,12 +113,12 @@ export const MCP_CLIENTS: McpClient[] = [
 				"Run this command in a terminal (any directory).",
 				"Start Claude Code and run /mcp — soloclef should be listed as connected.",
 			],
-			build: ({ baseUrl, apiKey, serverDir }) =>
+			build: ({ baseUrl, apiKey, serverCommand }) =>
 				[
 					"claude mcp add soloclef \\",
-					`  -e SOLOCLEF_BASE_URL=${baseUrl} \\`,
-					`  -e SOLOCLEF_API_KEY=${apiKey} \\`,
-					`  -- uv run --directory ${serverDir} python -m mcp_server`,
+					`  -e SURFSENSE_BASE_URL=${baseUrl} \\`,
+					`  -e SURFSENSE_API_KEY=${apiKey} \\`,
+					`  -- ${serverCommand}`,
 				].join("\n"),
 		},
 	},
@@ -141,18 +147,17 @@ export const MCP_CLIENTS: McpClient[] = [
 			configFile: "~/.codex/config.toml",
 			language: "toml",
 			steps: [
-				"Add this to ~/.codex/config.toml (or run `codex mcp add soloclef -- uv run --directory <dir> python -m mcp_server`).",
+				"Add this to ~/.codex/config.toml (or run `codex mcp add soloclef -- /path/to/soloclef-mcp`).",
 				"Restart Codex; `codex mcp list` should show soloclef.",
 			],
-			build: ({ baseUrl, apiKey, serverDir }) =>
+			build: ({ baseUrl, apiKey, serverCommand }) =>
 				[
 					"[mcp_servers.soloclef]",
-					'command = "uv"',
-					`args = ${JSON.stringify(serverArgs(serverDir))}`,
+					`command = ${JSON.stringify(serverCommand)}`,
 					"",
 					"[mcp_servers.soloclef.env]",
-					`SOLOCLEF_BASE_URL = "${baseUrl}"`,
-					`SOLOCLEF_API_KEY = "${apiKey}"`,
+					`SURFSENSE_BASE_URL = "${baseUrl}"`,
+					`SURFSENSE_API_KEY = "${apiKey}"`,
 				].join("\n"),
 		},
 	},
@@ -187,15 +192,15 @@ export const MCP_CLIENTS: McpClient[] = [
 				"Add this to opencode.json in your project root (or ~/.config/opencode/opencode.json for all projects).",
 				"Note OpenCode's format: the key is `mcp`, the command is one array, and env vars go under `environment`.",
 			],
-			build: ({ baseUrl, apiKey, serverDir }) =>
+			build: ({ baseUrl, apiKey, serverCommand }) =>
 				json({
 					$schema: "https://opencode.ai/config.json",
 					mcp: {
 						soloclef: {
 							type: "local",
-							command: ["uv", ...serverArgs(serverDir)],
+							command: [serverCommand],
 							enabled: true,
-							environment: { SOLOCLEF_BASE_URL: baseUrl, SOLOCLEF_API_KEY: apiKey },
+							environment: serverEnv(baseUrl, apiKey),
 						},
 					},
 				}),
@@ -281,14 +286,13 @@ export const MCP_CLIENTS: McpClient[] = [
 				"Add this to .vscode/mcp.json in your workspace (or run the MCP: Add Server command).",
 				"Open Copilot Chat in agent mode and click the tools icon to confirm soloclef is loaded.",
 			],
-			build: ({ baseUrl, apiKey, serverDir }) =>
+			build: ({ baseUrl, apiKey, serverCommand }) =>
 				json({
 					servers: {
 						soloclef: {
 							type: "stdio",
-							command: "uv",
-							args: serverArgs(serverDir),
-							env: { SOLOCLEF_BASE_URL: baseUrl, SOLOCLEF_API_KEY: apiKey },
+							command: serverCommand,
+							env: serverEnv(baseUrl, apiKey),
 						},
 					},
 				}),

@@ -25,7 +25,6 @@ function job(overrides: Partial<LiveDeliverableJob> = {}): LiveDeliverableJob {
 		progress: 0,
 		failureCode: null,
 		artifactId: null,
-		workspaceId: 7,
 		threadId: 9,
 		...overrides,
 	};
@@ -101,15 +100,9 @@ test("failure and phase copy never reflects unknown backend strings", () => {
 	assert.equal(deliverablePhaseLabel("internal_worker_name"), "Generating your video");
 });
 
-test("cancel and retry controls use workspace-scoped routes", () => {
-	assert.equal(
-		deliverableJobActionPath(7, 42, "cancel"),
-		"/api/v1/workspaces/7/deliverable-jobs/42/cancel"
-	);
-	assert.equal(
-		deliverableJobActionPath(7, 42, "retry"),
-		"/api/v1/workspaces/7/deliverable-jobs/42/retry"
-	);
+test("cancel and retry name only the job: the server takes the account from the session", () => {
+	assert.equal(deliverableJobActionPath(42, "cancel"), "/api/v1/deliverable-jobs/42/cancel");
+	assert.equal(deliverableJobActionPath(42, "retry"), "/api/v1/deliverable-jobs/42/retry");
 	assert.deepEqual(deliverableJobActionRequestOptions(false), { sameOrigin: true });
 	assert.deepEqual(deliverableJobActionRequestOptions(true), { sameOrigin: false });
 	assert.match(renderJob({ status: "queued" }), /Cancel/);

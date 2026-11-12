@@ -6,7 +6,7 @@ import {
 	hasRetiredChatParam,
 	withoutRetiredChatParam,
 } from "@/features/notebooks/lib/retired-chat-param";
-import { notebookPath, workspaceHomePath } from "@/lib/workspace-home";
+import { NOTEBOOKS_HOME, notebookPath } from "@/lib/dashboard-paths";
 
 test("an old notebook link's chat parameter is dropped, the rest kept", () => {
 	assert.equal(hasRetiredChatParam("?chat=42"), true);
@@ -24,22 +24,16 @@ test("an old notebook link's chat parameter is dropped, the rest kept", () => {
 });
 
 test("a link to a chat opens its notebook, or the home, never naming the chat", () => {
-	assert.equal(notebookPath(1, 5), "/dashboard/1/notebooks/5");
-	assert.equal(notebookPath("1", 5), "/dashboard/1/notebooks/5");
+	assert.equal(notebookPath(5), "/dashboard/notebooks/5");
 	for (const none of [null, undefined, 0, -2, 1.5]) {
-		assert.equal(notebookPath(1, none), workspaceHomePath(1), String(none));
+		assert.equal(notebookPath(none), NOTEBOOKS_HOME, String(none));
 	}
 });
 
-test("the retired chat routes redirect to the notebooks home", () => {
+test("the retired chat routes are gone", () => {
 	const root = process.cwd();
-	for (const page of [
-		"app/dashboard/[workspace_id]/new-chat/[[...chat_id]]/page.tsx",
-		"app/dashboard/[workspace_id]/chats/page.tsx",
-	]) {
-		const source = readFileSync(join(root, page), "utf8");
-		assert.match(source, /redirect\(workspaceHomePath\(workspace_id\)\)/, page);
-		assert.doesNotMatch(source, /ChatThreadView|[?&]chat=/, page);
+	for (const page of ["app/dashboard/new-chat", "app/dashboard/chats"]) {
+		assert.equal(existsSync(join(root, page)), false, page);
 	}
 	for (const gone of [
 		"components/layout/ui/sidebar/AllChatsSidebar.tsx",
@@ -53,19 +47,11 @@ test("the retired chat routes redirect to the notebooks home", () => {
 	}
 });
 
-test("connectors and automations moved into workspace settings; old routes forward", () => {
+test("connectors and automations live in settings", () => {
 	const root = process.cwd();
-	const shell = readFileSync(
-		join(root, "app/dashboard/[workspace_id]/workspace-settings/layout-shell.tsx"),
-		"utf8"
-	);
-	assert.match(shell, /workspace-settings\/connectors/);
-	assert.match(shell, /workspace-settings\/automations/);
-	for (const [route, target] of [
-		["connectors", "workspace-settings/connectors"],
-		["automations", "workspace-settings/automations"],
-	]) {
-		const page = readFileSync(join(root, `app/dashboard/[workspace_id]/${route}/page.tsx`), "utf8");
-		assert.ok(page.includes(target), route);
-	}
+	const shell = readFileSync(join(root, "app/dashboard/settings/layout-shell.tsx"), "utf8");
+	assert.match(shell, /item\("connectors"/);
+	assert.match(shell, /item\("automations"/);
+	const automations = readFileSync(join(root, "app/dashboard/automations/page.tsx"), "utf8");
+	assert.match(automations, /settingsPath\("automations"\)/);
 });

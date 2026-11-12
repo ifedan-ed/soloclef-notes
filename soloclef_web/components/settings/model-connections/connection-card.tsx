@@ -37,7 +37,7 @@ export function ConnectionCard({ connection }: { connection: ConnectionRead }) {
 					<div className="flex items-center gap-2 font-semibold">
 						{providerIcon(connection.provider)}
 						<span className="truncate">{providerLabel}</span>
-						{connection.scope === "GLOBAL" ? (
+						{connection.scope === "global" ? (
 							<Badge variant="outline" className="text-[10px]">
 								Default
 							</Badge>
@@ -66,7 +66,7 @@ export function ConnectionCard({ connection }: { connection: ConnectionRead }) {
 								<AlertDialogTitle>Delete this provider?</AlertDialogTitle>
 								<AlertDialogDescription>
 									<span className="font-medium text-foreground">{providerLabel}</span> and all of
-									its models will be removed from this workspace. This cannot be undone.
+									its models will be removed from your account. This cannot be undone.
 								</AlertDialogDescription>
 							</AlertDialogHeader>
 							<AlertDialogFooter>

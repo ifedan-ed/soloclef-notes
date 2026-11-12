@@ -3,7 +3,7 @@ import type { Execution } from "@/contracts/types/automation.types";
 /**
  * The "If already running" choices (``execution.concurrency``), as the form
  * and the automation page name them. What each one does is enforced in
- * ``soloclef_backend/app/automations/concurrency``.
+ * ``soloclef_automations/launch``.
  */
 export const CONCURRENCY_OPTIONS: ReadonlyArray<{
 	value: Execution["concurrency"];

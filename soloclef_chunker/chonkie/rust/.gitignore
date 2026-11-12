@@ -1,0 +1,3 @@
+# Cargo's build tree. Hundreds of megabytes of compiled artefacts that are
+# rebuilt from Cargo.toml and Cargo.lock; nothing here belongs in history.
+/target/

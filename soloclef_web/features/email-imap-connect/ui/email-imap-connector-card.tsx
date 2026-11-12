@@ -21,13 +21,12 @@ import { EmailImapAddAccountForm } from "./email-imap-add-account-form";
  * mailboxes connect through Microsoft's sign-in instead of the form, when the
  * server has the Microsoft app set up.
  */
-export function EmailImapConnectorCard({ workspaceId }: { workspaceId: number }) {
+export function EmailImapConnectorCard() {
 	const t = useTranslations("email_imap_connect");
 	const { accounts, loading, refreshQuietly, addAccount, removeAccount, testAccount } =
-		useEmailImapAccounts(workspaceId);
-	const microsoftConfigured = useMicrosoftMailAvailability(workspaceId);
-	const { start: connectMicrosoft, starting: connectingMicrosoft } =
-		useMicrosoftMailConnect(workspaceId);
+		useEmailImapAccounts();
+	const microsoftConfigured = useMicrosoftMailAvailability();
+	const { start: connectMicrosoft, starting: connectingMicrosoft } = useMicrosoftMailConnect();
 	const [expanded, setExpanded] = useState(false);
 	const [showAddForm, setShowAddForm] = useState(false);
 	const hintKey = outlookHintKey(microsoftConfigured);
@@ -82,7 +81,6 @@ export function EmailImapConnectorCard({ workspaceId }: { workspaceId: number })
 
 					{showAddForm ? (
 						<EmailImapAddAccountForm
-							workspaceId={workspaceId}
 							onSave={addAccount}
 							onAdded={() => setShowAddForm(false)}
 							onCancel={() => setShowAddForm(false)}

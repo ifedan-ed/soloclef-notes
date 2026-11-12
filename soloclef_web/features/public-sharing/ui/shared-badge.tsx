@@ -15,13 +15,11 @@ import { StopSharingDialog } from "./stop-sharing-button";
  * open it, change it, or stop sharing, without going to settings.
  */
 export function SharedBadge({
-	workspaceId,
 	notebookId,
 	link,
 	onSettings,
 	onStopped,
 }: {
-	workspaceId: number;
 	notebookId: number;
 	link: LiveLink | null;
 	/** Present for people who may change the link (Owners, by default). */
@@ -90,27 +88,24 @@ export function SharedBadge({
 							{t("settings")}
 						</Button>
 					) : null}
-					{link.can_revoke ? (
-						<Button
-							variant="ghost"
-							size="sm"
-							className="w-full justify-start text-destructive hover:text-destructive"
-							onClick={() => {
-								setOpen(false);
-								setStopOpen(true);
-							}}
-							data-testid="notebook-shared-stop"
-						>
-							<Link2Off className="size-4" />
-							{t("stop")}
-						</Button>
-					) : null}
+					<Button
+						variant="ghost"
+						size="sm"
+						className="w-full justify-start text-destructive hover:text-destructive"
+						onClick={() => {
+							setOpen(false);
+							setStopOpen(true);
+						}}
+						data-testid="notebook-shared-stop"
+					>
+						<Link2Off className="size-4" />
+						{t("stop")}
+					</Button>
 				</PopoverContent>
 			</Popover>
 			<StopSharingDialog
 				open={stopOpen}
 				onOpenChange={setStopOpen}
-				workspaceId={workspaceId}
 				notebookId={notebookId}
 				onStopped={onStopped}
 			/>

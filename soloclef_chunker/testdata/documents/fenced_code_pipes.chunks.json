@@ -1,0 +1,3 @@
+[
+  "Here is some shell.\n\n```\n| grep alpha\n| sort\n| uniq -c\n```\n\nAnd a tilde fence:\n\n~~~\n| cut -f1\n| head\n~~~\n\nAfter the code.\n"
+]

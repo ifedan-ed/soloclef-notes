@@ -49,7 +49,7 @@ test("the viewer resolves a video artifact to the MP4 player on its content URL"
 	});
 	assert.deepEqual(resolution, { kind: "mime", key: "video/mp4" });
 
-	const contentUrl = "/api/v1/workspaces/1/artifacts/8/files/14/content";
+	const contentUrl = "/api/v1/artifacts/8/files/14/content";
 	const primary = {
 		filename: "video.mp4",
 		mime_type: "video/mp4",

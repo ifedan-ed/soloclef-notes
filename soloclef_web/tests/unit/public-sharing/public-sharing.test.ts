@@ -1,10 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-	canCreatePublicLinks,
-	canRevokePublicLink,
-} from "@/features/public-sharing/lib/public-link-access";
 import { publicLinkFailure } from "@/features/public-sharing/lib/public-link-failure";
 import { publicFilePath, publicLinkUrl } from "@/features/public-sharing/lib/public-link-url";
 import {
@@ -25,27 +21,6 @@ test("a new link lasts seven days unless the owner picks thirty or never", () =>
 	assert.deepEqual([...EXPIRY_CHOICES], ["7", "30", "never"]);
 	assert.equal(isExpiryChoice("30"), true);
 	assert.equal(isExpiryChoice("3"), false);
-});
-
-test("only owners (or a role granted it) see the share actions", () => {
-	assert.equal(canCreatePublicLinks({ is_owner: true }), true);
-	assert.equal(
-		canCreatePublicLinks({ is_owner: false, permissions: ["public_sharing:view"] }),
-		false
-	);
-	assert.equal(
-		canCreatePublicLinks({ is_owner: false, permissions: ["public_sharing:create"] }),
-		true
-	);
-	assert.equal(canCreatePublicLinks(null), false);
-});
-
-test("owners revoke any link; others only the links they made", () => {
-	const editor = { is_owner: false, permissions: ["public_sharing:view"] };
-	assert.equal(canRevokePublicLink({ is_owner: true }, "me", "someone"), true);
-	assert.equal(canRevokePublicLink(editor, "me", "someone"), false);
-	assert.equal(canRevokePublicLink(editor, "me", "me"), true);
-	assert.equal(canRevokePublicLink(editor, undefined, null), false);
 });
 
 test("an expired link and a revoked one are told apart", () => {

@@ -18,25 +18,24 @@ interface UseDocumentsProcessingOptions {
 }
 
 /**
- * Returns the processing status of documents in the workspace:
+ * Returns the processing status of the account's documents:
  *   - "processing"      — docs are queued or actively being prepared for search
  *   - "background_sync" — existing docs are being refreshed in the background
  *   - "error"      — nothing processing, but failed docs exist (show red icon)
  *   - "success"    — just transitioned from processing → all clear (green check, auto-dismisses)
  *   - "idle"       — nothing noteworthy (show normal icon)
  */
-export function useDocumentsProcessing(
-	workspaceId: number | null,
-	{ hasPeriodicSyncEnabled = false }: UseDocumentsProcessingOptions = {}
-): DocumentsProcessingStatus {
+export function useDocumentsProcessing({
+	hasPeriodicSyncEnabled = false,
+}: UseDocumentsProcessingOptions = {}): DocumentsProcessingStatus {
 	const [status, setStatus] = useState<DocumentsProcessingStatus>("idle");
 	const wasProcessingRef = useRef(false);
 	const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-	const [documents] = useQuery(queries.documents.bySpace({ workspaceId: workspaceId ?? -1 }));
+	const [documents] = useQuery(queries.documents.mine());
 
 	useEffect(() => {
-		if (!workspaceId || !documents) return;
+		if (!documents) return;
 
 		const clearSuccessTimer = () => {
 			if (successTimerRef.current) {
@@ -95,7 +94,7 @@ export function useDocumentsProcessing(
 		} else {
 			setStatus("idle");
 		}
-	}, [workspaceId, documents, hasPeriodicSyncEnabled]);
+	}, [documents, hasPeriodicSyncEnabled]);
 
 	useEffect(() => {
 		return () => {

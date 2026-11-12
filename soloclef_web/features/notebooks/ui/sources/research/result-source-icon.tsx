@@ -1,5 +1,4 @@
 import { Globe, Link2 } from "lucide-react";
-import { isScraperToolId, SCRAPER_TOOL_ICONS } from "@/features/scraper-tools/scraper-tools";
 import { cn } from "@/lib/utils";
 import {
 	isAcademicSourceId,
@@ -13,10 +12,6 @@ import { WEB_API_SOURCE_ICONS } from "./web-api-icons";
 export function ResultSourceIcon({ source, className }: { source: string; className?: string }) {
 	if (source === READ_PAGE_ID) {
 		return <Link2 className={className} aria-hidden />;
-	}
-	if (isScraperToolId(source)) {
-		const Icon = SCRAPER_TOOL_ICONS[source];
-		return <Icon className={className} />;
 	}
 	if (isWebApiSourceId(source)) {
 		const Icon = WEB_API_SOURCE_ICONS[source];

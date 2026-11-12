@@ -19,7 +19,6 @@ export const log = z.object({
 	source: z.string().nullable().optional(),
 	log_metadata: z.record(z.string(), z.any()).nullable().optional(),
 	created_at: z.string(),
-	workspace_id: z.number(),
 });
 
 export const logBase = log.omit({ id: true, created_at: true });
@@ -27,7 +26,7 @@ export const logBase = log.omit({ id: true, created_at: true });
 /**
  * Create log
  */
-export const createLogRequest = logBase.extend({ workspace_id: z.number() });
+export const createLogRequest = logBase;
 export const createLogResponse = log;
 
 /**
@@ -48,7 +47,6 @@ export const deleteLogResponse = z.object({
  * Get logs (list)
  */
 export const logFilters = z.object({
-	workspace_id: z.number().optional(),
 	level: logLevelEnum.optional(),
 	status: logStatusEnum.optional(),
 	source: z.string().optional(),
@@ -59,7 +57,6 @@ export const logFilters = z.object({
 export const getLogsRequest = z.object({
 	queryParams: paginationQueryParams
 		.extend({
-			workspace_id: z.number().optional(),
 			level: logLevelEnum.optional(),
 			status: logStatusEnum.optional(),
 			source: z.string().optional(),
@@ -106,7 +103,6 @@ export const logSummary = z.object({
 	recent_failures: z.array(logFailure),
 });
 export const getLogSummaryRequest = z.object({
-	workspace_id: z.number(),
 	hours: z.number().optional(),
 });
 export const getLogSummaryResponse = logSummary;

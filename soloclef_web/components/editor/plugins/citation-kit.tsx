@@ -3,7 +3,6 @@
 import { createPlatePlugin, type PlateElementProps } from "platejs/react";
 import type { FC } from "react";
 import { InlineCitation, UrlCitation } from "@/components/assistant-ui/inline-citation";
-import { RunCitation } from "@/components/citations/run-citation";
 import {
 	CITATION_NODE,
 	CITATION_TYPE,
@@ -27,8 +26,6 @@ const CitationElement: FC<PlateElementProps<CitationElementNode>> = ({
 			<span contentEditable={false}>
 				{isUrl && element.url ? (
 					<UrlCitation url={element.url} />
-				) : element.kind === "run" && element.runId ? (
-					<RunCitation runId={element.runId} />
 				) : element.chunkId !== undefined ? (
 					<InlineCitation chunkId={element.chunkId} isDocsChunk={element.kind === "doc"} />
 				) : null}

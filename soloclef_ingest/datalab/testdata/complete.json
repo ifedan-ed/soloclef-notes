@@ -1,0 +1,20 @@
+{
+  "status": "complete",
+  "progress_percent": 100,
+  "success": true,
+  "error": null,
+  "output_format": "markdown",
+  "markdown": "{0}------------------------------------------------\n\n# Dosing guide\n\nGive once daily.\n\n{1}------------------------------------------------\n\n| Drug | Dose |\n|---|---|\n| Amoxicillin | 500 mg |\n\n",
+  "html": null,
+  "json": null,
+  "chunks": null,
+  "images": {},
+  "metadata": {"page_stats": []},
+  "page_count": 2,
+  "total_cost": null,
+  "cost_breakdown": {"list_cost_cents": 0.8, "final_cost_cents": 0.8},
+  "parse_quality_score": 4.6,
+  "runtime": 3.2,
+  "checkpoint_id": null,
+  "versions": null
+}

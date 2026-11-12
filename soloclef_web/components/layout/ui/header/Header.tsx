@@ -5,7 +5,7 @@ interface HeaderProps {
 }
 
 /**
- * The top bar of the mobile shell and of the anonymous chat: only the menu
+ * The top bar of the mobile shell: only the menu
  * trigger. The chat actions it used to carry (share, action log, artifacts)
  * belonged to the retired standalone chat page; a notebook has its own header.
  */

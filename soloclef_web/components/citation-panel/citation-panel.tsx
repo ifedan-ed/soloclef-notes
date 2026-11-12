@@ -51,7 +51,7 @@ export const CitationPanelContent: FC<CitationPanelContentProps> = ({ chunkId, o
 	// PDF it is usually what a reader wants before the whole original.
 	const params = useParams<{ notebook_id?: string }>();
 	const notebookId = Number(params?.notebook_id) || 0;
-	const sources = useNotebookSources(data?.workspace_id ?? 0, notebookId);
+	const sources = useNotebookSources(notebookId);
 	const source = useMemo(
 		() => sources.data?.find((s) => s.kind === "document" && s.target_id === data?.id) ?? null,
 		[sources.data, data?.id]
@@ -151,7 +151,6 @@ export const CitationPanelContent: FC<CitationPanelContentProps> = ({ chunkId, o
 			{showGuide && source && data ? (
 				<div className="flex min-h-0 flex-1 flex-col pt-3">
 					<SourceGuideView
-						workspaceId={data.workspace_id}
 						notebookId={notebookId}
 						source={source}
 						onBack={() => setShowGuide(false)}

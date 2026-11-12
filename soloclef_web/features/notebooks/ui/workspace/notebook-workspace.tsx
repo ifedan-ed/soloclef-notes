@@ -12,11 +12,10 @@ import {
 	publicLinksApi,
 	ShareDialog,
 	SharedBadge,
-	useCanCreatePublicLinks,
 	useLiveNotebookLink,
 } from "@/features/public-sharing";
 import { cn } from "@/lib/utils";
-import { workspaceHomePath } from "@/lib/workspace-home";
+import { NOTEBOOKS_HOME } from "@/lib/dashboard-paths";
 import { notebookKeys } from "../../api/notebook-query-keys";
 import { type NotebookChanges, notebooksApi } from "../../api/notebooks-api";
 import { useNotebookWithAutoTitle } from "../../hooks/use-auto-title";
@@ -33,15 +32,13 @@ import {
 	readNotebookFocus,
 	withoutFocusParams,
 } from "../../lib/content-search";
-import { noteFromAnswer } from "../../lib/note-from-answer";
 import { enabledCount } from "../../lib/source-selection";
-import type { NotebookNote } from "../../model/notebook";
 import { NotebookChatProvider } from "../../state/notebook-chat-context";
 import { ChatDropZone } from "../chat/chat-drop-zone";
 import { NotebookChat } from "../chat/notebook-chat";
+import { NotebookRightPanel } from "../notes-tab/notebook-right-panel";
 import type { DroppedFiles } from "../sources/add-sources-dialog";
 import { SourcesPanel } from "../sources/sources-panel";
-import { StudioPanel } from "../studio/studio-panel";
 import { NotebookHeader } from "./notebook-header";
 import { NotebookMenu } from "./notebook-menu";
 import { SidePanel } from "./side-panel";
@@ -49,15 +46,13 @@ import { SidePanel } from "./side-panel";
 type MobileTab = "sources" | "chat" | "studio";
 
 export function NotebookWorkspace({
-	workspaceId,
 	notebookId,
 }: {
-	workspaceId: number;
 	notebookId: number;
 }) {
 	const t = useTranslations("notebooks");
 	const queryClient = useQueryClient();
-	const { notebook, sources, watchTitle } = useNotebookWithAutoTitle(workspaceId, notebookId);
+	const { notebook, sources, watchTitle } = useNotebookWithAutoTitle(notebookId);
 	const [sourcesCollapsed, setSourcesCollapsed] = usePanelPreference("sources");
 	const [studioCollapsed, setStudioCollapsed] = usePanelPreference("studio");
 	// A link from the home search can name a source (?source=) or note (?note=)
@@ -77,7 +72,7 @@ export function NotebookWorkspace({
 	// opens it again); on a phone it fills the screen over the Studio tab.
 	const [openOutputId, setOpenOutputId] = useState<number | null>(null);
 	const [sourcesYield, setSourcesYield] = useState(true);
-	const outputs = useStudioOutputs(workspaceId, notebookId);
+	const outputs = useStudioOutputs(notebookId);
 	const openOutput =
 		openOutputId === null
 			? null
@@ -91,17 +86,16 @@ export function NotebookWorkspace({
 	useEffect(() => {
 		if (openOutputId !== null && outputs.data && !openOutput) setOpenOutputId(null);
 	}, [openOutputId, outputs.data, openOutput]);
-	const updateNotebook = useUpdateNotebook(workspaceId);
-	const setFeatured = useSetFeatured(workspaceId);
-	const copyNotebook = useCopyNotebook(workspaceId);
-	const { create, creating } = useCreateNotebook(workspaceId);
+	const updateNotebook = useUpdateNotebook();
+	const setFeatured = useSetFeatured();
+	const copyNotebook = useCopyNotebook();
+	const { create, creating } = useCreateNotebook();
 	// The notebook's one running chat (the newest thread) is what "Share chat" shares.
-	const threads = useNotebookThreads(workspaceId, notebookId);
+	const threads = useNotebookThreads(notebookId);
 	const chatThreadId = threads.data?.[0]?.id ?? null;
-	const canShare = useCanCreatePublicLinks();
 	const [shareOpen, setShareOpen] = useState(false);
 	// The notebook's live link: "Share notebook…" and the "Shared" badge.
-	const liveLink = useLiveNotebookLink(workspaceId, notebookId);
+	const liveLink = useLiveNotebookLink(notebookId);
 	const [notebookShareOpen, setNotebookShareOpen] = useState(false);
 
 	// Before the first paint, so a collapsed panel never flashes shut and then open.
@@ -128,7 +122,7 @@ export function NotebookWorkspace({
 
 	const sourceList = sources.data ?? [];
 	const enabled = enabledCount(sourceList);
-	const homeHref = workspaceHomePath(workspaceId);
+	const homeHref = NOTEBOOKS_HOME;
 
 	const update = useCallback(
 		(changes: NotebookChanges) => updateNotebook(notebookId, changes),
@@ -136,23 +130,6 @@ export function NotebookWorkspace({
 	);
 	const quietUpdate = (changes: NotebookChanges) =>
 		update(changes).catch(() => toast.error(t("rename_failed")));
-
-	const saveToNote = useCallback(
-		async (markdown: string) => {
-			const { title, content } = noteFromAnswer(markdown);
-			const note = await notebooksApi.createNote(workspaceId, notebookId, {
-				title: title || t("new_note"),
-				content,
-				origin: "chat",
-			});
-			queryClient.setQueryData<NotebookNote[]>(
-				notebookKeys.notes(workspaceId, notebookId),
-				(current = []) => [note, ...current]
-			);
-			toast.success(t("saved_to_note"));
-		},
-		[queryClient, workspaceId, notebookId, t]
-	);
 
 	const openSources = useCallback(() => {
 		setSourcesCollapsed(false);
@@ -184,24 +161,23 @@ export function NotebookWorkspace({
 	const showChat = useCallback(() => setMobileTab("chat"), []);
 
 	const deleteHistory = useCallback(async () => {
-		await notebooksApi.deleteChatHistory(workspaceId, notebookId);
+		await notebooksApi.deleteChatHistory(notebookId);
 		await queryClient.invalidateQueries({
-			queryKey: notebookKeys.threads(workspaceId, notebookId),
+			queryKey: notebookKeys.threads(notebookId),
 		});
 		toast.success(t("delete_history.done"));
-	}, [queryClient, workspaceId, notebookId, t]);
+	}, [queryClient, notebookId, t]);
 
 	const data = notebook.data;
 	const chatContext = useMemo(
 		() => ({
-			workspaceId,
 			notebookId,
 			title: data?.title ?? "",
 			icon: data?.icon ?? null,
 			createdAt: data?.created_at ?? null,
 			sourceCount: sourceList.length,
 			enabledSourceCount: enabled,
-			saveToNote,
+			threadId: chatThreadId,
 			openSources,
 			addSources: openAddSources,
 			uploadSources,
@@ -210,14 +186,13 @@ export function NotebookWorkspace({
 			watchTitle,
 		}),
 		[
-			workspaceId,
 			notebookId,
 			data?.title,
 			data?.icon,
 			data?.created_at,
 			sourceList.length,
 			enabled,
-			saveToNote,
+			chatThreadId,
 			openSources,
 			openAddSources,
 			uploadSources,
@@ -246,23 +221,19 @@ export function NotebookWorkspace({
 				<ShareDialog
 					open={shareOpen}
 					onOpenChange={setShareOpen}
-					workspaceId={workspaceId}
 					subject="chat"
 					itemTitle={data?.title ?? ""}
 					create={(expiry) => publicLinksApi.shareChat(chatThreadId, expiry)}
 				/>
 			) : null}
-			{canShare ? (
-				<NotebookShareDialog
-					open={notebookShareOpen}
-					onOpenChange={setNotebookShareOpen}
-					workspaceId={workspaceId}
-					notebookId={notebookId}
-					notebookTitle={data?.title ?? ""}
-					link={liveLink.link}
-					onChange={liveLink.set}
-				/>
-			) : null}
+			<NotebookShareDialog
+				open={notebookShareOpen}
+				onOpenChange={setNotebookShareOpen}
+				notebookId={notebookId}
+				notebookTitle={data?.title ?? ""}
+				link={liveLink.link}
+				onChange={liveLink.set}
+			/>
 			<div className="flex h-full min-h-0 flex-col">
 				<NotebookHeader
 					notebook={data}
@@ -275,10 +246,9 @@ export function NotebookWorkspace({
 						data ? (
 							<>
 								<SharedBadge
-									workspaceId={workspaceId}
 									notebookId={notebookId}
 									link={liveLink.link}
-									onSettings={canShare ? () => setNotebookShareOpen(true) : undefined}
+									onSettings={() => setNotebookShareOpen(true)}
 									onStopped={() => liveLink.set(null)}
 								/>
 								<NotebookMenu
@@ -287,10 +257,8 @@ export function NotebookWorkspace({
 									onCopy={() => copyNotebook(data)}
 									onSetFeatured={(featured) => setFeatured(notebookId, featured)}
 									onDeleteHistory={deleteHistory}
-									onSharePublicly={
-										canShare && chatThreadId !== null ? () => setShareOpen(true) : undefined
-									}
-									onShareNotebook={canShare ? () => setNotebookShareOpen(true) : undefined}
+									onSharePublicly={chatThreadId !== null ? () => setShareOpen(true) : undefined}
+									onShareNotebook={() => setNotebookShareOpen(true)}
 								/>
 							</>
 						) : null
@@ -311,7 +279,11 @@ export function NotebookWorkspace({
 									: "text-muted-foreground hover:bg-accent"
 							)}
 						>
-							{tab === "sources" ? `${t("sources")} (${enabled})` : t(tab)}
+							{tab === "sources"
+								? `${t("sources")} (${enabled})`
+								: tab === "studio"
+									? t("studio_and_notes")
+									: t(tab)}
 						</button>
 					))}
 				</div>
@@ -329,7 +301,6 @@ export function NotebookWorkspace({
 						mobileHidden={mobileTab !== "sources"}
 					>
 						<SourcesPanel
-							workspaceId={workspaceId}
 							notebookId={notebookId}
 							addOpen={addOpen}
 							onAddOpenChange={changeAddOpen}
@@ -360,31 +331,22 @@ export function NotebookWorkspace({
 								</Button>
 							</div>
 						) : null}
-						<NotebookChat workspaceId={workspaceId} notebookId={notebookId} />
+						<NotebookChat notebookId={notebookId} />
 					</ChatDropZone>
-					<SidePanel
-						side="right"
-						title={t("studio")}
-						collapsed={studioCollapsed && !viewing}
+					<NotebookRightPanel
+						notebookId={notebookId}
+						notebookTitle={data?.title ?? ""}
+						sources={sourceList}
+						onAddSources={openAddSources}
+						onResearch={openResearch}
+						openOutputId={openOutputId}
+						onOpenOutput={changeOpenOutput}
+						viewingOutput={!!viewing}
+						collapsed={studioCollapsed}
 						onCollapsedChange={setStudioCollapsed}
-						collapseLabel={t("collapse_studio")}
-						expandLabel={t("expand_studio")}
 						mobileHidden={mobileTab !== "studio"}
-						wide={!!viewing}
-						bare={!!viewing}
-					>
-						<StudioPanel
-							workspaceId={workspaceId}
-							notebookId={notebookId}
-							notebookTitle={data?.title ?? ""}
-							sources={sourceList}
-							onAddSources={openAddSources}
-							onResearch={openResearch}
-							initialOpenNoteId={focus?.kind === "note" ? focus.id : null}
-							openOutputId={openOutputId}
-							onOpenOutput={changeOpenOutput}
-						/>
-					</SidePanel>
+						focusNoteId={focus?.kind === "note" ? focus.id : null}
+					/>
 				</div>
 			</div>
 		</NotebookChatProvider>

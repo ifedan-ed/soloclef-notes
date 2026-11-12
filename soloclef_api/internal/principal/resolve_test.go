@@ -5,22 +5,29 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 )
 
 type fakeDirectory struct {
 	activeUsers map[string]bool
-	tokens      map[string]PersonalAccessTokenOwner
-	failure     error
-	touched     []int64
+	// endedSignIns are sign-ins that were ended: signed out, or every one
+	// of the account's on a new password.
+	endedSignIns map[string]bool
+	tokens       map[string]PersonalAccessTokenOwner
+	failure      error
+	touched      []int64
+	// asked is every sign-in the gate asked about, as "user/sign-in@unix".
+	asked []string
 }
 
-func (d *fakeDirectory) UserIsActive(_ context.Context, userID string) (bool, error) {
+func (d *fakeDirectory) SessionIsLive(_ context.Context, userID, sessionID string, now time.Time) (bool, error) {
+	d.asked = append(d.asked, userID+"/"+sessionID+"@"+strconv.FormatInt(now.Unix(), 10))
 	if d.failure != nil {
 		return false, d.failure
 	}
-	return d.activeUsers[userID], nil
+	return d.activeUsers[userID] && !d.endedSignIns[sessionID], nil
 }
 
 func (d *fakeDirectory) PersonalAccessTokenOwner(
@@ -51,7 +58,7 @@ func resolverFor(directory Directory) Resolver {
 }
 
 func requestWith(header, cookie string) *http.Request {
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/logs/workspaces/1/summary", nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/logs/summary", nil)
 	if header != "" {
 		request.Header.Set("Authorization", header)
 	}
@@ -65,7 +72,7 @@ func directoryWithLiveKey() *fakeDirectory {
 	return &fakeDirectory{
 		activeUsers: map[string]bool{testSubject: true},
 		tokens: map[string]PersonalAccessTokenOwner{
-			HashToken(livePersonalAccessToken): {TokenID: 7, UserID: testSubject},
+			HashToken(livePersonalAccessToken): {TokenID: 7, UserID: testSubject, APIAccessEnabled: true},
 		},
 	}
 }
@@ -102,7 +109,7 @@ func TestAnAPIKeySentWithoutTheBearerSchemeStillResolves(t *testing.T) {
 func TestARecentlyUsedKeyIsNotTouchedAgain(t *testing.T) {
 	directory := directoryWithLiveKey()
 	directory.tokens[HashToken(livePersonalAccessToken)] = PersonalAccessTokenOwner{
-		TokenID: 7, UserID: testSubject, LastUsedAt: time.Now(),
+		TokenID: 7, UserID: testSubject, LastUsedAt: time.Now(), APIAccessEnabled: true,
 	}
 
 	if _, err := resolverFor(directory).Resolve(context.Background(),
@@ -141,11 +148,14 @@ func TestABearerTokenForAnInactiveAccountFallsThroughToTheCookie(t *testing.T) {
 	}
 }
 
-func TestAnIdentityProvidersTokenIsLeftToThePythonTier(t *testing.T) {
+// With no agent provider configured, nothing here can verify an identity
+// provider's token, so it is a 401 — and not a fall-through to the session
+// cookie sent beside it, which would answer as an account the token never named.
+func TestAnIdentityProvidersTokenWithNoAgentProviderIsUnauthorized(t *testing.T) {
 	_, err := resolverFor(directoryWithLiveKey()).Resolve(context.Background(),
-		requestWith("Bearer "+tokenForeignIssuer, ""))
-	if !errors.Is(err, ErrServedByPythonTier) {
-		t.Errorf("got %v, want ErrServedByPythonTier", err)
+		requestWith("Bearer "+tokenForeignIssuer, tokenValid))
+	if !errors.Is(err, ErrUnauthorized) {
+		t.Errorf("got %v, want ErrUnauthorized", err)
 	}
 }
 
@@ -180,20 +190,22 @@ const foreignIssuer = "https://sso.example.com/application/o/app/"
 type fakeAgents struct {
 	issuer  string
 	account string
-	err     error
-	asked   int
+	// accessOff is the account's API-access switch, inverted so that a fake
+	// which does not mention it is an account that has turned it on.
+	accessOff bool
+	err       error
+	asked     int
 }
 
 func (a *fakeAgents) OwnsIssuer(issuer string) bool { return issuer == a.issuer }
 
-func (a *fakeAgents) Resolve(context.Context, string) (string, error) {
+func (a *fakeAgents) Resolve(context.Context, string) (AgentAccount, error) {
 	a.asked++
-	return a.account, a.err
+	return AgentAccount{UserID: a.account, APIAccessEnabled: !a.accessOff}, a.err
 }
 
-// An agent's token no longer costs a second hop: when the verifier owns the
-// issuer it is resolved here, and when it does not the request still goes to the
-// tier that can check it.
+// An agent's token is resolved when the verifier owns its issuer, and is a 401
+// when it does not: no other verifier exists to try.
 func TestAnAgentsTokenIsVerifiedHereWhenThisTierOwnsTheIssuer(t *testing.T) {
 	agents := &fakeAgents{
 		issuer:  foreignIssuer,
@@ -210,18 +222,23 @@ func TestAnAgentsTokenIsVerifiedHereWhenThisTierOwnsTheIssuer(t *testing.T) {
 		t.Errorf("got %v, want the agent's account", caller)
 	}
 	if !caller.IsGated() {
-		t.Error("an agent sees every workspace; it must be gated like an API key")
+		t.Error("an agent acts for the account; it must be gated like an API key")
 	}
 
-	// A token from some other issuer is still the Python tier's to judge.
+	// A token from some other issuer is refused, and the verifier is not
+	// asked to judge a token that is not its own.
 	agents.issuer = "https://elsewhere.example.invalid/"
-	if _, err := resolver.Resolve(context.Background(), requestWith("Bearer "+tokenForeignIssuer, "")); !errors.Is(err, ErrServedByPythonTier) {
-		t.Errorf("got %v, want ErrServedByPythonTier", err)
+	asked := agents.asked
+	if _, err := resolver.Resolve(context.Background(), requestWith("Bearer "+tokenForeignIssuer, "")); !errors.Is(err, ErrUnauthorized) {
+		t.Errorf("got %v, want ErrUnauthorized", err)
+	}
+	if agents.asked != asked {
+		t.Error("the verifier was asked about a token whose issuer it does not own")
 	}
 }
 
-// A refusal the verifier reached is answered here, in its own status and words,
-// and never falls through to the session check or to the Python tier.
+// A refusal the verifier reached is answered in its own status and words, and
+// never falls through to the session check.
 func TestAnAgentsRefusalIsNotAFallThrough(t *testing.T) {
 	refusal := Refusal{Status: http.StatusForbidden, Message: "This sign-in may not use Soloclef Notes"}
 	resolver := resolverFor(directoryWithLiveKey())
@@ -232,5 +249,100 @@ func TestAnAgentsRefusalIsNotAFallThrough(t *testing.T) {
 	var got Refusal
 	if !errors.As(err, &got) || got != refusal {
 		t.Fatalf("got %v, want the verifier's own refusal", err)
+	}
+}
+
+// The account's one access control. The switch is off for a new account, and
+// while it is off neither a key nor an agent's token acts for the account,
+// however valid the credential is.
+func TestAKeyOfAnAccountWithAPIAccessOffIsRefused(t *testing.T) {
+	directory := directoryWithLiveKey()
+	directory.tokens[HashToken(livePersonalAccessToken)] = PersonalAccessTokenOwner{TokenID: 7, UserID: testSubject}
+
+	// The valid session cookie beside the key must not rescue the request:
+	// the caller presented a key, and the key does not work.
+	_, err := resolverFor(directory).Resolve(context.Background(),
+		requestWith("Bearer "+livePersonalAccessToken, tokenValid))
+	var refusal Refusal
+	if !errors.As(err, &refusal) || refusal != ErrAPIAccessOff {
+		t.Fatalf("got %v, want the API-access refusal", err)
+	}
+	if refusal.Status != http.StatusForbidden || refusal.Message != "API access is not enabled for this account." {
+		t.Errorf("the refusal is %d %q", refusal.Status, refusal.Message)
+	}
+	if len(directory.touched) != 0 {
+		t.Errorf("a refused key was recorded as used: %v", directory.touched)
+	}
+}
+
+func TestAnAgentOfAnAccountWithAPIAccessOffIsRefused(t *testing.T) {
+	resolver := resolverFor(directoryWithLiveKey())
+	resolver.Agents = &fakeAgents{issuer: foreignIssuer, account: testSubject, accessOff: true}
+
+	_, err := resolver.Resolve(context.Background(), requestWith("Bearer "+tokenForeignIssuer, tokenValid))
+	var refusal Refusal
+	if !errors.As(err, &refusal) || refusal != ErrAPIAccessOff {
+		t.Fatalf("got %v, want the API-access refusal", err)
+	}
+}
+
+// The switch is about programs. The person's own session is never asked it.
+func TestASessionIsNotAskedTheAPIAccessSwitch(t *testing.T) {
+	directory := &fakeDirectory{activeUsers: map[string]bool{testSubject: true}}
+	caller, err := resolverFor(directory).Resolve(context.Background(), requestWith("", tokenValid))
+	if err != nil || caller.Method != MethodSession {
+		t.Fatalf("got %v, %v; want the session", caller, err)
+	}
+}
+
+// The sign-in the token names is asked about on every request, with the
+// resolver's clock, by the cookie and the bearer alike; an ended one is no
+// principal. A bearer of an ended sign-in falls through to the cookie, as
+// every refused bearer does, and the cookie is held to the same check.
+func TestAnEndedSignInIsNoPrincipal(t *testing.T) {
+	directory := &fakeDirectory{activeUsers: map[string]bool{testSubject: true}, endedSignIns: map[string]bool{}}
+	resolver := resolverFor(directory)
+	at := time.Unix(1762003600, 0)
+	resolver.Now = func() time.Time { return at }
+
+	if caller, err := resolver.Resolve(context.Background(), requestWith("Bearer "+tokenValid, "")); err != nil || caller.UserID != testSubject {
+		t.Fatalf("a live sign-in resolved to %+v, %v", caller, err)
+	}
+	if want := testSubject + "/" + testSignIn + "@1762003600"; len(directory.asked) != 1 || directory.asked[0] != want {
+		t.Errorf("the directory was asked %v, want [%s]", directory.asked, want)
+	}
+
+	directory.endedSignIns[testSignIn] = true
+	for name, request := range map[string]*http.Request{
+		"as a bearer":   requestWith("Bearer "+tokenValid, ""),
+		"as the cookie": requestWith("", tokenValid),
+		"as both":       requestWith("Bearer "+tokenValid, tokenValid),
+	} {
+		if caller, err := resolver.Resolve(context.Background(), request); !errors.Is(err, ErrUnauthorized) {
+			t.Errorf("%s: an ended sign-in resolved to %+v, %v", name, caller, err)
+		}
+	}
+
+	// Another sign-in of the same account, in the cookie, still works.
+	other := signedToken(testSecret, map[string]any{"sid": "9c8b7a6f-5e4d-4c3b-8a29-1f0e0d0c0b0a"})
+	if caller, err := resolver.Resolve(context.Background(), requestWith("Bearer "+tokenValid, other)); err != nil || caller.UserID != testSubject {
+		t.Errorf("the account's other sign-in resolved to %+v, %v", caller, err)
+	}
+}
+
+// A token that names no sign-in is refused before the database is asked:
+// there is nothing to ask about.
+func TestATokenNamingNoSignInIsUnauthorized(t *testing.T) {
+	directory := &fakeDirectory{activeUsers: map[string]bool{testSubject: true}}
+	for name, request := range map[string]*http.Request{
+		"as a bearer":   requestWith("Bearer "+tokenWithoutSignIn, ""),
+		"as the cookie": requestWith("", tokenWithoutSignIn),
+	} {
+		if caller, err := resolverFor(directory).Resolve(context.Background(), request); !errors.Is(err, ErrUnauthorized) {
+			t.Errorf("%s: resolved to %+v, %v", name, caller, err)
+		}
+	}
+	if len(directory.asked) != 0 {
+		t.Errorf("the directory was asked %v about a token naming no sign-in", directory.asked)
 	}
 }

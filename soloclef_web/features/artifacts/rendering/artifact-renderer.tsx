@@ -24,12 +24,13 @@ export function resolveArtifactPresentation(manifest: ArtifactManifest) {
 
 export function ArtifactRenderer({
 	manifest,
-	workspaceId,
+	localOnly = false,
 	zoomControlsContainer,
 	presentation = resolveArtifactPresentation(manifest),
 }: {
 	manifest: ArtifactManifest;
-	workspaceId: number;
+	/** See ``ArtifactRendererProps.localOnly``: set on public links. */
+	localOnly?: boolean;
 	zoomControlsContainer: HTMLElement | null;
 	presentation?: ReturnType<typeof resolveArtifactPresentation>;
 }) {
@@ -37,8 +38,8 @@ export function ArtifactRenderer({
 	const Viewer = renderer.Viewer;
 	return (
 		<Viewer
-			workspaceId={workspaceId}
 			manifest={manifest}
+			localOnly={localOnly}
 			zoomControlsContainer={zoomControlsContainer}
 		/>
 	);

@@ -90,18 +90,9 @@ export function getActivityIcon(iconKey: string, category: ActivityData["categor
 }
 
 const SERVICE_LOGOS: Record<string, { src: string; alt: string }> = {
-	google_search: { src: "/connectors/google-search.svg", alt: "Google Search" },
 	exa: { src: "/connectors/exa.svg", alt: "Exa" },
 	tavily: { src: "/connectors/tavily.svg", alt: "Tavily" },
 	web: { src: "/connectors/web.svg", alt: "Web" },
-	amazon: { src: "/connectors/amazon.svg", alt: "Amazon" },
-	walmart: { src: "/connectors/walmart.svg", alt: "Walmart" },
-	google_maps: { src: "/connectors/google-maps.svg", alt: "Google Maps" },
-	indeed: { src: "/connectors/indeed.svg", alt: "Indeed" },
-	youtube: { src: "/connectors/youtube.svg", alt: "YouTube" },
-	reddit: { src: "/connectors/reddit.svg", alt: "Reddit" },
-	tiktok: { src: "/connectors/tiktok.svg", alt: "TikTok" },
-	instagram: { src: "/connectors/instagram.svg", alt: "Instagram" },
 };
 
 export function getConnectorLogo(integration: ActivityData["integration"]) {

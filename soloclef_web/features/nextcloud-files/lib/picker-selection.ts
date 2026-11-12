@@ -1,5 +1,6 @@
+import type { DocumentParser } from "@/contracts/types/document.types";
 import { fileExtension } from "@/lib/etl/parser-choice";
-import type { PickedItem, RemoteEntry } from "../api/nextcloud-files-api";
+import type { ImportRequest, PickedItem, RemoteEntry } from "../api/nextcloud-files-api";
 
 export type Crumb = { name: string; path: string };
 
@@ -69,6 +70,52 @@ export function countPicked(selection: Selection): { files: number; folders: num
 		else files += 1;
 	}
 	return { files, folders };
+}
+
+/**
+ * The most ticked files and folders one request takes; the server's
+ * ImportRequest.items (nextcloud/schemas.py) refuses the whole request above
+ * it. This counts ticks. The cap on files an import brings in once folders
+ * are opened is a separate, smaller one the server applies and names itself.
+ */
+export const MAX_PICKED_ITEMS = 500;
+
+/**
+ * Why a selection cannot be sent, or null when it can. Above the cap the
+ * server answers a plain 422, which would reach the person as "try again in a
+ * moment" although trying again never helps. It is refused rather than cut
+ * down: quietly sending the first five hundred would leave ticked files out
+ * without saying so. An empty selection is not a case here because the Add
+ * button is disabled until something is ticked.
+ */
+export function pickProblem(items: PickedItem[]): "too_many" | null {
+	return items.length > MAX_PICKED_ITEMS ? "too_many" : null;
+}
+
+/**
+ * The import (or preview) request for a selection. The notebook is a named
+ * field because it is a plain number, as is the connector id beside it at
+ * the call: by position, swapping the two would still compile and would link
+ * the files to another notebook.
+ */
+export function nextcloudImportRequest({
+	notebookId,
+	items,
+	parser,
+	useVision,
+}: {
+	notebookId: number | null;
+	items: PickedItem[];
+	/** Required: an import always names its parser (see ImportRequest). */
+	parser: DocumentParser;
+	useVision: boolean;
+}): ImportRequest {
+	return {
+		items,
+		parser,
+		use_vision_llm: useVision,
+		notebook_id: notebookId,
+	};
 }
 
 export function formatBytes(bytes: number | null): string {

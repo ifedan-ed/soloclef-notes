@@ -137,6 +137,8 @@ export interface ConnectionDraft {
 	base_url: string | null;
 	api_key: string | null;
 	extra: Record<string, unknown>;
+	/** Extra headers, for an OpenAI-compatible endpoint only; absent for none. */
+	headers?: Record<string, string>;
 	/** Model id to seed after creation (providers without discovery, e.g. Azure). */
 	seedModelId?: string;
 }

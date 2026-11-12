@@ -44,7 +44,7 @@ export const builderTaskSchema = z.object({
 	maxRetries: z.number().int().min(0).max(10).nullable(),
 	timeoutSeconds: z.number().int().positive().max(86_400).nullable(),
 	/**
-	 * What the task may read: the workspace's documents (the default), or also
+	 * What the task may read: your documents (the default), or also
 	 * the web and connected apps (web search, Browserbase...). Sent as
 	 * ``retrieval_scope``; an @-mentioned connector widens it on the server.
 	 */
@@ -58,6 +58,11 @@ export const builderTaskSchema = z.object({
 	 * choices.
 	 */
 	saveToNotebookId: z.number().int().positive().nullable(),
+	/**
+	 * The model that answers this task (``params.model``), by the name the
+	 * model proxy lists it under; null = the automation's model.
+	 */
+	model: z.string().nullable(),
 });
 export type BuilderTask = z.infer<typeof builderTaskSchema>;
 export type TaskScope = BuilderTask["scope"];
@@ -84,20 +89,6 @@ export const builderExecutionSchema = z.object({
 });
 export type BuilderExecution = z.infer<typeof builderExecutionSchema>;
 
-/**
- * Per-automation model selection. For image and vision ``0`` means "unset";
- * for chat ``null`` does, because ``0`` is Auto there (the run picks a
- * standard model). The builder resolves an unset slot to the eligible default
- * during render, and the resolved ids are written onto ``definition.models`` at
- * submit so the run is insulated from later chat/workspace model changes.
- */
-export const builderModelsSchema = z.object({
-	chatModelId: z.number().int().nullable(),
-	imageConfigId: z.number().int(),
-	visionConfigId: z.number().int(),
-});
-export type BuilderModels = z.infer<typeof builderModelsSchema>;
-
 export const builderFormSchema = z.object({
 	name: z.string().trim().min(1, "Give your automation a name").max(200),
 	description: z.string().trim().max(2000).nullable(),
@@ -109,8 +100,13 @@ export const builderFormSchema = z.object({
 	tags: z.array(z.string()),
 	/** Carried through from an edited definition so we don't drop it. */
 	goal: z.string().nullable(),
-	/** Selected chat/image/vision models (``0`` = use the eligible default). */
-	models: builderModelsSchema,
+	/**
+	 * The model that answers the automation's tasks (``definition.models.chat``),
+	 * by the name the model proxy lists it under. null = the account's own chat
+	 * model, read when a run starts, so a later change of that model is
+	 * followed. A task may name its own (``BuilderTask.model``).
+	 */
+	chatModel: z.string().nullable(),
 });
 export type BuilderForm = z.infer<typeof builderFormSchema>;
 
@@ -156,6 +152,7 @@ export function emptyTask(): BuilderTask {
 		scope: "documents",
 		notebookId: null,
 		saveToNotebookId: null,
+		model: null,
 	};
 }
 
@@ -176,7 +173,7 @@ export function createEmptyForm(): BuilderForm {
 		},
 		tags: [],
 		goal: null,
-		models: { chatModelId: null, imageConfigId: 0, visionConfigId: 0 },
+		chatModel: null,
 	};
 }
 
@@ -240,9 +237,8 @@ function buildPlan(form: BuilderForm) {
 				...mentionParams(task.mentions),
 				...(task.scope !== "documents" ? { retrieval_scope: task.scope } : {}),
 				...(task.notebookId !== null ? { notebook_id: task.notebookId } : {}),
-				...(task.saveToNotebookId !== null
-					? { save_to_notebook_id: task.saveToNotebookId }
-					: {}),
+				...(task.saveToNotebookId !== null ? { save_to_notebook_id: task.saveToNotebookId } : {}),
+				...(task.model !== null ? { model: task.model } : {}),
 			},
 		};
 		if (task.maxRetries !== null) step.max_retries = task.maxRetries;
@@ -269,24 +265,11 @@ function buildDefinition(form: BuilderForm): AutomationDefinition {
 			email_result: form.execution.emailResult,
 		},
 		metadata: { tags: form.tags },
-		// Only emit models when fully resolved (the builder seeds non-zero
-		// defaults before submit). A zero/unset triple is omitted so the
-		// backend falls back to the workspace snapshot.
-		...(hasResolvedModels(form.models)
-			? {
-					models: {
-						chat_model_id: form.models.chatModelId,
-						image_gen_model_id: form.models.imageConfigId,
-						vision_model_id: form.models.visionConfigId,
-					},
-				}
-			: {}),
+		// A chosen model is sent by its proxy name. None chosen sends no
+		// ``models`` at all: the run is then answered by the account's own chat
+		// model, which the server reads when the run starts.
+		...(form.chatModel !== null ? { models: { chat: form.chatModel } } : {}),
 	} as unknown as AutomationDefinition;
-}
-
-/** True once every slot is chosen: chat may be Auto (0), image and vision need an id. */
-export function hasResolvedModels(models: BuilderModels): boolean {
-	return models.chatModelId !== null && models.imageConfigId !== 0 && models.visionConfigId !== 0;
 }
 
 /** The desired schedule trigger for this form, or ``null`` if none. */
@@ -300,13 +283,9 @@ export function buildScheduleTrigger(form: BuilderForm): TriggerCreateRequest | 
 	};
 }
 
-export function buildCreatePayload(
-	form: BuilderForm,
-	workspaceId: number
-): AutomationCreateRequest {
+export function buildCreatePayload(form: BuilderForm): AutomationCreateRequest {
 	const trigger = buildScheduleTrigger(form);
 	return {
-		workspace_id: workspaceId,
 		name: form.name.trim(),
 		description: form.description?.trim() ? form.description.trim() : null,
 		definition: buildDefinition(form),
@@ -482,6 +461,7 @@ export function hydrateForm(
 				typeof params.save_to_notebook_id === "number" && params.save_to_notebook_id > 0
 					? params.save_to_notebook_id
 					: null,
+			model: proxyName(params.model),
 		});
 	}
 	if (tasks.length === 0) {
@@ -514,8 +494,6 @@ export function hydrateForm(
 		? metadata.tags.filter((tag): tag is string => typeof tag === "string")
 		: [];
 
-	const models = modelsFromDefinition(d.models);
-
 	return {
 		formable: true,
 		form: {
@@ -538,20 +516,19 @@ export function hydrateForm(
 			},
 			tags,
 			goal: typeof d.goal === "string" ? d.goal : null,
-			models,
+			chatModel: proxyName(asRecord(d.models).chat),
 		},
 	};
 }
 
-/** Read a captured ``definition.models`` snapshot into the form's model slots. */
-function modelsFromDefinition(raw: unknown): BuilderModels {
-	const m = asRecord(raw);
-	const num = (value: unknown) => (typeof value === "number" ? value : 0);
-	return {
-		chatModelId: typeof m.chat_model_id === "number" ? m.chat_model_id : null,
-		imageConfigId: num(m.image_gen_model_id),
-		visionConfigId: num(m.vision_model_id),
-	};
+/**
+ * A stored model name, or null for none. A definition saved before models
+ * were proxy names holds numeric ids under other keys (``chat_model_id``...);
+ * those named rows nothing reads any more, so they hydrate as "no model
+ * chosen" and the next save writes the definition without them.
+ */
+function proxyName(raw: unknown): string | null {
+	return typeof raw === "string" && raw.trim() ? raw : null;
 }
 
 /**

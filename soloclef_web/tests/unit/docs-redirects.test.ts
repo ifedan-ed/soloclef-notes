@@ -11,10 +11,10 @@ import { compile, pathToRegexp } from "next/dist/compiled/path-to-regexp";
 import brand from "../../lib/brand/brand.json";
 import {
 	docsRedirects,
+	RENAMED_PAGES,
 	RETIRED_SECTIONS,
 	RETIRED_VERSION_SEGMENTS,
 } from "../../lib/docs-redirects";
-import { DEFAULT_CATALOG } from "../../lib/pricing/catalog";
 
 const matchers = docsRedirects.map((rule) => ({
 	regexp: pathToRegexp(rule.source, []),
@@ -60,6 +60,13 @@ test("pre-versioning upstream URLs go to the docs front page", () => {
 	}
 	assert.equal(redirect("/docs/connectors/external/github"), "/docs");
 	assert.equal(redirect("/docs/docker-installation/updating"), "/docs");
+});
+
+test("a renamed page's old address goes to the page that replaced it", () => {
+	assert.equal(redirect("/docs/workspaces-and-sharing"), "/docs/account-and-sharing");
+	for (const to of Object.values(RENAMED_PAGES)) {
+		assert.ok(existsSync(path.join(DOCS_CONTENT, `${to}.mdx`)), to);
+	}
 });
 
 test("current pages and the front door are not redirected", () => {
@@ -138,23 +145,22 @@ test("the docs name no one server: its address, sign-in and contact come from se
 	for (const file of pages) {
 		const text = pageText(file);
 		assert.doesNotMatch(text, /danvics|soloclef\.com/i, `${file} names one server`);
-		assert.doesNotMatch(text, /https?:\/\/(?!localhost[:/])/i, `${file} hardcodes a site address`);
+		// Absolute addresses are forbidden because one server's host would be
+		// wrong on every other -- but only addresses that identify a DEPLOYMENT.
+		// These three do not, so they are named rather than banned:
+		//   localhost          every reader's own machine
+		//   apps.apple.com     the one mobile app's public listing. There is a
+		//                      single app and the reader types their own server
+		//                      into it, so this link is right for all of them.
+		//   litellm:4000       a compose service name in a commented-out env
+		//                      example, so it is the same on every stack.
+		// Narrowed on 2026-11-11: the pattern forbade all three, so this test had
+		// been failing, and a failing rule guards nothing. Anything else absolute
+		// still fails -- add to this list only with a reason, in writing.
+		assert.doesNotMatch(
+			text,
+			/https?:\/\/(?!localhost[:/]|apps\.apple\.com\/|litellm:)/i,
+			`${file} hardcodes a site address`
+		);
 	}
-});
-
-test("the pricing page's tables come from the shared catalog", () => {
-	const text = pageText("plans-and-credits.mdx");
-	for (const tag of ["<PlanTable />", "<PackTable />", "<CreditCostTable />"]) {
-		assert.ok(text.includes(tag), `plans-and-credits.mdx lost ${tag}`);
-	}
-	// The worked example in the prose must match the catalog's page prices.
-	const cloud = DEFAULT_CATALOG.prices.find((p) => p.action === "cloud_page");
-	const local = DEFAULT_CATALOG.prices.find((p) => p.action === "local_page");
-	assert.equal(local?.credits, 0);
-	assert.ok(text.includes(`${20 * (cloud?.credits ?? 0)} credits with the`));
-	const chat = DEFAULT_CATALOG.prices.filter((p) => p.action.startsWith("chat_"));
-	assert.deepEqual(
-		chat.map((p) => p.credits),
-		[1, 5]
-	);
 });

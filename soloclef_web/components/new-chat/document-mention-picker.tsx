@@ -47,7 +47,6 @@ import { queries } from "@/zero/queries";
 export type DocumentMentionPickerRef = ComposerSuggestionNavigatorRef;
 
 interface DocumentMentionPickerProps {
-	workspaceId: number;
 	onSelectionChange: (mentions: MentionedDocumentInfo[]) => void;
 	onDone: () => void;
 	initialSelectedDocuments?: MentionedDocumentInfo[];
@@ -148,7 +147,6 @@ export const DocumentMentionPicker = forwardRef<
 	DocumentMentionPickerProps
 >(function DocumentMentionPicker(
 	{
-		workspaceId,
 		onSelectionChange,
 		onDone,
 		initialSelectedDocuments = [],
@@ -173,14 +171,12 @@ export const DocumentMentionPicker = forwardRef<
 	const [currentPage, setCurrentPage] = useState(0);
 	const [hasMore, setHasMore] = useState(false);
 	const [isLoadingMore, setIsLoadingMore] = useState(false);
-	const [zeroFolders] = useZeroQuery(queries.folders.bySpace({ workspaceId }));
+	const [zeroFolders] = useZeroQuery(queries.folders.mine());
 	const { data: connectors = [], isLoading: isConnectorsLoading } = useAtomValue(connectorsAtom);
 	const activeConnectors = useMemo(() => connectors.filter(isConnectorActive), [connectors]);
-	const artifactsByDocument = useArtifactsByDocument(workspaceId);
-	const paginationScopeKey = useMemo(
-		() => `${workspaceId}:${debouncedSearch}`,
-		[workspaceId, debouncedSearch]
-	);
+	const artifactsByDocument = useArtifactsByDocument();
+	// The search is the whole scope: every document is the account's.
+	const paginationScopeKey = debouncedSearch;
 	const previousPaginationScopeKeyRef = useRef<string | null>(null);
 
 	// Reset pagination state when the active search scope changes.
@@ -197,12 +193,11 @@ export const DocumentMentionPicker = forwardRef<
 
 	const titleSearchParams = useMemo(
 		() => ({
-			workspace_id: workspaceId,
 			page: 0,
 			page_size: PAGE_SIZE,
 			...(isSearchValid ? { title: debouncedSearch.trim() } : {}),
 		}),
-		[workspaceId, debouncedSearch, isSearchValid]
+		[debouncedSearch, isSearchValid]
 	);
 
 	const { data: titleSearchResults, isLoading: isTitleSearchLoading } = useQuery({
@@ -210,7 +205,7 @@ export const DocumentMentionPicker = forwardRef<
 		queryFn: ({ signal }) =>
 			documentsApiService.searchDocumentTitles({ queryParams: titleSearchParams }, signal),
 		staleTime: 60 * 1000,
-		enabled: !!workspaceId && currentPage === 0 && (!hasSearch || isSearchValid),
+		enabled: currentPage === 0 && (!hasSearch || isSearchValid),
 		placeholderData: keepPreviousData,
 	});
 
@@ -243,7 +238,6 @@ export const DocumentMentionPicker = forwardRef<
 
 		try {
 			const queryParams = {
-				workspace_id: workspaceId,
 				page: nextPage,
 				page_size: PAGE_SIZE,
 				...(isSearchValid ? { title: debouncedSearch.trim() } : {}),
@@ -262,7 +256,7 @@ export const DocumentMentionPicker = forwardRef<
 		} finally {
 			setIsLoadingMore(false);
 		}
-	}, [currentPage, hasMore, isLoadingMore, debouncedSearch, workspaceId, isSearchValid]);
+	}, [currentPage, hasMore, isLoadingMore, debouncedSearch, isSearchValid]);
 
 	const actualDocuments = useMemo(() => {
 		if (!isSingleCharSearch) return accumulatedDocuments;

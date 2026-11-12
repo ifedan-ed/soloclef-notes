@@ -1,10 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { APIRequestContext, Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { plainText } from "@/lib/markdown/plain-text";
-import { authHeaders, BACKEND_URL } from "../helpers/api/auth";
-import { createNote } from "../helpers/api/notebooks";
-import { expect, test } from "./fixtures";
+import { authHeaders } from "../helpers/api/auth";
+import { type NoteMaker, noteUrl, provideNotes } from "../helpers/api/notes";
+import { test as base, expect, uniqueName } from "./fixtures";
 
 /**
  * A note opens once on the Notes page, fully drawn: never blank after its
@@ -122,41 +122,50 @@ async function shoot(page: Page, name: string, until: number) {
 	}
 }
 
-async function renameNote(
-	request: APIRequestContext,
-	token: string,
-	ws: number,
-	nb: number,
-	id: number,
-	title: string
-) {
-	const res = await request.patch(
-		`${BACKEND_URL}/api/v1/workspaces/${ws}/notebooks/${nb}/notes/${id}`,
-		{ headers: authHeaders(token), data: { title } }
-	);
-	expect(res.ok(), await res.text()).toBeTruthy();
+const test = base.extend<{ notes: NoteMaker }>({
+	notes: async ({ request, token }, use) => provideNotes(request, token, use),
+});
+
+/** The note's text as stored, untrimmed: opening must not have touched a byte of it. */
+async function storedContent(page: Page, token: string, id: number): Promise<string> {
+	const response = await page.request.get(noteUrl(id), { headers: authHeaders(token) });
+	expect(response.ok(), await response.text()).toBeTruthy();
+	return ((await response.json()) as { content: string }).content;
+}
+
+/**
+ * Notes that are not shown in a list are opened from the list as a person
+ * does, so each is found there by a name no other test's note has: the
+ * account is shared by every test.
+ */
+const rowFor = (page: Page, tag: string) => page.getByRole("button", { name: tag });
+
+/** Requests that would change the note: its text, its pin, its notebook or its sources. */
+function watchWrites(page: Page, id: number): string[] {
+	const writes: string[] = [];
+	const path = new RegExp(`/api/v1/notes/${id}(/|$)`);
+	page.on("request", (req) => {
+		if (req.method() !== "GET" && path.test(new URL(req.url()).pathname)) writes.push(req.url());
+	});
+	return writes;
 }
 
 test.describe("A note on the Notes page", () => {
 	test.describe.configure({ timeout: 120_000 });
 	test("opens once, fully drawn, with an answer's Markdown and maths, unsaved", async ({
 		page,
-		request,
 		token,
-		workspace,
-		notebook,
+		notes,
 	}, testInfo) => {
-		const note = await createNote(request, token, workspace.id, notebook.id, "x", ANSWER);
-		// The title the old Save to note gave such an answer (a PATCH keeps it as sent).
-		await renameNote(request, token, workspace.id, notebook.id, note.id, RAW_TITLE);
+		// The raw title the old Save to note gave such an answer, TeX and all,
+		// made this test's own by a tag at its end.
+		const tag = uniqueName("answer");
+		const note = await notes.create({ title: `${RAW_TITLE} ${tag}`, content: ANSWER });
 
-		const saves: string[] = [];
-		page.on("request", (req) => {
-			if (req.method() !== "GET" && /\/notes\/\d+$|\/save$/.test(req.url())) saves.push(req.url());
-		});
+		const saves = watchWrites(page, note.id);
 
-		await page.goto(`/dashboard/${workspace.id}/notes`);
-		const row = page.getByRole("button", { name: /The correlation was moderate/ });
+		await page.goto(`/dashboard/notes`);
+		const row = rowFor(page, tag);
 		await expect(row).toBeVisible({ timeout: 30_000 });
 		await row.click();
 		await startFrameLog(page);
@@ -211,131 +220,32 @@ test.describe("A note on the Notes page", () => {
 
 		// Opening a note is not an edit.
 		expect.soft(saves, "saves sent by opening the note").toEqual([]);
-		const stored = await request.get(
-			`${BACKEND_URL}/api/v1/workspaces/${workspace.id}/notebooks/${notebook.id}/notes/${note.id}`,
-			{ headers: authHeaders(token) }
-		);
-		expect.soft(((await stored.json()) as { content: string }).content).toBe(ANSWER);
-	});
-
-	test("a note document opens once, fully drawn, unsaved", async ({
-		page,
-		request,
-		token,
-		workspace,
-	}, testInfo) => {
-		const created = await request.post(`${BACKEND_URL}/api/v1/workspaces/${workspace.id}/notes`, {
-			headers: authHeaders(token),
-			data: {
-				title: RAW_TITLE.replace("The correlation", "A document: the correlation"),
-				source_markdown: ANSWER,
-			},
-		});
-		expect(created.ok(), await created.text()).toBeTruthy();
-
-		await page.goto(`/dashboard/${workspace.id}/notes`);
-		const row = page.getByRole("button", { name: /A document: the correlation/ });
-		await expect(row).toBeVisible({ timeout: 30_000 });
-		await row.click();
-		await startFrameLog(page);
-		await shoot(page, `${testInfo.project.name}-document`, 2000);
-		const editor = page.locator('[data-slate-editor="true"]');
-		await expect(editor).toContainText("The correlation was moderate and positive");
-		await page.waitForTimeout(2000);
-		const log = await frames(page);
-		if (process.env.NOTES_DISPLAY_SHOTS) {
-			fs.writeFileSync(
-				path.join(process.env.NOTES_DISPLAY_SHOTS, `${testInfo.project.name}-document-frames.json`),
-				JSON.stringify(log, null, 1)
-			);
-			await page.screenshot({
-				path: path.join(
-					process.env.NOTES_DISPLAY_SHOTS,
-					`${testInfo.project.name}-document-settled.png`
-				),
-				fullPage: true,
-			});
-		}
-		const first = log.findIndex((f) => f.text > 0);
-		expect.soft(log.slice(first).filter((f) => f.text === 0)).toEqual([]);
-		await expect.soft(editor.locator(".katex").first()).toBeVisible({ timeout: 5_000 });
-		await expect.soft(editor.locator("table")).toHaveCount(1, { timeout: 5_000 });
-		// Unsaved: Save stays off until the note is edited.
-		await expect
-			.soft(page.getByRole("button", { name: "Save", exact: true }))
-			.toBeDisabled({ timeout: 5_000 });
+		expect.soft(await storedContent(page, token, note.id)).toBe(ANSWER);
 	});
 
 	// Notes shaped as the three writers make them (tests/fixtures-files/notes,
 	// the phone app's fixtures: Plate's own Markdown, answers kept from a chat,
 	// an automation's note document, and the rest of CommonMark and GFM).
 	const FIXTURES = path.join(__dirname, "..", "fixtures-files", "notes");
+	// The index says which writer made each one; here each is written through
+	// the one create route, as every note is, and only its Markdown differs.
 	const index = JSON.parse(fs.readFileSync(path.join(FIXTURES, "index.json"), "utf8")) as {
 		file: string;
-		kind: "notebook_note" | "document";
-		origin: "hand" | "chat" | "automation";
 		title: string;
 	}[];
 	for (const fixture of index) {
 		test(`"${fixture.title}" opens once and shows all of its words`, async ({
 			page,
-			request,
 			token,
-			workspace,
-			notebook,
+			notes,
 		}, testInfo) => {
 			const markdown = fs.readFileSync(path.join(FIXTURES, fixture.file), "utf8");
-			let stored: () => Promise<string>;
-			if (fixture.kind === "notebook_note") {
-				const res = await request.post(
-					`${BACKEND_URL}/api/v1/workspaces/${workspace.id}/notebooks/${notebook.id}/notes`,
-					{
-						headers: authHeaders(token),
-						data: {
-							title: fixture.title,
-							content: markdown,
-							origin: fixture.origin === "chat" ? "chat" : "hand",
-						},
-					}
-				);
-				expect(res.ok(), await res.text()).toBeTruthy();
-				const id = ((await res.json()) as { id: number }).id;
-				stored = async () =>
-					(
-						(await (
-							await request.get(
-								`${BACKEND_URL}/api/v1/workspaces/${workspace.id}/notebooks/${notebook.id}/notes/${id}`,
-								{ headers: authHeaders(token) }
-							)
-						).json()) as { content: string }
-					).content;
-			} else {
-				const res = await request.post(`${BACKEND_URL}/api/v1/workspaces/${workspace.id}/notes`, {
-					headers: authHeaders(token),
-					data: { title: fixture.title, source_markdown: markdown },
-				});
-				expect(res.ok(), await res.text()).toBeTruthy();
-				const id = ((await res.json()) as { id: number }).id;
-				stored = async () =>
-					(
-						(await (
-							await request.get(
-								`${BACKEND_URL}/api/v1/workspaces/${workspace.id}/documents/${id}/editor-content`,
-								{ headers: authHeaders(token) }
-							)
-						).json()) as { source_markdown: string }
-					).source_markdown;
-			}
-			const saves: string[] = [];
-			page.on("request", (req) => {
-				if (req.method() !== "GET" && /\/notes\/\d+$|\/save$/.test(req.url()))
-					saves.push(req.url());
-			});
+			const tag = uniqueName("fixture");
+			const note = await notes.create({ title: `${fixture.title} ${tag}`, content: markdown });
+			const saves = watchWrites(page, note.id);
 
-			await page.goto(`/dashboard/${workspace.id}/notes`);
-			const row = page.getByRole("button", {
-				name: new RegExp(fixture.title.slice(0, 12).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
-			});
+			await page.goto(`/dashboard/notes`);
+			const row = rowFor(page, tag);
 			await expect(row).toBeVisible({ timeout: 30_000 });
 			await row.click();
 			await startFrameLog(page);
@@ -365,7 +275,7 @@ test.describe("A note on the Notes page", () => {
 				.toEqual([]);
 			expect.soft(log.at(-1)?.mounts, "editors mounted").toBe(1);
 			expect.soft(saves, "saves sent by opening the note").toEqual([]);
-			expect.soft(await stored(), "the note as stored").toBe(markdown);
+			expect.soft(await storedContent(page, token, note.id), "the note as stored").toBe(markdown);
 
 			// Every word the note shows as text is drawn (an image's, a link
 			// definition's or a footnote label's words are not text, nor is a

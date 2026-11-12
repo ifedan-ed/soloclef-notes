@@ -5,19 +5,19 @@ import { draftToRestore } from "@/features/composer-tools/failed-send-draft";
 
 test("a failed send puts its text and tool back in an empty composer", () => {
 	assert.deepEqual(
-		draftToRestore({ isEmpty: true, tool: null }, { text: "summarise HFNC", tool: "youtube" }),
-		{ text: "summarise HFNC", tool: "youtube" }
+		draftToRestore({ isEmpty: true, tool: null }, { text: "summarise HFNC", tool: "pubmed" }),
+		{ text: "summarise HFNC", tool: "pubmed" }
 	);
 });
 
 test("text typed since the failure is never overwritten; a newer tool pick wins", () => {
 	assert.deepEqual(
-		draftToRestore({ isEmpty: false, tool: "reddit" }, { text: "old", tool: "youtube" }),
-		{ text: null, tool: "reddit" }
+		draftToRestore({ isEmpty: false, tool: "arxiv" }, { text: "old", tool: "pubmed" }),
+		{ text: null, tool: "arxiv" }
 	);
 	assert.deepEqual(
-		draftToRestore({ isEmpty: false, tool: null }, { text: "old", tool: "youtube" }),
-		{ text: null, tool: "youtube" }
+		draftToRestore({ isEmpty: false, tool: null }, { text: "old", tool: "pubmed" }),
+		{ text: null, tool: "pubmed" }
 	);
 });
 

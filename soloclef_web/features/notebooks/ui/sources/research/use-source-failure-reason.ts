@@ -6,7 +6,6 @@ import type { ResearchBoxSource } from "../../../model/research-sources";
 import { useResearchSourceName } from "./use-research-source-name";
 
 const KNOWN_CODES = new Set([
-	"out_of_credit",
 	"search_failed",
 	"source_blocked",
 	"source_busy",
@@ -14,6 +13,7 @@ const KNOWN_CODES = new Set([
 	"source_key_rejected",
 	"source_quota",
 	"source_timeout",
+	"source_unavailable",
 ]);
 
 /**

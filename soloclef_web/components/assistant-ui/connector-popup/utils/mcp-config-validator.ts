@@ -199,15 +199,10 @@ export const parseMCPConfig = (configJson: string): MCPConfigValidationResult =>
  */
 export const testMCPConnection = async (
 	serverConfig: MCPServerConfig,
-	workspaceId: number | string,
 	connectorId?: number
 ): Promise<MCPConnectionTestResult> => {
 	try {
-		const result = await connectorsApiService.testMCPConnection(
-			serverConfig,
-			workspaceId,
-			connectorId
-		);
+		const result = await connectorsApiService.testMCPConnection(serverConfig, connectorId);
 
 		if (result.status === "success") {
 			return {

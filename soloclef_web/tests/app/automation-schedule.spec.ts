@@ -9,12 +9,11 @@ import { expect, test } from "./fixtures";
 
 type Run = { id: number; status: string };
 
-test("a schedule trigger fires and the run finishes", async ({ request, token, workspace }) => {
+test("a schedule trigger fires and the run finishes", async ({ request, token }) => {
 	test.setTimeout(240_000);
 	const created = await request.post(`${BACKEND_URL}/api/v1/automations`, {
 		headers: authHeaders(token),
 		data: {
-			workspace_id: workspace.id,
 			name: "E2E every minute",
 			definition: {
 				name: "E2E every minute",
@@ -47,15 +46,14 @@ test("a schedule trigger fires and the run finishes", async ({ request, token, w
 	expect(last?.status, "the scheduled run should succeed").toBe("succeeded");
 });
 
-test("a new workspace needs no automation", async ({ page, request, token, workspace }) => {
-	const list = await request.get(`${BACKEND_URL}/api/v1/automations?workspace_id=${workspace.id}`, {
+// The account's automations are shared by every test of the run, so this
+// does not count them: it checks the home never asks anyone to make one.
+test("the notebooks home never asks for an automation", async ({ page, request, token }) => {
+	const list = await request.get(`${BACKEND_URL}/api/v1/automations`, {
 		headers: authHeaders(token),
 	});
 	expect(list.ok(), await list.text()).toBeTruthy();
-	const body = (await list.json()) as { items?: unknown[] } | unknown[];
-	const items = Array.isArray(body) ? body : (body.items ?? []);
-	expect(items).toHaveLength(0);
-	await page.goto(`/dashboard/${workspace.id}`);
+	await page.goto("/dashboard");
 	await expect(page.getByRole("heading", { name: "Notebooks", level: 1 })).toBeVisible();
 	await expect(page.getByText(/automation/i)).toHaveCount(0);
 });

@@ -5,8 +5,7 @@ interface EditorPanelState {
 	isOpen: boolean;
 	kind: "local_file" | "memory";
 	localFilePath: string | null;
-	workspaceId: number | null;
-	memoryScope: "user" | "team" | null;
+	memoryScope: "user" | null;
 	title: string | null;
 }
 
@@ -14,7 +13,6 @@ const initialState: EditorPanelState = {
 	isOpen: false,
 	kind: "memory",
 	localFilePath: null,
-	workspaceId: null,
 	memoryScope: null,
 	title: null,
 };
@@ -35,13 +33,11 @@ export const openEditorPanelAtom = atom(
 					kind: "local_file";
 					localFilePath: string;
 					title?: string;
-					workspaceId?: number;
 			  }
 			| {
 					kind: "memory";
-					memoryScope: "user" | "team";
+					memoryScope: "user";
 					title?: string;
-					workspaceId?: number;
 			  }
 	) => {
 		if (!get(editorPanelAtom).isOpen) {
@@ -52,7 +48,6 @@ export const openEditorPanelAtom = atom(
 				isOpen: true,
 				kind: "local_file",
 				localFilePath: payload.localFilePath,
-				workspaceId: payload.workspaceId ?? null,
 				memoryScope: null,
 				title: payload.title ?? null,
 			});
@@ -64,7 +59,6 @@ export const openEditorPanelAtom = atom(
 			isOpen: true,
 			kind: "memory",
 			localFilePath: null,
-			workspaceId: payload.workspaceId ?? null,
 			memoryScope: payload.memoryScope,
 			title: payload.title ?? null,
 		});

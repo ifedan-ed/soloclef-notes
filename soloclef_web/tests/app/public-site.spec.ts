@@ -11,8 +11,8 @@ import { expect, test } from "./fixtures";
  */
 
 const BRAND = "Soloclef Notes";
-// The e2e stack's own address and contact (docker/docker-compose.e2e-web.yml):
-// example values, as a real server sets them in docker/.env.
+// The e2e stack's own address and contact (docker/docker-compose.e2e-web-go.yml):
+// example values, as a real server sets them in docker/.env.go.
 const SITE = "https://notes.example.test";
 const SUPPORT_EMAIL = "help@notes.example.test";
 const UPSTREAM_NAME = /surf\s*sense/i;
@@ -34,6 +34,8 @@ const REMOVED = [
 	"/announcements",
 	"/reddit",
 	"/youtube",
+	// The pricing page went with billing, which was cut from the product.
+	"/pricing",
 ];
 
 async function visibleText(page: Page): Promise<string> {
@@ -81,7 +83,7 @@ test.describe("public site, signed out", () => {
 		for (const claim of [
 			"Answers from your sources, with citations",
 			"Research that lands in the notebook",
-			"Local or Cloud parsing, per upload",
+			"Your choice of parser, per source",
 			"Your files from Nextcloud",
 		]) {
 			await expect(page.getByRole("heading", { name: claim })).toBeVisible();
@@ -131,43 +133,6 @@ test.describe("public site, signed out", () => {
 		await expectNoOverflow(page, "features");
 	});
 
-	test("pricing: three plans, top-ups and credit costs; buying says Coming soon", async ({
-		page,
-	}) => {
-		const res = await page.goto("/pricing");
-		expect(res?.status()).toBe(200);
-		await expect(page).toHaveTitle(new RegExp(`Pricing · ${BRAND}`));
-
-		const plan = (slug: string) => page.getByTestId(`plan-${slug}`);
-		await expect(plan("free")).toContainText("$0");
-		await expect(plan("free")).toContainText("100 credits a month");
-		await expect(plan("plus")).toContainText("$9");
-		await expect(plan("plus")).toContainText("1,500 credits a month");
-		await expect(plan("pro")).toContainText("$24");
-		await expect(plan("pro")).toContainText("5,000 credits a month");
-		await expect(page.getByTestId("pack-credits-500")).toContainText("$5");
-
-		// Billing is in shadow mode: nothing claims payments work.
-		await expect(page.getByTestId("billing-not-live")).toBeVisible();
-		const comingSoon = page.getByTestId("buy-coming-soon");
-		await expect(comingSoon.first()).toBeVisible();
-		expect(await comingSoon.count()).toBeGreaterThanOrEqual(3);
-		for (const button of await comingSoon.all()) {
-			await expect(button).toHaveAttribute("aria-disabled", "true");
-		}
-		await expect(page.getByRole("link", { name: /^(Choose|Buy)\b/ })).toHaveCount(0);
-		// No method is set up on this stack, so none is promised (Stripe is pending).
-		await expect(page.getByText(/\bby card\b|stripe/i)).toHaveCount(0);
-		await expect(page.getByText(/Payments are not open yet/)).toBeAttached();
-
-		const costs = page.getByTestId("credit-costs");
-		await expect(costs.getByRole("row", { name: /Video overview/ })).toContainText("40");
-		await expect(costs.getByRole("row", { name: /Local parsing/ })).toContainText("Free");
-
-		await expectNoUpstreamName(page, "pricing");
-		await expectNoOverflow(page, "pricing");
-	});
-
 	test("docs open signed out and carry the brand", async ({ page }) => {
 		const res = await page.goto("/docs");
 		expect(res?.status()).toBe(200);
@@ -176,7 +141,7 @@ test.describe("public site, signed out", () => {
 		await expectNoUpstreamName(page, "docs");
 		await expectNoOverflow(page, "docs");
 
-		for (const slug of ["getting-started", "studio", "plans-and-credits"]) {
+		for (const slug of ["getting-started", "studio"]) {
 			const doc = await page.goto(`/docs/${slug}`);
 			expect(doc?.status(), `/docs/${slug}`).toBe(200);
 			await expectNoUpstreamName(page, `/docs/${slug}`);
@@ -245,10 +210,10 @@ test.describe("public site, signed out", () => {
 
 	test("sitemap, robots and manifest describe this server", async ({ request }) => {
 		const sitemap = await (await request.get("/sitemap.xml")).text();
-		expect(sitemap).toContain(`${SITE}/pricing`);
+		expect(sitemap).toContain(`${SITE}/features`);
 		expect(sitemap).toContain(`${SITE}/docs`);
 		expect(sitemap).toContain(`${SITE}/docs/self-hosting`);
-		expect(sitemap).not.toMatch(/surfsense\.com|\/blog|\/changelog|\/downloads|\/free/);
+		expect(sitemap).not.toMatch(/surfsense\.com|\/blog|\/changelog|\/downloads|\/free|\/pricing/);
 
 		const robots = await (await request.get("/robots.txt")).text();
 		expect(robots).toContain(`Sitemap: ${SITE}/sitemap.xml`);
@@ -266,11 +231,11 @@ test.describe("public site, signed out", () => {
 test.describe("signed in", () => {
 	test("/ goes straight to the notebooks", async ({ page }) => {
 		await page.goto("/");
-		await expect(page).toHaveURL(/\/dashboard\/\d+\/notebooks$/);
+		await expect(page).toHaveURL(/\/dashboard\/notebooks$/);
 	});
 
-	test("the app shell shows the brand, not the upstream name", async ({ page, workspace }) => {
-		await page.goto(`/dashboard/${workspace.id}/notebooks`);
+	test("the app shell shows the brand, not the upstream name", async ({ page }) => {
+		await page.goto(`/dashboard/notebooks`);
 		await expect(page.getByRole("heading", { name: "Notebooks", level: 1 })).toBeVisible();
 		await expect(page).toHaveTitle(new RegExp(BRAND));
 		await expectNoUpstreamName(page, "notebooks home");

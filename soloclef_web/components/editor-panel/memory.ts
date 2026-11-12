@@ -3,8 +3,6 @@
 import { authenticatedFetch } from "@/lib/auth-fetch";
 import { buildBackendUrl } from "@/lib/env-config";
 
-export type MemoryScope = "user" | "team";
-
 export interface MemoryLimits {
 	soft: number;
 	hard: number;
@@ -15,7 +13,7 @@ export type MemoryLimitLevel = "ok" | "warning" | "error";
 export interface MemoryEditorDocument {
 	document_id: number;
 	title: string;
-	document_type: "USER_MEMORY" | "TEAM_MEMORY";
+	document_type: "USER_MEMORY";
 	source_markdown: string;
 }
 
@@ -24,11 +22,8 @@ interface MemoryReadResponse {
 	limits?: MemoryLimits;
 }
 
-function getMemoryPath(scope: MemoryScope, workspaceId?: number | null) {
-	if (scope === "user") return "/api/v1/users/me/memory";
-	if (!workspaceId) throw new Error("Missing workspace context");
-	return `/api/v1/workspaces/${workspaceId}/memory`;
-}
+/** The account's one memory: what the assistant keeps about the person between chats. */
+const MEMORY_PATH = "/api/v1/users/me/memory";
 
 export function getMemoryLimitState(length: number, limits?: MemoryLimits | null) {
 	if (!limits) {
@@ -52,17 +47,13 @@ export function getMemoryLimitState(length: number, limits?: MemoryLimits | null
 }
 
 export async function fetchMemoryEditorDocument({
-	scope,
-	workspaceId,
 	title,
 	signal,
 }: {
-	scope: MemoryScope;
-	workspaceId?: number | null;
 	title?: string | null;
 	signal?: AbortSignal;
 }) {
-	const response = await authenticatedFetch(buildBackendUrl(getMemoryPath(scope, workspaceId)), {
+	const response = await authenticatedFetch(buildBackendUrl(MEMORY_PATH), {
 		method: "GET",
 		signal,
 	});
@@ -72,29 +63,20 @@ export async function fetchMemoryEditorDocument({
 	}
 
 	const data = (await response.json()) as MemoryReadResponse;
-	const isTeamMemory = scope === "team";
 
 	return {
 		limits: data.limits ?? null,
 		document: {
-			document_id: isTeamMemory ? -1002 : -1001,
-			title: title || (isTeamMemory ? "Team Memory" : "Personal Memory"),
-			document_type: isTeamMemory ? "TEAM_MEMORY" : "USER_MEMORY",
+			document_id: -1001,
+			title: title || "Memory",
+			document_type: "USER_MEMORY",
 			source_markdown: data.memory_md ?? "",
 		} satisfies MemoryEditorDocument,
 	};
 }
 
-export async function saveMemoryMarkdown({
-	scope,
-	workspaceId,
-	markdown,
-}: {
-	scope: MemoryScope;
-	workspaceId?: number | null;
-	markdown: string;
-}) {
-	const response = await authenticatedFetch(buildBackendUrl(getMemoryPath(scope, workspaceId)), {
+export async function saveMemoryMarkdown({ markdown }: { markdown: string }) {
+	const response = await authenticatedFetch(buildBackendUrl(MEMORY_PATH), {
 		method: "PUT",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ memory_md: markdown }),
@@ -110,4 +92,17 @@ export async function saveMemoryMarkdown({
 		markdown: data.memory_md ?? markdown,
 		limits: data.limits,
 	};
+}
+
+/** Empty the account's memory: the assistant starts again knowing nothing about the person. */
+export async function resetMemory() {
+	const response = await authenticatedFetch(buildBackendUrl(`${MEMORY_PATH}/reset`), {
+		method: "POST",
+	});
+	if (!response.ok) {
+		const errorData = await response.json().catch(() => ({ detail: "Failed to reset memory" }));
+		throw new Error(errorData.detail || "Failed to reset memory");
+	}
+	const data = (await response.json()) as MemoryReadResponse;
+	return { markdown: data.memory_md ?? "", limits: data.limits };
 }

@@ -1,14 +1,7 @@
 export { LayoutDataProvider } from "./providers";
-export type {
-	IconRailProps,
-	NavItem,
-	PageUsage,
-	User,
-	Workspace,
-} from "./types/layout.types";
+export type { IconRailProps, NavItem, PageUsage, User } from "./types/layout.types";
 export type { RoutedSectionGroup, RoutedSectionItem } from "./ui";
 export {
-	CreateWorkspaceDialog,
 	Header,
 	IconRail,
 	LayoutShell,
@@ -17,5 +10,4 @@ export {
 	NavIcon,
 	RoutedSectionShell,
 	SidebarUserProfile,
-	WorkspaceAvatar,
 } from "./ui";

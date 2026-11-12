@@ -11,7 +11,6 @@ export type ChatErrorKind =
 	| "model_capability_error"
 	| "model_provider_unavailable"
 	| "rate_limited"
-	| "billing_refused"
 	| "network_offline"
 	| "stream_interrupted"
 	| "stream_parse_error"
@@ -35,28 +34,12 @@ export interface NormalizedChatError {
 	rawMessage?: string;
 	errorCode?: string;
 	details?: Record<string, unknown>;
-	/** Billing refused the turn: the toast offers a way to the billing page. */
-	billingPath?: string;
 }
 
 export interface RawChatErrorInput {
 	error: unknown;
 	flow: ChatFlow;
-	context?: {
-		workspaceId?: number;
-		threadId?: number | null;
-	};
 }
-
-/** Refusals that billing sends on the chat stream (402 codes and the premium quota). */
-export const BILLING_CHAT_ERROR_CODES = new Set([
-	"INSUFFICIENT_CREDITS",
-	"PLAN_MODEL_TIER_NOT_INCLUDED",
-	"PREMIUM_QUOTA_EXHAUSTED",
-]);
-
-export const BILLING_CHAT_FALLBACK_MESSAGE =
-	"Billing stopped this message. Check your plan and credits.";
 
 export const GENERIC_CHAT_ERROR_MESSAGE =
 	"We couldn’t complete this response right now. Please try again.";
@@ -267,28 +250,6 @@ export function classifyChatError(input: RawChatErrorInput): NormalizedChatError
 			rawMessage,
 			errorCode: errorCode ?? "RATE_LIMITED",
 			details: { flow: input.flow },
-		};
-	}
-
-	if (errorCode && BILLING_CHAT_ERROR_CODES.has(errorCode)) {
-		const withPath = error as { billing_path?: unknown; billingPath?: unknown } | null;
-		const billingPath =
-			typeof withPath?.billing_path === "string"
-				? withPath.billing_path
-				: typeof withPath?.billingPath === "string"
-					? withPath.billingPath
-					: "/billing";
-		return {
-			kind: "billing_refused",
-			channel: "toast",
-			severity: "warn",
-			telemetryEvent: "chat_blocked",
-			isExpected: true,
-			userMessage: rawMessage || BILLING_CHAT_FALLBACK_MESSAGE,
-			rawMessage,
-			errorCode,
-			details: { flow: input.flow },
-			billingPath,
 		};
 	}
 

@@ -26,7 +26,6 @@ function render(element: ReactElement): string {
 function notebook(id: number, overrides: Partial<Notebook> = {}): Notebook {
 	return {
 		id,
-		workspace_id: 1,
 		title: `Notebook ${id}`,
 		icon: "📚",
 		created_at: "2026-09-01T10:00:00Z",

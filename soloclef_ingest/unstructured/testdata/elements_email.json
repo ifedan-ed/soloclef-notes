@@ -1,0 +1,14 @@
+[
+  {
+    "type": "NarrativeText",
+    "element_id": "11111111111111111111111111111111",
+    "text": "The clinic moves to the second floor on Monday.",
+    "metadata": {"filename": "move.eml", "filetype": "message/rfc822", "languages": ["eng"], "sent_from": ["Ada <ada@notes.example>"], "subject": "Clinic move"}
+  },
+  {
+    "type": "CodeSnippet",
+    "element_id": "22222222222222222222222222222222",
+    "text": "room = 2.14",
+    "metadata": {"filename": "move.eml", "filetype": "message/rfc822"}
+  }
+]

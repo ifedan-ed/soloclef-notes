@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { LayoutGrid, List, Plus, RefreshCw, Search, Settings } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
@@ -11,8 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Spinner } from "@/components/ui/spinner";
-import { workspacesApiService } from "@/lib/apis/workspaces-api.service";
-import { cacheKeys } from "@/lib/query-client/cache-keys";
+import { notebookPath, settingsPath } from "@/lib/dashboard-paths";
 import { cn } from "@/lib/utils";
 import { notebookKeys } from "../../api/notebook-query-keys";
 import { notebooksApi } from "../../api/notebooks-api";
@@ -33,33 +32,26 @@ import { NotebookCard } from "./notebook-card";
 
 const SKELETON_KEYS = ["a", "b", "c", "d", "e", "f"];
 
-/** The notebooks home: what a workspace opens on. */
-export function NotebooksHome({ workspaceId }: { workspaceId: number }) {
+/** The notebooks home: what the app opens on. */
+export function NotebooksHome() {
 	const t = useTranslations("notebooks");
 	const queryClient = useQueryClient();
-	const { data: notebooks, isLoading, error, refetch } = useNotebooks(workspaceId);
-	// The workspace's name heads the page: with no second sidebar, this is
-	// where it shows (the shell has already fetched it, so this is the cache).
-	const { data: workspace } = useQuery({
-		queryKey: cacheKeys.workspaces.detail(String(workspaceId)),
-		queryFn: () => workspacesApiService.getWorkspace({ id: workspaceId }),
-		enabled: Number.isFinite(workspaceId) && workspaceId > 0,
-	});
+	const { data: notebooks, isLoading, error, refetch } = useNotebooks();
 	const showSkeleton = useDelayedFlag(isLoading);
 	const [tab, setTab] = useState<HomeTab>("all");
 	const [query, setQuery] = useState("");
 	const [view, setView] = useHomeView();
-	const { create, creating } = useCreateNotebook(workspaceId);
+	const { create, creating } = useCreateNotebook();
 	const showCreating = useDelayedFlag(creating);
-	const update = useUpdateNotebook(workspaceId);
-	const setFeatured = useSetFeatured(workspaceId);
-	const copy = useCopyNotebook(workspaceId);
-	const inside = useContentSearch(workspaceId, query);
+	const update = useUpdateNotebook();
+	const setFeatured = useSetFeatured();
+	const copy = useCopyNotebook();
+	const inside = useContentSearch(query);
 	const showInsideSpinner = useDelayedFlag(inside.pending);
 	const searchRef = useRef<HTMLInputElement>(null);
 	const insideListRef = useRef<HTMLDivElement>(null);
 
-	const href = (id: number) => `/dashboard/${workspaceId}/notebooks/${id}`;
+	const href = (id: number) => notebookPath(id);
 	const sections = homeSections(notebooks ?? [], tab, query);
 
 	const onCreate = () => void create().catch(() => toast.error(t("create_failed")));
@@ -71,8 +63,8 @@ export function NotebooksHome({ workspaceId }: { workspaceId: number }) {
 		onCopy: () => copy(notebook).catch(() => toast.error(t("copy_failed"))),
 		onDelete: async () => {
 			try {
-				await notebooksApi.remove(workspaceId, notebook.id);
-				queryClient.setQueryData<Notebook[]>(notebookKeys.list(workspaceId), (current = []) =>
+				await notebooksApi.remove(notebook.id);
+				queryClient.setQueryData<Notebook[]>(notebookKeys.list(), (current = []) =>
 					current.filter((item) => item.id !== notebook.id)
 				);
 			} catch {
@@ -84,7 +76,7 @@ export function NotebooksHome({ workspaceId }: { workspaceId: number }) {
 	const headerLinks = (
 		<>
 			<Button asChild variant="ghost" size="icon" className="size-9 shrink-0 rounded-full">
-				<Link href={`/dashboard/${workspaceId}/user-settings`} aria-label={t("settings")}>
+				<Link href={settingsPath()} aria-label={t("settings")}>
 					<Settings className="size-4" />
 				</Link>
 			</Button>
@@ -98,19 +90,9 @@ export function NotebooksHome({ workspaceId }: { workspaceId: number }) {
 			<header className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
 				<div className="flex items-center gap-2">
 					<Logo disableLink className="size-7 rounded-md" />
-					<div className="min-w-0">
-						{workspace?.name ? (
-							<p
-								className="max-w-[16rem] truncate text-xs leading-tight text-muted-foreground"
-								title={workspace.name}
-							>
-								{workspace.name}
-							</p>
-						) : null}
-						<h1 className="text-xl font-semibold leading-tight text-foreground">
-							{t("home_title")}
-						</h1>
-					</div>
+					<h1 className="min-w-0 text-xl font-semibold leading-tight text-foreground">
+						{t("home_title")}
+					</h1>
 					<div className="ml-auto flex items-center gap-1 sm:hidden">{headerLinks}</div>
 				</div>
 				<div className="flex min-w-0 items-center gap-2 sm:contents">

@@ -2,31 +2,29 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
-import { cacheKeys } from "@/lib/query-client/cache-keys";
 import { type NextcloudConnection, nextcloudConnectApi } from "../api/nextcloud-connect-api";
 
-export const nextcloudConnectionKey = (workspaceId: number) =>
-	["nextcloud-connection", workspaceId] as const;
+export const nextcloudConnectionKey = () => ["nextcloud-connection"] as const;
 
-/** This person's own Nextcloud connection in the workspace, and the server it uses. */
-export function useNextcloudConnection(workspaceId: number) {
+/** This person's own Nextcloud connection, and the server it uses. */
+export function useNextcloudConnection() {
 	const queryClient = useQueryClient();
 	const query = useQuery({
-		queryKey: nextcloudConnectionKey(workspaceId),
-		queryFn: () => nextcloudConnectApi.connection(workspaceId),
+		queryKey: nextcloudConnectionKey(),
+		queryFn: () => nextcloudConnectApi.connection(),
 		staleTime: 60_000,
 	});
 	const refresh = useCallback(
 		async (next?: NextcloudConnection | null) => {
-			if (next) queryClient.setQueryData(nextcloudConnectionKey(workspaceId), next);
+			if (next) queryClient.setQueryData(nextcloudConnectionKey(), next);
 			await Promise.all([
-				queryClient.invalidateQueries({ queryKey: nextcloudConnectionKey(workspaceId) }),
-				queryClient.invalidateQueries({
-					queryKey: cacheKeys.connectors.all(String(workspaceId)),
-				}),
+				queryClient.invalidateQueries({ queryKey: nextcloudConnectionKey() }),
+				// Every connector list: the prefix all of their keys share, so a
+				// new Nextcloud connection shows wherever connectors are listed.
+				queryClient.invalidateQueries({ queryKey: ["connectors"] }),
 			]);
 		},
-		[queryClient, workspaceId]
+		[queryClient]
 	);
 	const connection = query.data;
 	return {

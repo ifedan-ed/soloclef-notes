@@ -8,9 +8,8 @@ const userQueryFn = () => userApiService.getMe();
 export const currentUserAtom = atomWithQuery(() => {
 	return {
 		queryKey: USER_QUERY_KEY,
-		// Live-changing numeric fields (pages_*, premium_credit_micros_*)
-		// are now pushed via Zero (queries.user.me()), so /users/me only
-		// needs to fire once per session for the static profile fields.
+		// The profile's fields change only when the person edits them here,
+		// so /users/me only needs to fire once per session.
 		staleTime: Infinity,
 		enabled: isAuthenticated(),
 		// No `retry: false` here: paired with `staleTime: Infinity`, one dropped

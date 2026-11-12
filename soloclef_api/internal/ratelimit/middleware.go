@@ -25,7 +25,8 @@ type Middleware struct {
 
 func (m Middleware) Wrap(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		client, path := ClientIP(request), request.URL.Path
+		// Counted by network, not by address, for IPv6 (client_network.go).
+		client, path := countedAs(ClientIP(request)), request.URL.Path
 		if !m.Covers(request) || client == "" || path == "" {
 			next.ServeHTTP(response, request)
 			return

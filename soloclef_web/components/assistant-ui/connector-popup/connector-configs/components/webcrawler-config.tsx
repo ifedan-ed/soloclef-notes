@@ -4,8 +4,6 @@ import { Info } from "lucide-react";
 import type { FC } from "react";
 import { useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { isHttpUrl } from "@/lib/url";
@@ -21,25 +19,15 @@ function invalidUrlLines(value: string): string[] {
 }
 
 export const WebcrawlerConfig: FC<ConnectorConfigProps> = ({ connector, onConfigChange }) => {
-	// Initialize with existing config values
-	const existingApiKey = (connector.config?.FIRECRAWL_API_KEY as string | undefined) || "";
+	// The page list is the only setting of a crawler connection the server
+	// answers or accepts. There used to be a Firecrawl key field here, filled
+	// in from the connection's config: the server no longer sends a stored key
+	// back to a browser, and refuses one sent to it, so the field is gone.
 	const existingUrls = (connector.config?.INITIAL_URLS as string | undefined) || "";
 
-	const [apiKey, setApiKey] = useState(existingApiKey);
 	const [initialUrls, setInitialUrls] = useState(existingUrls);
-	const [showApiKey, setShowApiKey] = useState(false);
 
 	const invalidUrls = invalidUrlLines(initialUrls);
-
-	const handleApiKeyChange = (value: string) => {
-		setApiKey(value);
-		if (onConfigChange) {
-			onConfigChange({
-				...connector.config,
-				FIRECRAWL_API_KEY: value.trim() || undefined,
-			});
-		}
-	};
 
 	const handleUrlsChange = (value: string) => {
 		setInitialUrls(value);
@@ -58,8 +46,7 @@ export const WebcrawlerConfig: FC<ConnectorConfigProps> = ({ connector, onConfig
 			<div className="space-y-1 sm:space-y-2">
 				<h3 className="font-medium text-sm sm:text-base">Web Crawler Configuration</h3>
 				<p className="text-xs sm:text-sm text-muted-foreground">
-					Add webpages to your knowledge base for periodic indexing. Configure a Firecrawl API key
-					for enhanced crawling or use the free fallback option.
+					Add webpages to your knowledge base for periodic indexing.
 				</p>
 			</div>
 
@@ -71,44 +58,6 @@ export const WebcrawlerConfig: FC<ConnectorConfigProps> = ({ connector, onConfig
 					the chat instead.
 				</AlertDescription>
 			</Alert>
-
-			{/* API Key Field */}
-			<div className="space-y-2">
-				<Label htmlFor="api-key" className="text-xs sm:text-sm">
-					Firecrawl API Key (Optional)
-				</Label>
-				<div className="relative">
-					<Input
-						id="api-key"
-						type={showApiKey ? "text" : "password"}
-						placeholder="fc-xxxxxxxxxxxxx"
-						value={apiKey}
-						onChange={(e) => handleApiKeyChange(e.target.value)}
-						className="bg-slate-400/5 dark:bg-white/5 border-slate-400/20 text-xs sm:text-sm pr-10"
-					/>
-					<Button
-						type="button"
-						variant="ghost"
-						size="sm"
-						onClick={() => setShowApiKey((prev) => !prev)}
-						className="absolute right-1 top-1/2 -translate-y-1/2 h-7 px-2 text-xs text-muted-foreground hover:text-accent-foreground"
-					>
-						{showApiKey ? "Hide" : "Show"}
-					</Button>
-				</div>
-				<p className="text-[10px] sm:text-xs text-muted-foreground">
-					Get your API key from{" "}
-					<a
-						href="https://firecrawl.dev"
-						target="_blank"
-						rel="noopener noreferrer"
-						className="text-primary hover:underline"
-					>
-						firecrawl.dev
-					</a>
-					. If not provided, will use AsyncChromiumLoader as fallback.
-				</p>
-			</div>
 
 			{/* Initial URLs Field */}
 			<div className="space-y-2">

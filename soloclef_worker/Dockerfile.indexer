@@ -1,0 +1,75 @@
+# The indexing worker (cmd/indexer): one Go binary and one tokenizer file.
+# No Python, and no other image to copy anything from.
+#
+# The build context is the REPOSITORY ROOT, as for the Dockerfile beside this
+# one, because the worker requires its sibling modules through relative
+# replaces:
+#   docker build -f soloclef_worker/Dockerfile.indexer -t soloclef-indexer:latest .
+#
+# Where the tokenizer comes from. The chunks are sized with BGE-M3's
+# tokenizer.json, and the ones already stored were cut with one exact file, so
+# the file is fetched by its commit on Hugging Face AND checked against its
+# sha256 (the last stage's ADD). The commit says which revision is meant; the
+# checksum is what stops another file being served under it, and a mismatch
+# fails the build rather than shipping an indexer that cuts different chunks.
+# The checksum is Hugging Face's own (the x-linked-etag of the URL below) and
+# the one the backend image's copy had, so nothing already indexed changes.
+ARG TOKENIZER_URL=https://huggingface.co/BAAI/bge-m3/resolve/5617a9f61b028005a4858fdac845db406aefb181/tokenizer.json
+ARG TOKENIZER_SHA256=21106b6d7dab2952c1d496fb21d5dc9db75c28ed361a05f5020bbba27810dd08
+
+# The chunker's Rust core, as a static library (soloclef_chunker/chonkie/rust).
+# The crate versions are pinned by its Cargo.lock.
+FROM rust:1.89-slim-bookworm AS chonkie
+WORKDIR /src/soloclef_chunker/chonkie/rust
+COPY soloclef_chunker/chonkie/rust/Cargo.toml soloclef_chunker/chonkie/rust/Cargo.lock ./
+COPY soloclef_chunker/chonkie/rust/src src
+RUN cargo build --release --locked
+
+# The Go binary. cgo, because the chunker links the library above; bookworm
+# and not alpine so that it links against the same libc the last stage has.
+FROM golang:1.25-bookworm AS build
+WORKDIR /src
+COPY soloclef_celery soloclef_celery
+# The chunker piece by piece, so that a `target/` left by a local cargo build
+# (hundreds of megabytes, and built for the host) is never sent into the image.
+COPY soloclef_chunker/go.mod soloclef_chunker/
+COPY soloclef_chunker/chonkie/chonkie.go soloclef_chunker/chonkie/
+COPY soloclef_chunker/recursive soloclef_chunker/recursive
+COPY soloclef_chunker/tablesafe soloclef_chunker/tablesafe
+COPY soloclef_filestore soloclef_filestore
+COPY soloclef_ingest soloclef_ingest
+# A document's vision choice is read in the API's own spelling of a model
+# choice (soloclef_assistant/ownmodels), so the indexer builds against that
+# module, and against the modules it imports in turn. The worker's go.mod
+# names each by a relative replace, which must be a directory here.
+COPY soloclef_agent soloclef_agent
+COPY soloclef_assistant soloclef_assistant
+COPY soloclef_automations soloclef_automations
+COPY soloclef_connectors soloclef_connectors
+COPY soloclef_studio soloclef_studio
+# The migrations are compiled into the binary: the start-up check compares
+# the database's version with them (soloclef_schema/schemaversion).
+COPY soloclef_schema soloclef_schema
+COPY soloclef_worker soloclef_worker
+COPY --from=chonkie /src/soloclef_chunker/chonkie/rust/target/release/libsoloclef_chonkie.a \
+     soloclef_chunker/chonkie/rust/target/release/libsoloclef_chonkie.a
+RUN cd soloclef_worker && CGO_ENABLED=1 go build -trimpath -o /out/indexer ./cmd/indexer
+
+FROM debian:bookworm-slim
+# TLS roots for an https proxy or bucket; nothing else is installed.
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --uid 10002 --home-dir /nonexistent indexer \
+    && mkdir -p /opt/tokenizers/bge-m3
+COPY --from=build /out/indexer /usr/local/bin/soloclef-indexer
+# One folder a profile, under the directory SOLOCLEF_INDEX_TOKENIZER_DIR
+# names (internal/chunking). It is a setting, not baked into the binary, so
+# it is not set here either: the deployment states it. --chmod because a file
+# ADD fetches is otherwise readable by root only, and the indexer is not root;
+# the folders are made above because ADD would give the ones it makes the
+# same 0644, which the indexer could not enter.
+ARG TOKENIZER_URL
+ARG TOKENIZER_SHA256
+ADD --checksum=sha256:${TOKENIZER_SHA256} --chmod=0644 ${TOKENIZER_URL} /opt/tokenizers/bge-m3/tokenizer.json
+USER indexer
+ENTRYPOINT ["/usr/local/bin/soloclef-indexer"]

@@ -10,7 +10,6 @@ import {
 	Search,
 } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
-import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDelayedFlag } from "../../hooks/use-delayed-flag";
@@ -28,17 +27,18 @@ const START_ICONS: Record<GuidedStart, typeof Lightbulb> = {
 /**
  * An empty notebook chat: the notebook's title and source count, then ways
  * in. With sources, three questions drawn from them; without, three guided
- * starts. Replaces the regular chat greeting inside notebooks; the composer
- * stays underneath.
+ * starts. Replaces the regular chat greeting inside notebooks. The composer
+ * is not part of it: the chat's one composer is laid out right beneath it
+ * (thread.tsx, ThreadContent), so the input never changes while someone
+ * types.
  */
-export function NotebookWelcome({ composer }: { composer: ReactNode }) {
+export function NotebookWelcome() {
 	const notebook = useNotebookChat();
 	const t = useTranslations("notebooks");
 	const locale = useLocale();
 	const thread = useThreadRuntime();
 	const hasSources = (notebook?.enabledSourceCount ?? 0) > 0;
 	const questions = useStudioSuggestions(
-		notebook?.workspaceId ?? 0,
 		notebook?.notebookId ?? 0,
 		"chat",
 		{},
@@ -62,8 +62,10 @@ export function NotebookWelcome({ composer }: { composer: ReactNode }) {
 		.join(" · ");
 
 	return (
-		<div className="flex min-h-0 w-full flex-1 overflow-y-auto">
-			<section className="mx-auto flex w-full max-w-(--thread-max-width) flex-col gap-6 px-4 pt-10 pb-8">
+		// The chat's scrolling area holds this and scrolls it, and already has
+		// the side padding the composer under it has, so the two line up.
+		<div className="w-full">
+			<section className="mx-auto flex w-full max-w-(--thread-max-width) flex-col gap-6 pt-10 pb-6">
 				<div className="space-y-2">
 					<span className="text-5xl leading-none" aria-hidden>
 						{notebook.icon || "📓"}
@@ -138,7 +140,6 @@ export function NotebookWelcome({ composer }: { composer: ReactNode }) {
 						</div>
 					) : null}
 				</div>
-				<div className="w-full">{composer}</div>
 			</section>
 		</div>
 	);

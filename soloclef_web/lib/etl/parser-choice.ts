@@ -4,38 +4,42 @@ import type {
 	ParserCapability,
 } from "@/contracts/types/document.types";
 
-/** What the upload dialog offers for one parser. */
+/** What a parser picker offers for one parser. */
 export interface ParserOption {
 	parser: DocumentParser;
 	available: boolean;
-	/** Stable backend token ("missing_api_key", ...) when unavailable. */
+	/** The server's token ("not_configured") when unavailable, else null. */
 	unavailableReason: string | null;
-	/** Page-credit multiplier to warn about, or null when nothing is charged. */
-	costMultiplier: number | null;
 }
 
 export interface ParserChoice {
+	/** All four parsers, in the server's order; empty until capabilities arrive. */
 	options: ParserOption[];
-	/** The parser to send with the upload; undefined lets the server default apply. */
+	/**
+	 * The parser to send, or undefined when there is none to send yet: the
+	 * capabilities have not arrived, or the one that would apply cannot run
+	 * here. A source with no parser to send must not be submitted.
+	 */
 	effectiveParser: DocumentParser | undefined;
 }
 
-function toOption(capability: ParserCapability, billingEnabled: boolean): ParserOption {
+function toOption(capability: ParserCapability): ParserOption {
 	return {
 		parser: capability.parser,
 		available: capability.available,
 		unavailableReason: capability.available ? null : capability.unavailable_reason,
-		costMultiplier:
-			billingEnabled && capability.page_multiplier > 0 ? capability.page_multiplier : null,
 	};
 }
 
 /**
- * The Local/Cloud choice given what the backend reports.
+ * The parser a source will be read by, given what the server reports and
+ * what the person picked.
  *
- * Fails closed: until capabilities arrive nothing is offered and nothing is
- * sent, so the server default applies. A selection that cannot run here
- * falls back to the server default, or to any parser that can run.
+ * It starts on the server's default and otherwise is exactly the pick. It
+ * never moves to a different parser on its own: a pick, or a default, that
+ * is not configured yields no parser at all, and the picker asks the person
+ * to choose one that is. Quietly sending a file to another service than the
+ * one named would be choosing where someone's document goes for them.
  */
 export function resolveParserChoice(
 	capabilities: EtlCapabilities | undefined,
@@ -43,42 +47,36 @@ export function resolveParserChoice(
 ): ParserChoice {
 	if (!capabilities) return { options: [], effectiveParser: undefined };
 
-	const options = capabilities.parsers.map((capability) =>
-		toOption(capability, capabilities.page_credit_billing_enabled)
-	);
-	const runnable = (parser: DocumentParser | undefined) =>
-		options.some((option) => option.parser === parser && option.available);
+	const options = capabilities.parsers.map(toOption);
+	const wanted = selected ?? capabilities.default_parser;
+	const runnable = options.some((option) => option.parser === wanted && option.available);
 
-	const effectiveParser = runnable(selected)
-		? selected
-		: runnable(capabilities.default_parser)
-			? capabilities.default_parser
-			: options.find((option) => option.available)?.parser;
-
-	return { options, effectiveParser };
+	return { options, effectiveParser: runnable ? wanted : undefined };
 }
 
 /**
- * Every extension an upload can carry to ``parser``: the parser's own
- * document types, the parser-agnostic ones, and images when the vision LLM
- * reads them. Lower-case, with the leading dot.
+ * Every extension a source can carry to ``parser``: the parser's own
+ * document types and the ones the server reads itself whatever was chosen,
+ * and, with the vision switch on, the pictures the vision model describes.
+ * Lower-case, with the leading dot. With no parser to send, only the
+ * server-read types remain, because nothing else would be read by anything.
  */
 export function acceptedExtensions(
 	capabilities: EtlCapabilities,
 	parser: DocumentParser | undefined,
-	options: { visionRequested: boolean }
+	vision = false
 ): Set<string> {
-	const chosen = capabilities.parsers.find(
-		(capability) => capability.parser === (parser ?? capabilities.default_parser)
-	);
-	const { plaintext, direct_convert, audio, image } = capabilities.always_handled;
+	const chosen = capabilities.parsers.find((capability) => capability.parser === parser);
+	const { plaintext, direct_convert } = capabilities.always_handled;
+	// Pictures only when the server would take the switch: a stale "on"
+	// from before the vision model went away must not admit them.
+	const pictures = vision && capabilities.vision_available ? capabilities.picture_extensions : [];
 	return new Set(
 		[
 			...(chosen?.available ? chosen.document_extensions : []),
 			...plaintext,
 			...direct_convert,
-			...audio,
-			...(options.visionRequested ? image : []),
+			...pictures,
 		].map((ext) => ext.toLowerCase())
 	);
 }

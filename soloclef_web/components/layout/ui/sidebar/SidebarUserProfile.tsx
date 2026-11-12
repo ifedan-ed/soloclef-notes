@@ -5,7 +5,6 @@ import {
 	Bell,
 	Check,
 	ChevronRight,
-	ChevronsUpDown,
 	ChevronUp,
 	ExternalLink,
 	FolderSync,
@@ -16,9 +15,6 @@ import {
 	Moon,
 	Settings,
 	Sun,
-	Trash2,
-	UserCog,
-	UserPen,
 } from "lucide-react";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
@@ -43,15 +39,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useIsAnonymous } from "@/contexts/anonymous-mode";
 import { useLocaleContext } from "@/contexts/LocaleContext";
-import { useLoginGate } from "@/contexts/login-gate";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { usePlatform } from "@/hooks/use-platform";
 import { APP_VERSION } from "@/lib/env-config";
 import { getUserAvatarColor, getUserInitials } from "@/lib/user-avatar";
 import { cn } from "@/lib/utils";
-import type { User, Workspace } from "../../types/layout.types";
+import type { User } from "../../types/layout.types";
 import { SidebarButtonBadge } from "./SidebarButton";
 
 // Supported languages configuration
@@ -73,33 +67,16 @@ const THEMES = [
 
 const LEARN_MORE_LINKS = [{ key: "documentation" as const, href: "/docs" }];
 
-type MobileProfileSubmenu = "workspace" | "theme" | "language" | "learn_more";
-
-/**
- * The workspace part of the account menu: which workspace is open, a switch
- * to any other, and that workspace's members and settings.
- */
-export interface AccountMenuWorkspace {
-	workspaces: Workspace[];
-	activeWorkspaceId: number | null;
-	onWorkspaceSelect: (id: number) => void;
-	onManageMembers?: () => void;
-	onWorkspaceSettings?: () => void;
-	/** Deletes the open workspace (its owner) or leaves it (a member); a dialog confirms. */
-	onDeleteOrLeave?: () => void;
-	/** Whether the person owns the open workspace: Delete for the owner, Leave for anyone else. */
-	activeIsOwner?: boolean;
-}
+type MobileProfileSubmenu = "theme" | "language" | "learn_more";
 
 interface SidebarUserProfileProps {
 	user: User;
-	/** Adds the workspace switcher, members and workspace settings to the menu. */
-	workspace?: AccountMenuWorkspace;
 	/** Adds "Connect your agent" (the MCP setup guide) to the menu. */
 	showConnectAgent?: boolean;
 	/** Called before a menu action runs (the mobile sheet closes itself). */
 	onBeforeAction?: () => void;
-	onUserSettings?: () => void;
+	/** Opens the account's settings. */
+	onSettings?: () => void;
 	/** Opens the notifications panel (the bell's). */
 	onNotifications?: () => void;
 	notificationsUnreadCount?: number;
@@ -163,10 +140,9 @@ function UserAvatar({
 
 export function SidebarUserProfile({
 	user,
-	workspace,
 	showConnectAgent = false,
 	onBeforeAction,
-	onUserSettings,
+	onSettings,
 	onNotifications,
 	notificationsUnreadCount = 0,
 	onLogout,
@@ -187,12 +163,7 @@ export function SidebarUserProfile({
 	const [connectAgentOpen, setConnectAgentOpen] = useState(false);
 	const [folderWatchOpen, setFolderWatchOpen] = useState(false);
 	const { isDesktop } = usePlatform();
-	const isAnonymous = useIsAnonymous();
-	const { gate } = useLoginGate();
 	const bumpWatchedFoldersRefresh = useSetAtom(watchedFoldersRefreshAtom);
-	const activeWorkspace =
-		workspace?.workspaces.find((space) => space.id === workspace.activeWorkspaceId) ?? null;
-	const activeWorkspaceName = activeWorkspace?.name ?? t("select_workspace");
 	// A menu item's action runs once the menu has closed (onCloseAutoFocus), and
 	// the menu then leaves focus alone: a dialog or panel the action opens keeps
 	// it instead of losing it to the avatar and closing again.
@@ -241,96 +212,6 @@ export function SidebarUserProfile({
 	);
 	const drawerSeparatorClassName = "mx-3 h-px bg-popover-border";
 
-	const workspaceItems = () =>
-		workspace?.workspaces.map((space) => ({
-			space,
-			isSelected: space.id === workspace.activeWorkspaceId,
-			onSelect: act(() => workspace.onWorkspaceSelect(space.id)),
-		})) ?? [];
-
-	const renderWorkspaceSubmenu = () => {
-		if (!workspace) return null;
-
-		const trigger = (
-			<>
-				<ChevronsUpDown className="h-4 w-4" />
-				<span className="flex min-w-0 flex-1 flex-col">
-					<span className="text-[11px] leading-tight text-muted-foreground">{t("workspace")}</span>
-					<span className="truncate font-medium" title={activeWorkspaceName}>
-						{activeWorkspaceName}
-					</span>
-				</span>
-			</>
-		);
-
-		if (useMobileSubmenus) {
-			return (
-				<DropdownMenuItem
-					className={submenuTriggerClassName}
-					onSelect={() => setMobileSubmenu("workspace")}
-					aria-label={`${t("switch_workspace")}: ${activeWorkspaceName}`}
-				>
-					{trigger}
-					<ChevronRight className="h-4 w-4 text-muted-foreground" />
-				</DropdownMenuItem>
-			);
-		}
-
-		return (
-			<DropdownMenuSub>
-				<DropdownMenuSubTrigger aria-label={`${t("switch_workspace")}: ${activeWorkspaceName}`}>
-					{trigger}
-				</DropdownMenuSubTrigger>
-				<DropdownMenuPortal>
-					<DropdownMenuSubContent className="min-w-[200px] max-w-[280px] gap-1">
-						<DropdownMenuLabel className="px-2 py-1 text-xs font-normal text-muted-foreground">
-							{t("switch_workspace")}
-						</DropdownMenuLabel>
-						{workspaceItems().map(({ space, isSelected, onSelect }) => (
-							<DropdownMenuItem
-								key={space.id}
-								onSelect={onSelect}
-								aria-current={isSelected ? "true" : undefined}
-								className={cn(isSelected && "text-primary")}
-							>
-								<span className="min-w-0 flex-1 truncate">{space.name}</span>
-								{isSelected && <Check className="h-4 w-4 shrink-0" />}
-							</DropdownMenuItem>
-						))}
-						{(workspace.onManageMembers ||
-							workspace.onWorkspaceSettings ||
-							workspace.onDeleteOrLeave) && <DropdownMenuSeparator />}
-						{workspace.onManageMembers && (
-							<DropdownMenuItem onSelect={act(workspace.onManageMembers)}>
-								<UserPen className="h-4 w-4" />
-								{t("manage_members")}
-							</DropdownMenuItem>
-						)}
-						{workspace.onWorkspaceSettings && (
-							<DropdownMenuItem onSelect={act(workspace.onWorkspaceSettings)}>
-								<Settings className="h-4 w-4" />
-								{t("workspace_settings")}
-							</DropdownMenuItem>
-						)}
-						{workspace.onDeleteOrLeave && (
-							<DropdownMenuItem
-								onSelect={act(workspace.onDeleteOrLeave)}
-								className="text-destructive focus:text-destructive"
-							>
-								{workspace.activeIsOwner ? (
-									<Trash2 className="h-4 w-4" />
-								) : (
-									<LogOut className="h-4 w-4" />
-								)}
-								{workspace.activeIsOwner ? t("delete_workspace") : t("leave_workspace")}
-							</DropdownMenuItem>
-						)}
-					</DropdownMenuSubContent>
-				</DropdownMenuPortal>
-			</DropdownMenuSub>
-		);
-	};
-
 	const renderAppItems = () => (
 		<>
 			{showConnectAgent && (
@@ -341,12 +222,7 @@ export function SidebarUserProfile({
 				</DropdownMenuItem>
 			)}
 			{isDesktop && (
-				<DropdownMenuItem
-					onSelect={act(
-						() => (isAnonymous ? gate("watch local folders") : setFolderWatchOpen(true)),
-						true
-					)}
-				>
+				<DropdownMenuItem onSelect={act(() => setFolderWatchOpen(true), true)}>
 					<FolderSync className="h-4 w-4" />
 					{t("watch_local_folder")}
 				</DropdownMenuItem>
@@ -359,11 +235,10 @@ export function SidebarUserProfile({
 			{showConnectAgent && (
 				<ConnectAgentDialog open={connectAgentOpen} onOpenChange={setConnectAgentOpen} />
 			)}
-			{isDesktop && !isAnonymous && workspace?.activeWorkspaceId ? (
+			{isDesktop ? (
 				<FolderWatchDialog
 					open={folderWatchOpen}
 					onOpenChange={setFolderWatchOpen}
-					workspaceId={workspace.activeWorkspaceId}
 					onSuccess={() => bumpWatchedFoldersRefresh((c) => c + 1)}
 				/>
 			) : null}
@@ -519,91 +394,13 @@ export function SidebarUserProfile({
 			>
 				<DrawerHandle className="mt-3 h-1.5 w-10" />
 				<DrawerTitle className="px-4 pb-2 pt-3 text-center text-base font-semibold">
-					{mobileSubmenu === "workspace"
-						? t("switch_workspace")
-						: mobileSubmenu === "theme"
-							? t("theme")
-							: mobileSubmenu === "language"
-								? t("language")
-								: t("learn_more")}
+					{mobileSubmenu === "theme"
+						? t("theme")
+						: mobileSubmenu === "language"
+							? t("language")
+							: t("learn_more")}
 				</DrawerTitle>
 				<div className="space-y-1 px-4 pb-6 pt-1">
-					{mobileSubmenu === "workspace" && workspace && (
-						<>
-							{workspaceItems().map(({ space, isSelected }, index) => (
-								<Fragment key={space.id}>
-									{index > 0 && <div className={drawerSeparatorClassName} />}
-									<button
-										type="button"
-										aria-current={isSelected ? "true" : undefined}
-										className={cn(drawerItemClassName, isSelected && "text-primary")}
-										onClick={() => {
-											setMobileSubmenu(null);
-											runNow(() => workspace.onWorkspaceSelect(space.id));
-										}}
-									>
-										<span className="min-w-0 flex-1 truncate">{space.name}</span>
-										{isSelected && <Check className="h-4 w-4 shrink-0" />}
-									</button>
-								</Fragment>
-							))}
-							{workspace.onManageMembers && (
-								<>
-									<div className={drawerSeparatorClassName} />
-									<button
-										type="button"
-										className={drawerItemClassName}
-										onClick={() => {
-											setMobileSubmenu(null);
-											runNow(workspace.onManageMembers);
-										}}
-									>
-										<UserPen className="h-4 w-4 text-muted-foreground" />
-										<span className="flex-1">{t("manage_members")}</span>
-									</button>
-								</>
-							)}
-							{workspace.onWorkspaceSettings && (
-								<>
-									<div className={drawerSeparatorClassName} />
-									<button
-										type="button"
-										className={drawerItemClassName}
-										onClick={() => {
-											setMobileSubmenu(null);
-											runNow(workspace.onWorkspaceSettings);
-										}}
-									>
-										<Settings className="h-4 w-4 text-muted-foreground" />
-										<span className="flex-1">{t("workspace_settings")}</span>
-									</button>
-								</>
-							)}
-							{workspace.onDeleteOrLeave && (
-								<>
-									<div className={drawerSeparatorClassName} />
-									<button
-										type="button"
-										className={cn(drawerItemClassName, "text-destructive")}
-										onClick={() => {
-											setMobileSubmenu(null);
-											runNow(workspace.onDeleteOrLeave);
-										}}
-									>
-										{workspace.activeIsOwner ? (
-											<Trash2 className="h-4 w-4" />
-										) : (
-											<LogOut className="h-4 w-4" />
-										)}
-										<span className="flex-1">
-											{workspace.activeIsOwner ? t("delete_workspace") : t("leave_workspace")}
-										</span>
-									</button>
-								</>
-							)}
-						</>
-					)}
-
 					{mobileSubmenu === "theme" &&
 						setTheme &&
 						THEMES.map((themeOption, index) => {
@@ -679,12 +476,9 @@ export function SidebarUserProfile({
 
 	const menuItems = (
 		<>
-			{renderWorkspaceSubmenu()}
-			{workspace && <DropdownMenuSeparator />}
-
-			<DropdownMenuItem onSelect={act(onUserSettings)}>
-				<UserCog className="h-4 w-4" />
-				{t("user_settings")}
+			<DropdownMenuItem onSelect={act(onSettings)}>
+				<Settings className="h-4 w-4" />
+				{t("settings")}
 			</DropdownMenuItem>
 
 			{renderAppItems()}

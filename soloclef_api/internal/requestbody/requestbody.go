@@ -10,25 +10,32 @@
 // internal/errorenvelope writes. So the failures are produced here and written
 // there, exactly as a path parameter's are (internal/requestnumber).
 //
-// What this package deliberately does not do is position a *decode* failure.
-// pydantic-core parses the body with its own JSON parser, whose byte offset is
-// the location it reports — "1" for `{`, "3" for three spaces, "10" for a tab
-// inside a string — and whose idea of valid JSON is not encoding/json's: it
-// takes NaN and Infinity, and a body that is not UTF-8 never reaches it at all
-// and is answered by a different handler with a 400. Mirroring that parser's
-// offsets is a parser, not a mirror, so a body this tier cannot decode is
-// reported as ErrUndecodable and the route hands the request to the Python
-// tier, which positions it itself. That is safe for a write because such a body
-// never reaches the Python route's own code either: it is refused before any
-// statement runs, so nothing is written twice.
+// A body that is not JSON at all is refused by Middleware before the route
+// runs, as FastAPI refused it before solving a route's dependencies: a 422
+// "JSON decode error" for a body that is not valid JSON, and a 400 for one that
+// is not UTF-8 (ErrUndecodable and ErrNotUTF8). The 422 is located at the body
+// and not at a byte offset. pydantic-core reported its own parser's offset
+// ("1" for `{`), which is a fact of that parser and not of the body; a client
+// shows the message, and the message is the same.
 package requestbody
 
 import "errors"
 
-// ErrUndecodable is a body this tier will not answer for: not UTF-8, or not
-// JSON that encoding/json reads. The Python tier's parser decides where the
-// fault is.
-var ErrUndecodable = errors.New("requestbody: the body's decode failure belongs to the Python tier")
+// ErrUndecodable is a body that is not JSON this package can read: a syntax
+// error, data after the value, NaN, or an escape naming half of a surrogate
+// pair (surrogate.go says why that one is refused).
+var ErrUndecodable = errors.New("requestbody: the body is not valid JSON")
+
+// ErrNotUTF8 is a body whose bytes are not UTF-8, so it is not text at all.
+var ErrNotUTF8 = errors.New("requestbody: the body is not UTF-8")
+
+// JSONDecodeError is the message a body that is not valid JSON is refused
+// with: pydantic's own, so a client that matched on it still does.
+const JSONDecodeError = "JSON decode error"
+
+// UnparseableBody is the sentence a body that is not UTF-8, or that did not
+// arrive whole, is refused with in a 400: FastAPI's own words for the same.
+const UnparseableBody = "There was an error parsing the body"
 
 // The messages pydantic gives, as the Python tier was asked for them one case
 // at a time.

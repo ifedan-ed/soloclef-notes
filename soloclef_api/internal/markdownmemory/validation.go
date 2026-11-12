@@ -1,7 +1,6 @@
 package markdownmemory
 
 import (
-	"sort"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -56,29 +55,6 @@ func headingless(content string) (string, bool) {
 		return "", false
 	}
 	return "Memory must be markdown with at least one ## heading.", true
-}
-
-// personalHeadingIntroduced is validation.py:validate_memory_scope, for the
-// team scope only. A forbidden heading the document already had is
-// grandfathered — the Python route collects a warning for it that the route
-// then discards — and only a newly introduced one is refused.
-func personalHeadingIntroduced(content, oldMemory string) (string, bool) {
-	previous := explicitHeadings(oldMemory)
-	current := explicitHeadings(content)
-
-	introduced := make([]string, 0, len(current))
-	for heading := range current {
-		if !forbiddenTeamHeadings[heading] || previous[heading] {
-			continue
-		}
-		introduced = append(introduced, heading)
-	}
-	if len(introduced) == 0 {
-		return "", false
-	}
-	sort.Strings(introduced)
-	return "Team memory cannot introduce personal headings: " +
-		strings.Join(introduced, ", ") + ". Use team-safe headings instead.", true
 }
 
 // grouped is Python's "{:,}" for a non-negative count.

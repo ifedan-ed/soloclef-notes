@@ -11,12 +11,14 @@ const DocumentContentSchema = z.object({
 	viewer_mode: z.enum(["plate", "monaco"]).optional(),
 });
 
-export function documentContentQueryOptions(workspaceId: number, documentId: number) {
+// Keyed by the document alone: a document id is the account's own or the
+// route answers 404, so no second id is needed to say whose it is.
+export function documentContentQueryOptions(documentId: number) {
 	return queryOptions({
-		queryKey: ["document-content", workspaceId, documentId] as const,
+		queryKey: ["document-content", documentId] as const,
 		queryFn: async () => {
 			const response = await authenticatedFetch(
-				buildBackendUrl(`/api/v1/workspaces/${workspaceId}/documents/${documentId}/editor-content`),
+				buildBackendUrl(`/api/v1/documents/${documentId}/editor-content`),
 				{ skipAuthRedirect: true }
 			);
 			if (!response.ok) {

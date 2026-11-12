@@ -5,12 +5,12 @@ import { preferredToolRequestFields } from "@/features/composer-tools/preferred-
 import { scopeForPreferredTool } from "@/features/composer-tools/scope-for-preferred-tool";
 
 test("a forced tool widens a documents-only turn to all", () => {
-	assert.equal(scopeForPreferredTool("documents", "reddit"), "all");
+	assert.equal(scopeForPreferredTool("documents", "pubmed"), "all");
 });
 
 test("a forced tool keeps a web or all scope as chosen", () => {
-	assert.equal(scopeForPreferredTool("web", "youtube"), "web");
-	assert.equal(scopeForPreferredTool("all", "amazon"), "all");
+	assert.equal(scopeForPreferredTool("web", "exa"), "web");
+	assert.equal(scopeForPreferredTool("all", "arxiv"), "all");
 });
 
 test("without a forced tool the scope is unchanged", () => {
@@ -18,9 +18,9 @@ test("without a forced tool the scope is unchanged", () => {
 });
 
 test("the request names the tool and its widened scope", () => {
-	assert.deepEqual(preferredToolRequestFields("documents", "google_maps"), {
+	assert.deepEqual(preferredToolRequestFields("documents", "exa"), {
 		retrieval_scope: "all",
-		preferred_tool: "google_maps",
+		preferred_tool: "exa",
 	});
 });
 
@@ -35,8 +35,14 @@ test("only a new message carries the forced tool, and it is consumed once", () =
 		new URL("../../../lib/chat/stream-engine/engine.ts", import.meta.url),
 		"utf8"
 	);
+	// The three turn bodies are built apart from the engine; only the new
+	// message's names the tool.
+	const bodies = readFileSync(
+		new URL("../../../lib/chat/stream-engine/turn-request-bodies.ts", import.meta.url),
+		"utf8"
+	);
 	assert.equal(
-		source.match(/preferred_tool:/g)?.length,
+		bodies.match(/preferred_tool:/g)?.length,
 		1,
 		"regenerate and resume must not force a tool"
 	);
@@ -50,4 +56,28 @@ test("switching chat threads drops a picked tool", () => {
 		"utf8"
 	);
 	assert.ok(source.includes("setPreferredTool(null)"));
+});
+
+test("each literature is sent under the chat's own name for it", () => {
+	// The Go chat accepts exactly these three values (internal/chat, `picks`);
+	// a different spelling is refused by name, so they are pinned here.
+	for (const tool of ["pubmed", "arxiv", "preprints"] as const) {
+		assert.deepEqual(preferredToolRequestFields("documents", tool), {
+			retrieval_scope: "all",
+			preferred_tool: tool,
+		});
+	}
+});
+
+test("the three literatures are in the menu's list, once each", async () => {
+	const { ACADEMIC_TOOL_IDS, COMPOSER_TOOL_IDS, offeredComposerTools } = await import(
+		"@/features/composer-tools/composer-tools"
+	);
+	assert.deepEqual([...ACADEMIC_TOOL_IDS], ["pubmed", "arxiv", "preprints"]);
+	for (const tool of ACADEMIC_TOOL_IDS) {
+		assert.equal(COMPOSER_TOOL_IDS.filter((id) => id === tool).length, 1, tool);
+	}
+	// Offered to an account with no keys at all.
+	const offered = offeredComposerTools(new Set());
+	assert.ok(ACADEMIC_TOOL_IDS.every((tool) => offered.includes(tool)));
 });

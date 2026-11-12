@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestDecodeHandsBackABodyCarryingALoneSurrogate(t *testing.T) {
+func TestDecodeRefusesABodyCarryingALoneSurrogate(t *testing.T) {
 	unpaired := []string{
 		`{"a":"\ud800"}`,
 		`{"a":"\udc00"}`,

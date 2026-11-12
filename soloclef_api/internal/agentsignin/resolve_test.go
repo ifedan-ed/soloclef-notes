@@ -20,9 +20,9 @@ type fakeAccounts struct {
 	asked   []Identity
 }
 
-func (a *fakeAccounts) Account(_ context.Context, identity Identity) (string, error) {
+func (a *fakeAccounts) Account(_ context.Context, identity Identity) (principal.AgentAccount, error) {
 	a.asked = append(a.asked, identity)
-	return a.account, a.err
+	return principal.AgentAccount{UserID: a.account, APIAccessEnabled: true}, a.err
 }
 
 func quietLogger() *slog.Logger {
@@ -104,18 +104,19 @@ func TestAVerifiedSignInActsAsItsAccount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
-	if account != accounts.account {
-		t.Errorf("got %q, want %q", account, accounts.account)
+	// The switch is carried through untouched: the verdict on it is the
+	// resolver's (internal/principal), not this package's.
+	if account.UserID != accounts.account || !account.APIAccessEnabled {
+		t.Errorf("got %+v, want %q with API access as the account has it", account, accounts.account)
 	}
 	if len(accounts.asked) != 1 || accounts.asked[0].Subject != "provider-subject-1" {
 		t.Errorf("the account was looked up as %v", accounts.asked)
 	}
 }
 
-// A provider this tier cannot read is not a verdict. The Python tier keeps its
-// own copy of the provider's keys, so the request goes there rather than being
-// answered with a guess.
-func TestAProviderThatCannotBeReadIsServedByThePythonTier(t *testing.T) {
+// A provider that cannot be read is not a verdict on the token, so it is a 503
+// the agent retries and never a 401 that would sign every agent out.
+func TestAProviderThatCannotBeReadIsA503(t *testing.T) {
 	signing := newRSAKey(t)
 	provider := newFakeProvider(t, keySet(t, publicJWK(t, "signing", &signing.PublicKey)))
 	provider.fail.Store(true)
@@ -128,7 +129,8 @@ func TestAProviderThatCannotBeReadIsServedByThePythonTier(t *testing.T) {
 
 	_, err := principals.Resolve(context.Background(),
 		mint(t, signing, "signing", jwt.SigningMethodRS256, validClaims(provider.issuer, time.Now())))
-	if !errors.Is(err, principal.ErrServedByPythonTier) {
-		t.Fatalf("got %v, want the request handed to the Python tier", err)
+	var refusal principal.Refusal
+	if !errors.As(err, &refusal) || refusal != ErrSignInUnreachable {
+		t.Fatalf("got %v, want the 503 %q", err, ErrSignInUnreachable.Message)
 	}
 }

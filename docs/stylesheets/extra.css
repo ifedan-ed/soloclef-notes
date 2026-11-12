@@ -1,0 +1,14 @@
+:root {
+  --md-primary-fg-color: #1f2937;
+  --md-primary-fg-color--light: #374151;
+  --md-primary-fg-color--dark: #111827;
+  --md-accent-fg-color: #2f6fed;
+}
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #111827;
+  --md-accent-fg-color: #6b9bff;
+  --md-typeset-a-color: #8fb3ff;
+}
+.md-typeset a { color: var(--md-accent-fg-color); }
+.md-typeset img { border-radius: 10px; }
+.md-typeset .md-button--primary { background: #2f6fed; border-color: #2f6fed; color: #fff; }

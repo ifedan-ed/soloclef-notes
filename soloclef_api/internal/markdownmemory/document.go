@@ -17,7 +17,7 @@ type line struct {
 
 // section is a "## " heading and the lines under it. explicitHeading is false
 // for the section the parser invents for a headingless document, and only an
-// explicit one counts as a heading for the scope and diff rules.
+// explicit one counts as the heading a saved document must have.
 type section struct {
 	heading         string
 	lines           []line

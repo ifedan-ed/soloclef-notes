@@ -21,7 +21,7 @@ import { expect, openNotebook, test, waitForChatReady } from "./fixtures";
  *   "Back to <title>" returns to the output where it was.
  *
  * The fake chat model answers any Explain message with EXPLAIN_ANSWER
- * (soloclef_backend/tests/e2e/fakes/chat_llm.py).
+ * (docker/e2e-web-go/model-stub/stub.py).
  */
 
 const EXPLAIN_ANSWER = "E2E explain answer";
@@ -30,8 +30,8 @@ const row = (page: Page, title: string) =>
 	page.getByRole("button", { name: new RegExp(`^${title}`) }).first();
 const view = (page: Page) => page.locator("[data-output-view]");
 
-async function openOutput(page: Page, ws: number, nb: number, title: string) {
-	await openNotebook(page, ws, nb, "Studio");
+async function openOutput(page: Page, nb: number, title: string) {
+	await openNotebook(page, nb, "Studio");
 	const button = row(page, title);
 	await expect(button).toBeEnabled({ timeout: 30_000 });
 	await button.click();
@@ -90,14 +90,13 @@ async function expectExpanded(page: Page) {
 test.describe("Explain from flashcards and quizzes", () => {
 	test("a quiz opens beside the chat; answered, every option explains itself; Explain asks the chat", async ({
 		page,
-		workspace,
 		notebook,
 		request,
 		isPhone,
 	}) => {
 		const title = "E2E explain quiz";
-		await seedOutput(request, workspace.id, notebook.id, "quiz", "ready", title);
-		await openOutput(page, workspace.id, notebook.id, title);
+		await seedOutput(request, notebook.id, "quiz", "ready", title);
+		await openOutput(page, notebook.id, title);
 		const v = view(page);
 		await expect(v.getByRole("heading", { name: "E2E quiz question 1?" })).toBeVisible({
 			timeout: 30_000,
@@ -174,14 +173,13 @@ test.describe("Explain from flashcards and quizzes", () => {
 
 	test("a flashcard's Explain sends NotebookLM's message; the deck keeps its place", async ({
 		page,
-		workspace,
 		notebook,
 		request,
 		isPhone,
 	}) => {
 		const title = "E2E explain cards";
-		await seedOutput(request, workspace.id, notebook.id, "flashcards", "ready", title);
-		await openOutput(page, workspace.id, notebook.id, title);
+		await seedOutput(request, notebook.id, "flashcards", "ready", title);
+		await openOutput(page, notebook.id, title);
 		const v = view(page);
 		await expect(v.getByText("E2E question 1")).toBeVisible({ timeout: 30_000 });
 		await v.getByRole("button", { name: "Next card" }).click();
@@ -211,7 +209,6 @@ test.describe("Explain from flashcards and quizzes", () => {
 test.describe("Output sizes", () => {
 	test("every kind of output toggles between the column and the whole window", async ({
 		page,
-		workspace,
 		notebook,
 		request,
 		isPhone,
@@ -228,9 +225,9 @@ test.describe("Output sizes", () => {
 			"report",
 		];
 		for (const kind of kinds) {
-			await seedOutput(request, workspace.id, notebook.id, kind, "ready", `E2E size ${kind}`);
+			await seedOutput(request, notebook.id, kind, "ready", `E2E size ${kind}`);
 		}
-		await openNotebook(page, workspace.id, notebook.id, "Studio");
+		await openNotebook(page, notebook.id, "Studio");
 		for (const kind of kinds) {
 			const title = `E2E size ${kind}`;
 			await expect(row(page, title)).toBeEnabled({ timeout: 30_000 });
@@ -267,15 +264,14 @@ test.describe("Output sizes", () => {
 
 	test("Explain from an expanded quiz drops it into the column beside the answer", async ({
 		page,
-		workspace,
 		notebook,
 		request,
 		isPhone,
 	}) => {
 		test.skip(isPhone, "a phone has no expanded size");
 		const title = "E2E expanded quiz";
-		await seedOutput(request, workspace.id, notebook.id, "quiz", "ready", title);
-		await openOutput(page, workspace.id, notebook.id, title);
+		await seedOutput(request, notebook.id, "quiz", "ready", title);
+		await openOutput(page, notebook.id, title);
 		const v = view(page);
 		await v.getByTestId("output-size-toggle").click();
 		await expectExpanded(page);
@@ -328,16 +324,15 @@ async function scrollToSection(v: Locator, index: number) {
 test.describe("Explain from a report", () => {
 	test("a selected passage: the report opens expanded, Explain drops it into the column at the same section", async ({
 		page,
-		workspace,
 		notebook,
 		request,
 		isPhone,
 	}) => {
 		const title = "E2E explain passage report";
-		await seedOutput(request, workspace.id, notebook.id, "report", "ready", title, {
+		await seedOutput(request, notebook.id, "report", "ready", title, {
 			markdown: REPORT,
 		});
-		await openOutput(page, workspace.id, notebook.id, title);
+		await openOutput(page, notebook.id, title);
 		const v = view(page);
 		await expect(v.getByRole("heading", { name: "E2E explain report", level: 1 })).toBeVisible({
 			timeout: 30_000,
@@ -381,7 +376,6 @@ test.describe("Explain from a report", () => {
 
 	test("the report's embedded quiz: Explain keeps the report open at the same place", async ({
 		page,
-		workspace,
 		notebook,
 		request,
 		token,
@@ -390,16 +384,15 @@ test.describe("Explain from a report", () => {
 		await addNoteSource(
 			request,
 			token,
-			workspace.id,
 			notebook.id,
 			"E2E handbook",
 			"E2E handbook text about rounds, escalation and handovers."
 		);
 		const title = "E2E explain embed report";
-		await seedOutput(request, workspace.id, notebook.id, "report", "ready", title, {
+		await seedOutput(request, notebook.id, "report", "ready", title, {
 			markdown: REPORT,
 		});
-		await openOutput(page, workspace.id, notebook.id, title);
+		await openOutput(page, notebook.id, title);
 		const v = view(page);
 		const add = v.getByRole("button", { name: "Add Quiz: E2E quiz: escalation" });
 		await expect(add).toBeVisible({ timeout: 30_000 });
@@ -407,13 +400,14 @@ test.describe("Explain from a report", () => {
 		let outputId = 0;
 		await expect
 			.poll(async () => {
-				const list = await listStudioOutputs(request, token, workspace.id, notebook.id);
+				const list = await listStudioOutputs(request, token, notebook.id);
 				const added = list.find((o) => o.title === "E2E quiz: escalation");
 				outputId = added?.id ?? 0;
 				return added?.status;
 			})
-			.toBe("queued");
-		await completeOutput(request, workspace.id, notebook.id, outputId);
+			// In progress: waiting for a runner, or taken by one.
+			.toMatch(/^(queued|running)$/);
+		await completeOutput(request, notebook.id, outputId);
 		const embed = v.getByRole("region", { name: "Quiz: E2E quiz: escalation" });
 		await expect(embed.getByRole("heading", { name: "E2E quiz question 1?" })).toBeVisible({
 			timeout: 30_000,

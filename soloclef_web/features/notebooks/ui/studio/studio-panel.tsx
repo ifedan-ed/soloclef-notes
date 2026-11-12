@@ -1,90 +1,55 @@
 "use client";
 
-import { ArrowLeft, BellRing, NotebookPen, Sparkles } from "lucide-react";
+import { ArrowLeft, BellRing, Sparkles } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
-import { preloadPlateEditor } from "@/components/editor/plate-editor-module";
 import { PodcastPlayer } from "@/components/tool-ui/podcast/player";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useDelayedFlag } from "../../hooks/use-delayed-flag";
-import {
-	useNotebookNotes,
-	useNoteMutations,
-	useStudioMutations,
-	useStudioOutputs,
-} from "../../hooks/use-notebook-queries";
+import { useStudioMutations, useStudioOutputs } from "../../hooks/use-notebook-queries";
 import { useStudioNotifications } from "../../hooks/use-studio-notifications";
 import { studioOpenAction } from "../../lib/open-output";
 import { newRequestId } from "../../lib/studio-request";
-import type { NotebookNote, NotebookSource, StudioKind, StudioOutput } from "../../model/notebook";
+import type { NotebookSource, StudioKind, StudioOutput } from "../../model/notebook";
 import { GenerateDialog } from "./generate-dialog";
-import { NoteEditor } from "./note-editor";
-import { NoteRow } from "./note-row";
 import { OutputView } from "./output-view";
 import { StudioOutputRow } from "./studio-output-row";
 import { StudioTiles } from "./studio-tiles";
 
-type Item =
-	| { type: "output"; at: string; output: StudioOutput }
-	| { type: "note"; at: string; note: NotebookNote };
-
 export function StudioPanel({
-	workspaceId,
 	notebookId,
 	notebookTitle,
 	sources,
 	onAddSources,
 	onResearch,
-	initialOpenNoteId = null,
 	openOutputId,
 	onOpenOutput,
 }: {
-	workspaceId: number;
 	notebookId: number;
 	notebookTitle: string;
 	sources: NotebookSource[];
 	onAddSources: () => void;
 	onResearch: () => void;
-	/** A note that opens straight away (a home search result's). */
-	initialOpenNoteId?: number | null;
-	/** The output open in the output view (the workspace widens the column for it). */
+	/** The output open in the output view (the notebook page widens the column for it). */
 	openOutputId: number | null;
 	onOpenOutput: (outputId: number | null) => void;
 }) {
 	const t = useTranslations("notebooks");
-	const outputs = useStudioOutputs(workspaceId, notebookId);
-	const notes = useNotebookNotes(workspaceId, notebookId);
-	const studio = useStudioMutations(workspaceId, notebookId);
-	const noteMutations = useNoteMutations(workspaceId, notebookId);
+	const outputs = useStudioOutputs(notebookId);
+	const studio = useStudioMutations(notebookId);
 	const [dialogKind, setDialogKind] = useState<StudioKind | null>(null);
-	const [openNoteId, setOpenNoteId] = useState<number | null>(initialOpenNoteId);
 	const [playing, setPlaying] = useState<StudioOutput | null>(null);
-	const loading = outputs.isLoading || notes.isLoading;
+	const loading = outputs.isLoading;
 	const showSkeleton = useDelayedFlag(loading);
 	const notifications = useStudioNotifications(outputs.data);
-	// A note then opens drawn whole, not after a placeholder (plate-editor-module.ts).
-	const hasNotes = (notes.data?.length ?? 0) > 0 || initialOpenNoteId !== null;
-	useEffect(() => {
-		if (hasNotes) preloadPlateEditor().catch(() => undefined);
-	}, [hasNotes]);
-
-	const items: Item[] = [
-		...(outputs.data ?? []).map((output) => ({
-			type: "output" as const,
-			at: output.created_at,
-			output,
-		})),
-		...(notes.data ?? []).map((note) => ({
-			type: "note" as const,
-			at: note.updated_at,
-			note,
-		})),
-	].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
-
-	const openNote = (notes.data ?? []).find((note) => note.id === openNoteId) ?? null;
+	// Notes have a tab of their own beside this one (NotebookRightPanel); Studio
+	// lists what was generated, newest first.
+	const items = [...(outputs.data ?? [])].sort(
+		(a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+	);
 	const viewing = (outputs.data ?? []).find((output) => output.id === openOutputId) ?? null;
 
 	const openOutput = (output: StudioOutput) => {
@@ -92,34 +57,6 @@ export function StudioPanel({
 		if (action?.type === "audio-player") setPlaying(output);
 		else if (action?.type === "studio-view") onOpenOutput(output.id);
 	};
-
-	const addNote = async () => {
-		try {
-			const note = await noteMutations.create.mutateAsync({ title: t("new_note"), content: "" });
-			setOpenNoteId(note.id);
-		} catch {
-			toast.error(t("note_create_failed"));
-		}
-	};
-
-	if (openNote) {
-		return (
-			<NoteEditor
-				key={openNote.id}
-				note={openNote}
-				onBack={() => setOpenNoteId(null)}
-				onSave={(changes) => noteMutations.update.mutateAsync({ noteId: openNote.id, ...changes })}
-				onConvert={async () => {
-					await noteMutations.convert.mutateAsync(openNote.id);
-					toast.success(t("converted"));
-				}}
-				onDelete={async () => {
-					await noteMutations.remove.mutateAsync(openNote.id);
-					setOpenNoteId(null);
-				}}
-			/>
-		);
-	}
 
 	if (playing?.artifact_id) {
 		return (
@@ -139,7 +76,6 @@ export function StudioPanel({
 				<div className="min-h-0 flex-1 overflow-y-auto px-3">
 					<PodcastPlayer
 						artifactId={playing.artifact_id}
-						workspaceId={workspaceId}
 						title={playing.title}
 						durationMs={playing.duration_seconds ? playing.duration_seconds * 1000 : undefined}
 					/>
@@ -153,7 +89,6 @@ export function StudioPanel({
 			{viewing?.artifact_id ? (
 				<OutputView
 					key={viewing.id}
-					workspaceId={workspaceId}
 					notebookId={notebookId}
 					output={viewing}
 					onClose={() => onOpenOutput(null)}
@@ -202,60 +137,37 @@ export function StudioPanel({
 						</div>
 					) : (
 						<div className="space-y-0.5">
-							{items.map((item) =>
-								item.type === "output" ? (
-									<StudioOutputRow
-										key={`output-${item.output.id}`}
-										output={item.output}
-										onOpen={() => openOutput(item.output)}
-										onRename={(title) =>
-											studio.rename.mutateAsync({ outputId: item.output.id, title })
-										}
-										onDelete={() => studio.remove.mutateAsync(item.output.id)}
-										onRetry={() =>
-											studio.generate.mutate(
-												{
-													...(item.output.options as Record<string, unknown>),
-													kind: item.output.kind,
-													title: item.output.title,
-													request_id: newRequestId(),
-												},
-												{
-													onSuccess: (output) => notifications.markStarted(output.id),
-													onError: () => toast.error(t("generate_failed")),
-												}
-											)
-										}
-									/>
-								) : (
-									<NoteRow
-										key={`note-${item.note.id}`}
-										note={item.note}
-										onOpen={() => setOpenNoteId(item.note.id)}
-									/>
-								)
-							)}
+							{items.map((output) => (
+								<StudioOutputRow
+									key={`output-${output.id}`}
+									output={output}
+									onOpen={() => openOutput(output)}
+									onRename={(title) => studio.rename.mutateAsync({ outputId: output.id, title })}
+									onDelete={() => studio.remove.mutateAsync(output.id)}
+									onRetry={() =>
+										studio.generate.mutate(
+											{
+												...(output.options as Record<string, unknown>),
+												kind: output.kind,
+												title: output.title,
+												request_id: newRequestId(),
+											},
+											{
+												onSuccess: (generated) => notifications.markStarted(generated.id),
+												onError: () => toast.error(t("generate_failed")),
+											}
+										)
+									}
+								/>
+							))}
 						</div>
 					)}
-				</div>
-				{/* A strip of its own under the list: floating over it, the button
-			    covered whichever output row scrolled beneath it. */}
-				<div className="flex shrink-0 justify-center border-t px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-					<Button
-						className="rounded-full"
-						onClick={addNote}
-						disabled={noteMutations.create.isPending}
-					>
-						<NotebookPen className="size-4" />
-						{t("add_note")}
-					</Button>
 				</div>
 				<GenerateDialog
 					kind={dialogKind}
 					onOpenChange={(open) => {
 						if (!open) setDialogKind(null);
 					}}
-					workspaceId={workspaceId}
 					notebookId={notebookId}
 					notebookTitle={notebookTitle}
 					sources={sources}

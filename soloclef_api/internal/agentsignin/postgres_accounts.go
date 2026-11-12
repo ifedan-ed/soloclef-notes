@@ -7,6 +7,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/principal"
 )
 
 // PostgresAccounts finds the account a verified identity acts as, read-only, as
@@ -17,9 +19,10 @@ type PostgresAccounts struct {
 	ProviderName string
 }
 
-// Account returns the account id, ErrNoAccount when the rule names none and when
-// the account it names is gone or deactivated, or a database error.
-func (a PostgresAccounts) Account(ctx context.Context, identity Identity) (string, error) {
+// Account returns the account and its API-access switch, ErrNoAccount when the
+// rule names none and when the account it names is gone or deactivated, or a
+// database error.
+func (a PostgresAccounts) Account(ctx context.Context, identity Identity) (principal.AgentAccount, error) {
 	queries := New(a.Pool)
 
 	linked, err := queries.LinkedAccount(ctx, LinkedAccountParams{
@@ -27,7 +30,7 @@ func (a PostgresAccounts) Account(ctx context.Context, identity Identity) (strin
 		AccountID: identity.Subject,
 	})
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return "", fmt.Errorf("reading the identity's link: %w", err)
+		return principal.AgentAccount{}, fmt.Errorf("reading the identity's link: %w", err)
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		linked = ""
@@ -38,7 +41,7 @@ func (a PostgresAccounts) Account(ctx context.Context, identity Identity) (strin
 	if linked == "" && identity.Email != "" {
 		sameEmail, err = queries.AccountWithEmail(ctx, identity.Email)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return "", fmt.Errorf("reading the account with that address: %w", err)
+			return principal.AgentAccount{}, fmt.Errorf("reading the account with that address: %w", err)
 		}
 		if err == nil {
 			candidates.EmailUserID = sameEmail.ID
@@ -48,23 +51,24 @@ func (a PostgresAccounts) Account(ctx context.Context, identity Identity) (strin
 
 	chosen, err := ChooseAccount(candidates)
 	if err != nil {
-		return "", err
+		return principal.AgentAccount{}, err
 	}
 
 	// The row the account was chosen from is the row its state is read from,
 	// as there: only a linked account needs a second read.
-	active := sameEmail.IsActive
+	active, apiAccess := sameEmail.IsActive, sameEmail.ApiAccessEnabled
 	if chosen != sameEmail.ID {
-		active, err = queries.AccountIsActive(ctx, chosen)
+		standing, err := queries.AccountStanding(ctx, chosen)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return "", fmt.Errorf("%w: the account is gone", ErrNoAccount)
+			return principal.AgentAccount{}, fmt.Errorf("%w: the account is gone", ErrNoAccount)
 		}
 		if err != nil {
-			return "", fmt.Errorf("reading whether the account is active: %w", err)
+			return principal.AgentAccount{}, fmt.Errorf("reading whether the account is active: %w", err)
 		}
+		active, apiAccess = standing.IsActive, standing.ApiAccessEnabled
 	}
 	if !active {
-		return "", fmt.Errorf("%w: the account is deactivated", ErrNoAccount)
+		return principal.AgentAccount{}, fmt.Errorf("%w: the account is deactivated", ErrNoAccount)
 	}
-	return chosen, nil
+	return principal.AgentAccount{UserID: chosen, APIAccessEnabled: apiAccess}, nil
 }

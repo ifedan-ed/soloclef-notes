@@ -38,7 +38,8 @@ func Build(server *mcp.Server, configuration settings.Settings, signIn *signinch
 		func(*http.Request) *mcp.Server { return server },
 		// Stateless: no session state is kept between requests, so any replica
 		// can serve any request. SSE responses, rather than JSON, flush headers
-		// early, which keeps a long scraper call from tripping a client timeout.
+		// early, which keeps a long call (a large upload, a slow literature search)
+		// from tripping a client timeout.
 		&mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: false},
 	)
 

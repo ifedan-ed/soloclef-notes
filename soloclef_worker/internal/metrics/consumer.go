@@ -36,11 +36,11 @@ func Consumer(source ConsumerSource) Collector {
 			into.Sample("task_jobs_in_flight", float64(count), "task", task)
 		}
 
-		into.Declare("held_claims", Gauge, "Messages this worker holds unacked: the jobs running plus anything waiting for its eta.")
+		into.Declare("held_claims", Gauge, "Messages this worker holds unacked: the jobs running, and any waiting for their task class.")
 		into.Sample("held_claims", float64(snapshot.HeldClaims))
 
-		into.Declare("waiting_for_eta", Gauge, "Messages taken off a queue that are not due yet.")
-		into.Sample("waiting_for_eta", float64(snapshot.WaitingForETA))
+		into.Declare("scheduled_messages", Gauge, "Messages waiting in Redis for their eta, across every queue and worker.")
+		into.Sample("scheduled_messages", float64(snapshot.Scheduled))
 
 		// The wait is a sum and a count rather than a histogram: a mean is
 		// what these two give, and the buckets a histogram would need cannot
@@ -64,6 +64,7 @@ func Consumer(source ConsumerSource) Collector {
 			{"messages_expired_total", "Messages dropped unrun, past their expires.", snapshot.Expired},
 			{"messages_unreadable_total", "Messages dropped unrun because they are not an envelope this worker can read.", snapshot.Unreadable},
 			{"messages_requeued_total", "Messages put back on their queue for any reason.", snapshot.Requeued},
+			{"messages_delayed_total", "Messages taken before their eta and handed to the scheduled set, which holds no slot.", snapshot.Delayed},
 			{"messages_restored_total", "Messages made visible again after a claim went stale.", snapshot.Restored},
 			{"queue_wait_unknown_total", "Messages whose queue wait could not be measured, so an absent measurement is never read as a fast queue.", snapshot.WaitUnknown},
 		}

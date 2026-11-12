@@ -14,10 +14,7 @@ import {
 import { pendingUserImageDataUrlsAtom } from "@/atoms/chat/pending-user-images.atom";
 import { retrievalScopeAtom, submittedRetrievalScopeAtom } from "@/atoms/chat/retrieval-scope.atom";
 import { type AgentCreatedDocument, agentCreatedDocumentsAtom } from "@/atoms/documents/ui.atoms";
-import { currentUserAtom } from "@/atoms/user/user-query.atoms";
 import { scopeForMentionKinds } from "@/contracts/types/retrieval-scope.types";
-import { BILLING_PATH, billingSettingsPath } from "@/features/billing/lib/billing-errors";
-import { showBillingRefusalToast } from "@/features/billing/ui/billing-refusal-toast";
 import type {
 	HitlDecision,
 	HitlResponse,
@@ -85,6 +82,11 @@ import {
 	TOOLS_WITH_UI_ALL,
 } from "./helpers";
 import { chatStreamStore } from "./store";
+import {
+	newChatRequestBody,
+	regenerateRequestBody,
+	resumeRequestBody,
+} from "./turn-request-bodies";
 
 const jotaiStore = getDefaultStore();
 const tokenUsageStore = chatStreamStore.tokenUsage;
@@ -102,7 +104,6 @@ export interface EngineView {
 
 /** Route/view context the page passes into every engine call. */
 export interface EngineContext {
-	workspaceId: number;
 	/** Currently viewed thread id (``activeThreadId`` in the page). */
 	threadId: number | null;
 	/** The page's current displayed messages — history/slice seed. */
@@ -168,19 +169,13 @@ async function handleChatFailure({
 	flow,
 	threadId,
 	assistantMsgId,
-	workspaceId,
 }: {
 	error: unknown;
 	flow: ChatFlow;
 	threadId: number | null;
 	assistantMsgId: string;
-	workspaceId: number;
 }): Promise<void> {
-	const normalized = classifyChatError({
-		error,
-		flow,
-		context: { workspaceId, threadId },
-	});
+	const normalized = classifyChatError({ error, flow });
 
 	const logger =
 		normalized.severity === "error"
@@ -199,30 +194,26 @@ async function handleChatFailure({
 		message: normalized.userMessage,
 	};
 	if (normalized.telemetryEvent === "chat_blocked") {
-		trackChatBlocked(workspaceId, threadId, telemetryPayload);
+		trackChatBlocked(threadId, telemetryPayload);
 	} else {
-		trackChatErrorDetailed(workspaceId, threadId, telemetryPayload);
+		trackChatErrorDetailed(threadId, telemetryPayload);
 	}
 
 	if (normalized.channel === "silent") {
 		return;
 	}
 
+	// The chat refused the turn because the account's model has left the
+	// proxy. Re-read it, so the model menu shows the same thing the toast
+	// says and the person can see where to choose another.
+	if (normalized.kind === "model_not_found") {
+		void queryClient.invalidateQueries({ queryKey: cacheKeys.chatModel() });
+	}
+
 	// A turn is running on this thread that this page is not streaming (it
 	// started in another tab or device): let the page show it with Stop.
 	if (normalized.kind === "thread_busy" && threadId != null) {
 		askForTurnStatusCheck(threadId);
-	}
-
-	if (normalized.kind === "billing_refused") {
-		showBillingRefusalToast({
-			code: normalized.errorCode,
-			message: normalized.userMessage,
-			href: workspaceId
-				? billingSettingsPath(workspaceId)
-				: (normalized.billingPath ?? BILLING_PATH),
-		});
-		return;
 	}
 
 	if (normalized.channel === "inline") {
@@ -246,7 +237,6 @@ async function handleStreamTerminalError({
 	threadId,
 	assistantMsgId,
 	accepted,
-	workspaceId,
 	onAbort,
 	onPreAcceptFailure,
 	onAcceptedStreamError,
@@ -256,7 +246,6 @@ async function handleStreamTerminalError({
 	threadId: number | null;
 	assistantMsgId: string;
 	accepted: boolean;
-	workspaceId: number;
 	onAbort?: () => Promise<void>;
 	onPreAcceptFailure?: () => Promise<void>;
 	onAcceptedStreamError?: () => Promise<void>;
@@ -277,7 +266,6 @@ async function handleStreamTerminalError({
 		flow,
 		threadId,
 		assistantMsgId: accepted ? assistantMsgId : "no-persist-assistant",
-		workspaceId,
 	});
 }
 
@@ -345,7 +333,7 @@ export async function cancelActiveTurn(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function startNewChat(ctx: EngineContext, message: AppendMessage): Promise<void> {
-	const { workspaceId, threadId, priorMessages, view } = ctx;
+	const { threadId, priorMessages, view } = ctx;
 
 	// Supersede any previous in-flight turn.
 	chatStreamStore.abortActive();
@@ -385,7 +373,6 @@ export async function startNewChat(ctx: EngineContext, message: AppendMessage): 
 	const localFilesystemEnabled =
 		jotaiStore.get(agentFlagsAtom).data?.enable_desktop_local_filesystem === true;
 	const disabledTools = jotaiStore.get(disabledToolsAtom);
-	const currentUser = jotaiStore.get(currentUserAtom).data;
 
 	// Resolve filesystem selection BEFORE any optimistic UI / lazy thread
 	// creation so an unsatisfied "Local Folder" requirement bails cleanly
@@ -397,7 +384,7 @@ export async function startNewChat(ctx: EngineContext, message: AppendMessage): 
 
 	let selection: Awaited<ReturnType<typeof getAgentFilesystemSelection>>;
 	try {
-		selection = await getAgentFilesystemSelection(workspaceId, { localFilesystemEnabled });
+		selection = await getAgentFilesystemSelection({ localFilesystemEnabled });
 	} catch (error) {
 		restoreDraft();
 		await handleChatFailure({
@@ -405,7 +392,6 @@ export async function startNewChat(ctx: EngineContext, message: AppendMessage): 
 			flow: "new",
 			threadId,
 			assistantMsgId: "no-persist-assistant",
-			workspaceId,
 		});
 		return;
 	}
@@ -420,10 +406,9 @@ export async function startNewChat(ctx: EngineContext, message: AppendMessage): 
 
 	// Lazy thread creation: create thread on first message if it doesn't exist.
 	let currentThreadId = threadId;
-	let isNewThread = false;
 	if (!currentThreadId) {
 		try {
-			const newThread = await createThread(workspaceId, "New Chat");
+			const newThread = await createThread("New Chat");
 			currentThreadId = newThread.id;
 			view.setThreadId(currentThreadId);
 			view.setCurrentThread(newThread);
@@ -432,8 +417,6 @@ export async function startNewChat(ctx: EngineContext, message: AppendMessage): 
 
 			// chat_created is now emitted server-side (new_chat_routes.create_thread)
 			// so PAT/MCP-created threads are also counted.
-
-			isNewThread = true;
 		} catch (error) {
 			console.error("[chat-engine] Failed to create thread:", error);
 			restoreDraft();
@@ -442,7 +425,6 @@ export async function startNewChat(ctx: EngineContext, message: AppendMessage): 
 				flow: "new",
 				threadId: currentThreadId,
 				assistantMsgId: "no-persist-assistant",
-				workspaceId,
 			});
 			return;
 		}
@@ -464,17 +446,6 @@ export async function startNewChat(ctx: EngineContext, message: AppendMessage): 
 	// canonical ``msg-{db_id}`` once ``persist_user_turn`` resolves.
 	let userMsgId = `msg-user-${Date.now()}`;
 
-	const authorMetadata = currentUser
-		? {
-				custom: {
-					author: {
-						displayName: currentUser.display_name ?? null,
-						avatarUrl: currentUser.avatar_url ?? null,
-					},
-				},
-			}
-		: undefined;
-
 	const existingImageUrls = new Set(
 		message.content
 			.filter(
@@ -493,11 +464,10 @@ export async function startNewChat(ctx: EngineContext, message: AppendMessage): 
 		role: "user",
 		content: userDisplayContent,
 		createdAt: new Date(),
-		metadata: authorMetadata,
 	};
 	chatStreamStore.setMessages(streamThreadId, (prev) => [...prev, userMessage]);
 
-	trackChatMessageSent(workspaceId, streamThreadId, {
+	trackChatMessageSent(streamThreadId, {
 		hasAttachments: userImages.length > 0,
 		hasMentionedDocuments:
 			mentionPayload.document_ids.length > 0 ||
@@ -555,34 +525,23 @@ export async function startNewChat(ctx: EngineContext, message: AppendMessage): 
 			})
 			.filter((m) => m.content.length > 0);
 
-		const hasDocumentIds = mentionPayload.document_ids.length > 0;
-		const hasFolderIds = mentionPayload.folder_ids.length > 0;
-		const hasConnectorIds = mentionPayload.connector_ids.length > 0;
-		const hasThreadIds = mentionPayload.thread_ids.length > 0;
-
 		const response = await fetchWithTurnCancellingRetry(() =>
 			authenticatedFetch(buildBackendUrl("/api/v1/new_chat"), {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					chat_id: streamThreadId,
-					user_query: userQuery.trim(),
-					workspace_id: workspaceId,
-					retrieval_scope: turnToolFields.retrieval_scope,
-					preferred_tool: turnToolFields.preferred_tool,
-					filesystem_mode: selection.filesystem_mode,
-					client_platform: selection.client_platform,
-					local_filesystem_mounts: selection.local_filesystem_mounts,
-					messages: messageHistory,
-					mentioned_document_ids: hasDocumentIds ? mentionPayload.document_ids : undefined,
-					mentioned_folder_ids: hasFolderIds ? mentionPayload.folder_ids : undefined,
-					mentioned_connector_ids: hasConnectorIds ? mentionPayload.connector_ids : undefined,
-					mentioned_connectors: hasConnectorIds ? mentionPayload.connectors : undefined,
-					mentioned_thread_ids: hasThreadIds ? mentionPayload.thread_ids : undefined,
-					mentioned_documents: allMentionedDocs.length > 0 ? allMentionedDocs : undefined,
-					disabled_tools: disabledTools.length > 0 ? disabledTools : undefined,
-					...(userImages.length > 0 ? { user_images: userImages } : {}),
-				}),
+				body: JSON.stringify(
+					newChatRequestBody({
+						threadId: streamThreadId,
+						userQuery,
+						turnToolFields,
+						selection,
+						messageHistory,
+						mentionPayload,
+						mentionedDocuments: allMentionedDocs,
+						disabledTools,
+						userImages,
+					})
+				),
 				signal: controller.signal,
 			})
 		);
@@ -721,7 +680,7 @@ export async function startNewChat(ctx: EngineContext, message: AppendMessage): 
 				}
 
 				case "data-action-log": {
-					applyActionLogSse(queryClient, streamThreadId, workspaceId, parsed.data);
+					applyActionLogSse(queryClient, streamThreadId, parsed.data);
 					break;
 				}
 
@@ -767,11 +726,6 @@ export async function startNewChat(ctx: EngineContext, message: AppendMessage): 
 						});
 					}
 					userMsgId = newUserMsgId;
-					if (isNewThread) {
-						queryClient.invalidateQueries({
-							queryKey: ["threads", String(workspaceId)],
-						});
-					}
 					break;
 				}
 
@@ -804,7 +758,7 @@ export async function startNewChat(ctx: EngineContext, message: AppendMessage): 
 		batcher.flush();
 
 		if (contentParts.length > 0 && !wasInterrupted) {
-			trackChatResponseReceived(workspaceId, streamThreadId);
+			trackChatResponseReceived(streamThreadId);
 		}
 	} catch (error) {
 		streamBatcher?.flush();
@@ -815,7 +769,6 @@ export async function startNewChat(ctx: EngineContext, message: AppendMessage): 
 			threadId: streamThreadId,
 			assistantMsgId,
 			accepted: newAccepted,
-			workspaceId,
 			onPreAcceptFailure: async () => {
 				// Pre-accept failure means the BE never accepted the request — no
 				// server-side persistence ran. Roll back the optimistic UI.
@@ -847,7 +800,7 @@ export async function startNewChat(ctx: EngineContext, message: AppendMessage): 
 // ---------------------------------------------------------------------------
 
 export async function resumeChat(ctx: EngineContext, decisions: HitlResponse[]): Promise<void> {
-	const { workspaceId, threadId } = ctx;
+	const { threadId } = ctx;
 	if (threadId == null) return;
 	const pendingInterrupts = chatStreamStore.getPendingInterrupts(threadId);
 	if (pendingInterrupts.length === 0) return;
@@ -963,20 +916,14 @@ export async function resumeChat(ctx: EngineContext, decisions: HitlResponse[]):
 	}
 
 	try {
-		const selection = await getAgentFilesystemSelection(workspaceId, { localFilesystemEnabled });
+		const selection = await getAgentFilesystemSelection({ localFilesystemEnabled });
 		const response = await fetchWithTurnCancellingRetry(() =>
 			authenticatedFetch(buildBackendUrl(`/api/v1/threads/${resumeThreadId}/resume`), {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					workspace_id: workspaceId,
-					retrieval_scope: retrievalScope,
-					decisions,
-					disabled_tools: disabledTools.length > 0 ? disabledTools : undefined,
-					filesystem_mode: selection.filesystem_mode,
-					client_platform: selection.client_platform,
-					local_filesystem_mounts: selection.local_filesystem_mounts,
-				}),
+				body: JSON.stringify(
+					resumeRequestBody({ retrievalScope, decisions, disabledTools, selection })
+				),
 				signal: controller.signal,
 			})
 		);
@@ -1081,7 +1028,7 @@ export async function resumeChat(ctx: EngineContext, decisions: HitlResponse[]):
 				}
 
 				case "data-action-log": {
-					applyActionLogSse(queryClient, resumeThreadId, workspaceId, parsed.data);
+					applyActionLogSse(queryClient, resumeThreadId, parsed.data);
 					break;
 				}
 
@@ -1142,7 +1089,6 @@ export async function resumeChat(ctx: EngineContext, decisions: HitlResponse[]):
 			threadId: resumeThreadId,
 			assistantMsgId,
 			accepted: resumeAccepted,
-			workspaceId,
 		});
 	} finally {
 		chatStreamStore.setRunning(resumeThreadId, false);
@@ -1173,7 +1119,7 @@ export async function regenerateChat(
 		revertActions?: boolean;
 	}
 ): Promise<void> {
-	const { workspaceId, threadId, priorMessages } = ctx;
+	const { threadId, priorMessages } = ctx;
 	if (!threadId) {
 		toast.error("Cannot regenerate: no active chat thread");
 		return;
@@ -1252,45 +1198,22 @@ export async function regenerateChat(
 			? messageDocumentsMap[sourceUserMessageId]
 			: [];
 	try {
-		const selection = await getAgentFilesystemSelection(workspaceId, { localFilesystemEnabled });
-		const regenerateDocIds = sourceMentionedDocs.filter((d) => d.kind === "doc").map((d) => d.id);
-		const regenerateFolderIds = sourceMentionedDocs
-			.filter((d) => d.kind === "folder")
-			.map((d) => d.id);
-		const regenerateConnectors = sourceMentionedDocs.filter((d) => d.kind === "connector");
-		const regenerateThreadIds = sourceMentionedDocs
-			.filter((d) => d.kind === "thread")
-			.map((d) => d.id);
+		const selection = await getAgentFilesystemSelection({ localFilesystemEnabled });
 		const retrievalScope = scopeForMentionKinds(
 			requestedRetrievalScope,
 			sourceMentionedDocs.map((mention) => mention.kind)
 		);
 
-		const requestBody: Record<string, unknown> = {
-			workspace_id: workspaceId,
-			retrieval_scope: retrievalScope,
-			user_query: newUserQuery,
-			disabled_tools: disabledTools.length > 0 ? disabledTools : undefined,
-			filesystem_mode: selection.filesystem_mode,
-			client_platform: selection.client_platform,
-			local_filesystem_mounts: selection.local_filesystem_mounts,
-			mentioned_document_ids: regenerateDocIds.length > 0 ? regenerateDocIds : undefined,
-			mentioned_folder_ids: regenerateFolderIds.length > 0 ? regenerateFolderIds : undefined,
-			mentioned_connector_ids:
-				regenerateConnectors.length > 0 ? regenerateConnectors.map((d) => d.id) : undefined,
-			mentioned_connectors: regenerateConnectors.length > 0 ? regenerateConnectors : undefined,
-			mentioned_thread_ids: regenerateThreadIds.length > 0 ? regenerateThreadIds : undefined,
-			mentioned_documents: sourceMentionedDocs.length > 0 ? sourceMentionedDocs : undefined,
-		};
-		if (isEdit) {
-			requestBody.user_images = editExtras?.userImages ?? [];
-		}
-		if (editFromPosition?.fromMessageId != null) {
-			requestBody.from_message_id = editFromPosition.fromMessageId;
-			if (editFromPosition.revertActions) {
-				requestBody.revert_actions = true;
-			}
-		}
+		const requestBody = regenerateRequestBody({
+			retrievalScope,
+			userQuery: newUserQuery,
+			disabledTools,
+			selection,
+			mentions: sourceMentionedDocs,
+			editedUserImages: isEdit ? (editExtras?.userImages ?? []) : undefined,
+			fromMessageId: editFromPosition?.fromMessageId ?? undefined,
+			revertActions: editFromPosition?.revertActions,
+		});
 		const response = await fetchWithTurnCancellingRetry(() =>
 			authenticatedFetch(getRegenerateUrl(streamThreadId), {
 				method: "POST",
@@ -1367,7 +1290,7 @@ export async function regenerateChat(
 			}
 			switch (parsed.type) {
 				case "data-action-log": {
-					applyActionLogSse(queryClient, streamThreadId, workspaceId, parsed.data);
+					applyActionLogSse(queryClient, streamThreadId, parsed.data);
 					break;
 				}
 
@@ -1466,7 +1389,7 @@ export async function regenerateChat(
 		batcher.flush();
 
 		if (contentParts.length > 0) {
-			trackChatResponseReceived(workspaceId, streamThreadId);
+			trackChatResponseReceived(streamThreadId);
 		}
 	} catch (error) {
 		streamBatcher?.flush();
@@ -1477,7 +1400,6 @@ export async function regenerateChat(
 			threadId: streamThreadId,
 			assistantMsgId,
 			accepted: regenerateAccepted,
-			workspaceId,
 		});
 	} finally {
 		chatStreamStore.setRunning(streamThreadId, false);

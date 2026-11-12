@@ -14,8 +14,6 @@ var (
 	WriteClosed = annotations("", false, false, false, false)
 	// DeleteClosed destroys this deployment's own data.
 	DeleteClosed = annotations("", false, true, false, false)
-	// ScrapeOpen reaches a third party and records a run.
-	ScrapeOpen = annotations("", false, false, false, true)
 )
 
 func annotations(title string, readOnly, destructive, idempotent, openWorld bool) *mcp.ToolAnnotations {

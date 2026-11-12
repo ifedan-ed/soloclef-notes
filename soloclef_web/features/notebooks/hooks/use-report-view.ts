@@ -14,18 +14,13 @@ const OWN_ERROR_TOAST = { suppressGlobalErrorToast: true } as const;
  * Every mutation answers with the whole view, which replaces the
  * cached one, so cards change state without a refetch.
  */
-export function useReportView(
-	workspaceId: number,
-	notebookId: number,
-	outputId: number,
-	enabled: boolean
-) {
+export function useReportView(notebookId: number, outputId: number, enabled: boolean) {
 	const queryClient = useQueryClient();
-	const key = notebookKeys.reportView(workspaceId, notebookId, outputId);
+	const key = notebookKeys.reportView(notebookId, outputId);
 	const view = useQuery({
 		queryKey: key,
-		queryFn: () => notebooksApi.reportView(workspaceId, notebookId, outputId),
-		enabled: enabled && workspaceId > 0 && notebookId > 0 && outputId > 0,
+		queryFn: () => notebooksApi.reportView(notebookId, outputId),
+		enabled: enabled && notebookId > 0 && outputId > 0,
 		staleTime: 60_000,
 		refetchOnWindowFocus: false,
 	});
@@ -34,19 +29,19 @@ export function useReportView(
 	const add = useMutation({
 		meta: OWN_ERROR_TOAST,
 		mutationFn: (suggestionId: string) =>
-			notebooksApi.addReportSuggestion(workspaceId, notebookId, outputId, suggestionId),
+			notebooksApi.addReportSuggestion(notebookId, outputId, suggestionId),
 		onSuccess: (next) => {
 			store(next);
 			// The new output shows in the Studio list (and is polled from there).
 			void queryClient.invalidateQueries({
-				queryKey: notebookKeys.outputs(workspaceId, notebookId),
+				queryKey: notebookKeys.outputs(notebookId),
 			});
 		},
 	});
 	const dismiss = useMutation({
 		meta: OWN_ERROR_TOAST,
 		mutationFn: (suggestionId: string) =>
-			notebooksApi.dismissReportSuggestion(workspaceId, notebookId, outputId, suggestionId),
+			notebooksApi.dismissReportSuggestion(notebookId, outputId, suggestionId),
 		onMutate: (suggestionId) => {
 			const previous = queryClient.getQueryData<ReportView>(key);
 			if (previous) {

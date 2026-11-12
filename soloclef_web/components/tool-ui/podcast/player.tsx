@@ -69,14 +69,11 @@ function linesFromMarkdown(markdown: string): TranscriptLine[] {
 }
 
 async function loadFromArtifact(
-	workspaceId: number,
 	artifactId: number,
 	legacyPodcastId: number | undefined,
 	signal: AbortSignal
 ): Promise<{ audioBlob: Blob; lines: TranscriptLine[] }> {
-	const manifest = await queryClient.fetchQuery(
-		artifactManifestQueryOptions(workspaceId, artifactId)
-	);
+	const manifest = await queryClient.fetchQuery(artifactManifestQueryOptions(artifactId));
 	const primary = manifest.files.find((file) => file.role === "primary");
 	if (!primary) throw new Error("Podcast audio file missing");
 
@@ -104,22 +101,20 @@ async function loadFromArtifact(
 /**
  * Streams the rendered episode and shows its transcript.
  *
- * Prefer ``artifactId`` + ``workspaceId``; ``podcastId`` is the only path for
- * public shares and podcasts with no Artifact. A shared Studio output passes
+ * Prefer ``artifactId``; ``podcastId`` is the only path for public shares
+ * and podcasts with no Artifact. A shared Studio output passes
  * its text as ``transcriptMarkdown``, the transcript the owner's player reads
  * from the artifact.
  */
 export function PodcastPlayer({
 	podcastId,
 	artifactId,
-	workspaceId,
 	title,
 	durationMs,
 	transcriptMarkdown,
 }: {
 	podcastId?: number;
 	artifactId?: number;
-	workspaceId?: number;
 	title: string;
 	durationMs?: number;
 	transcriptMarkdown?: string;
@@ -188,13 +183,8 @@ export function PodcastPlayer({
 					if (lines.length === 0 && transcriptMarkdown) {
 						lines = linesFromMarkdown(transcriptMarkdown);
 					}
-				} else if (artifactId != null && workspaceId != null) {
-					({ audioBlob, lines } = await loadFromArtifact(
-						workspaceId,
-						artifactId,
-						podcastId,
-						controller.signal
-					));
+				} else if (artifactId != null) {
+					({ audioBlob, lines } = await loadFromArtifact(artifactId, podcastId, controller.signal));
 				} else {
 					throw new Error("Podcast identity missing");
 				}
@@ -216,7 +206,7 @@ export function PodcastPlayer({
 		} finally {
 			setIsLoading(false);
 		}
-	}, [podcastId, artifactId, workspaceId, shareToken, transcriptMarkdown]);
+	}, [podcastId, artifactId, shareToken, transcriptMarkdown]);
 
 	useEffect(() => {
 		loadPodcast();

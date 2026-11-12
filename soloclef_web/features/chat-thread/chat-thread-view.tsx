@@ -13,18 +13,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { chatSessionStateAtom } from "@/atoms/chat/chat-session-state.atom";
 import {
-	clearTargetCommentIdAtom,
-	currentThreadAtom,
-	setCurrentThreadMetadataAtom,
-	setTargetCommentIdAtom,
-} from "@/atoms/chat/current-thread.atom";
-import {
 	type MentionedDocumentInfo,
 	mentionedDocumentsAtom,
 	messageDocumentsMapAtom,
 } from "@/atoms/chat/mentioned-documents.atom";
 import { closeEditorPanelAtom } from "@/atoms/editor/editor-panel.atom";
-import { membersAtom } from "@/atoms/members/members-query.atoms";
 import {
 	EditMessageDialog,
 	type EditMessageDialogChoice,
@@ -104,7 +97,6 @@ const EMPTY_PENDING_INTERRUPTS: PendingInterruptState[] = [];
 const EMPTY_MESSAGES: ThreadMessageLike[] = [];
 
 export interface ChatThreadViewProps {
-	workspaceId: number;
 	/** The thread to show; 0 or null starts a new chat on the first message. */
 	chatId: number | null;
 	/** Called when the thread turns out to be deleted. */
@@ -115,7 +107,7 @@ export interface ChatThreadViewProps {
  * One chat thread with its full runtime: streaming, history, HITL approvals,
  * edits and artifacts. A notebook renders it for the notebook's chat.
  */
-export function ChatThreadView({ workspaceId, chatId, onThreadNotFound }: ChatThreadViewProps) {
+export function ChatThreadView({ chatId, onThreadNotFound }: ChatThreadViewProps) {
 	const queryClient = useQueryClient();
 	const urlChatId = chatId && chatId > 0 ? chatId : 0;
 	const [threadId, setThreadId] = useState<number | null>(() => (urlChatId > 0 ? urlChatId : null));
@@ -143,10 +135,6 @@ export function ChatThreadView({ workspaceId, chatId, onThreadNotFound }: ChatTh
 	const setMessageDocumentsMap = useSetAtom(messageDocumentsMapAtom);
 	const setMentionedDocuments = useSetAtom(mentionedDocumentsAtom);
 	const setPreferredTool = useSetAtom(preferredToolAtom);
-	const currentThreadState = useAtomValue(currentThreadAtom);
-	const setCurrentThreadMetadata = useSetAtom(setCurrentThreadMetadataAtom);
-	const setTargetCommentId = useSetAtom(setTargetCommentIdAtom);
-	const clearTargetCommentId = useSetAtom(clearTargetCommentIdAtom);
 	const closeEditorPanel = useSetAtom(closeEditorPanelAtom);
 
 	// Edit dialog state. Holds the message id being edited and the (already
@@ -179,10 +167,10 @@ export function ChatThreadView({ workspaceId, chatId, onThreadNotFound }: ChatTh
 	const isThreadMessagesLoading = shouldHideStaleMessages && !threadMessagesQuery.error;
 	const runtimeMessages = shouldHideStaleMessages ? EMPTY_MESSAGES : displayMessages;
 
-	// Live collaboration: sync session state and messages via Zero. Kept on the
-	// page because "AI responding" reflects the currently-viewed thread.
+	// Sync session state and messages via Zero, so a turn running in another
+	// tab or device shows here. Kept on the page because "AI responding"
+	// reflects the currently-viewed thread.
 	useChatSessionStateSync(activeThreadId);
-	const { data: membersData } = useAtomValue(membersAtom);
 
 	const handleSyncedMessagesUpdate = useCallback(
 		(
@@ -205,32 +193,22 @@ export function ChatThreadView({ workspaceId, chatId, onThreadNotFound }: ChatTh
 					return prev;
 				}
 
-				const memberById = new Map(membersData?.map((m) => [m.user_id, m]) ?? []);
-				const prevById = new Map(prev.map((m) => [m.id, m]));
-
-				return reconcileInterruptedAssistantMessages(syncedMessages).map((msg) => {
-					const member = msg.author_id ? (memberById.get(msg.author_id) ?? null) : null;
-
-					const existingMsg = prevById.get(`msg-${msg.id}`);
-					const existingAuthor = existingMsg?.metadata?.custom?.author as
-						| { displayName?: string | null; avatarUrl?: string | null }
-						| undefined;
-
-					return convertToThreadMessage({
+				// A thread has one author, the account that owns it, so a synced
+				// row needs no name or picture looked up for it.
+				return reconcileInterruptedAssistantMessages(syncedMessages).map((msg) =>
+					convertToThreadMessage({
 						id: msg.id,
 						thread_id: msg.thread_id,
 						role: msg.role.toLowerCase() as "user" | "assistant" | "system",
 						content: msg.content,
 						author_id: msg.author_id,
 						created_at: msg.created_at,
-						author_display_name: member?.user_display_name ?? existingAuthor?.displayName ?? null,
-						author_avatar_url: member?.user_avatar_url ?? existingAuthor?.avatarUrl ?? null,
 						turn_id: msg.turn_id ?? null,
-					});
-				});
+					})
+				);
 			});
 		},
-		[localRunning, membersData]
+		[localRunning]
 	);
 
 	useMessagesSync(activeThreadId, handleSyncedMessagesUpdate);
@@ -267,15 +245,14 @@ export function ChatThreadView({ workspaceId, chatId, onThreadNotFound }: ChatTh
 
 	const buildCtx = useCallback(
 		(): EngineContext => ({
-			workspaceId,
 			threadId: activeThreadId,
 			priorMessages: messagesRef.current,
 			view: { setThreadId, setCurrentThread },
 		}),
-		[workspaceId, activeThreadId]
+		[activeThreadId]
 	);
 
-	// Reset thread-local runtime state on route/workspace changes. The durable
+	// Reset thread-local runtime state on route changes. The durable
 	// streaming overlay is preserved for any still-running thread (and the newly
 	// viewed thread) via ``clearInactive`` so an in-flight turn survives nav.
 	useEffect(() => {
@@ -431,10 +408,8 @@ export function ChatThreadView({ workspaceId, chatId, onThreadNotFound }: ChatTh
 
 	// Prefetch document titles for @ mention picker so data is ready on type.
 	useEffect(() => {
-		if (!workspaceId) return;
-
+		// The same key the mention picker reads: the titles are the account's.
 		const prefetchParams = {
-			workspace_id: workspaceId,
 			page: 0,
 			page_size: 20,
 		};
@@ -444,65 +419,7 @@ export function ChatThreadView({ workspaceId, chatId, onThreadNotFound }: ChatTh
 			queryFn: () => documentsApiService.searchDocumentTitles({ queryParams: prefetchParams }),
 			staleTime: 60 * 1000,
 		});
-	}, [workspaceId, queryClient]);
-
-	// Handle scroll to comment from URL query params (e.g., from inbox click).
-	useEffect(() => {
-		const readAndApplyCommentId = () => {
-			const params = new URLSearchParams(window.location.search);
-			const raw = params.get("commentId");
-			if (raw && activeThreadId) {
-				const commentId = Number.parseInt(raw, 10);
-				if (!Number.isNaN(commentId)) {
-					setTargetCommentId(commentId);
-				}
-			}
-		};
-
-		readAndApplyCommentId();
-
-		window.addEventListener("popstate", readAndApplyCommentId);
-
-		return () => {
-			window.removeEventListener("popstate", readAndApplyCommentId);
-			clearTargetCommentId();
-		};
-	}, [activeThreadId, setTargetCommentId, clearTargetCommentId]);
-
-	// Sync current thread state to atom
-	useEffect(() => {
-		if (!currentThread) {
-			if (activeThreadId) {
-				return;
-			}
-			setCurrentThreadMetadata({
-				id: null,
-				workspaceId: null,
-				visibility: null,
-				hasComments: false,
-			});
-			return;
-		}
-
-		const visibility =
-			currentThreadState.id === currentThread.id && currentThreadState.visibility !== null
-				? currentThreadState.visibility
-				: currentThread.visibility;
-
-		setCurrentThreadMetadata({
-			id: currentThread.id,
-			workspaceId: currentThread.workspace_id ?? workspaceId,
-			visibility,
-			hasComments: currentThread.has_comments ?? false,
-		});
-	}, [
-		activeThreadId,
-		currentThread,
-		currentThreadState.id,
-		currentThreadState.visibility,
-		workspaceId,
-		setCurrentThreadMetadata,
-	]);
+	}, [queryClient]);
 
 	// Handle new message from user
 	const onNew = useCallback(
@@ -766,13 +683,13 @@ export function ChatThreadView({ workspaceId, chatId, onThreadNotFound }: ChatTh
 	// Surface the thread's deliverables to the layout-level artifacts sidebar.
 	const { artifacts: chatArtifacts, isReady: isArtifactMetadataReady } = useSyncChatArtifacts(
 		runtimeMessages,
-		activeThreadId,
-		workspaceId
+		activeThreadId
 	);
 	useArtifactDeepLink(
 		chatArtifacts,
 		!isThreadMessagesLoading && isArtifactMetadataReady,
-		`${workspaceId}:${activeThreadId ?? "new"}`
+		// The thread alone names the view: thread ids are unique in an account.
+		String(activeThreadId ?? "new")
 	);
 
 	// A turn another page runs: keep its clock ticking between progress saves.
@@ -826,7 +743,7 @@ export function ChatThreadView({ workspaceId, chatId, onThreadNotFound }: ChatTh
 					pendingInterrupts={pendingInterrupts}
 					onSubmit={handleApprovalSubmit}
 				>
-					<div key={workspaceId} className="flex h-full overflow-hidden">
+					<div className="flex h-full overflow-hidden">
 						<div className="relative flex-1 flex flex-col min-w-0 overflow-hidden">
 							<TurnStoppingProvider value={serverTurn.stopping}>
 								<Thread

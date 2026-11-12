@@ -43,12 +43,18 @@ type RegistryKeys struct {
 	Index string
 	// Mutex serialises the scan for stale claims across workers.
 	Mutex string
+	// Scheduled is the sorted set of messages taken before they were due,
+	// scored by their eta (scheduled.go). It is this worker's and not
+	// kombu's: a Python worker holds such a message in its own memory and
+	// never reads this set, and nothing it does writes to it.
+	Scheduled string
 }
 
 // CeleryRegistryKeys are the names kombu's Redis transport uses, unprefixed,
-// as this app leaves them (app/celery_app.py sets no broker_transport_options).
+// as this app leaves them (app/celery_app.py sets no broker_transport_options),
+// and the name of the Go workers' own scheduled set beside them.
 func CeleryRegistryKeys() RegistryKeys {
-	return RegistryKeys{Unacked: "unacked", Index: "unacked_index", Mutex: "unacked_mutex"}
+	return RegistryKeys{Unacked: "unacked", Index: "unacked_index", Mutex: "unacked_mutex", Scheduled: "soloclef_scheduled"}
 }
 
 // MutexExpiry is kombu's unacked_mutex_expire: how long a restore scan may

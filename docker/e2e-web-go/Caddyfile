@@ -1,0 +1,19 @@
+# Caddy for the web e2e stack on the Go services
+# (docker-compose.e2e-web-go.yml). Never used live.
+#
+# The deployment's own routes (proxy-go/routes.caddy, mounted beside this
+# file by docker-compose.go.yml), plus the three test-only prefixes: the
+# API's seed routes and the two stand-ins' own pages. A service is named by
+# its container ({$SOLOCLEF_STACK} is the compose project), as everywhere in
+# the Go stack. No trusted proxies: the browser talks to Caddy directly.
+{
+	auto_https off
+}
+
+:80 {
+	reverse_proxy /__e2e__/* {$SOLOCLEF_STACK}-api-1:8080
+	reverse_proxy /__nextcloud__/* {$SOLOCLEF_STACK}-nextcloud-stub-1:8080
+	reverse_proxy /__google__/* {$SOLOCLEF_STACK}-google-stub-1:8080
+
+	import /etc/caddy/routes.caddy
+}

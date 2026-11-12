@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, Info } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Fragment } from "react";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,6 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
 	canTick,
 	MAX_RESEARCH_SOURCES,
@@ -27,11 +26,9 @@ import {
 import {
 	ACADEMIC_SOURCE_IDS,
 	isResearchBoxSource,
-	MAY_RETURN_NOTHING,
 	type PageReader,
 	READ_PAGE_ID,
 	type ResearchBoxSource,
-	type ResearchSourceId,
 	type UnavailableSources,
 	WEB_GROUP_MENU_IDS,
 } from "../../../model/research-sources";
@@ -44,27 +41,7 @@ const GROUPS = [
 	{ key: "group_academic", ids: ACADEMIC_SOURCE_IDS },
 ] as const;
 
-/** A caveat shown beside a source that may come back empty, explained on hover. */
-function SourceCaveat({ source }: { source: ResearchSourceId }) {
-	const t = useTranslations("notebook_research");
-	return (
-		<Tooltip>
-			<TooltipTrigger asChild>
-				<span className="ml-auto inline-flex items-center gap-1 pl-2 text-[11px] text-muted-foreground">
-					{t("may_return_nothing")}
-					<Info className="size-3" aria-hidden />
-					{/* Touch screens get no tooltip; screen readers get the reason here. */}
-					<span className="sr-only">{t(`caveat_${source}`)}</span>
-				</span>
-			</TooltipTrigger>
-			<TooltipContent side="right" className="max-w-64 text-xs">
-				{t(`caveat_${source}`)}
-			</TooltipContent>
-		</Tooltip>
-	);
-}
-
-/** A source's icon and name, with why it is unavailable or what to expect of it. */
+/** A source's icon and name, with why it is unavailable or what reads a pasted page. */
 function SourceRow({
 	id,
 	reason,
@@ -93,8 +70,6 @@ function SourceRow({
 						{t("page_via_browserbase")}
 					</span>
 				) : null
-			) : MAY_RETURN_NOTHING.has(id as ResearchSourceId) ? (
-				<SourceCaveat source={id as ResearchSourceId} />
 			) : null}
 		</>
 	);
@@ -128,7 +103,7 @@ function TriggerFace({ picks }: { picks: SourcePicks }) {
 }
 
 /**
- * Where to search: the open web, a platform, or a scholarly database; or read
+ * Where to search: a keyed web search API or a scholarly database; or read
  * one page. One click picks one source; "Search several at once" turns the
  * list into checkboxes for up to ``MAX_RESEARCH_SOURCES`` sources.
  */
@@ -140,7 +115,7 @@ export function ResearchSourceMenu({
 }: {
 	picks: SourcePicks;
 	onChange: (picks: SourcePicks) => void;
-	/** Sources shown greyed out with their reason, e.g. no Exa key in this workspace. */
+	/** Sources shown greyed out with their reason, e.g. no Exa key connected. */
 	unavailable?: UnavailableSources;
 	/** What "Read a web page" uses here, named beside it when it is Browserbase. */
 	pageReader?: PageReader;

@@ -23,7 +23,6 @@ import { useNotebookSources } from "../../hooks/use-notebook-queries";
 import type { NotebookSource } from "../../model/notebook";
 
 interface NotebookSourcePickerProps {
-	workspaceId: number;
 	notebookId: number;
 	onSelectionChange: (mentions: MentionedDocumentInfo[]) => void;
 	onDone: () => void;
@@ -44,7 +43,7 @@ function sourceMention(source: NotebookSource): MentionedDocumentInfo {
 
 /**
  * The @ menu inside a notebook: the notebook's own sources and nothing else.
- * Mentioning one points the answer at that source. The workspace-wide picker
+ * Mentioning one points the answer at that source. The library-wide picker
  * (every document, connector and chat) belonged to the retired chat page;
  * picking a connector there mentioned all of its documents at once.
  */
@@ -52,18 +51,11 @@ export const NotebookSourcePicker = forwardRef<
 	ComposerSuggestionNavigatorRef,
 	NotebookSourcePickerProps
 >(function NotebookSourcePicker(
-	{
-		workspaceId,
-		notebookId,
-		onSelectionChange,
-		onDone,
-		initialSelectedDocuments = [],
-		externalSearch = "",
-	},
+	{ notebookId, onSelectionChange, onDone, initialSelectedDocuments = [], externalSearch = "" },
 	ref
 ) {
 	const t = useTranslations("notebooks");
-	const sources = useNotebookSources(workspaceId, notebookId);
+	const sources = useNotebookSources(notebookId);
 	const selectedKeys = useMemo(
 		() => new Set(initialSelectedDocuments.map(getMentionDocKey)),
 		[initialSelectedDocuments]

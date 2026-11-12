@@ -17,7 +17,7 @@ function renderInline(inline: Inline, key: number): ReactNode {
 				</code>
 			);
 		case "link": {
-			const external = !/^\/(?![\/\\])/.test(inline.href);
+			const external = !/^\/(?![/\\])/.test(inline.href);
 			return (
 				<a
 					key={key}

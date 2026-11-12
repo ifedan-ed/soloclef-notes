@@ -114,7 +114,8 @@ export function BedrockConnectForm({ onDraftChange }: ProviderConnectFormProps) 
 				</p>
 			) : null}
 			<p className="text-xs text-muted-foreground">
-				After entering credentials, refresh models to discover the Bedrock catalog for this region.
+				The models listed are the ones the model service knows for Amazon Bedrock. Connecting tests
+				one of the models you choose with these credentials.
 			</p>
 		</div>
 	);

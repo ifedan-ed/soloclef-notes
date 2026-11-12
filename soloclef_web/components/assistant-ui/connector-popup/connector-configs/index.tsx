@@ -1,17 +1,17 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { FC } from "react";
+import type { ComponentType, FC } from "react";
 import type { SearchSourceConnector } from "@/contracts/types/connector.types";
 
 export interface ConnectorConfigProps {
 	connector: SearchSourceConnector;
 	onConfigChange?: (config: Record<string, unknown>) => void;
 	onNameChange?: (name: string) => void;
-	workspaceId?: string;
 }
 
-export type ConnectorConfigComponent = FC<ConnectorConfigProps>;
+// What next/dynamic hands back: a component of either kind, not only a function.
+export type ConnectorConfigComponent = ComponentType<ConnectorConfigProps>;
 
 const configMap: Record<string, () => Promise<{ default: FC<ConnectorConfigProps> }>> = {
 	GOOGLE_DRIVE_CONNECTOR: () =>

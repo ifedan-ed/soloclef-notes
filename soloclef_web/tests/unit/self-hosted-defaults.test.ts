@@ -8,7 +8,7 @@ import test from "node:test";
 /**
  * Everything here ships in every server's website, so no one server's host,
  * mail domain or sign-in name may be written into it: those come from the
- * server's own settings (lib/brand, lib/sso-settings, the billing admin page).
+ * server's own settings (lib/brand, lib/sso-settings).
  * Tests and the Playwright config are not shipped and are not scanned.
  */
 const WEB = path.resolve(__dirname, "../..");

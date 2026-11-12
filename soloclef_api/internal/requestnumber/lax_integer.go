@@ -25,9 +25,9 @@ import (
 //	"٢", "１"     -> refused; ASCII digits only
 //
 // This mirror exists because it was got wrong: until it was written this
-// package accepted `^[+-]?\d+$` and nothing else, so `GET
-// /api/v1/workspaces/1.0/my-access` was a 200 on the Python tier and a 422
-// here, on a route that had already been handed over. Do not simplify it back.
+// package accepted `^[+-]?\d+$` and nothing else, so an id of `1.0` in a
+// path was a 200 on the Python tier and a 422 here, on a route that had
+// already been handed over. Do not simplify it back.
 func WholeNumber(text string) (string, bool) {
 	trimmed := strings.TrimFunc(text, unicode.IsSpace)
 	integer, fraction, hasFraction := strings.Cut(trimmed, ".")

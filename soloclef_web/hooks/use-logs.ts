@@ -13,20 +13,18 @@ export type {
 	LogSummary,
 } from "@/contracts/types/log.types";
 
-export function useLogs(workspaceId?: number, filters: LogFilters = {}) {
+// The signed-in account's activity log, newest first, narrowed by `filters`.
+export function useLogs(filters: LogFilters = {}) {
 	const filtersKey = JSON.stringify(filters);
 	// biome-ignore lint/correctness/useExhaustiveDependencies: stable serialized key used intentionally
 	const memoizedFilters = useMemo(() => filters, [filtersKey]);
 
 	const buildQueryParams = useCallback(
 		(customFilters: LogFilters = {}) => {
-			const params: Record<string, string> = {};
+			const params: LogFilters = {};
 
 			const allFilters = { ...memoizedFilters, ...customFilters };
 
-			if (allFilters.workspace_id) {
-				params.workspace_id = allFilters.workspace_id.toString();
-			}
 			if (allFilters.level) {
 				params.level = allFilters.level;
 			}
@@ -54,18 +52,8 @@ export function useLogs(workspaceId?: number, filters: LogFilters = {}) {
 		error,
 		refetch,
 	} = useQuery({
-		queryKey: cacheKeys.logs.withQueryParams({
-			workspace_id: workspaceId,
-			...buildQueryParams(filters ?? {}),
-		}),
-		queryFn: () =>
-			logsApiService.getLogs({
-				queryParams: {
-					workspace_id: workspaceId,
-					...buildQueryParams(filters ?? {}),
-				},
-			}),
-		enabled: !!workspaceId,
+		queryKey: cacheKeys.logs.withQueryParams(buildQueryParams(filters ?? {})),
+		queryFn: () => logsApiService.getLogs({ queryParams: buildQueryParams(filters ?? {}) }),
 		staleTime: 3 * 60 * 1000,
 	});
 
@@ -80,7 +68,6 @@ export function useLogs(workspaceId?: number, filters: LogFilters = {}) {
 // Separate hook for log summary with smart polling support for document processing indicator UI
 // Polling only happens when there are active tasks, otherwise it stops to save resources
 export function useLogsSummary(
-	workspaceId: number,
 	hours: number = 24,
 	options: { refetchInterval?: number; enablePolling?: boolean } = {}
 ) {
@@ -92,13 +79,9 @@ export function useLogsSummary(
 		error,
 		refetch,
 	} = useQuery({
-		queryKey: cacheKeys.logs.summary(workspaceId),
-		queryFn: () =>
-			logsApiService.getLogSummary({
-				workspace_id: workspaceId,
-				hours: hours,
-			}),
-		enabled: !!workspaceId,
+		// The window is part of the key: two spans are two different answers.
+		queryKey: [...cacheKeys.logs.summary(), hours],
+		queryFn: () => logsApiService.getLogSummary({ hours }),
 		staleTime: 3 * 60 * 1000,
 		// Always refetch on mount to show fresh processing tasks when navigating to the page
 		refetchOnMount: "always",

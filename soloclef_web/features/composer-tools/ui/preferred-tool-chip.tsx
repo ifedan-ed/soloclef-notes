@@ -2,7 +2,11 @@
 
 import { X } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { COMPOSER_TOOL_ICONS, type ComposerToolId } from "../composer-tools";
+import {
+	COMPOSER_TOOL_ICONS,
+	COMPOSER_TOOL_NAME_KEYS,
+	type ComposerToolId,
+} from "../composer-tools";
 
 type PreferredToolChipProps = {
 	tool: ComposerToolId | null;
@@ -12,10 +16,9 @@ type PreferredToolChipProps = {
 /** Shows which tool the next message is forced to use, with a way to drop it. */
 export function PreferredToolChip({ tool, onRemove }: PreferredToolChipProps) {
 	const t = useTranslations("composer_tools");
-	const names = useTranslations("scraper_tools");
 	if (!tool) return null;
 	const Icon = COMPOSER_TOOL_ICONS[tool];
-	const name = names(tool);
+	const name = t(COMPOSER_TOOL_NAME_KEYS[tool]);
 	return (
 		<div className="mx-3 mt-2 flex">
 			<span

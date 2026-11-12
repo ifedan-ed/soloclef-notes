@@ -1,0 +1,1 @@
+{"detail": [{"loc": ["body", "mode"], "msg": "Input should be 'lite', 'fast', 'balanced' or 'accurate'", "type": "enum", "input": "best", "ctx": {}}]}

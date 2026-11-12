@@ -6,10 +6,11 @@ import { toast } from "sonner";
 import { AppError } from "@/lib/error";
 import { googleDriveApi } from "../api/google-drive-api";
 import { loadGooglePicker, pickDriveFiles } from "../lib/google-picker";
+import { driveImportRequest, MAX_PICKED_FILES, pickProblem } from "../lib/picked-files";
 
 /**
- * Pick files in the Google Picker and import them: into the notebook when
- * one is given, otherwise into the library.
+ * Pick files in the Google Picker and import them into the account's
+ * library, and into the notebook too when one is given.
  */
 export function useGoogleDriveImport({
 	connectorId,
@@ -33,8 +34,23 @@ export function useGoogleDriveImport({
 				loadGooglePicker(),
 			]);
 			const files = await pickDriveFiles(session, t("picker_title"));
-			if (!files || files.length === 0) return;
-			const result = await googleDriveApi.importPicked(connectorId, files, notebookId);
+			// null is the Picker closed without choosing: nothing to say.
+			if (files === null) return;
+			// Chosen, but nothing sendable. Say why instead of doing nothing
+			// (only folders) or sending a request the server must refuse.
+			const problem = pickProblem(files);
+			if (problem === "none") {
+				toast.info(t("import_nothing_picked"));
+				return;
+			}
+			if (problem === "too_many") {
+				toast.error(t("import_too_many", { max: MAX_PICKED_FILES }));
+				return;
+			}
+			const result = await googleDriveApi.importPicked(
+				connectorId,
+				driveImportRequest({ notebookId, files })
+			);
 			if (result.queued > 0) toast.success(t("import_started", { count: result.queued }));
 			if (result.unsupported.length > 0) {
 				toast.warning(t("import_unsupported", { names: result.unsupported.join(", ") }));

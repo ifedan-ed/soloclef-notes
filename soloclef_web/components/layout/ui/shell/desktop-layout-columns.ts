@@ -1,5 +1,5 @@
 /**
- * The desktop shell's columns: the workspace rail, then the page. The last
+ * The desktop shell's columns: the rail, then the page. The last
  * track takes the remaining width. A spare track would sit empty to the right
  * of every page (the "blank right half"), with the page squeezed into an
  * auto-sized column beside it. The second sidebar that used to sit between

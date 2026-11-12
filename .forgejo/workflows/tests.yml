@@ -4,18 +4,15 @@ name: Tests
 # workflows (image publishing, desktop releases, their PR checks), which
 # could not run here and tested things we do not ship.
 #
-# Unit tests on every push and pull request. The Playwright journey needs
-# the whole Docker stack, so it stays a manual run:
-#   bash soloclef_web/scripts/e2e-stack.sh rebuild && (cd soloclef_web && pnpm test:e2e)
+# The web app's unit tests on every push and pull request; the Go modules
+# have a workflow of their own (go.yml). The Playwright journey needs the
+# whole Docker stack, so it stays a manual run:
+#   bash soloclef_web/scripts/e2e-stack-go.sh rebuild && (cd soloclef_web && pnpm test:e2e)
 #
-# NOTHING BELOW HAS EVER RUN. Every runner registered on this host is scoped to
-# a different repository, and the one user-level registration went offline on
-# 2026-05-11, so no runner accepts a job for danvics/soloclef: 1,128 jobs
-# queued since 2026-09-23 and none started (checked 2026-11-08). Until a runner
-# is registered against this repository, or a user-level one is restored, with
-# the ubuntu-latest label asked for below, a green tick here means a job was
-# cancelled while waiting. custom/docs/go-api-tier.md, "Where to run it", has
-# the evidence and what the Go schema drift check needs on top of this.
+# NOTHING BELOW HAS EVER RUN: no runner has been registered for this
+# repository (checked 2026-11-08). Until one is, with the ubuntu-latest label
+# asked for below, a green tick here means a job was cancelled while waiting,
+# not that the tests passed.
 
 on:
   push:
@@ -28,30 +25,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  backend:
-    name: Backend lint and unit tests
-    runs-on: ubuntu-latest
-    env:
-      # No EMBEDDING_MODEL: the app config builds an embedding client at
-      # import, and tests/conftest.py names the suite's own provider for it
-      # (tests/fake_embeddings.py) -- deterministic vectors, no model, no
-      # network.
-      # Connector credentials are encrypted with it; any value works in tests.
-      SECRET_KEY: ci-only-not-a-secret
-    steps:
-      - uses: https://github.com/actions/checkout@v4
-      - name: Install uv
-        run: curl -LsSf https://astral.sh/uv/install.sh | sh && echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - name: Install dependencies
-        working-directory: soloclef_backend
-        run: uv sync --python 3.12
-      - name: Ruff
-        working-directory: soloclef_backend
-        run: uv run ruff check .
-      - name: Unit tests
-        working-directory: soloclef_backend
-        run: uv run pytest -m unit -q
-
   web:
     name: Web unit tests
     runs-on: ubuntu-latest

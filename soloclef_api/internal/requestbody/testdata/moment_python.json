@@ -1,0 +1,1443 @@
+{
+ "why": "pydantic's own answer for every shape of InviteUpdate.expires_at, recorded by soloclef_api/scripts/moment_table.py. internal/requestbody replays it.",
+ "cases": [
+  {
+   "raw": "\"2026-03-04T05:06:07Z\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "2026-03-04T05:06:07+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "\"2026-03-04T05:06:07z\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "2026-03-04T05:06:07+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "\"2026-03-04t05:06:07Z\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "2026-03-04T05:06:07+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "\"2026-03-04 05:06:07\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "2026-03-04T05:06:07",
+   "utcoffset": null,
+   "naive": true
+  },
+  {
+   "raw": "\"2026-03-04_05:06:07\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "2026-03-04T05:06:07",
+   "utcoffset": null,
+   "naive": true
+  },
+  {
+   "raw": "\"2026-03-04T05:06:07\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "2026-03-04T05:06:07",
+   "utcoffset": null,
+   "naive": true
+  },
+  {
+   "raw": "\"2026-03-04T05:06:07+02:00\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "2026-03-04T05:06:07+02:00",
+   "utcoffset": 7200,
+   "naive": false
+  },
+  {
+   "raw": "\"2026-03-04T05:06:07-05:30\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "2026-03-04T05:06:07-05:30",
+   "utcoffset": -19800,
+   "naive": false
+  },
+  {
+   "raw": "\"2026-03-04T05:06:07+0200\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "2026-03-04T05:06:07+02:00",
+   "utcoffset": 7200,
+   "naive": false
+  },
+  {
+   "raw": "\"2026-03-04T05:06:07-0530\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "2026-03-04T05:06:07-05:30",
+   "utcoffset": -19800,
+   "naive": false
+  },
+  {
+   "raw": "\"2026-03-04T05:06:07+02\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, unexpected extra characters at the end of the input",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"2026-03-04T05:06:07-00:00\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "2026-03-04T05:06:07+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "\"2026-03-04T05:06:07.123456Z\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "2026-03-04T05:06:07.123456+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "\"2026-03-04T05:06:07.1Z\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "2026-03-04T05:06:07.100000+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "\"2026-03-04T05:06:07.12Z\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "2026-03-04T05:06:07.120000+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "\"2026-03-04T05:06:07.1234567890123Z\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "2026-03-04T05:06:07.123456+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "\"2026-03-04T05:06:07.Z\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, unexpected extra characters at the end of the input",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"2026-03-04T05:06:07.\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, unexpected extra characters at the end of the input",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"2026-03-04T05:06:07,5Z\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "2026-03-04T05:06:07.500000+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "\"2026-03-04T05:06\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "2026-03-04T05:06:00",
+   "utcoffset": null,
+   "naive": true
+  },
+  {
+   "raw": "\"2026-03-04T05:06Z\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "2026-03-04T05:06:00+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "\"2026-03-04T05\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, unexpected extra characters at the end of the input",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"2026-03-04\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "2026-03-04T00:00:00",
+   "utcoffset": null,
+   "naive": true
+  },
+  {
+   "raw": "\"2026-03-04T00:00:00Z\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "2026-03-04T00:00:00+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "\"2026-03-04T23:59:59Z\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "2026-03-04T23:59:59+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "\"2026-03-04T24:00:00Z\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, unexpected extra characters at the end of the input",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"2026-03-04T25:00:00Z\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, unexpected extra characters at the end of the input",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"2026-03-04T05:60:00Z\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, unexpected extra characters at the end of the input",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"2026-03-04T05:06:60Z\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, unexpected extra characters at the end of the input",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"2026-03-04T05:06:61Z\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, unexpected extra characters at the end of the input",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"2026-00-04\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, month value is outside expected range of 1-12",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"2026-13-04\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, month value is outside expected range of 1-12",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"2026-03-00\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, day value is outside expected range",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"2026-03-32\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, day value is outside expected range",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"2026-02-29\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, day value is outside expected range",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"2024-02-29\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "2024-02-29T00:00:00",
+   "utcoffset": null,
+   "naive": true
+  },
+  {
+   "raw": "\"2026-02-30\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, day value is outside expected range",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"0000-01-01T00:00:00Z\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_parsing",
+     "msg": "Input should be a valid datetime, year 0 is out of range",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"0001-01-01\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "0001-01-01T00:00:00",
+   "utcoffset": null,
+   "naive": true
+  },
+  {
+   "raw": "\"9999-12-31T23:59:59Z\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "9999-12-31T23:59:59+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "\"10000-01-01\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, invalid date separator, expected `-`",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"99999-01-01\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, invalid date separator, expected `-`",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"226-03-04\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, input is too short",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"26-03-04\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, input is too short",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"2026-3-4\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, input is too short",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"2026-03-4\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, input is too short",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"2026-3-04\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, input is too short",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"2026-03-04T5:06:07Z\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, unexpected extra characters at the end of the input",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"2026-03-04T05:6:07Z\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, unexpected extra characters at the end of the input",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"2026-03-04T05:06:7Z\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, unexpected extra characters at the end of the input",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"2026/03/04\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, invalid date separator, expected `-`",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"20260304\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "1970-08-23T11:51:44+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "\"20260304T050607Z\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, invalid date separator, expected `-`",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"2026-03-04X05:06:07Z\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, unexpected extra characters at the end of the input",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"+2026-03-04\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, invalid character in year",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"-2026-03-04\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, invalid character in year",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\" 2026-03-04\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, invalid character in year",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"2026-03-04 \"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, unexpected extra characters at the end of the input",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"\\t2026-03-04\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, invalid character in year",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"2026-03-04\\n\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, unexpected extra characters at the end of the input",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"2026-03-04T05:06:07Z \"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, unexpected extra characters at the end of the input",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"2026-03-04T05:06:07ZZ\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, unexpected extra characters at the end of the input",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"2026-03-04T05:06:07+99:00\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, unexpected extra characters at the end of the input",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"2026-03-04T05:06:07+02:60\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, unexpected extra characters at the end of the input",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"2026-03-04T05:06:07+2:00\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, unexpected extra characters at the end of the input",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"abc\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, input is too short",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, input is too short",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\" \"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, input is too short",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"now\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, input is too short",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"today\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, input is too short",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"null\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, input is too short",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"true\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, input is too short",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"0\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "1970-01-01T00:00:00+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "\"-0\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "1970-01-01T00:00:00+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "\"1\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "1970-01-01T00:00:01+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "\"-1\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "1969-12-31T23:59:59+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "\"1700000000\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "2023-11-14T22:13:20+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "\"1700000000.5\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "2023-11-14T22:13:20.500000+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "\"1700000000000\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "2023-11-14T22:13:20+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "\"20000000000\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "2603-10-11T11:33:20+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "\"20000000001\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "1970-08-20T11:33:20.001000+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "\"-20000000000\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "1336-03-23T12:26:40+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "\"-20000000001\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "1969-05-14T12:26:39.999000+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "\"1e12\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, input is too short",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"1E12\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, input is too short",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"0x10\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, input is too short",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"1_000\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, input is too short",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"+1700000000\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "2023-11-14T22:13:20+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "\" 1700000000\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, invalid character in year",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"1700000000 \"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, invalid date separator, expected `-`",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"1700000000.\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "2023-11-14T22:13:20+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "\".5\"",
+   "ok": true,
+   "mentioned": true,
+   "value": "1970-01-01T00:00:00.500000+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "\"inf\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, input is too short",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"-inf\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, input is too short",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"nan\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, input is too short",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "0",
+   "ok": true,
+   "mentioned": true,
+   "value": "1970-01-01T00:00:00+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "1",
+   "ok": true,
+   "mentioned": true,
+   "value": "1970-01-01T00:00:01+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "-1",
+   "ok": true,
+   "mentioned": true,
+   "value": "1969-12-31T23:59:59+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "0.0",
+   "ok": true,
+   "mentioned": true,
+   "value": "1970-01-01T00:00:00+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "0.5",
+   "ok": true,
+   "mentioned": true,
+   "value": "1970-01-01T00:00:00.500000+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "-0.5",
+   "ok": true,
+   "mentioned": true,
+   "value": "1969-12-31T23:59:59.500000+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "1700000000",
+   "ok": true,
+   "mentioned": true,
+   "value": "2023-11-14T22:13:20+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "1700000000.5",
+   "ok": true,
+   "mentioned": true,
+   "value": "2023-11-14T22:13:20.500000+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "1700000000.123456",
+   "ok": true,
+   "mentioned": true,
+   "value": "2023-11-14T22:13:20.123456+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "1700000000.1234567",
+   "ok": true,
+   "mentioned": true,
+   "value": "2023-11-14T22:13:20.123457+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "1700000000000",
+   "ok": true,
+   "mentioned": true,
+   "value": "2023-11-14T22:13:20+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "1700000000000.5",
+   "ok": true,
+   "mentioned": true,
+   "value": "2023-11-14T22:13:20.000500+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "19999999999",
+   "ok": true,
+   "mentioned": true,
+   "value": "2603-10-11T11:33:19+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "20000000000",
+   "ok": true,
+   "mentioned": true,
+   "value": "2603-10-11T11:33:20+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "20000000001",
+   "ok": true,
+   "mentioned": true,
+   "value": "1970-08-20T11:33:20.001000+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "-19999999999",
+   "ok": true,
+   "mentioned": true,
+   "value": "1336-03-23T12:26:41+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "-20000000000",
+   "ok": true,
+   "mentioned": true,
+   "value": "1336-03-23T12:26:40+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "-20000000001",
+   "ok": true,
+   "mentioned": true,
+   "value": "1969-05-14T12:26:39.999000+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "1e12",
+   "ok": true,
+   "mentioned": true,
+   "value": "2001-09-09T01:46:40+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "1e15",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_parsing",
+     "msg": "Input should be a valid datetime, dates after 9999 are not supported as unix timestamps",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "1e16",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_parsing",
+     "msg": "Input should be a valid datetime, dates after 9999 are not supported as unix timestamps",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "1e19",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_parsing",
+     "msg": "Input should be a valid datetime, dates after 9999 are not supported as unix timestamps",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "1e20",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_parsing",
+     "msg": "Input should be a valid datetime, dates after 9999 are not supported as unix timestamps",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "-1e20",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_parsing",
+     "msg": "Input should be a valid datetime, dates before 0000 are not supported as unix timestamps",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "253402300799",
+   "ok": true,
+   "mentioned": true,
+   "value": "1978-01-11T21:31:40.799000+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "253402300800",
+   "ok": true,
+   "mentioned": true,
+   "value": "1978-01-11T21:31:40.800000+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "-62135596800",
+   "ok": true,
+   "mentioned": true,
+   "value": "1968-01-12T20:06:43.200000+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "-62135596801",
+   "ok": true,
+   "mentioned": true,
+   "value": "1968-01-12T20:06:43.199000+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "2147483648",
+   "ok": true,
+   "mentioned": true,
+   "value": "2038-01-19T03:14:08+00:00",
+   "utcoffset": 0,
+   "naive": false
+  },
+  {
+   "raw": "9007199254740993",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_parsing",
+     "msg": "Input should be a valid datetime, dates after 9999 are not supported as unix timestamps",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "true",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_type",
+     "msg": "Input should be a valid datetime",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "false",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_type",
+     "msg": "Input should be a valid datetime",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "null",
+   "ok": true,
+   "mentioned": true,
+   "value": null,
+   "utcoffset": null,
+   "naive": false
+  },
+  {
+   "raw": "[]",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_type",
+     "msg": "Input should be a valid datetime",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "{}",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_type",
+     "msg": "Input should be a valid datetime",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"\"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, input is too short",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "\"  \"",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_from_date_parsing",
+     "msg": "Input should be a valid datetime or date, input is too short",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "{\"a\": 1}",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_type",
+     "msg": "Input should be a valid datetime",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "[1]",
+   "ok": false,
+   "errors": [
+    {
+     "type": "datetime_type",
+     "msg": "Input should be a valid datetime",
+     "loc": [
+      "expires_at"
+     ]
+    }
+   ]
+  },
+  {
+   "raw": "ABSENT:{}",
+   "ok": true,
+   "mentioned": false,
+   "value": null,
+   "utcoffset": null,
+   "naive": false
+  },
+  {
+   "raw": "ABSENT:{\"name\": \"x\"}",
+   "ok": true,
+   "mentioned": false,
+   "value": null,
+   "utcoffset": null,
+   "naive": false
+  }
+ ]
+}

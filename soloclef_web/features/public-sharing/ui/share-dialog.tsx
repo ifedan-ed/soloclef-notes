@@ -26,6 +26,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { useDelayedFlag } from "@/features/notebooks/hooks/use-delayed-flag";
 import { cacheKeys } from "@/lib/query-client/cache-keys";
+import { settingsPath } from "@/lib/dashboard-paths";
 import { publicLinkUrl } from "../lib/public-link-url";
 import type { CreatedLink } from "../model/created-link";
 import {
@@ -55,14 +56,12 @@ function shareFailureMessage(
 export function ShareDialog({
 	open,
 	onOpenChange,
-	workspaceId,
 	subject,
 	itemTitle,
 	create,
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	workspaceId: number;
 	subject: "chat" | "output";
 	itemTitle: string;
 	create: (expiry: ExpiryChoice) => Promise<CreatedLink>;
@@ -163,7 +162,7 @@ export function ShareDialog({
 						</p>
 						<p className="text-sm">
 							<Link
-								href={`/dashboard/${workspaceId}/workspace-settings/public-links`}
+								href={settingsPath("public-links")}
 								className="text-primary underline-offset-4 hover:underline"
 								onClick={() => onOpenChange(false)}
 							>

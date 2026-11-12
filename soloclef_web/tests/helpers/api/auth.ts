@@ -16,11 +16,12 @@ const TEST_USER_PASSWORD = process.env.PLAYWRIGHT_TEST_PASSWORD || "E2eTestPassw
 const E2E_MINT_SECRET = process.env.E2E_MINT_SECRET || "local-e2e-mint-secret-not-for-production";
 
 /**
- * Mints a JWT for the seeded e2e user via the test-only endpoint mounted
- * by soloclef_backend/tests/e2e/run_backend.py. Bypasses the production
- * desktop login rate limit, so it's safe to call from any
- * worker / retry. Returns 404 from the backend when the endpoint isn't
- * mounted (i.e. someone is pointing the suite at a non-e2e backend).
+ * Mints a session token for the seeded e2e user through the API's test-only
+ * route, which the e2e overlay switches on (SOLOCLEF_API_E2E_ROUTES in
+ * docker/docker-compose.e2e-web-go.yml). It bypasses the sign-in rate limit,
+ * so it is safe to call from any worker or retry. A server without the route
+ * answers 404 (someone is pointing the suite at a server that is not a test
+ * stack).
  */
 export async function mintTestToken(
 	request: APIRequestContext,
@@ -31,6 +32,9 @@ export async function mintTestToken(
 		headers: {
 			"Content-Type": "application/json",
 			"X-E2E-Mint-Secret": E2E_MINT_SECRET,
+			// A spec's `request` carries the signed-in cookie, and a write
+			// with a cookie must name its origin (the API's CSRF check).
+			Origin: new URL(BACKEND_URL).origin,
 		},
 	});
 	if (!response.ok()) {
@@ -85,9 +89,7 @@ export async function acquireTestToken(request: APIRequestContext): Promise<stri
 }
 
 /**
- * Standard auth headers for backend API calls. Optionally injects an
- * X-E2E-Scenario header that the test-only ScenarioMiddleware in
- * soloclef_backend/tests/e2e/run_backend.py reads to flip fake behavior.
+ * Standard auth headers for API calls, with any extra headers a test adds.
  */
 export function authHeaders(token: string, extra?: Record<string, string>): Record<string, string> {
 	return {

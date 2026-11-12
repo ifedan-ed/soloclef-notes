@@ -15,7 +15,7 @@ import (
 // (formatFloat, in encode.go). A route **with** a response_model is serialised
 // by pydantic-core instead, which is Rust and writes through ryu: the same two
 // floats are "1e16" and "0.00001". Both appear in this deployment —
-// GET /api/v1/logs/workspaces/{id}/summary has no response_model and
+// the Python tier's log summary has no response_model and its
 // GET /api/v1/logs/{log_id} has one — and the same `log_metadata` column
 // reaches both.
 //

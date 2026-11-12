@@ -7,16 +7,16 @@ import {
 	createEmptyForm,
 	emptyTask,
 	formFromAutomation,
-	hasResolvedModels,
+	hydrateForm,
 } from "@/lib/automations/builder-schema";
 
-function formWith(task: Partial<ReturnType<typeof emptyTask>>, chatModelId: number | null = 0) {
+function formWith(task: Partial<ReturnType<typeof emptyTask>>, chatModel: string | null = null) {
 	const form = createEmptyForm();
 	return {
 		...form,
 		name: "Weekly digest",
 		tasks: [{ ...emptyTask(), query: "List my notebooks", ...task }],
-		models: { chatModelId, imageConfigId: -2001, visionConfigId: -4 },
+		chatModel,
 	};
 }
 
@@ -30,34 +30,64 @@ test("a new task reads documents only and is not tied to a notebook", () => {
 	const task = emptyTask();
 	assert.equal(task.scope, "documents");
 	assert.equal(task.notebookId, null);
-	const params = planParams(buildCreatePayload(formWith({}), 1));
+	const params = planParams(buildCreatePayload(formWith({})));
 	assert.equal("retrieval_scope" in params, false);
 	assert.equal("notebook_id" in params, false);
 });
 
 test("a task that may use the web sends its scope and notebook", () => {
-	const params = planParams(buildCreatePayload(formWith({ scope: "all", notebookId: 12 }), 1));
+	const params = planParams(buildCreatePayload(formWith({ scope: "all", notebookId: 12 })));
 	assert.equal(params.retrieval_scope, "all");
 	assert.equal(params.notebook_id, 12);
 });
 
-test("Auto (0) is a chosen chat model and is sent as 0", () => {
-	const form = formWith({}, 0);
-	assert.equal(hasResolvedModels(form.models), true);
-	const payload = buildCreatePayload(form, 1);
-	const models = (payload.definition as unknown as { models: Record<string, number> }).models;
-	assert.equal(models.chat_model_id, 0);
+test("no model chosen sends no models at all, so the run follows the account's chat model", () => {
+	assert.equal(createEmptyForm().chatModel, null);
+	const payload = buildCreatePayload(formWith({}));
+	assert.equal("models" in payload.definition, false);
+	assert.equal("model" in planParams(payload), false);
 });
 
-test("an unchosen chat model (null) is not resolved", () => {
-	assert.equal(createEmptyForm().models.chatModelId, null);
-	assert.equal(hasResolvedModels(formWith({}, null).models), false);
+test("a chosen model is sent by its proxy name, and nothing else is sent beside it", () => {
+	const payload = buildCreatePayload(formWith({}, "claude-sonnet-4-5"));
+	assert.deepEqual((payload.definition as unknown as { models: unknown }).models, {
+		chat: "claude-sonnet-4-5",
+	});
 });
 
-test("editing reads the scope, notebook and Auto back into the form", () => {
+test("a task's own model is sent on that step only", () => {
+	const form = formWith({ model: "gpt-5-mini" }, "claude-sonnet-4-5");
+	form.tasks.push({ ...emptyTask(), query: "Then draft the summary" });
+	const payload = buildCreatePayload(form);
+	const plan = (payload.definition as unknown as { plan: { params: Record<string, unknown> }[] })
+		.plan;
+	assert.equal(plan[0].params.model, "gpt-5-mini");
+	assert.equal("model" in plan[1].params, false);
+});
+
+test("a definition saved with the old numeric model ids hydrates as no model chosen", () => {
+	// Those ids named rows nothing reads any more, and the server now refuses
+	// the keys: the form drops them, so the next save is one it accepts.
+	const result = hydrateForm(
+		"Digest",
+		null,
+		{
+			name: "Digest",
+			plan: [{ step_id: "step_1", action: "agent_task", params: { query: "Summarize" } }],
+			models: { chat_model_id: 0, image_gen_model_id: -2001, vision_model_id: -4 },
+		},
+		[]
+	);
+	assert.equal(result.formable, true);
+	if (!result.formable) return;
+	assert.equal(result.form.chatModel, null);
+	const payload = buildCreatePayload({ ...result.form });
+	assert.equal("models" in payload.definition, false);
+});
+
+test("editing reads the scope, notebook and models back into the form", () => {
 	const automation = {
 		id: 1,
-		workspace_id: 1,
 		name: "Weekly digest",
 		description: null,
 		status: "active",
@@ -79,6 +109,7 @@ test("editing reads the scope, notebook and Auto back into the form", () => {
 						auto_approve_all: true,
 						retrieval_scope: "web",
 						notebook_id: 7,
+						model: "gpt-5-mini",
 					},
 				},
 			],
@@ -90,7 +121,7 @@ test("editing reads the scope, notebook and Auto back into the form", () => {
 				on_failure: [],
 			},
 			metadata: { tags: [] },
-			models: { chat_model_id: 0, image_gen_model_id: -2001, vision_model_id: -4 },
+			models: { chat: "claude-sonnet-4-5" },
 		},
 	} as unknown as Automation;
 	const result = formFromAutomation(automation);
@@ -98,5 +129,6 @@ test("editing reads the scope, notebook and Auto back into the form", () => {
 	if (!result.formable) return;
 	assert.equal(result.form.tasks[0].scope, "web");
 	assert.equal(result.form.tasks[0].notebookId, 7);
-	assert.equal(result.form.models.chatModelId, 0);
+	assert.equal(result.form.chatModel, "claude-sonnet-4-5");
+	assert.equal(result.form.tasks[0].model, "gpt-5-mini");
 });

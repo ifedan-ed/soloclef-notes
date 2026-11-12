@@ -1,9 +1,10 @@
 "use client";
 
-import { AuiIf, ThreadPrimitive } from "@assistant-ui/react";
+import { AuiIf, ThreadPrimitive, useAuiState } from "@assistant-ui/react";
 import { ArrowDownIcon } from "lucide-react";
 import type { FC, ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const ChatScrollToBottom: FC = () => (
 	<ThreadPrimitive.ScrollToBottom asChild>
@@ -28,6 +29,15 @@ export interface ChatViewportProps {
 	 * bottom composer stays visible above the loading skeleton.
 	 */
 	footerAlwaysVisible?: boolean;
+	/**
+	 * While the thread is empty, the scrolling area is only as tall as what it
+	 * holds, so the footer's composer sits right under it (a notebook's
+	 * welcome) rather than at the bottom of the panel. Content taller than
+	 * the panel still scrolls, with the composer kept in view. Only a layout:
+	 * the composer stays the same mounted element whichever way it is laid
+	 * out, so nothing typed into it can be lost to a swap.
+	 */
+	footerUnderEmptyContent?: boolean;
 }
 
 /**
@@ -46,39 +56,47 @@ export const ChatViewport: FC<ChatViewportProps> = ({
 	children,
 	footer,
 	footerAlwaysVisible = false,
-}) => (
-	<div className="aui-chat-viewport-column relative flex min-h-0 min-w-0 w-full flex-1 flex-col">
-		<ThreadPrimitive.Viewport
-			turnAnchor="top"
-			autoScroll
-			scrollToBottomOnRunStart
-			scrollToBottomOnInitialize
-			scrollToBottomOnThreadSwitch
-			className="aui-thread-viewport relative flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-y-auto px-4 scroll-smooth"
-			style={{ scrollbarGutter: "stable" }}
-		>
-			<div
-				aria-hidden
-				className="aui-chat-viewport-top-fade pointer-events-none sticky top-0 z-10 -mx-4 h-2 shrink-0 bg-gradient-to-b from-main-panel from-20% to-transparent"
-			/>
-			{children}
-		</ThreadPrimitive.Viewport>
-		{footer ? (
-			<AuiIf condition={({ thread }) => footerAlwaysVisible || !thread.isEmpty}>
+	footerUnderEmptyContent = false,
+}) => {
+	const isEmpty = useAuiState(({ thread }) => thread.isEmpty);
+	const hugContent = footerUnderEmptyContent && isEmpty;
+	return (
+		<div className="aui-chat-viewport-column relative flex min-h-0 min-w-0 w-full flex-1 flex-col">
+			<ThreadPrimitive.Viewport
+				turnAnchor="top"
+				autoScroll
+				scrollToBottomOnRunStart
+				scrollToBottomOnInitialize
+				scrollToBottomOnThreadSwitch
+				className={cn(
+					"aui-thread-viewport relative flex min-h-0 min-w-0 w-full flex-col overflow-y-auto px-4 scroll-smooth",
+					hugContent ? "flex-initial" : "flex-1"
+				)}
+				style={{ scrollbarGutter: "stable" }}
+			>
 				<div
-					className="aui-chat-composer-footer relative z-20 flex min-w-0 shrink-0 flex-col items-stretch bg-main-panel px-4 pt-2"
-					style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
-				>
+					aria-hidden
+					className="aui-chat-viewport-top-fade pointer-events-none sticky top-0 z-10 -mx-4 h-2 shrink-0 bg-gradient-to-b from-main-panel from-20% to-transparent"
+				/>
+				{children}
+			</ThreadPrimitive.Viewport>
+			{footer ? (
+				<AuiIf condition={({ thread }) => footerAlwaysVisible || !thread.isEmpty}>
 					<div
-						aria-hidden
-						className="aui-chat-composer-fade pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-t from-main-panel to-transparent"
-					/>
-					<div className="aui-chat-composer-area relative mx-auto flex min-w-0 w-full max-w-(--thread-max-width) flex-col gap-3 overflow-visible">
-						<ChatScrollToBottom />
-						{footer}
+						className="aui-chat-composer-footer relative z-20 flex min-w-0 shrink-0 flex-col items-stretch bg-main-panel px-4 pt-2"
+						style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
+					>
+						<div
+							aria-hidden
+							className="aui-chat-composer-fade pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-t from-main-panel to-transparent"
+						/>
+						<div className="aui-chat-composer-area relative mx-auto flex min-w-0 w-full max-w-(--thread-max-width) flex-col gap-3 overflow-visible">
+							<ChatScrollToBottom />
+							{footer}
+						</div>
 					</div>
-				</div>
-			</AuiIf>
-		) : null}
-	</div>
-);
+				</AuiIf>
+			) : null}
+		</div>
+	);
+};

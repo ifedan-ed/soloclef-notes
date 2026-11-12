@@ -10,21 +10,19 @@ import { useGoogleDriveConnection } from "../hooks/use-google-drive-connection";
 import { GoogleDriveDisconnectButton } from "./google-drive-disconnect-button";
 
 /**
- * This person's Google Drive in a workspace: Connect when there is none, and
+ * The account's Google Drive: Connect when there is none, and
  * once connected the account with Reconnect and (optionally) Disconnect.
  */
 export function GoogleDriveConnectionControls({
-	workspaceId,
 	showDisconnect = true,
 	onDisconnected,
 }: {
-	workspaceId: number;
 	showDisconnect?: boolean;
 	onDisconnected?: () => void;
 }) {
 	const t = useTranslations("google_drive_connect");
-	const { connection, isLoading, isConnected, refresh } = useGoogleDriveConnection(workspaceId);
-	const { start, starting } = useGoogleDriveConnect(workspaceId);
+	const { connection, isLoading, isConnected, refresh } = useGoogleDriveConnection();
+	const { start, starting } = useGoogleDriveConnect();
 
 	if (isLoading || !connection) return null;
 	if (!connection.configured) {
@@ -48,7 +46,10 @@ export function GoogleDriveConnectionControls({
 				<span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted">
 					{getConnectorIcon(EnumConnectorName.GOOGLE_DRIVE_CONNECTOR, "size-4")}
 				</span>
-				<div className="min-w-0 flex-1 text-sm">
+				{/* A floor on the label's width: without one it gave up all its
+				    room to the buttons on a phone and read "C…". With it the
+				    buttons drop to a second line, kept to the right. */}
+				<div className="min-w-40 flex-1 text-sm">
 					{isConnected ? (
 						<>
 							<p className="truncate font-medium" data-testid="google-drive-account">
@@ -65,7 +66,7 @@ export function GoogleDriveConnectionControls({
 						</>
 					)}
 				</div>
-				<div className="flex flex-wrap items-center gap-1">
+				<div className="ml-auto flex flex-wrap items-center gap-1">
 					{isConnected
 						? connectButton(t("reconnect"), "outline")
 						: connectButton(t("connect"), "default")}

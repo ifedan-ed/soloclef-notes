@@ -2,6 +2,7 @@ import { mustGetQuery } from "@rocicorp/zero";
 import { handleQueryRequest } from "@rocicorp/zero/server";
 import { NextResponse } from "next/server";
 import { SERVER_BACKEND_URL } from "@/lib/env-config";
+import { ZERO_CONTEXT_PATH, zeroContextFromAccount } from "@/lib/zero/zero-context";
 import type { Context } from "@/types/zero";
 import { queries } from "@/zero/queries";
 import { schema } from "@/zero/schema";
@@ -37,7 +38,7 @@ async function authenticateRequest(
 	}
 
 	try {
-		const res = await fetch(`${backendURL}/zero/context`, {
+		const res = await fetch(`${backendURL}${ZERO_CONTEXT_PATH}`, {
 			headers,
 		});
 
@@ -45,7 +46,10 @@ async function authenticateRequest(
 			return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
 		}
 
-		const ctx = (await res.json()) as Exclude<Context, undefined>;
+		const ctx = zeroContextFromAccount(await res.json().catch(() => null));
+		if (!ctx) {
+			return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+		}
 		return { ctx };
 	} catch {
 		return { error: NextResponse.json({ error: "Auth service unavailable" }, { status: 503 }) };

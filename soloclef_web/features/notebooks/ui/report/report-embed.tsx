@@ -21,17 +21,11 @@ const HEIGHTS: Partial<Record<StudioOutput["kind"], string>> = {
 };
 
 /** A finished Studio output shown inside the report, in its own viewer. */
-export function ReportEmbed({
-	output,
-	workspaceId,
-}: {
-	output: StudioOutput;
-	workspaceId: number;
-}) {
+export function ReportEmbed({ output }: { output: StudioOutput }) {
 	const t = useTranslations("report_view");
 	const artifactId = output.artifact_id ?? 0;
 	const manifest = useQuery({
-		...artifactManifestQueryOptions(workspaceId, artifactId),
+		...artifactManifestQueryOptions(artifactId),
 		enabled: output.kind !== "audio" && artifactId > 0,
 	});
 	const showSpinner = useDelayedFlag(manifest.isPending && output.kind !== "audio");
@@ -41,7 +35,6 @@ export function ReportEmbed({
 		return (
 			<PodcastPlayer
 				artifactId={artifactId}
-				workspaceId={workspaceId}
 				title={output.title}
 				durationMs={output.duration_seconds ? output.duration_seconds * 1000 : undefined}
 			/>
@@ -56,11 +49,7 @@ export function ReportEmbed({
 			/>
 			<div className={`relative ${height}`} aria-busy={manifest.isPending}>
 				{manifest.data ? (
-					<ArtifactRenderer
-						workspaceId={workspaceId}
-						manifest={manifest.data}
-						zoomControlsContainer={controls}
-					/>
+					<ArtifactRenderer manifest={manifest.data} zoomControlsContainer={controls} />
 				) : manifest.isError ? (
 					<p
 						role="alert"
@@ -82,11 +71,9 @@ export function ReportEmbed({
 export function ReportEmbedCard({
 	suggestionId,
 	output,
-	workspaceId,
 }: {
 	suggestionId: string;
 	output: StudioOutput;
-	workspaceId: number;
 }) {
 	const t = useTranslations("report_view");
 	const tn = useTranslations("notebooks");
@@ -106,7 +93,7 @@ export function ReportEmbedCard({
 				</span>
 				<span className="min-w-0 truncate font-medium">{output.title}</span>
 			</p>
-			<ReportEmbed output={output} workspaceId={workspaceId} />
+			<ReportEmbed output={output} />
 		</section>
 	);
 }

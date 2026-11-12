@@ -1,10 +1,8 @@
 "use client";
 
-import { useAtom } from "jotai";
 import { Bell, ExternalLink, Megaphone } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { setTargetCommentIdAtom } from "@/atoms/chat/current-thread.atom";
 import { Button } from "@/components/ui/button";
 import {
 	Drawer,
@@ -17,7 +15,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { isCommentReplyMetadata, isNewMentionMetadata } from "@/contracts/types/inbox.types";
 import {
 	type ClearScope,
 	clearConfirmTitle,
@@ -36,7 +33,6 @@ import { MarkdownLiteView } from "@/features/site-announcements/ui/markdown-lite
 import type { InboxItem } from "@/hooks/use-inbox";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
-import { notebookPath } from "@/lib/workspace-home";
 
 export interface NotificationsDataSource {
 	items: InboxItem[];
@@ -55,7 +51,6 @@ export interface NotificationsDataSource {
 
 export interface NotificationsDropdownData {
 	totalUnreadCount: number;
-	comments: NotificationsDataSource;
 	status: NotificationsDataSource;
 	/** Announcements from the site's administrators. */
 	announcements?: NotificationsDataSource;
@@ -98,10 +93,6 @@ function formatTime(dateString: string): string {
 	}
 }
 
-function isCommentNotification(item: InboxItem): boolean {
-	return item.type === "new_mention" || item.type === "comment_reply";
-}
-
 function isAnnouncement(item: InboxItem): boolean {
 	return item.type === SITE_ANNOUNCEMENT_TYPE;
 }
@@ -125,7 +116,6 @@ export function NotificationsDropdown({
 }: NotificationsDropdownProps) {
 	const router = useRouter();
 	const isMobile = useIsMobile();
-	const [, setTargetCommentId] = useAtom(setTargetCommentIdAtom);
 	const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
 	const open = controlledOpen ?? uncontrolledOpen;
 	const setOpen = useCallback(
@@ -146,24 +136,15 @@ export function NotificationsDropdown({
 	const announcements = notifications.announcements ?? NO_ANNOUNCEMENTS;
 	// The inboxes each tab draws from; "all" and "unread" read every inbox.
 	const sources = useMemo(() => {
-		if (activeFilter === "mentions") return [notifications.comments];
 		if (activeFilter === "announcements") return [announcements];
-		return [notifications.comments, notifications.status, announcements];
-	}, [activeFilter, announcements, notifications.comments, notifications.status]);
+		return [notifications.status, announcements];
+	}, [activeFilter, announcements, notifications.status]);
 
 	const unreadLabel = formatNotificationCount(notifications.totalUnreadCount);
-	const allCount =
-		(notifications.comments.totalCount ?? 0) +
-		(notifications.status.totalCount ?? 0) +
-		(announcements.totalCount ?? 0);
-	const mentionsCount = notifications.comments.totalCount ?? notifications.comments.items.length;
+	const allCount = (notifications.status.totalCount ?? 0) + (announcements.totalCount ?? 0);
 	const announcementsCount = announcements.totalCount ?? announcements.items.length;
 	const visibleUnreadCount =
-		activeFilter === "mentions"
-			? notifications.comments.unreadCount
-			: activeFilter === "announcements"
-				? announcements.unreadCount
-				: notifications.totalUnreadCount;
+		activeFilter === "announcements" ? announcements.unreadCount : notifications.totalUnreadCount;
 	const isLoading = sources.some((source) => source.loading);
 	const isLoadingMore = sources.some((source) => !!source.loadingMore);
 	const hasMore = sources.some((source) => !!source.hasMore);
@@ -207,13 +188,8 @@ export function NotificationsDropdown({
 	}, [hasMore, isLoading, isLoadingMore, loadMoreForActiveFilter, open]);
 
 	const sourceOf = useCallback(
-		(item: InboxItem) =>
-			isCommentNotification(item)
-				? notifications.comments
-				: isAnnouncement(item)
-					? announcements
-					: notifications.status,
-		[announcements, notifications.comments, notifications.status]
+		(item: InboxItem) => (isAnnouncement(item) ? announcements : notifications.status),
+		[announcements, notifications.status]
 	);
 
 	const markItemAsRead = useCallback(
@@ -252,31 +228,9 @@ export function NotificationsDropdown({
 				return;
 			}
 
-			if (item.type === "new_mention" && isNewMentionMetadata(item.metadata)) {
-				const threadId = item.metadata.thread_id;
-				const commentId = item.metadata.comment_id;
-				if (item.workspace_id && threadId) {
-					if (commentId) setTargetCommentId(commentId);
-					setOpen(false);
-					onCloseMobileSidebar?.();
-					router.push(notebookPath(item.workspace_id, item.metadata.notebook_id));
-				}
-				return;
-			}
-
-			if (item.type === "comment_reply" && isCommentReplyMetadata(item.metadata)) {
-				const threadId = item.metadata.thread_id;
-				const replyId = item.metadata.reply_id;
-				if (item.workspace_id && threadId) {
-					if (replyId) setTargetCommentId(replyId);
-					setOpen(false);
-					onCloseMobileSidebar?.();
-					router.push(notebookPath(item.workspace_id, item.metadata.notebook_id));
-				}
-				return;
-			}
+			// Any other notification has nowhere to go: opening it marks it read.
 		},
-		[markItemAsRead, onCloseMobileSidebar, router, setTargetCommentId, setOpen]
+		[markItemAsRead, onCloseMobileSidebar, router, setOpen]
 	);
 
 	const handleMarkAllAsRead = useCallback(async () => {
@@ -290,7 +244,6 @@ export function NotificationsDropdown({
 	}, [markingAllAsRead, sources, visibleUnreadCount]);
 
 	const tabCount = (() => {
-		if (activeFilter === "mentions") return mentionsCount;
 		if (activeFilter === "announcements") return announcementsCount;
 		if (activeFilter === "unread") return notifications.totalUnreadCount;
 		return allCount;
@@ -319,29 +272,23 @@ export function NotificationsDropdown({
 	}, [activeFilter, clearing, sources]);
 
 	const emptyStateCopy =
-		activeFilter === "mentions"
+		activeFilter === "announcements"
 			? {
-					title: "No mentions",
-					description: "Mentions and replies will appear here.",
+					title: "No announcements",
+					description: "Announcements from the administrators will appear here.",
 				}
-			: activeFilter === "announcements"
+			: activeFilter === "unread"
 				? {
-						title: "No announcements",
-						description: "Announcements from the administrators will appear here.",
+						title: "No unread notifications",
+						description: "New status updates and announcements will appear here.",
 					}
-				: activeFilter === "unread"
-					? {
-							title: "No unread notifications",
-							description: "New mentions and status updates will appear here.",
-						}
-					: {
-							title: "No notifications",
-							description: "Mentions, replies, and status updates will appear here.",
-						};
+				: {
+						title: "No notifications",
+						description: "Uploads, connector syncs and announcements will appear here.",
+					};
 
 	const tabs: { value: NotificationFilter; label: string; count: number }[] = [
 		{ value: "all", label: "All", count: allCount },
-		{ value: "mentions", label: "Mentions", count: mentionsCount },
 		{ value: "announcements", label: "Announcements", count: announcementsCount },
 		{ value: "unread", label: "Unread", count: notifications.totalUnreadCount },
 	];

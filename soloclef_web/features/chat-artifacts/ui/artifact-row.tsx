@@ -1,5 +1,4 @@
-import { useAtomValue, useSetAtom } from "jotai";
-import { activeWorkspaceIdAtom } from "@/atoms/workspaces/workspace-query.atoms";
+import { useSetAtom } from "jotai";
 import { TextShimmerLoader } from "@/components/prompt-kit/loader";
 import { artifactDownloadPath } from "@/features/artifacts/api/artifact-download-path";
 import { isArtifactDownloadable } from "@/features/artifacts/lib/artifact-format-catalog";
@@ -15,14 +14,9 @@ import { closeArtifactsPanelAtom } from "../state/artifacts-panel.atom";
 export function ArtifactRow({ artifact }: { artifact: ChatArtifact }) {
 	const openArtifactPanel = useSetAtom(openArtifactPanelAtom);
 	const closeArtifactsPanel = useSetAtom(closeArtifactsPanelAtom);
-	const workspaceId = Number(useAtomValue(activeWorkspaceIdAtom));
 	const isDesktop = useMediaQuery("(min-width: 1024px)");
 	const canOpen = artifact.artifactId != null;
-	const canDownload =
-		canOpen &&
-		Number.isFinite(workspaceId) &&
-		workspaceId > 0 &&
-		isArtifactDownloadable(artifact.format);
+	const canDownload = canOpen && isArtifactDownloadable(artifact.format);
 
 	const handleOpen = () => {
 		const artifactId = artifact.artifactId;
@@ -62,7 +56,7 @@ export function ArtifactRow({ artifact }: { artifact: ChatArtifact }) {
 			</span>
 			{canDownload && artifact.artifactId != null ? (
 				<ArtifactDownloadButton
-					path={artifactDownloadPath(workspaceId, artifact.artifactId)}
+					path={artifactDownloadPath(artifact.artifactId)}
 					filename={artifact.title}
 					className="relative z-10 size-9 shrink-0 text-muted-foreground hover:text-foreground"
 				/>

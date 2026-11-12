@@ -47,7 +47,7 @@ test("a link that could run script stays plain text", () => {
 	assert.equal(isSafeHref("javascript:alert(1)"), false);
 	assert.equal(isSafeHref("//evil.example"), false);
 	assert.equal(isSafeHref("/\\evil.example"), false);
-	assert.equal(isSafeHref("https://notes.danvics.com"), true);
+	assert.equal(isSafeHref("https://notes.example.com"), true);
 	assert.equal(isSafeHref("/dashboard/1"), true);
 });
 

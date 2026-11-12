@@ -1,6 +1,7 @@
-// publish-event states one domain event on the event stream and prints the
-// entry id. It exists so the cross-language proof can publish from Go without a
-// Go write route having been ported yet (custom/docs/event-bus.md).
+// publish-event states one domain event on the event stream, for one account,
+// and prints the entry id. It is an operator's tool for exercising whatever
+// subscribes to the stream without driving the route that owes the event
+// (custom/docs/event-bus.md).
 package main
 
 import (
@@ -17,25 +18,25 @@ import (
 func main() {
 	redisURL := flag.String("redis-url", "", "the stream's Redis, as REDIS_APP_URL")
 	eventType := flag.String("event-type", "", "the dotted event type")
-	workspace := flag.Int64("workspace-id", 0, "the workspace the event is scoped to")
+	userID := flag.String("user-id", "", "the account the event belongs to, as its uuid")
 	payload := flag.String("payload", "{}", "the event payload, as JSON")
 	flag.Parse()
 
-	if err := run(*redisURL, *eventType, *workspace, *payload); err != nil {
+	if err := run(*redisURL, *eventType, *userID, *payload); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func run(redisURL, eventType string, workspaceID int64, payload string) error {
-	if redisURL == "" || eventType == "" || workspaceID == 0 {
-		return fmt.Errorf("-redis-url, -event-type and -workspace-id are all required")
+func run(redisURL, eventType, userID, payload string) error {
+	if redisURL == "" || eventType == "" || userID == "" {
+		return fmt.Errorf("-redis-url, -event-type and -user-id are all required")
 	}
 	var decoded json.RawMessage
 	if err := json.Unmarshal([]byte(payload), &decoded); err != nil {
 		return fmt.Errorf("the payload is not JSON: %w", err)
 	}
-	event, err := eventstream.NewEvent(eventType, decoded, workspaceID, time.Now())
+	event, err := eventstream.NewEvent(eventType, decoded, userID, time.Now())
 	if err != nil {
 		return err
 	}

@@ -39,16 +39,16 @@ test("an empty notebook explains sources and invites a drop", () => {
 	assert.match(html, /Drop files here or add a source/);
 });
 
-test("the research box defaults to Web and Fast research", () => {
+test("the research box defaults to PubMed and Fast research", () => {
 	const html = render(
 		createElement(ResearchForm, {
-			draft: { query: "", picks: pickOnly(initialSourcePicks, "web"), mode: "fast" },
+			draft: { query: "", picks: initialSourcePicks, mode: "fast" },
 			onDraftChange: noop,
 			onSubmit: noop,
 		})
 	);
 	assert.match(html, /placeholder="Search the web for new sources"/);
-	assert.match(html, /aria-label="Search in: Web"/);
+	assert.match(html, /aria-label="Search in: PubMed"/);
 	assert.match(html, /aria-label="Research mode: Fast research"/);
 	assert.match(html, /aria-label="Search"[^>]*disabled|disabled[^>]*aria-label="Search"/);
 });
@@ -56,12 +56,12 @@ test("the research box defaults to Web and Fast research", () => {
 test("the research box names the chosen tool and mode", () => {
 	const html = render(
 		createElement(ResearchForm, {
-			draft: { query: "iron", picks: pickOnly(initialSourcePicks, "youtube"), mode: "deep" },
+			draft: { query: "iron", picks: pickOnly(initialSourcePicks, "exa"), mode: "deep" },
 			onDraftChange: noop,
 			onSubmit: noop,
 		})
 	);
-	assert.match(html, />YouTube</);
+	assert.match(html, />Exa</);
 	assert.match(html, />Deep research</);
 	assert.doesNotMatch(html, /disabled=""/);
 });
@@ -82,21 +82,20 @@ test("results list links out in a new tab and offers to add the checked ones", (
 			url: "https://example.com/a",
 			title: "Iron basics",
 			snippet: "What iron does",
-			source: "web",
+			source: "exa",
 			meta: "example.com · 2025",
 		},
 		{
 			id: "b",
-			url: "https://youtube.com/watch?v=b",
-			title: "Iron video",
+			url: "https://arxiv.org/abs/2401.00001",
+			title: "Iron preprint",
 			snippet: "",
-			source: "youtube",
+			source: "arxiv",
 		},
 	];
 	const html = render(
 		createElement(ResearchResults, {
 			results,
-			source: "web",
 			importing: false,
 			importFailed: false,
 			onImport: noop,
@@ -120,7 +119,6 @@ test("an empty result set says so; a failed import offers to retry", () => {
 		render(
 			createElement(ResearchResults, {
 				results: [],
-				source: "web",
 				importing: false,
 				importFailed: false,
 				onImport: noop,
@@ -131,8 +129,7 @@ test("an empty result set says so; a failed import offers to retry", () => {
 	);
 	const failed = render(
 		createElement(ResearchResults, {
-			results: [{ id: "a", url: "https://a.test", title: "A", snippet: "", source: "reddit" }],
-			source: "reddit",
+			results: [{ id: "a", url: "https://a.test", title: "A", snippet: "", source: "tavily" }],
 			importing: false,
 			importFailed: true,
 			onImport: noop,
@@ -149,10 +146,10 @@ test("every result gets a fixed-size tile; images are proxied, lazy and referrer
 			results: [
 				{
 					id: "v",
-					url: "https://youtube.com/watch?v=v",
-					title: "Video",
+					url: "https://example.org/v",
+					title: "Article",
 					snippet: "",
-					source: "youtube",
+					source: "exa",
 					thumbnail_url: "/api/v1/research/thumbnails?u=abc&s=def",
 				},
 				{
@@ -160,12 +157,17 @@ test("every result gets a fixed-size tile; images are proxied, lazy and referrer
 					url: "https://nhs.uk/a",
 					title: "Page",
 					snippet: "",
-					source: "web",
+					source: "tavily",
 					favicon_url: "/api/v1/research/thumbnails?u=fav&s=sig",
 				},
-				{ id: "r", url: "https://reddit.com/r/a", title: "Post", snippet: "", source: "reddit" },
+				{
+					id: "r",
+					url: "https://arxiv.org/abs/2401.00002",
+					title: "Paper",
+					snippet: "",
+					source: "arxiv",
+				},
 			],
-			source: "web",
 			importing: false,
 			importFailed: false,
 			onImport: noop,
@@ -182,7 +184,6 @@ test("every result gets a fixed-size tile; images are proxied, lazy and referrer
 		assert.match(tag, /referrerPolicy="no-referrer"|referrerpolicy="no-referrer"/);
 		assert.match(tag, /width="\d+"/);
 	}
-	assert.ok(!html.includes("i.ytimg.com"));
 });
 
 test("a paper shows its source badges and an open-access mark", () => {
@@ -205,7 +206,6 @@ test("a paper shows its source badges and an open-access mark", () => {
 					},
 				},
 			],
-			source: "pubmed",
 			importing: false,
 			importFailed: false,
 			onImport: noop,
@@ -216,20 +216,6 @@ test("a paper shows its source badges and an open-access mark", () => {
 	assert.match(html, />PMC</);
 	assert.match(html, />Open access</);
 	assert.doesNotMatch(html, /future-index/);
-});
-
-test("TikTok coming back empty explains why", () => {
-	const html = render(
-		createElement(ResearchResults, {
-			results: [],
-			source: "tiktok",
-			importing: false,
-			importFailed: false,
-			onImport: noop,
-			onDismiss: noop,
-		})
-	);
-	assert.match(html, /TikTok had no videos under hashtags from this query/);
 });
 
 test("a known failure is worded in the user's language, naming the source", () => {
@@ -248,7 +234,7 @@ test("a known failure is worded in the user's language, naming the source", () =
 		createElement(ResearchError, {
 			message: "server said this",
 			code: "brand_new_code",
-			source: "web",
+			source: "exa",
 			onRetry: noop,
 			onDismiss: noop,
 		})
@@ -259,13 +245,13 @@ test("a known failure is worded in the user's language, naming the source", () =
 test("the research box can search the academic sources", () => {
 	const html = render(
 		createElement(ResearchForm, {
-			draft: { query: "hfnc", picks: pickOnly(initialSourcePicks, "pubmed"), mode: "deep" },
+			draft: { query: "hfnc", picks: pickOnly(initialSourcePicks, "arxiv"), mode: "deep" },
 			onDraftChange: noop,
 			onSubmit: noop,
 		})
 	);
-	assert.match(html, /aria-label="Search in: PubMed"/);
-	assert.match(html, /src="\/connectors\/pubmed.svg"|pubmed.svg/);
+	assert.match(html, /aria-label="Search in: arXiv"/);
+	assert.match(html, /src="\/connectors\/arxiv.svg"|arxiv.svg/);
 });
 
 test("the research box can search Exa and Tavily, with their marks", () => {
@@ -288,8 +274,8 @@ test("the research box can search Exa and Tavily, with their marks", () => {
 
 test("a missing, refused or exhausted Exa/Tavily key is worded for the user", () => {
 	const cases = [
-		["source_not_connected", /Exa isn&#x27;t connected in this workspace/],
-		["source_key_rejected", /Exa refused this workspace&#x27;s API key/],
+		["source_not_connected", /Exa isn&#x27;t connected. Add its connector in Settings/],
+		["source_key_rejected", /Exa refused your API key/],
 		["source_quota", /Exa turned the search down/],
 	] as const;
 	for (const [code, wording] of cases) {

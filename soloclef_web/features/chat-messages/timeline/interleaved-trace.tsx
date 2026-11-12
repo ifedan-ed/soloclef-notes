@@ -49,6 +49,7 @@ import {
 	type TurnRenderItem,
 } from "./grouping";
 import { getActivityIcon, getActivityPresentation, getConnectorLogo } from "./presentation";
+import { ToolCardRevertButton } from "./tool-registry/fallback/revert-button";
 import { AssistantTurnTiming, useAssistantTurnTiming } from "./turn-timing";
 import type { TurnTimingDisplay } from "./turn-timing-state";
 import { useReasoningAutoScroll } from "./use-reasoning-auto-scroll";
@@ -226,21 +227,32 @@ const ReasoningEpisode: FC<{ text: string; running: boolean }> = ({ text, runnin
 	);
 };
 
-const ActivityRow: FC<{ activity: ActivityData; threadRunning: boolean }> = ({
-	activity,
-	threadRunning,
-}) => {
+const ActivityRow: FC<{
+	activity: ActivityData;
+	threadRunning: boolean;
+	/** What the person can do about a finished step: its undo, when it changed something. */
+	action?: ReactNode;
+}> = ({ activity, threadRunning, action }) => {
 	const { status, title } = getActivityPresentation(activity, threadRunning);
 	const Icon = getActivityIcon(activity.iconKey, activity.category);
+	const label =
+		status === "running" ? (
+			<TextShimmerLoader text={title} size="md" className="truncate font-normal!" />
+		) : (
+			title
+		);
 	return (
 		<TraceItemRow
 			icon={Icon}
 			logo={getConnectorLogo(activity.integration)}
 			title={
-				status === "running" ? (
-					<TextShimmerLoader text={title} size="md" className="truncate font-normal!" />
+				action && status === "completed" ? (
+					<div className="flex min-w-0 items-center justify-between gap-2">
+						<span className="min-w-0 truncate">{label}</span>
+						{action}
+					</div>
 				) : (
-					title
+					label
 				)
 			}
 			status={status}
@@ -283,7 +295,15 @@ const TraceLeaf: FC<{
 	}
 	const activityId = getToolActivityId(part);
 	const activity = activityId ? activities.get(activityId) : undefined;
-	return activity ? <ActivityRow activity={activity} threadRunning={threadRunning} /> : null;
+	if (!activity) return null;
+	// A step that changed the person's documents can be undone from its own
+	// line. The button draws nothing unless the action log holds a
+	// reversible row for this very call, and says "Undone" once it is.
+	const undo =
+		part.type === "tool-call" && typeof part.toolCallId === "string" ? (
+			<ToolCardRevertButton toolCallId={part.toolCallId} toolName={part.toolName} variant="trace" />
+		) : null;
+	return <ActivityRow activity={activity} threadRunning={threadRunning} action={undo} />;
 };
 
 const TraceLeafByIndex: FC<{

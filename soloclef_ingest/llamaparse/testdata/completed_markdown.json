@@ -1,0 +1,16 @@
+{
+  "job": {
+    "id": "pjb-7f3a",
+    "project_id": "prj-01",
+    "status": "COMPLETED",
+    "error_message": null,
+    "tier": "agentic"
+  },
+  "markdown": {
+    "pages": [
+      {"page_number": 1, "success": true, "markdown": "# Dosing guide\n\nGive once daily.\n", "header": "", "footer": ""},
+      {"page_number": 2, "success": false, "error": "Page could not be rendered"},
+      {"page_number": 3, "success": true, "markdown": "| Drug | Dose |\n|---|---|\n| Amoxicillin | 500 mg |", "header": "", "footer": ""}
+    ]
+  }
+}

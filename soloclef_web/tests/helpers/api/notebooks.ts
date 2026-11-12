@@ -3,7 +3,6 @@ import { authHeaders, BACKEND_URL } from "./auth";
 
 export type NotebookRow = {
 	id: number;
-	workspace_id: number;
 	title: string;
 	icon: string | null;
 };
@@ -22,12 +21,15 @@ async function ok<T>(response: Awaited<ReturnType<APIRequestContext["get"]>>, wh
 	return (await response.json()) as T;
 }
 
-const nb = (ws: number, id?: number) =>
-	`${BACKEND_URL}/api/v1/workspaces/${ws}/notebooks${id === undefined ? "" : `/${id}`}`;
+// One kind of note, the account's own, at one address; a notebook is a filter.
+const NOTES = `${BACKEND_URL}/api/v1/notes`;
 
-export async function listNotebooks(request: APIRequestContext, token: string, ws: number) {
+// Every notebook is the signed-in account's: no path names an owner.
+const nb = (id?: number) => `${BACKEND_URL}/api/v1/notebooks${id === undefined ? "" : `/${id}`}`;
+
+export async function listNotebooks(request: APIRequestContext, token: string) {
 	return ok<NotebookRow[]>(
-		await request.get(nb(ws), { headers: authHeaders(token) }),
+		await request.get(nb(), { headers: authHeaders(token) }),
 		"listNotebooks"
 	);
 }
@@ -35,96 +37,88 @@ export async function listNotebooks(request: APIRequestContext, token: string, w
 export async function createNotebook(
 	request: APIRequestContext,
 	token: string,
-	ws: number,
 	title: string,
 	icon = "📓"
 ) {
 	return ok<NotebookRow>(
-		await request.post(nb(ws), { headers: authHeaders(token), data: { title, icon } }),
+		await request.post(nb(), { headers: authHeaders(token), data: { title, icon } }),
 		"createNotebook"
 	);
 }
 
-export async function deleteNotebook(
-	request: APIRequestContext,
-	token: string,
-	ws: number,
-	id: number
-) {
-	const response = await request.delete(nb(ws, id), { headers: authHeaders(token) });
+/**
+ * Deletes a notebook a test made, and first the notes filed in it. A note
+ * outlives its notebook (the notebook going only unfiles it), and every test
+ * signs in as the same account: left alone, the notes that `createNote` and
+ * `addNoteSource` write would pile up on every later test's Notes page.
+ */
+export async function deleteNotebook(request: APIRequestContext, token: string, id: number) {
+	const filed = await request.get(`${NOTES}?notebook_id=${id}&limit=100`, {
+		headers: authHeaders(token),
+	});
+	// Not ok: the notebook is already gone, and its notes were unfiled with it.
+	if (filed.ok()) {
+		const { items } = (await filed.json()) as { items: { id: number }[] };
+		for (const note of items) {
+			await request.delete(`${NOTES}/${note.id}`, { headers: authHeaders(token) });
+		}
+	}
+	const response = await request.delete(nb(id), { headers: authHeaders(token) });
 	if (!response.ok() && response.status() !== 404) {
 		throw new Error(`deleteNotebook failed (${response.status()})`);
 	}
 }
 
-export async function listSources(
-	request: APIRequestContext,
-	token: string,
-	ws: number,
-	id: number
-) {
+export async function listSources(request: APIRequestContext, token: string, id: number) {
 	return ok<SourceRow[]>(
-		await request.get(`${nb(ws, id)}/sources`, { headers: authHeaders(token) }),
+		await request.get(`${nb(id)}/sources`, { headers: authHeaders(token) }),
 		"listSources"
 	);
 }
 
-export async function listNotes(request: APIRequestContext, token: string, ws: number, id: number) {
-	return ok<{ id: number; title: string; content: string }[]>(
-		await request.get(`${nb(ws, id)}/notes`, { headers: authHeaders(token) }),
+/** The notes filed in a notebook: what its Notes tab lists (first page). */
+export async function listNotes(request: APIRequestContext, token: string, id: number) {
+	const page = await ok<{ items: { id: number; title: string; content: string }[] }>(
+		await request.get(`${NOTES}?notebook_id=${id}&limit=50`, { headers: authHeaders(token) }),
 		"listNotes"
 	);
+	return page.items;
 }
 
+/** Writes a note filed in the notebook (soloclef_api/internal/notes: one kind of note). */
 export async function createNote(
 	request: APIRequestContext,
 	token: string,
-	ws: number,
 	id: number,
 	title: string,
 	content: string
 ) {
 	return ok<{ id: number }>(
-		await request.post(`${nb(ws, id)}/notes`, {
+		await request.post(NOTES, {
 			headers: authHeaders(token),
-			data: { title, content },
+			data: { title, content, notebook_id: id },
 		}),
 		"createNote"
 	);
 }
 
-export async function getNotebook(
-	request: APIRequestContext,
-	token: string,
-	ws: number,
-	id: number
-) {
+export async function getNotebook(request: APIRequestContext, token: string, id: number) {
 	return ok<NotebookRow & Record<string, unknown>>(
-		await request.get(nb(ws, id), { headers: authHeaders(token) }),
+		await request.get(nb(id), { headers: authHeaders(token) }),
 		"getNotebook"
 	);
 }
 
-export async function listThreads(
-	request: APIRequestContext,
-	token: string,
-	ws: number,
-	id: number
-) {
+export async function listThreads(request: APIRequestContext, token: string, id: number) {
 	return ok<{ id: number }[]>(
-		await request.get(`${nb(ws, id)}/threads`, { headers: authHeaders(token) }),
+		await request.get(`${nb(id)}/threads`, { headers: authHeaders(token) }),
 		"listThreads"
 	);
 }
 
-export async function listStudioOutputs(
-	request: APIRequestContext,
-	token: string,
-	ws: number,
-	id: number
-) {
+export async function listStudioOutputs(request: APIRequestContext, token: string, id: number) {
 	return ok<{ id: number; kind: string; status: string; title: string }[]>(
-		await request.get(`${nb(ws, id)}/studio/outputs`, { headers: authHeaders(token) }),
+		await request.get(`${nb(id)}/studio/outputs`, { headers: authHeaders(token) }),
 		"listStudioOutputs"
 	);
 }
@@ -136,26 +130,26 @@ export type SourceDetail = SourceRow & {
 };
 
 /**
- * Add a real, indexed source the way a user can: write a note, then
- * "Convert to source". The backend creates a NOTE document and Celery
- * indexes it (fake embeddings), so chunks and citations are real rows.
+ * Add a real, indexed source the way a user can: write a note in the
+ * notebook, then switch it on as the notebook's source. The note is a
+ * document, so the indexer chunks and embeds it and citations are real rows.
+ * (There is no "convert": the source is the note itself, not a copy of it.)
  */
 export async function addNoteSource(
 	request: APIRequestContext,
 	token: string,
-	ws: number,
 	id: number,
 	title: string,
 	content: string
 ): Promise<SourceDetail> {
-	const note = await createNote(request, token, ws, id, title, content);
-	const converted = await request.post(`${nb(ws, id)}/notes/${note.id}/convert`, {
+	const note = await createNote(request, token, id, title, content);
+	const switched = await request.put(`${NOTES}/${note.id}/sources/${id}`, {
 		headers: authHeaders(token),
 	});
-	await ok(converted, "convertNote");
+	await ok(switched, "noteAsSource");
 	const deadline = Date.now() + 60_000;
 	for (;;) {
-		const sources = (await listSources(request, token, ws, id)) as SourceDetail[];
+		const sources = (await listSources(request, token, id)) as SourceDetail[];
 		const source = sources.find((s) => s.title === title);
 		if (source && (source.status ?? "ready") === "ready") return source;
 		if (Date.now() > deadline) {
@@ -201,7 +195,6 @@ export type SeedKind =
 /** A finished (or running/failed) Studio output, via the test-only seed route. */
 export async function seedOutput(
 	request: APIRequestContext,
-	ws: number,
 	id: number,
 	kind: SeedKind,
 	status: "ready" | "running" | "failed" = "ready",
@@ -211,7 +204,7 @@ export async function seedOutput(
 	return ok(
 		await request.post(`${BACKEND_URL}/__e2e__/seed/studio-output`, {
 			headers: seedHeaders(),
-			data: { workspace_id: ws, notebook_id: id, kind, status, title, ...content },
+			data: { notebook_id: id, kind, status, title, ...content },
 		}),
 		"seedOutput"
 	);
@@ -233,14 +226,13 @@ function seedHeaders() {
  */
 export async function completeOutput(
 	request: APIRequestContext,
-	ws: number,
 	id: number,
 	outputId: number
 ): Promise<{ output_id: number; artifact_id: number | null }> {
 	return ok(
 		await request.post(`${BACKEND_URL}/__e2e__/seed/complete-output`, {
 			headers: seedHeaders(),
-			data: { workspace_id: ws, notebook_id: id, output_id: outputId },
+			data: { notebook_id: id, output_id: outputId },
 		}),
 		"completeOutput"
 	);

@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BRAND } from "@/lib/brand";
 import {
 	API_KEY_PLACEHOLDER,
-	DEFAULT_SERVER_DIR,
+	DEFAULT_SERVER_COMMAND,
 	MCP_CLIENTS,
 	type McpSnippetOptions,
 	type McpTransport,
@@ -84,7 +84,7 @@ export function AgentSetupTabs({
 		// not quietly point the agent at somebody else's server.
 		baseUrl:
 			options?.baseUrl || (selfHosted ? "http://localhost:8000" : "https://api.surfsense.com"),
-		serverDir: options?.serverDir || DEFAULT_SERVER_DIR,
+		serverCommand: options?.serverCommand || DEFAULT_SERVER_COMMAND,
 	};
 
 	// Upstream's hosted server is not a thing a self-hoster can use, so it is

@@ -27,8 +27,10 @@ type Principal struct {
 	Method Method
 }
 
-// IsGated reports whether this principal only sees workspaces that have API
-// access switched on, matching AuthContext.is_gated.
+// IsGated reports whether the caller is a program acting for the account (an
+// API key or an agent's token) and not the person in a session. Such a caller
+// is let in only while the account's API-access switch is on; the resolver
+// checks that once, so no route does (resolve.go, ErrAPIAccessOff).
 func (p Principal) IsGated() bool {
 	return p.Method == MethodPersonalAccessToken || p.Method == MethodAgent
 }

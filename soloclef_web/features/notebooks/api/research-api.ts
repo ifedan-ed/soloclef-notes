@@ -11,8 +11,7 @@ import {
 	researchSourcesStatusSchema,
 } from "../model/research";
 
-const researchPath = (workspaceId: number, notebookId: number) =>
-	`/api/v1/workspaces/${workspaceId}/notebooks/${notebookId}/research`;
+const researchPath = (notebookId: number) => `/api/v1/notebooks/${notebookId}/research`;
 
 /** The search endpoint refused the request before streaming anything. */
 export class ResearchRequestError extends Error {
@@ -27,8 +26,9 @@ export class ResearchRequestError extends Error {
 
 async function errorDetail(response: Response): Promise<string | null> {
 	try {
-		const body = (await response.json()) as { detail?: unknown };
-		return typeof body.detail === "string" ? body.detail : null;
+		// The API's error envelope: {"error": {"message": ...}}.
+		const body = (await response.json()) as { error?: { message?: unknown } };
+		return typeof body.error?.message === "string" ? body.error.message : null;
 	} catch {
 		return null;
 	}
@@ -39,27 +39,22 @@ async function errorDetail(response: Response): Promise<string | null> {
  * streams in. Resolves when the stream closes; abort through ``signal``.
  */
 export async function streamResearchSearch({
-	workspaceId,
 	notebookId,
 	request,
 	signal,
 	onEvent,
 }: {
-	workspaceId: number;
 	notebookId: number;
 	request: ResearchRequest;
 	signal: AbortSignal;
 	onEvent: (event: ResearchEvent) => void;
 }): Promise<void> {
-	const response = await authenticatedFetch(
-		buildBackendUrl(`${researchPath(workspaceId, notebookId)}/search`),
-		{
-			method: "POST",
-			headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-			body: JSON.stringify(request),
-			signal,
-		}
-	);
+	const response = await authenticatedFetch(buildBackendUrl(`${researchPath(notebookId)}/search`), {
+		method: "POST",
+		headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+		body: JSON.stringify(request),
+		signal,
+	});
 	if (!response.ok || !response.body) {
 		throw new ResearchRequestError(response.status, await errorDetail(response));
 	}
@@ -87,29 +82,20 @@ export async function streamResearchSearch({
 }
 
 export const researchApi = {
-	/** Which key-backed sources (Exa, Tavily) this workspace cannot search, and why. */
-	sourcesStatus: (workspaceId: number, notebookId: number) =>
-		baseApiService.get(
-			`${researchPath(workspaceId, notebookId)}/sources`,
-			researchSourcesStatusSchema
-		),
+	/** Which key-backed sources (Exa, Tavily) this account cannot search, and why. */
+	sourcesStatus: (notebookId: number) =>
+		baseApiService.get(`${researchPath(notebookId)}/sources`, researchSourcesStatusSchema),
 	/**
 	 * Adds one pasted web page as a source (read in the background, with
 	 * Browserbase when connected); answers with the notebook's full source list.
 	 */
-	readPage: (workspaceId: number, notebookId: number, url: string) =>
-		baseApiService.post(
-			`${researchPath(workspaceId, notebookId)}/read-page`,
-			z.array(notebookSourceSchema),
-			{ body: { url } }
-		),
+	readPage: (notebookId: number, url: string) =>
+		baseApiService.post(`${researchPath(notebookId)}/read-page`, z.array(notebookSourceSchema), {
+			body: { url },
+		}),
 	/** Imports the chosen results; answers with the notebook's full source list. */
-	importResults: (workspaceId: number, notebookId: number, items: ResearchImportItem[]) =>
-		baseApiService.post(
-			`${researchPath(workspaceId, notebookId)}/import`,
-			z.array(notebookSourceSchema),
-			{
-				body: { items },
-			}
-		),
+	importResults: (notebookId: number, items: ResearchImportItem[]) =>
+		baseApiService.post(`${researchPath(notebookId)}/import`, z.array(notebookSourceSchema), {
+			body: { items },
+		}),
 };

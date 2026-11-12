@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { RootProvider } from "fumadocs-ui/provider/next";
 import { Roboto } from "next/font/google";
-import Script from "next/script";
 import { DesktopUpdateToast } from "@/components/desktop/desktop-update-toast";
 import { AuthCutoverPurge } from "@/components/providers/AuthCutoverPurge";
 import { ClientErrorReporter } from "@/components/providers/ClientErrorReporter";
@@ -20,9 +19,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { LocaleProvider } from "@/contexts/LocaleContext";
 import { PlatformProvider } from "@/contexts/platform-context";
 import { BRAND, metadataBase, siteUrl } from "@/lib/brand";
-import { BUILD_TIME_AUTH_TYPE } from "@/lib/env-config";
 import { ReactQueryClientProvider } from "@/lib/query-client/query-client.provider";
-import { getRuntimeAuthInitScript, resolveRuntimeAuthUiMode } from "@/lib/runtime-auth-config";
 import { cn } from "@/lib/utils";
 
 const roboto = Roboto({
@@ -32,6 +29,12 @@ const roboto = Roboto({
 	// keep the fallback for this page view. "swap" (the default) always swaps
 	// in Roboto once it arrives, which produced a visible font jump on load.
 	display: "optional",
+	// What "the fallback" is when Roboto misses that window. next/font's own
+	// fallback face is Arial, by local("Arial") only, and the family it writes
+	// ends there: on a device with no Arial (Linux, many Androids) that face
+	// fails to load and the text drew in the browser's default font, a serif.
+	// A generic family at the end makes the last resort the system's sans.
+	fallback: ["system-ui", "sans-serif"],
 	variable: "--font-roboto",
 });
 
@@ -84,15 +87,8 @@ export default function RootLayout({
 	// Language can be switched dynamically through LanguageSwitcher component
 	// Locale state is managed by LocaleContext and persisted in localStorage
 	return (
-		<html
-			lang="en"
-			data-soloclef-auth-type={resolveRuntimeAuthUiMode(BUILD_TIME_AUTH_TYPE)}
-			suppressHydrationWarning
-		>
+		<html lang="en" suppressHydrationWarning>
 			<head>
-				<Script id="soloclef-runtime-auth-init" strategy="beforeInteractive">
-					{getRuntimeAuthInitScript(BUILD_TIME_AUTH_TYPE)}
-				</Script>
 				<OrganizationJsonLd />
 				<WebSiteJsonLd />
 				<SoftwareApplicationJsonLd />

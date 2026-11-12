@@ -57,7 +57,7 @@ test("research events are validated; anything else is dropped", () => {
 					url: "https://example.com",
 					title: "Example",
 					snippet: "Snippet",
-					source: "web",
+					source: "exa",
 					thumbnail_url: null,
 					meta: null,
 				},
@@ -79,6 +79,12 @@ test("the sources status reads which key-backed sources are unavailable", async 
 	assert.deepEqual(
 		researchSourcesStatusSchema.parse({ unavailable: { exa: "not_connected" } }).unavailable,
 		{ exa: "not_connected" }
+	);
+	// A source this server does not search at all is greyed out too.
+	assert.deepEqual(
+		researchSourcesStatusSchema.parse({ unavailable: { google_scholar: "not_available" } })
+			.unavailable,
+		{ google_scholar: "not_available" }
 	);
 	assert.deepEqual(researchSourcesStatusSchema.parse({}).unavailable, {});
 	assert.throws(() => researchSourcesStatusSchema.parse({ unavailable: { exa: "broken" } }));

@@ -13,11 +13,10 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_mcp_go/internal/settings"
 )
 
-// pythonResults holds, per call, the text the Python server answered against the
-// stand-in backend above. Captured from it over HTTP: these are the strings a
-// model reads, and reproducing them is what makes the port a port rather than a
-// rewrite.
-const pythonResults = "testdata/python_tool_results.json"
+// toolResults holds, per call, the text a model reads back against the stand-in
+// backend. First captured from the Python server; it changes now only on
+// purpose.
+const toolResults = "testdata/tool_results.json"
 
 type resultCase struct {
 	Label     string         `json:"label"`
@@ -27,9 +26,9 @@ type resultCase struct {
 	IsError   bool           `json:"is_error"`
 }
 
-func TestToolResultsMatchPythonServer(t *testing.T) {
+func TestToolResultsAreThePublishedTexts(t *testing.T) {
 	var cases []resultCase
-	raw, err := os.ReadFile(pythonResults)
+	raw, err := os.ReadFile(toolResults)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,15 +42,6 @@ func TestToolResultsMatchPythonServer(t *testing.T) {
 	backend := fakeBackend(t)
 	session, done := connected(t, backend.URL)
 	defer done()
-
-	// A workspace is chosen first, as a session does, because most tools need
-	// one and the choice is remembered for the caller.
-	if _, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name:      "soloclef_select_workspace",
-		Arguments: map[string]any{"workspace": "Research"},
-	}); err != nil {
-		t.Fatal(err)
-	}
 
 	for _, each := range cases {
 		t.Run(each.Label, func(t *testing.T) {

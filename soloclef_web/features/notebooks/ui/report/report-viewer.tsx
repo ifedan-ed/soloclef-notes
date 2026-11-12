@@ -63,14 +63,12 @@ type Selected = { text: string; top: number; left: number };
  * with no suggestions and no Explain (there is no notebook chat to ask).
  */
 export function ReportBody({
-	workspaceId,
 	notebookId,
 	output,
 	compact,
 	controls,
 	shared,
 }: {
-	workspaceId: number;
 	notebookId: number;
 	output: Pick<StudioOutput, "id" | "title" | "artifact_id" | "options">;
 	compact: boolean;
@@ -83,17 +81,12 @@ export function ReportBody({
 	const explain = useExplain();
 	const artifactId = output.artifact_id ?? 0;
 	const manifest = useQuery({
-		...artifactManifestQueryOptions(workspaceId, artifactId),
+		...artifactManifestQueryOptions(artifactId),
 		enabled: artifactId > 0 && !shared,
 	});
 	const manifestData = shared?.manifest ?? manifest.data;
-	const { view, add, dismiss } = useReportView(
-		workspaceId,
-		notebookId,
-		output.id,
-		artifactId > 0 && !shared
-	);
-	const outputs = useStudioOutputs(workspaceId, notebookId);
+	const { view, add, dismiss } = useReportView(notebookId, output.id, artifactId > 0 && !shared);
+	const outputs = useStudioOutputs(notebookId);
 	const showSpinner = useDelayedFlag(!manifestData && manifest.isPending);
 
 	const outline = useMemo(
@@ -346,7 +339,7 @@ export function ReportBody({
 			) : null}
 			{manifestData && primary && mode !== "interactive" ? (
 				<ArtifactDownloadButton
-					path={shared ? primary.content_url : artifactDownloadPath(workspaceId, artifactId)}
+					path={shared ? primary.content_url : artifactDownloadPath(artifactId)}
 					filename={artifactDownloadFilename(manifestData, artifactId)}
 					className="size-8 shrink-0 rounded-full text-muted-foreground"
 				/>
@@ -377,7 +370,6 @@ export function ReportBody({
 							fallbackTitle={output.title}
 							placed={placed}
 							outputs={outputsById}
-							workspaceId={workspaceId}
 							adding={add.isPending ? (add.variables ?? null) : null}
 							failedToStart={failedToStart}
 							onAdd={addSuggestion}
@@ -415,11 +407,7 @@ export function ReportBody({
 						}}
 					/>
 				) : mode === "file" && manifestData ? (
-					<ArtifactRenderer
-						workspaceId={workspaceId}
-						manifest={manifestData}
-						zoomControlsContainer={null}
-					/>
+					<ArtifactRenderer manifest={manifestData} zoomControlsContainer={null} />
 				) : mode === "error" ? (
 					<div
 						role="alert"

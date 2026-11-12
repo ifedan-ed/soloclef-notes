@@ -15,14 +15,11 @@ import (
 // all, and it is never defaulted on: two schedulers run every scheduled task
 // twice, so a worker nobody asked to beat does not beat.
 //
-// The next two are **Celery's own**, not this worker's. The schedule is built
-// from the same settings app/celery_app.py builds it from, so the Go beat and
-// the Python beat cannot disagree about the cadence of the connector checker
-// or about which queue a tick goes to.
+// The next is the default queue's name, which the routing table builds the
+// other queue names from (soloclef_celery/routing).
 const (
-	EnvEnabled         = "SOLOCLEF_WORKER_BEAT"
-	EnvDefaultQueue    = "CELERY_TASK_DEFAULT_QUEUE"
-	EnvCheckerInterval = "SCHEDULE_CHECKER_INTERVAL"
+	EnvEnabled      = "SOLOCLEF_WORKER_BEAT"
+	EnvDefaultQueue = "CELERY_TASK_DEFAULT_QUEUE"
 
 	EnvKeyPrefix    = "SOLOCLEF_WORKER_BEAT_KEY_PREFIX"
 	EnvLeaseTTL     = "SOLOCLEF_WORKER_BEAT_LEASE_TTL"
@@ -33,12 +30,9 @@ const (
 	EnvName         = "SOLOCLEF_WORKER_BEAT_NAME"
 )
 
-// Defaults app/config.py gives the two Celery settings, repeated here so an
-// unset variable means the same thing on both sides.
-const (
-	defaultQueue           = "surfsense"
-	defaultCheckerInterval = "2m"
-)
+// defaultQueue is the default queue's name when the setting is unset, the
+// one every producer of this app has always used.
+const defaultQueue = "surfsense"
 
 // Enabled is whether this process should schedule. Anything but an explicit
 // yes is no.
@@ -52,17 +46,10 @@ func Enabled(getenv func(string) string) bool {
 }
 
 // LoadConfig reads the configuration from an environment. The schedule itself
-// is not configurable: it is app/celery_app.py's, built from the two settings
-// above.
+// is not configurable: it is Schedule's.
 func LoadConfig(getenv func(string) string) (Config, error) {
 	cfg := DefaultConfig()
-
-	queue := or(getenv(EnvDefaultQueue), defaultQueue)
-	entries, err := SoloclefSchedule(queue, or(getenv(EnvCheckerInterval), defaultCheckerInterval))
-	if err != nil {
-		return Config{}, err
-	}
-	cfg.Entries = entries
+	cfg.Entries = Schedule(or(getenv(EnvDefaultQueue), defaultQueue))
 
 	if prefix := strings.TrimSpace(getenv(EnvKeyPrefix)); prefix != "" {
 		cfg.KeyPrefix = prefix

@@ -1,27 +1,31 @@
 import {
 	type ConnectionCreateRequest,
 	type ConnectionRead,
+	type ConnectionTestUpdateRequest,
 	type ConnectionUpdateRequest,
 	connectionCreateRequest,
 	connectionListResponse,
 	connectionRead,
+	connectionTestUpdateRequest,
 	connectionUpdateRequest,
+	type EndpointModelPreviewRequest,
+	endpointModelPreviewRequest,
 	type GlobalLlmConfigStatus,
 	globalLlmConfigStatus,
 	type LlmSetupStatus,
 	llmSetupStatus,
 	type ModelPreviewRead,
+	type ModelPreviewRequest,
 	type ModelProviderRead,
 	type ModelRead,
-	type ModelRoles,
 	type ModelsBulkUpdateRequest,
 	type ModelTestPreviewRequest,
 	type ModelUpdateRequest,
 	modelListResponse,
 	modelPreviewListResponse,
+	modelPreviewRequest,
 	modelProviderListResponse,
 	modelRead,
-	modelRoles,
 	modelsBulkUpdateRequest,
 	modelTestPreviewRequest,
 	modelUpdateRequest,
@@ -40,19 +44,19 @@ class ModelConnectionsApiService {
 		return baseApiService.get(`/api/v1/global-llm-config-status`, globalLlmConfigStatus);
 	};
 
-	getLlmSetupStatus = async (workspaceId: number): Promise<LlmSetupStatus> => {
-		return baseApiService.get(`/api/v1/workspaces/${workspaceId}/llm-setup-status`, llmSetupStatus);
+	// Whether the signed-in account has a chat model it can use.
+	getLlmSetupStatus = async (): Promise<LlmSetupStatus> => {
+		return baseApiService.get(`/api/v1/users/me/llm-setup-status`, llmSetupStatus);
 	};
 
 	getModelProviders = async (): Promise<ModelProviderRead[]> => {
 		return baseApiService.get(`/api/v1/model-providers`, modelProviderListResponse);
 	};
 
-	getConnections = async (workspaceId: number): Promise<ConnectionRead[]> => {
-		return baseApiService.get(
-			`/api/v1/model-connections?workspace_id=${workspaceId}`,
-			connectionListResponse
-		);
+	// The signed-in account's own connections (the shared ones are
+	// getGlobalConnections).
+	getConnections = async (): Promise<ConnectionRead[]> => {
+		return baseApiService.get(`/api/v1/model-connections`, connectionListResponse);
 	};
 
 	createConnection = async (request: ConnectionCreateRequest): Promise<ConnectionRead> => {
@@ -60,15 +64,8 @@ class ModelConnectionsApiService {
 		if (!parsed.success) {
 			throw new ValidationError(parsed.error.issues.map((issue) => issue.message).join(", "));
 		}
-		const { workspace_id, ...body } = parsed.data;
-		if (
-			body.scope === "SEARCH_SPACE" &&
-			(!Number.isFinite(workspace_id) || (workspace_id ?? 0) <= 0)
-		) {
-			throw new ValidationError("workspace_id is required");
-		}
 		return baseApiService.post(`/api/v1/model-connections`, connectionRead, {
-			body: { ...body, workspace_id },
+			body: parsed.data,
 		});
 	};
 
@@ -97,24 +94,25 @@ class ModelConnectionsApiService {
 		return baseApiService.post(`/api/v1/model-connections/${id}/discover`, modelListResponse);
 	};
 
-	previewModels = async (request: ConnectionCreateRequest): Promise<ModelPreviewRead[]> => {
-		const parsed = connectionCreateRequest.safeParse(request);
+	// A provider's models before a connection is made. A catalogue request
+	// (just the provider) is parsed by the catalogue's schema, which drops
+	// any key or address, because the catalogue does not depend on them. An
+	// endpoint's request carries the address, key and headers its own
+	// GET /models is asked with (model-listing.ts, previewRequestFor).
+	previewModels = async (
+		request: ModelPreviewRequest | EndpointModelPreviewRequest
+	): Promise<ModelPreviewRead[]> => {
+		const parsed =
+			"base_url" in request
+				? endpointModelPreviewRequest.safeParse(request)
+				: modelPreviewRequest.safeParse(request);
 		if (!parsed.success) {
 			throw new ValidationError(parsed.error.issues.map((issue) => issue.message).join(", "));
-		}
-		const { workspace_id, ...body } = parsed.data;
-		if (
-			body.scope === "SEARCH_SPACE" &&
-			(!Number.isFinite(workspace_id) || (workspace_id ?? 0) <= 0)
-		) {
-			throw new ValidationError("workspace_id is required");
 		}
 		return baseApiService.post(
 			`/api/v1/model-connections/discover-preview`,
 			modelPreviewListResponse,
-			{
-				body: { ...body, workspace_id },
-			}
+			{ body: parsed.data }
 		);
 	};
 
@@ -125,16 +123,28 @@ class ModelConnectionsApiService {
 		if (!parsed.success) {
 			throw new ValidationError(parsed.error.issues.map((issue) => issue.message).join(", "));
 		}
-		const { workspace_id, ...body } = parsed.data;
-		if (
-			body.scope === "SEARCH_SPACE" &&
-			(!Number.isFinite(workspace_id) || (workspace_id ?? 0) <= 0)
-		) {
-			throw new ValidationError("workspace_id is required");
-		}
 		return baseApiService.post(`/api/v1/model-connections/test-preview`, verifyConnectionResponse, {
-			body: { ...body, workspace_id },
+			body: parsed.data,
 		});
+	};
+
+	// Tests a saved connection as it would be after `request` is applied,
+	// saving nothing. The parsed body is sent as it is: zod leaves an absent
+	// optional field absent, and an absent `api_key` is what tells the server
+	// to test with the saved key.
+	testConnectionUpdate = async (
+		id: number,
+		request: ConnectionTestUpdateRequest
+	): Promise<VerifyConnectionResponse> => {
+		const parsed = connectionTestUpdateRequest.safeParse(request);
+		if (!parsed.success) {
+			throw new ValidationError(parsed.error.issues.map((issue) => issue.message).join(", "));
+		}
+		return baseApiService.post(
+			`/api/v1/model-connections/${id}/test-update`,
+			verifyConnectionResponse,
+			{ body: parsed.data }
+		);
 	};
 
 	updateModel = async (id: number, request: ModelUpdateRequest): Promise<ModelRead> => {
@@ -168,16 +178,6 @@ class ModelConnectionsApiService {
 
 	testModel = async (id: number): Promise<VerifyConnectionResponse> => {
 		return baseApiService.post(`/api/v1/models/${id}/test`, verifyConnectionResponse);
-	};
-
-	getModelRoles = async (workspaceId: number): Promise<ModelRoles> => {
-		return baseApiService.get(`/api/v1/workspaces/${workspaceId}/model-roles`, modelRoles);
-	};
-
-	updateModelRoles = async (workspaceId: number, roles: ModelRoles): Promise<ModelRoles> => {
-		return baseApiService.put(`/api/v1/workspaces/${workspaceId}/model-roles`, modelRoles, {
-			body: roles,
-		});
 	};
 }
 

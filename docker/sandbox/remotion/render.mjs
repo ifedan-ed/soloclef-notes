@@ -402,6 +402,105 @@ async function renderSceneParts({
   return manifest;
 }
 
+// The layout check: each scene's last frame, when everything the scene
+// shows is on screen, rendered once and measured in the page as it is
+// captured (src/layoutCheck.ts). The findings come out on a marked console
+// line and are written, one entry per scene in order, to layout.json beside
+// the stills; the worker reads that file. A scene that reports nothing is a
+// failure of this step, never a pass. One browser serves every scene, as in
+// renderSceneParts, and one frame a scene replaces the vision review's three
+// stills a scene and contact sheet, each of which launched its own browser.
+// layoutMark is LAYOUT_MARK of src/layoutCheck.ts, which this file, run by
+// node unbundled, cannot import.
+const layoutMark = "SOLOCLEF_LAYOUT ";
+
+async function renderLayoutStills({
+  cancellation,
+  composition,
+  serveUrl,
+  inputProps,
+  outputDir,
+  progress,
+}) {
+  const sceneDurations = composition.props.sceneDurations;
+  if (!Array.isArray(sceneDurations)) {
+    throw new Error("calculateMetadata did not return sceneDurations");
+  }
+  const frames = scenePreviewFrames(sceneDurations);
+  await mkdir(path.dirname(outputDir), {recursive: true});
+  const stagingDir = await mkdtemp(
+    path.join(path.dirname(outputDir), ".remotion-stills-"),
+  );
+  const startedAt = Date.now();
+  const browser = await openBrowser("chrome", {
+    chromiumOptions: {enableMultiProcessOnLinux: true},
+  });
+  const scenes = [];
+  try {
+    progress.write({phase: "stills", progress: 0});
+    for (const [index, scene] of inputProps.scenes.entries()) {
+      const end = frames[index][2];
+      const reports = [];
+      await cancellation.withSignal((cancelSignal) =>
+        renderStill({
+          composition,
+          serveUrl,
+          output: path.join(
+            stagingDir,
+            `scene-${String(index + 1).padStart(2, "0")}-slide-${scene.slide_number}-end.png`,
+          ),
+          frame: end,
+          inputProps,
+          puppeteerInstance: browser,
+          timeoutInMilliseconds: configuredTimeout,
+          cancelSignal,
+          onBrowserLog: ({text}) => {
+            if (!text.startsWith(layoutMark)) return;
+            // An unreadable report is counted, as null, so it fails below
+            // instead of throwing inside the browser's log handler.
+            try {
+              reports.push(JSON.parse(text.slice(layoutMark.length)));
+            } catch {
+              reports.push(null);
+            }
+          },
+        }),
+      );
+      const report = reports.find(
+        (entry) => entry?.slide_number === scene.slide_number,
+      );
+      if (
+        reports.length !== 1 ||
+        !report ||
+        !Array.isArray(report.findings) ||
+        !report.findings.every((finding) => typeof finding === "string")
+      ) {
+        throw new Error(
+          `The layout of slide ${scene.slide_number} was not measured (${reports.length} reports)`,
+        );
+      }
+      scenes.push({slide_number: scene.slide_number, findings: report.findings});
+      progress.write({
+        phase: "stills",
+        progress: (index + 1) / inputProps.scenes.length,
+        scene: scene.slide_number,
+        frame: end,
+      });
+    }
+    cancellation.assertActive();
+    await atomicWriteJson(path.join(stagingDir, "layout.json"), {scenes});
+    await rm(outputDir, {recursive: true, force: true});
+    await rename(stagingDir, outputDir);
+  } catch (error) {
+    await rm(stagingDir, {recursive: true, force: true});
+    throw error;
+  } finally {
+    await browser.close({silent: true});
+  }
+  console.log(`SOLOCLEF_LAYOUT_SECONDS=${(Date.now() - startedAt) / 1000}`);
+  return {scenes};
+}
+
 export async function render(argv = process.argv.slice(2)) {
   const flags = {
     "--preflight": {mode: "preflight", argumentCount: 2},
@@ -430,6 +529,9 @@ export async function render(argv = process.argv.slice(2)) {
   try {
     propsSource = await readFile(propsPath, "utf8");
     inputProps = validateInputProps(JSON.parse(propsSource));
+    // The stills are the layout check (layoutCheck.ts): only they measure,
+    // so a render is never held up by it.
+    if (mode === "stills") inputProps = {...inputProps, layout_check: true};
   } catch (error) {
     const diagnostic = {
       ok: false,
@@ -505,69 +607,17 @@ export async function render(argv = process.argv.slice(2)) {
 
     if (mode === "stills") {
       phase = "stills";
-      const sceneDurations = composition.props.sceneDurations;
-      if (!Array.isArray(sceneDurations)) {
-        throw new Error("calculateMetadata did not return sceneDurations");
-      }
-      const frames = scenePreviewFrames(sceneDurations);
-      await mkdir(path.dirname(outputPath), {recursive: true});
-      const stagingDir = await mkdtemp(
-        path.join(path.dirname(outputPath), ".remotion-stills-"),
-      );
-      try {
-        const labels = ["start", "middle", "end"];
-        const totalStills = inputProps.scenes.length * labels.length;
-        let completedStills = 0;
-        progress.write({phase, progress: 0});
-        for (const [index, scene] of inputProps.scenes.entries()) {
-          for (const [frameIndex, frame] of frames[index].entries()) {
-            await cancellation.withSignal((cancelSignal) =>
-              renderStill({
-                composition,
-                serveUrl,
-                output: path.join(
-                  stagingDir,
-                  `scene-${String(index + 1).padStart(2, "0")}-slide-${scene.slide_number}-${frameIndex + 1}-${labels[frameIndex]}.png`,
-                ),
-                frame,
-                inputProps,
-                timeoutInMilliseconds: configuredTimeout,
-                cancelSignal,
-              }),
-            );
-            completedStills += 1;
-            progress.write({
-              phase,
-              progress: completedStills / (totalStills + 1),
-              scene: scene.slide_number,
-              frame,
-            });
-          }
-        }
-        cancellation.assertActive();
-        await execFileAsync("ffmpeg", [
-          "-y",
-          "-v",
-          "error",
-          "-pattern_type",
-          "glob",
-          "-i",
-          path.join(stagingDir, "scene-*.png"),
-          "-vf",
-          `scale=480:270,tile=3x${inputProps.scenes.length}:padding=8:margin=8`,
-          "-frames:v",
-          "1",
-          path.join(stagingDir, "contact-sheet.png"),
-        ]);
-        progress.write({phase, progress: 1});
-        await rm(outputPath, {recursive: true, force: true});
-        await rename(stagingDir, outputPath);
-      } catch (error) {
-        await rm(stagingDir, {recursive: true, force: true});
-        throw error;
-      }
+      const report = await renderLayoutStills({
+        cancellation,
+        composition,
+        serveUrl,
+        inputProps,
+        outputDir: outputPath,
+        progress,
+      });
+      progress.write({phase, progress: 1});
       await progress.flush();
-      return;
+      return report;
     }
 
     phase = "render";

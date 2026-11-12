@@ -23,15 +23,15 @@ import { cacheKeys } from "@/lib/query-client/cache-keys";
 import { queryClient } from "@/lib/query-client/client";
 
 // Cache invalidation strategy:
-// - Automation writes invalidate the workspace list + the touched detail.
+// - Automation writes invalidate the account's list + the touched detail.
 // - Trigger writes only invalidate the parent automation detail (triggers
 //   come back inline in AutomationDetail).
-// We deliberately invalidate the whole "automations" prefix on the list side
-// because list is keyed by (workspaceId, limit, offset) and we don't track
-// the active pagination in this layer.
+// The list side invalidates the whole "automations"/"list" prefix because
+// the list is keyed by (limit, offset) and this layer does not track which
+// page is on screen.
 
-function invalidateList(workspaceId: number) {
-	queryClient.invalidateQueries({ queryKey: ["automations", "list", workspaceId] });
+function invalidateList() {
+	queryClient.invalidateQueries({ queryKey: ["automations", "list"] });
 }
 
 function invalidateDetail(automationId: number) {
@@ -45,18 +45,15 @@ export const createAutomationMutationAtom = atomWithMutation(() => ({
 	mutationFn: async (request: AutomationCreateRequest) => {
 		return automationsApiService.createAutomation(request);
 	},
-	onSuccess: (_automation, variables) => {
-		invalidateList(variables.workspace_id);
+	onSuccess: () => {
+		invalidateList();
 		toast.success("Automation created");
 		// automation_created is now emitted server-side (AutomationService.create).
 	},
-	onError: (error: Error, variables) => {
+	onError: (error: Error) => {
 		console.error("Error creating automation:", error);
 		toast.error("Failed to create automation");
-		trackAutomationCreateFailed({
-			workspace_id: variables.workspace_id,
-			error: error.message,
-		});
+		trackAutomationCreateFailed({ error: error.message });
 	},
 }));
 
@@ -65,9 +62,9 @@ export const updateAutomationMutationAtom = atomWithMutation(() => ({
 	mutationFn: async (vars: { automationId: number; patch: AutomationUpdateRequest }) => {
 		return automationsApiService.updateAutomation(vars.automationId, vars.patch);
 	},
-	onSuccess: (automation, vars) => {
+	onSuccess: (_automation, vars) => {
 		invalidateDetail(vars.automationId);
-		invalidateList(automation.workspace_id);
+		invalidateList();
 		toast.success("Automation updated");
 		// automation_updated / automation_status_changed are now emitted
 		// server-side (AutomationService.update).
@@ -84,7 +81,7 @@ export const updateAutomationMutationAtom = atomWithMutation(() => ({
 
 export const deleteAutomationMutationAtom = atomWithMutation(() => ({
 	meta: { suppressGlobalErrorToast: true },
-	mutationFn: async (vars: { automationId: number; workspaceId: number }) => {
+	mutationFn: async (vars: { automationId: number }) => {
 		// Marked first: a detail/runs refetch racing the delete must not toast.
 		markAutomationDeleted(vars.automationId);
 		try {
@@ -96,7 +93,7 @@ export const deleteAutomationMutationAtom = atomWithMutation(() => ({
 		return vars;
 	},
 	onSuccess: (vars) => {
-		invalidateList(vars.workspaceId);
+		invalidateList();
 		// Drop (never refetch) the deleted automation's detail and runs.
 		for (const kind of ["detail", "runs"] as const) {
 			const queryKey = ["automations", kind, vars.automationId];

@@ -14,12 +14,11 @@ import { expect, openNotebook, test } from "./fixtures";
 test.describe("Chat selection", () => {
 	test("dragging a selection down onto the composer scrolls the chat", async ({
 		page,
-		workspace,
 		notebook,
 		isPhone,
 	}) => {
 		test.skip(isPhone, "drag-selecting with a mouse is a desktop gesture");
-		await openNotebook(page, workspace.id, notebook.id, "Chat");
+		await openNotebook(page, notebook.id, "Chat");
 		const viewport = page.locator(".aui-thread-viewport");
 
 		// A conversation well past one screen.
@@ -46,7 +45,10 @@ test.describe("Chat selection", () => {
 			const vp = document.querySelector(".aui-thread-viewport");
 			const composer = document.querySelector(".aui-composer-root");
 			if (!vp || !composer) return 0;
-			const bottom = Math.min(vp.getBoundingClientRect().bottom, composer.getBoundingClientRect().top);
+			const bottom = Math.min(
+				vp.getBoundingClientRect().bottom,
+				composer.getBoundingClientRect().top
+			);
 			let n = 0;
 			for (const el of document.querySelectorAll('[data-role="user"]')) {
 				if (el.getBoundingClientRect().top < bottom) n++;

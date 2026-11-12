@@ -38,6 +38,14 @@ type Capture struct {
 // Record captures one event for the caller. own writes the route's own
 // properties, which land after capture_for's two and before the sender's.
 func (c Capture) Record(caller principal.Principal, name string, own func(*pythonjson.Object)) {
+	c.record(caller, name, own)
+}
+
+func (c Capture) record(
+	caller principal.Principal,
+	name string,
+	own func(*pythonjson.Object),
+) {
 	if c.Sink == nil {
 		return
 	}
@@ -48,7 +56,6 @@ func (c Capture) Record(caller principal.Principal, name string, own func(*pytho
 	if own != nil {
 		own(properties)
 	}
-
 	c.Sink.Capture(posthogcapture.Captured{
 		Name:       name,
 		Account:    caller.UserID,

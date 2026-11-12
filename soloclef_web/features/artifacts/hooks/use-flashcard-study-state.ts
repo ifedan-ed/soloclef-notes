@@ -40,20 +40,18 @@ async function readStudyState(response: Response, failureMessage: string) {
 }
 
 function useStudyStateMutation<TVariables>({
-	workspaceId,
 	artifactId,
 	generation,
 	mutationFn,
 	optimistic,
 }: {
-	workspaceId: number;
 	artifactId: number;
 	generation: number;
 	mutationFn: (variables: TVariables) => Promise<FlashcardStudyState>;
 	optimistic: (manifest: ArtifactManifest, variables: TVariables) => ArtifactManifest;
 }) {
 	const queryClient = useQueryClient();
-	const queryKey = artifactManifestQueryKey(workspaceId, artifactId);
+	const queryKey = artifactManifestQueryKey(artifactId);
 
 	return useMutation<FlashcardStudyState, Error, TVariables, MutationContext>({
 		mutationFn,
@@ -79,16 +77,13 @@ function useStudyStateMutation<TVariables>({
 	});
 }
 
-export function useMarkFlashcard(workspaceId: number, artifactId: number, generation: number) {
+export function useMarkFlashcard(artifactId: number, generation: number) {
 	return useStudyStateMutation<MarkVariables>({
-		workspaceId,
 		artifactId,
 		generation,
 		mutationFn: async ({ cardIndex, mark }) => {
 			const response = await authenticatedFetch(
-				buildBackendUrl(
-					`/api/v1/workspaces/${workspaceId}/artifacts/${artifactId}/flashcard-progress`
-				),
+				buildBackendUrl(`/api/v1/artifacts/${artifactId}/flashcard-progress`),
 				{
 					method: "PATCH",
 					headers: { "Content-Type": "application/json" },
@@ -111,19 +106,14 @@ export function useMarkFlashcard(workspaceId: number, artifactId: number, genera
 	});
 }
 
-export function useResetFlashcardProgress(
-	workspaceId: number,
-	artifactId: number,
-	generation: number
-) {
+export function useResetFlashcardProgress(artifactId: number, generation: number) {
 	return useStudyStateMutation<void>({
-		workspaceId,
 		artifactId,
 		generation,
 		mutationFn: async () => {
 			const response = await authenticatedFetch(
 				buildBackendUrl(
-					`/api/v1/workspaces/${workspaceId}/artifacts/${artifactId}/flashcard-progress?generation=${generation}`
+					`/api/v1/artifacts/${artifactId}/flashcard-progress?generation=${generation}`
 				),
 				{ method: "DELETE" }
 			);
@@ -138,16 +128,13 @@ export function useResetFlashcardProgress(
 	});
 }
 
-export function useShuffleFlashcards(workspaceId: number, artifactId: number, generation: number) {
+export function useShuffleFlashcards(artifactId: number, generation: number) {
 	return useStudyStateMutation<ShuffleVariables>({
-		workspaceId,
 		artifactId,
 		generation,
 		mutationFn: async ({ order }) => {
 			const response = await authenticatedFetch(
-				buildBackendUrl(
-					`/api/v1/workspaces/${workspaceId}/artifacts/${artifactId}/flashcard-order`
-				),
+				buildBackendUrl(`/api/v1/artifacts/${artifactId}/flashcard-order`),
 				{
 					method: "PUT",
 					headers: { "Content-Type": "application/json" },

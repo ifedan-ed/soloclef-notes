@@ -6,12 +6,11 @@ import { DownloadFileButton } from "@/features/file-viewers/download-file-button
 
 interface DownloadOriginalButtonProps {
 	documentId: number;
-	workspaceId: number;
 }
 
 /** Renders only when the document has a stored ORIGINAL file; downloads it on click. */
-export function DownloadOriginalButton({ documentId, workspaceId }: DownloadOriginalButtonProps) {
-	const { data: manifest } = useQuery(documentViewQueryOptions(workspaceId, documentId));
+export function DownloadOriginalButton({ documentId }: DownloadOriginalButtonProps) {
+	const { data: manifest } = useQuery(documentViewQueryOptions(documentId));
 	const file = manifest?.file;
 	if (!file) return null;
 

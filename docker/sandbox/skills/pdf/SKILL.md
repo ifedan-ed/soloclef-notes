@@ -50,8 +50,7 @@ Start an in-place revision with `load_artifact_for_revision`. Read its
 `markdown_path` for the artifact's substantive content and any other context
 provided by the user, then regenerate the PDF at `expected_output_path`. PDF
 revisions are rebuilds from Markdown/context, not edits inferred from rendered
-pages. Do not use vision to reconstruct the old PDF; vision may still be used
-by `verify_artifact` after regeneration.
+pages. Do not use vision to reconstruct the old PDF.
 
 Save the verified revision with the returned `artifact_id` and
 `expected_generation`. A changed title, filename, or design is still the same
@@ -71,4 +70,6 @@ file, preview file, or matching filename stem is part of the publication
 contract.
 
 The Markdown representation must faithfully contain the document's substantive
-text so the artifact remains accessible and searchable without parsing the PDF.
+text so the artifact remains accessible and searchable without parsing the PDF. Pass the Markdown text itself in
+`markdown_representation`: tool arguments are not run by a shell, so
+`$(cat file)` or a file path is refused.

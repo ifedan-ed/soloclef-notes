@@ -1,0 +1,166 @@
+# The web Playwright suite's stack, on the Go services.
+#
+# An overlay, never run alone and never by hand:
+#
+#   soloclef_web/scripts/e2e-stack-go.sh up | down | rebuild | status | logs
+#
+# which runs
+#
+#   docker compose -p soloclefgo-e2e --env-file docker/e2e-web-go/settings.env \
+#     -f docker/docker-compose.go.yml -f docker/docker-compose.e2e-web-go.yml ...
+#
+# The first file is the Go stack exactly as a deployment runs it: the same
+# services, images, start-up checks and settings. That is the point: a test
+# stack that restated the application in a compose file of its own could
+# drift from what is deployed, so this one adds to the real file only what a
+# browser test needs and the Go stack does not have:
+#
+#   - the test routes under /__e2e__, switched on for the API, with a seed
+#     secret. This file is the only place that says "true";
+#   - a stand-in for the model proxy (e2e-web-go/model-stub), and stand-ins
+#     for Nextcloud and Google;
+#   - the three test-only routes in Caddy (e2e-web-go/Caddyfile, which
+#     imports the deployment's own routes, proxy-go/routes.caddy);
+#   - the public pages' example address and contact, which the suite reads
+#     back, and memory caps sized for a test host.
+#
+# The web app, zero-cache, the MCP server and Caddy are the Go stack's own
+# services, run here as a deployment runs them. The sandbox server is not
+# started: both sandbox switches are off in the settings.
+#
+# Nothing here can touch the live site or another test: the project is
+# soloclefgo-e2e (the script names it; the boot test's is soloclefgo-boot),
+# every container, volume, network and image carries that name, and one port
+# is published, Caddy's, on loopback (SOLOCLEF_GO_SITE_PUBLISH).
+#
+# No route out. The stack's networks are internal, and so is the model
+# network the script makes: a call that should have met a stand-in and did
+# not fails at once instead of reaching a paid provider or a real person's
+# Drive. Only Caddy is also on `ingress`, so the published port has
+# somewhere to land.
+
+services:
+  api:
+    environment:
+      # The one place the test routes are switched on. The secret is not a
+      # secret of anybody's: it guards a database that is deleted with the
+      # stack, and the suite sends the same words (playwright.config.ts).
+      SOLOCLEF_API_E2E_ROUTES: "true"
+      SOLOCLEF_API_E2E_SEED_SECRET: e2e-mint-secret-not-for-production  # pragma: allowlist secret
+      # The stand-in Google's test authority, and nothing else: with no
+      # route out there is no other TLS server for the API to meet.
+      SSL_CERT_FILE: /run/e2e/google-ca.pem
+    secrets:
+      - google_oauth_client_secret
+    volumes:
+      - ./e2e-web-go/.generated/google/ca.pem:/run/e2e/google-ca.pem:ro
+
+  worker:
+    environment:
+      SSL_CERT_FILE: /run/e2e/google-ca.pem
+    secrets:
+      - google_oauth_client_secret
+    volumes:
+      - ./e2e-web-go/.generated/google/ca.pem:/run/e2e/google-ca.pem:ro
+
+  # The model proxy's stand-in: chat, the short jobs, embeddings and speech,
+  # in the OpenAI shape, from one file. It is on the model network under
+  # the name the settings give the proxy.
+  model-stub:
+    image: python:3.12-slim
+    command: ["python", "/stub/stub.py"]
+    environment:
+      E2E_EMBEDDING_DIMENSION: ${SOLOCLEF_GO_EMBEDDING_DIMENSION:?}
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ./e2e-web-go/model-stub/stub.py:/stub/stub.py:ro
+      - ./e2e-web-go/.generated/line.mp3:/stub/line.mp3:ro
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health', timeout=2)"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks:
+      - model
+
+  # Nextcloud's Login Flow, OCS and WebDAV, faked
+  # (e2e-web-go/nextcloud-stub, standard library only). The browser reaches
+  # its sign-in page through Caddy at /__nextcloud__/.
+  nextcloud-stub:
+    image: python:3.12-slim
+    command: ["python", "/fakes/nextcloud_server.py"]
+    environment:
+      NEXTCLOUD_STUB_INTERNAL_URL: ${SOLOCLEF_API_NEXTCLOUD_BASE_URL:?}
+      NEXTCLOUD_STUB_PUBLIC_URL: ${SOLOCLEF_API_PUBLIC_URL:?}/__nextcloud__
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ./e2e-web-go/nextcloud-stub:/fakes:ro
+    mem_limit: 256m
+
+  # Google, faked, and answering to Google's own names on this network,
+  # because the Go code has those names as constants and not as settings
+  # (e2e-web-go/google-stub/serve.py says why and how).
+  google-stub:
+    image: python:3.12-slim
+    command: ["python", "/stub/serve.py"]
+    environment:
+      GOOGLE_STUB_PUBLIC_URL: ${SOLOCLEF_API_PUBLIC_URL:?}/__google__
+      GOOGLE_STUB_TLS_CERT: /run/e2e/google/cert.pem
+      GOOGLE_STUB_TLS_KEY: /run/e2e/google/key.pem
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ./e2e-web-go/google-stub:/stub:ro
+      - ./e2e-web-go/.generated/google:/run/e2e/google:ro
+    mem_limit: 256m
+    networks:
+      default:
+        aliases:
+          - oauth2.googleapis.com
+          - www.googleapis.com
+
+  # The Go stack's own three, held to what a test host can spare.
+  zero-cache:
+    mem_limit: 2g
+
+  frontend:
+    build:
+      # The public pages' own address and contact. Example values, never a
+      # real server's: the suite reads them back
+      # (tests/app/public-site.spec.ts).
+      args:
+        NEXT_PUBLIC_SITE_URL: https://notes.example.test
+        NEXT_PUBLIC_SUPPORT_EMAIL: help@notes.example.test
+        # The site as the suite expects it: offering "Request access", not
+        # sign-up (public-site.spec.ts), although the API takes sign-ups
+        # here so that the password-reset spec can make its own accounts.
+        NEXT_PUBLIC_SIGNUPS_OPEN: ""
+        NEXT_PUBLIC_OIDC_ALLOW_SIGNUP: ""
+    mem_limit: 2g
+
+  # The deployment's Caddy, with this stack's Caddyfile over its own: the
+  # same routes and the three test-only prefixes.
+  proxy:
+    volumes:
+      - ./e2e-web-go/Caddyfile:/etc/caddy/Caddyfile:ro
+    mem_limit: 256m
+    networks:
+      - default
+      - ingress
+
+secrets:
+  # The stand-in Google checks no client secret; the API and the worker
+  # still refuse to start Drive without the file.
+  google_oauth_client_secret:
+    file: ${SOLOCLEF_GO_SECRETS_DIR:?}/google_oauth_client_secret
+
+networks:
+  # The stack's own network, with no route out (see the top of the file).
+  default:
+    internal: true
+  # The API and the worker join it in every stack; here it has no server on
+  # it and, like `default`, no route out.
+  sandbox:
+    internal: true
+  # Where the published port lands. Only Caddy is on it.
+  ingress: {}

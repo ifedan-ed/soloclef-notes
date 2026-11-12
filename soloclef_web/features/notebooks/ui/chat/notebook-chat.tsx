@@ -17,16 +17,10 @@ import { NotebookThreadPane } from "./notebook-thread-pane";
  * The latest chat opens (a notebook without one gets its first); the URL never
  * names it, and "Delete chat history" in the notebook menu is the fresh start.
  */
-export function NotebookChat({
-	workspaceId,
-	notebookId,
-}: {
-	workspaceId: number;
-	notebookId: number;
-}) {
+export function NotebookChat({ notebookId }: { notebookId: number }) {
 	const t = useTranslations("notebooks");
 	const queryClient = useQueryClient();
-	const threads = useNotebookThreads(workspaceId, notebookId);
+	const threads = useNotebookThreads(notebookId);
 	const [threadId, setThreadId] = useState<number | null>(null);
 	const creatingRef = useRef(false);
 
@@ -48,8 +42,8 @@ export function NotebookChat({
 		if (creatingRef.current) return;
 		creatingRef.current = true;
 		try {
-			const thread = await notebooksApi.createThread(workspaceId, notebookId);
-			queryClient.setQueryData(notebookKeys.threads(workspaceId, notebookId), (current = []) => [
+			const thread = await notebooksApi.createThread(notebookId);
+			queryClient.setQueryData(notebookKeys.threads(notebookId), (current = []) => [
 				thread,
 				...(current as (typeof thread)[]),
 			]);
@@ -80,7 +74,6 @@ export function NotebookChat({
 				{threadId ? (
 					<NotebookThreadPane
 						view={ChatThreadView}
-						workspaceId={workspaceId}
 						threadId={threadId}
 						onThreadNotFound={() => {
 							setThreadId(null);

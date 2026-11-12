@@ -9,44 +9,172 @@ import (
 	"context"
 )
 
-const documentForDeletion = `-- name: DocumentForDeletion :one
-SELECT workspace_id, status FROM documents WHERE id = $1
+const chunkIDsOf = `-- name: ChunkIDsOf :many
+SELECT id FROM chunks WHERE document_id = $1 ORDER BY id LIMIT $2
 `
 
-type DocumentForDeletionRow struct {
-	WorkspaceID int64
-	Status      []byte
+type ChunkIDsOfParams struct {
+	DocumentID int64
+	Batch      int32
 }
 
-// app/routes/documents_routes.py's delete_document loads the document row and
-// uses two of its columns: the workspace the permission is checked against,
-// and the status its three refusals are decided from.
-func (q *Queries) DocumentForDeletion(ctx context.Context, id int64) (DocumentForDeletionRow, error) {
-	row := q.db.QueryRow(ctx, documentForDeletion, id)
-	var i DocumentForDeletionRow
-	err := row.Scan(&i.WorkspaceID, &i.Status)
-	return i, err
+// owner: through the caller, which read the document with its owner.
+// One batch of the document's chunk ids, lowest first. The removal takes a
+// batch, removes those points from the vector store, deletes those rows,
+// and asks again, so the memory and the statement time of a delete do not
+// grow with the document.
+func (q *Queries) ChunkIDsOf(ctx context.Context, arg ChunkIDsOfParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, chunkIDsOf, arg.DocumentID, arg.Batch)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
-const markDocumentDeleting = `-- name: MarkDocumentDeleting :exec
+const deleteChunks = `-- name: DeleteChunks :exec
+DELETE FROM chunks WHERE document_id = $1 AND id = ANY($2::bigint[])
+`
+
+type DeleteChunksParams struct {
+	DocumentID int64
+	Ids        []int64
+}
+
+// owner: through the caller, which read the document with its owner.
+// The rows of a batch whose points are already gone. The document id is
+// repeated so that an id list can never reach another document's chunks.
+func (q *Queries) DeleteChunks(ctx context.Context, arg DeleteChunksParams) error {
+	_, err := q.db.Exec(ctx, deleteChunks, arg.DocumentID, arg.Ids)
+	return err
+}
+
+const deleteDocument = `-- name: DeleteDocument :exec
+DELETE FROM documents WHERE id = $1 AND status ->> 'state' = 'deleting'
+`
+
+// owner: through the caller, which read the document with its owner.
+// The row itself, last. Its file rows, its artifact and that artifact's
+// file rows, versions, source guides and notebook links go with it by ON DELETE CASCADE. Only a document that is
+// marked is deleted: the marker is this removal's own, and a row without it
+// is not one this removal was asked to finish.
+func (q *Queries) DeleteDocument(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deleteDocument, id)
+	return err
+}
+
+const filesOf = `-- name: FilesOf :many
+SELECT d.storage_backend::text AS storage_backend, d.storage_key::text AS storage_key
+FROM document_files AS d
+WHERE d.document_id = $1
+UNION ALL
+SELECT f.storage_backend::text, f.storage_key::text
+FROM artifact_files AS f
+JOIN artifacts AS a ON a.id = f.artifact_id
+WHERE a.document_id = $1
+UNION ALL
+SELECT COALESCE(slide.value ->> 'storage_backend', '')::text, (slide.value ->> 'audio_storage_key')::text
+FROM artifacts AS a
+CROSS JOIN LATERAL jsonb_array_elements(
+    CASE WHEN jsonb_typeof(a.metadata -> 'slides') = 'array' THEN a.metadata -> 'slides' ELSE '[]'::jsonb END
+) AS slide (value)
+WHERE a.document_id = $1
+  AND COALESCE(slide.value ->> 'audio_storage_key', '') <> ''
+`
+
+type FilesOfRow struct {
+	StorageBackend string
+	StorageKey     string
+}
+
+// owner: through the caller, which read the document with its owner.
+// Every stored file of the document, with the backend each was written to:
+// a file is removed from the store its row names and from no other.
+//
+// Three places name a file, and the document row is the only way to any of
+// them, so all three are read before it goes:
+//
+//   - document_files: the upload and what was made from it;
+//   - artifact_files, when the document is an artifact's: the thing itself
+//     (the MP4, the deck, the episode) and its preview. This used to be
+//     left out, so deleting an artifact deleted its rows and kept its files;
+//   - a video's narration, one MP3 a slide, which has no row at all: the
+//     artifact's metadata names each under slides[].audio_storage_key with
+//     the store it is in (soloclef_worker/internal/videojob/artifact.go).
+//
+// A slide that names audio and no store is returned with an empty backend,
+// which the removal refuses: guessing a store would delete from the wrong
+// one, and skipping the file would orphan it. Metadata whose slides are not
+// a list names no audio.
+func (q *Queries) FilesOf(ctx context.Context, documentID int64) ([]FilesOfRow, error) {
+	rows, err := q.db.Query(ctx, filesOf, documentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FilesOfRow
+	for rows.Next() {
+		var i FilesOfRow
+		if err := rows.Scan(&i.StorageBackend, &i.StorageKey); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markDocumentDeleting = `-- name: MarkDocumentDeleting :execrows
+
 UPDATE documents SET status = '{"state": "deleting"}'::jsonb WHERE id = $1
 `
 
-// `document.status = {"state": "deleting"}` replaces the column outright, as
-// there: the marker is what keeps a document being deleted out of search.
-func (q *Queries) MarkDocumentDeleting(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, markDocumentDeleting, id)
-	return err
+// The five statements below are the removal's, and name a document by id
+// alone. Every route that removes a document has read the row with its
+// owner first (OwnsDocument here; the note, artifact and connection deletes
+// in their own packages), and each statement names the document id, so none
+// can reach another document's rows. Each says so in its own comment.
+// owner: through the caller, which read the document with its owner.
+// The marker replaces the status outright. It is what takes the document
+// out of search at once, and what tells the indexing worker to leave it
+// alone (indexstore.Load, Begin and Replace all read it). Zero rows means
+// the document is already gone.
+func (q *Queries) MarkDocumentDeleting(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.Exec(ctx, markDocumentDeleting, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const markDocumentReady = `-- name: MarkDocumentReady :exec
-UPDATE documents SET status = '{"state": "ready"}'::jsonb WHERE id = $1
+const ownsDocument = `-- name: OwnsDocument :one
+SELECT true::boolean AS owned FROM documents WHERE id = $1 AND user_id = $2::uuid
 `
 
-// The revert for an enqueue that did not happen. It writes "ready" whatever
-// the state was before, exactly as the Python route's own revert does: a
-// document left in "deleting" with no task to delete it is stuck forever.
-func (q *Queries) MarkDocumentReady(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, markDocumentReady, id)
-	return err
+type OwnsDocumentParams struct {
+	ID     int64
+	UserID string
+}
+
+// Whether this account has this document. The route asks before it removes
+// anything, and the answer for another account's document is the answer for
+// an id that names nothing: no row.
+func (q *Queries) OwnsDocument(ctx context.Context, arg OwnsDocumentParams) (bool, error) {
+	row := q.db.QueryRow(ctx, ownsDocument, arg.ID, arg.UserID)
+	var owned bool
+	err := row.Scan(&owned)
+	return owned, err
 }

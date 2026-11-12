@@ -6,14 +6,14 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useElectronAPI } from "@/hooks/use-platform";
 import { cn } from "@/lib/utils";
-import type { NavItem, User, Workspace } from "../../types/layout.types";
+import type { NavItem, User } from "../../types/layout.types";
 import { Header } from "../header";
 import { IconRail } from "../icon-rail";
 import { MobileSidebar, MobileSidebarTrigger } from "../sidebar";
 import type { NotificationsDropdownData } from "../sidebar/NotificationsDropdown";
 import { DESKTOP_LAYOUT_COLUMNS } from "./desktop-layout-columns";
 import { FocusShell } from "./FocusShell";
-import { WorkspacePanel } from "./WorkspacePanel";
+import { PagePanel } from "./PagePanel";
 
 const MobileArtifactDrawer = dynamic(
 	() =>
@@ -36,26 +36,17 @@ function MacDesktopTitleBar() {
 }
 
 interface LayoutShellProps {
-	workspaces: Workspace[];
-	activeWorkspaceId: number | null;
-	onWorkspaceSelect: (id: number) => void;
-	onWorkspaceDelete?: (workspace: Workspace) => void;
-	onWorkspaceSettings?: (workspace: Workspace) => void;
-	onAddWorkspace: () => void;
-	isAtWorkspaceLimit?: boolean;
-	maxWorkspacesPerUser?: number;
-	/** Page links at the top of the rail (Home). */
+	/** Page links at the top of the rail (Home, Notes). */
 	navItems: NavItem[];
 	onNavItemClick?: (item: NavItem) => void;
 	user: User;
+	/** Opens the account's settings, from the account menu. */
 	onSettings?: () => void;
-	onManageMembers?: () => void;
-	onUserSettings?: () => void;
 	onLogout?: () => void;
 	theme?: string;
 	setTheme?: (theme: "light" | "dark" | "system") => void;
-	workspacePanelViewportClassName?: string;
-	workspacePanelContentClassName?: string;
+	pageViewportClassName?: string;
+	pageContentClassName?: string;
 	children: React.ReactNode;
 	className?: string;
 	notifications?: NotificationsDropdownData;
@@ -64,25 +55,15 @@ interface LayoutShellProps {
 }
 
 export function LayoutShell({
-	workspaces,
-	activeWorkspaceId,
-	onWorkspaceSelect,
-	onWorkspaceDelete,
-	onWorkspaceSettings,
-	onAddWorkspace,
-	isAtWorkspaceLimit = false,
-	maxWorkspacesPerUser,
 	navItems,
 	onNavItemClick,
 	user,
 	onSettings,
-	onManageMembers,
-	onUserSettings,
 	onLogout,
 	theme,
 	setTheme,
-	workspacePanelViewportClassName,
-	workspacePanelContentClassName,
+	pageViewportClassName,
+	pageContentClassName,
 	children,
 	className,
 	notifications,
@@ -123,31 +104,22 @@ export function LayoutShell({
 					<MobileSidebar
 						isOpen={mobileMenuOpen}
 						onOpenChange={setMobileMenuOpen}
-						workspaces={workspaces}
-						activeWorkspaceId={activeWorkspaceId}
-						onWorkspaceSelect={onWorkspaceSelect}
-						onAddWorkspace={onAddWorkspace}
-						isAtWorkspaceLimit={isAtWorkspaceLimit}
-						maxWorkspacesPerUser={maxWorkspacesPerUser}
 						navItems={navItems}
 						onNavItemClick={onNavItemClick}
 						user={user}
 						onSettings={onSettings}
-						onWorkspaceDelete={onWorkspaceDelete}
-						onManageMembers={onManageMembers}
-						onUserSettings={onUserSettings}
 						notifications={notifications}
 						onLogout={onLogout}
 						theme={theme}
 						setTheme={setTheme}
 					/>
 
-					<WorkspacePanel
-						viewportClassName={workspacePanelViewportClassName}
-						contentClassName={workspacePanelContentClassName}
+					<PagePanel
+						viewportClassName={pageViewportClassName}
+						contentClassName={pageContentClassName}
 					>
 						{children}
-					</WorkspacePanel>
+					</PagePanel>
 					<MobileArtifactDrawer />
 					<MobileDocumentViewerPanel />
 				</div>
@@ -169,20 +141,10 @@ export function LayoutShell({
 						className={cn("hidden overflow-hidden bg-rail md:flex", !isMacDesktop && "border-r")}
 					>
 						<IconRail
-							workspaces={workspaces}
-							activeWorkspaceId={activeWorkspaceId}
-							onWorkspaceSelect={onWorkspaceSelect}
-							onWorkspaceDelete={onWorkspaceDelete}
-							onWorkspaceSettings={onWorkspaceSettings}
-							onAddWorkspace={onAddWorkspace}
-							isAtWorkspaceLimit={isAtWorkspaceLimit}
-							maxWorkspacesPerUser={maxWorkspacesPerUser}
 							navItems={navItems}
 							onNavItemClick={onNavItemClick}
 							user={user}
 							onSettings={onSettings}
-							onManageMembers={onManageMembers}
-							onUserSettings={onUserSettings}
 							notifications={notifications}
 							onLogout={onLogout}
 							theme={theme}
@@ -190,13 +152,13 @@ export function LayoutShell({
 						/>
 					</div>
 
-					<WorkspacePanel
+					<PagePanel
 						className={isMacDesktop ? "rounded-tl-xl border-l border-t" : undefined}
-						viewportClassName={workspacePanelViewportClassName}
-						contentClassName={workspacePanelContentClassName}
+						viewportClassName={pageViewportClassName}
+						contentClassName={pageContentClassName}
 					>
 						{children}
-					</WorkspacePanel>
+					</PagePanel>
 				</div>
 				<MobileArtifactDrawer />
 				<MobileDocumentViewerPanel />

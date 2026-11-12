@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useAtomValue, useSetAtom } from "jotai";
 import { Dot, FileWarning, TriangleAlert, XIcon } from "lucide-react";
 import { useState } from "react";
-import { activeWorkspaceIdAtom } from "@/atoms/workspaces/workspace-query.atoms";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Drawer, DrawerContent, DrawerHandle, DrawerTitle } from "@/components/ui/drawer";
@@ -65,8 +64,6 @@ export function ArtifactViewerContent({
 	artifactId: number;
 	onClose: () => void;
 }) {
-	const workspaceId = Number(useAtomValue(activeWorkspaceIdAtom));
-	const workspaceIsValid = Number.isFinite(workspaceId) && workspaceId > 0;
 	const {
 		data: content,
 		error,
@@ -75,10 +72,7 @@ export function ArtifactViewerContent({
 		isRefetchError,
 		isFetching,
 		refetch,
-	} = useQuery({
-		...artifactManifestQueryOptions(workspaceId, artifactId),
-		enabled: workspaceIsValid,
-	});
+	} = useQuery(artifactManifestQueryOptions(artifactId));
 	const resolved = content ? resolveArtifactPresentation(content) : null;
 	const downloadFilename = artifactDownloadFilename(content, artifactId);
 	const artifactType =
@@ -109,24 +103,18 @@ export function ArtifactViewerContent({
 					</div>
 					<div className="flex items-center gap-1">
 						<div ref={setZoomControlsContainer} className="flex items-center gap-1" />
-						{workspaceIsValid ? (
-							<>
-								{Actions && content ? (
-									<Actions workspaceId={workspaceId} manifest={content} />
-								) : null}
-								{resolved?.renderer.downloadable ? (
-									<ArtifactDownloadButton
-										path={artifactDownloadPath(workspaceId, artifactId)}
-										filename={downloadFilename}
-										className="size-6 shrink-0 rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-									/>
-								) : null}
-								<Separator
-									orientation="vertical"
-									className="mx-1.5 hidden bg-muted-foreground/20 data-[orientation=vertical]:h-4 data-[orientation=vertical]:w-px dark:bg-muted-foreground/25 lg:block"
-								/>
-							</>
+						{Actions && content ? <Actions manifest={content} /> : null}
+						{resolved?.renderer.downloadable ? (
+							<ArtifactDownloadButton
+								path={artifactDownloadPath(artifactId)}
+								filename={downloadFilename}
+								className="size-6 shrink-0 rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+							/>
 						) : null}
+						<Separator
+							orientation="vertical"
+							className="mx-1.5 hidden bg-muted-foreground/20 data-[orientation=vertical]:h-4 data-[orientation=vertical]:w-px dark:bg-muted-foreground/25 lg:block"
+						/>
 						<Button
 							variant="ghost"
 							size="icon"
@@ -167,7 +155,6 @@ export function ArtifactViewerContent({
 					</div>
 				) : content ? (
 					<ArtifactRenderer
-						workspaceId={workspaceId}
 						manifest={content}
 						zoomControlsContainer={zoomControlsContainer}
 						presentation={resolved ?? undefined}

@@ -15,7 +15,6 @@ export function ReportDocument({
 	fallbackTitle,
 	placed,
 	outputs,
-	workspaceId,
 	adding,
 	failedToStart,
 	onAdd,
@@ -25,7 +24,6 @@ export function ReportDocument({
 	fallbackTitle: string;
 	placed: Map<number, ReportSuggestion[]>;
 	outputs: ReadonlyMap<number, StudioOutput>;
-	workspaceId: number;
 	adding: string | null;
 	failedToStart: ReadonlySet<string>;
 	onAdd: (suggestion: ReportSuggestion) => void;
@@ -52,12 +50,7 @@ export function ReportDocument({
 						const phase = suggestionPhase(suggestion, output, adding === suggestion.id);
 						if (phase === "ready" && output) {
 							return (
-								<ReportEmbedCard
-									key={suggestion.id}
-									suggestionId={suggestion.id}
-									output={output}
-									workspaceId={workspaceId}
-								/>
+								<ReportEmbedCard key={suggestion.id} suggestionId={suggestion.id} output={output} />
 							);
 						}
 						return (

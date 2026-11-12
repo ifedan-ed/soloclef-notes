@@ -23,7 +23,6 @@ export interface SelectedFolder {
 interface FolderWatchDialogProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	workspaceId: number;
 	onSuccess?: () => void;
 	initialFolder?: SelectedFolder | null;
 }
@@ -40,7 +39,6 @@ export const DEFAULT_EXCLUDE_PATTERNS = [
 export function FolderWatchDialog({
 	open,
 	onOpenChange,
-	workspaceId,
 	onSuccess,
 	initialFolder,
 }: FolderWatchDialogProps) {
@@ -73,7 +71,9 @@ export function FolderWatchDialog({
 	}, []);
 
 	const handleSubmit = useCallback(async () => {
-		if (!selectedFolder) return;
+		// No extension list yet means the server has not said what its default
+		// parser reads; a sync started now would have no honest file filter.
+		if (!selectedFolder || !supportedExtensions) return;
 		const api = window.electronAPI;
 		if (!api) return;
 
@@ -86,7 +86,6 @@ export function FolderWatchDialog({
 			const rootFolderId = await uploadFolderScan({
 				folderPath: selectedFolder.path,
 				folderName: selectedFolder.name,
-				workspaceId,
 				excludePatterns: DEFAULT_EXCLUDE_PATTERNS,
 				fileExtensions: supportedExtensions,
 				onProgress: setProgress,
@@ -99,7 +98,6 @@ export function FolderWatchDialog({
 				excludePatterns: DEFAULT_EXCLUDE_PATTERNS,
 				fileExtensions: supportedExtensions,
 				rootFolderId: rootFolderId ?? null,
-				workspaceId,
 				active: true,
 			});
 
@@ -119,7 +117,7 @@ export function FolderWatchDialog({
 			setSubmitting(false);
 			setProgress(null);
 		}
-	}, [selectedFolder, workspaceId, supportedExtensions, onOpenChange, onSuccess]);
+	}, [selectedFolder, supportedExtensions, onOpenChange, onSuccess]);
 
 	const handleOpenChange = useCallback(
 		(nextOpen: boolean) => {

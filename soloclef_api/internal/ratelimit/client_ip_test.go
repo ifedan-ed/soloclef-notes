@@ -52,7 +52,7 @@ func TestTheClientIsChosenInGetRealClientIpsOrder(t *testing.T) {
 	}
 
 	for name, test := range cases {
-		request := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/1/members", nil)
+		request := httptest.NewRequest(http.MethodGet, "/api/v1/notebooks/1/notes", nil)
 		request.RemoteAddr = test.peer
 		for header, value := range test.headers {
 			request.Header.Set(header, value)

@@ -3,17 +3,14 @@ package requestbody
 // carriesUnpairedSurrogate reports whether the body holds a \uD800–\uDFFF
 // escape that is not half of a valid pair.
 //
-// Go's encoding/json replaces such an escape with U+FFFD and reads on, so this
-// tier would answer 200 for a body the Python tier cannot finish: pydantic-core
-// carries the lone surrogate into a Python str, the route writes the row, and
-// then the *response* cannot be encoded — a 500 with the row written. Asked of
-// the running tier with `{"log_metadata":{"a":"\ud800"}}` and with a lone
-// surrogate in the message: 500 both times, and the row there afterwards.
-//
-// Nothing here can reproduce that, because what Go hands the route has already
-// lost the surrogate. So the body is ErrUndecodable and the request is
-// forwarded, which gives the identical answer *and* the identical row, because
-// the Python tier does the write itself.
+// Go's encoding/json replaces such an escape with U+FFFD and reads on, so
+// without this check a body carrying one would be stored with a character the
+// sender never wrote. It is refused instead, as a body that is not valid JSON
+// text (ErrUndecodable): a lone surrogate names no character, so nothing
+// faithful can be stored for it. The Python version accepted it, wrote the row,
+// and then failed to encode its own response: a 500 with the row written
+// (asked of it with `{"log_metadata":{"a":"\ud800"}}`). A refusal before
+// anything is written is the better answer.
 func carriesUnpairedSurrogate(body []byte) bool {
 	for index := 0; index < len(body); index++ {
 		if body[index] != '\\' {

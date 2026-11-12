@@ -101,9 +101,12 @@ export interface ResearchImportItem {
 /** The backend accepts at most this many results per import. */
 export const MAX_RESEARCH_IMPORT = 50;
 
-/** Sources this workspace cannot search, each with why (e.g. no Exa key connected). */
+/**
+ * Sources the account cannot search, each with why: no key connected (Exa,
+ * Tavily), or a source this server does not search at all (Google Scholar).
+ */
 export const researchSourcesStatusSchema = z.object({
-	unavailable: z.record(z.string(), z.literal("not_connected")).default({}),
+	unavailable: z.record(z.string(), z.enum(["not_connected", "not_available"])).default({}),
 	/** What "Read a web page" reads with: Browserbase when it is connected. */
 	page_reader: z.enum(["browserbase", "crawler"]).default("crawler"),
 });

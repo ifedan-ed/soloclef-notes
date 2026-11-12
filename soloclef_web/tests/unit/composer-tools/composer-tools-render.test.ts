@@ -40,7 +40,7 @@ test("the Tools pill shows its label on desktop and only an icon when compact", 
 	assert.match(compact, /aria-label="Pick a tool for the next message"/);
 });
 
-test("the menu lists all ten platforms and checks the picked one", () => {
+test("the menu lists the literatures and checks the picked one", () => {
 	const html = render(
 		createElement(
 			DropdownMenuPrimitive.Root,
@@ -48,10 +48,20 @@ test("the menu lists all ten platforms and checks the picked one", () => {
 			createElement(
 				DropdownMenuPrimitive.Content,
 				null,
-				createElement(ComposerToolsMenuItems, { selected: "reddit", onSelect: noop })
+				createElement(ComposerToolsMenuItems, { selected: "arxiv", onSelect: noop })
 			)
 		)
 	);
+	for (const name of ["PubMed", "arXiv", "bioRxiv and medRxiv"]) {
+		assert.match(html, new RegExp(`>${name}<`), name);
+	}
+	assert.match(html, /Use a tool for the next message/);
+	assert.equal(html.match(/lucide-check/g)?.length, 1);
+});
+
+test("the platform scrapers the product cut are not in the menu", () => {
+	// Every key connected, so nothing is hidden for want of one.
+	const html = menuHtml(new Set(["exa", "tavily"] as const));
 	for (const name of [
 		"Web",
 		"Google Search",
@@ -63,25 +73,25 @@ test("the menu lists all ten platforms and checks the picked one", () => {
 		"Indeed",
 		"Amazon",
 		"Walmart",
+		"Browserbase",
 	]) {
-		assert.match(html, new RegExp(`>${name}<`), name);
+		assert.doesNotMatch(html, new RegExp(`>${name}<`), name);
 	}
-	assert.match(html, /Use a tool for the next message/);
-	assert.equal(html.match(/lucide-check/g)?.length, 1);
+	assert.equal(html.match(/role="menuitem"/g)?.length, 5);
 });
 
 test("the chip names the forced tool and offers removal", () => {
-	const html = render(createElement(PreferredToolChip, { tool: "tiktok", onRemove: noop }));
-	assert.match(html, />TikTok</);
-	assert.match(html, /aria-label="Remove TikTok"/);
-	assert.match(html, /Your next message will use TikTok/);
+	const html = render(createElement(PreferredToolChip, { tool: "pubmed", onRemove: noop }));
+	assert.match(html, />PubMed</);
+	assert.match(html, /aria-label="Remove PubMed"/);
+	assert.match(html, /Your next message will use PubMed/);
 });
 
 test("no chip when no tool is picked", () => {
 	assert.equal(render(createElement(PreferredToolChip, { tool: null, onRemove: noop })), "");
 });
 
-function menuHtml(connected?: ReadonlySet<"exa" | "tavily" | "browserbase">): string {
+function menuHtml(connected?: ReadonlySet<"exa" | "tavily">): string {
 	return render(
 		createElement(
 			DropdownMenuPrimitive.Root,
@@ -95,23 +105,37 @@ function menuHtml(connected?: ReadonlySet<"exa" | "tavily" | "browserbase">): st
 	);
 }
 
-test("Exa, Tavily and Browserbase are listed only where the workspace has their key", () => {
+test("Exa and Tavily are listed only where the account has their key", () => {
 	const none = menuHtml();
-	for (const name of ["Exa", "Tavily", "Browserbase"]) {
+	for (const name of ["Exa", "Tavily"]) {
 		assert.doesNotMatch(none, new RegExp(`>${name}<`), name);
 	}
 
-	const some = menuHtml(new Set(["exa", "browserbase"] as const));
+	const some = menuHtml(new Set(["exa"] as const));
 	assert.match(some, />Exa</);
-	assert.match(some, />Browserbase</);
 	assert.doesNotMatch(some, />Tavily</);
-	// They sit with the general web tools, before the platforms.
-	assert.ok(some.indexOf(">Google Search<") < some.indexOf(">Exa<"));
-	assert.ok(some.indexOf(">Browserbase<") < some.indexOf(">YouTube<"));
+	// The web searches sit before the literatures.
+	assert.ok(some.indexOf(">Exa<") < some.indexOf(">PubMed<"));
 });
 
 test("the chip names a keyed tool too", () => {
 	const html = render(createElement(PreferredToolChip, { tool: "tavily", onRemove: noop }));
 	assert.match(html, />Tavily</);
 	assert.match(html, /Your next message will use Tavily/);
+});
+
+test("PubMed, arXiv and the preprint servers are three separate choices, offered without a key", () => {
+	// No connected set at all: these need no key, unlike Exa and Tavily.
+	const html = menuHtml();
+	for (const name of ["PubMed", "arXiv", "bioRxiv and medRxiv"]) {
+		assert.match(html, new RegExp(`>${name}<`), name);
+	}
+	assert.ok(html.indexOf(">PubMed<") < html.indexOf(">arXiv<"));
+	assert.ok(html.indexOf(">arXiv<") < html.indexOf(">bioRxiv and medRxiv<"));
+});
+
+test("the chip names a literature by its own name", () => {
+	const html = render(createElement(PreferredToolChip, { tool: "preprints", onRemove: noop }));
+	assert.match(html, />bioRxiv and medRxiv</);
+	assert.match(html, /aria-label="Remove bioRxiv and medRxiv"/);
 });

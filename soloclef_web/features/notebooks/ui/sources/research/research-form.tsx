@@ -46,9 +46,9 @@ export function ResearchForm({
 	onDraftChange: (draft: ResearchDraft) => void;
 	onSubmit: () => void;
 	inputRef?: Ref<HTMLInputElement>;
-	/** Sources greyed out in the menu, e.g. Exa with no key in this workspace. */
+	/** Sources greyed out in the menu, e.g. Exa with no key connected. */
 	unavailable?: UnavailableSources;
-	/** What reads a pasted page in this workspace. */
+	/** What reads a pasted page for this account. */
 	pageReader?: PageReader;
 	/** A page is being added: the button waits. */
 	busy?: boolean;

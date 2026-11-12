@@ -13,7 +13,6 @@ import {
 	updateConnectorMutationAtom,
 } from "@/atoms/connectors/connector-mutation.atoms";
 import { connectorsAtom } from "@/atoms/connectors/connector-query.atoms";
-import { activeWorkspaceIdAtom } from "@/atoms/workspaces/workspace-query.atoms";
 import { EnumConnectorName } from "@/contracts/enums/connector";
 import type { SearchSourceConnector } from "@/contracts/types/connector.types";
 import { searchSourceConnector } from "@/contracts/types/connector.types";
@@ -62,7 +61,6 @@ function clearOAuthResultCookie(): void {
 }
 
 export const useConnectorDialog = () => {
-	const workspaceId = useAtomValue(activeWorkspaceIdAtom);
 	const { data: allConnectors, refetch: refetchAllConnectors } = useAtomValue(connectorsAtom);
 	const { mutateAsync: indexConnector } = useAtomValue(indexConnectorMutationAtom);
 	const { mutateAsync: updateConnector } = useAtomValue(updateConnectorMutationAtom);
@@ -149,7 +147,7 @@ export const useConnectorDialog = () => {
 	// Consume OAuth result from cookie (set by /connectors/callback route handler)
 	useEffect(() => {
 		const raw = readOAuthResultCookie();
-		if (!raw || !workspaceId) return;
+		if (!raw) return;
 		clearOAuthResultCookie();
 
 		const result = parseOAuthCallbackResult(raw);
@@ -162,12 +160,7 @@ export const useConnectorDialog = () => {
 			const name = oauthConnector?.title || "connector";
 
 			if (oauthConnector) {
-				trackConnectorSetupFailure(
-					Number(workspaceId),
-					oauthConnector.connectorType,
-					result.error,
-					"oauth_callback"
-				);
+				trackConnectorSetupFailure(oauthConnector.connectorType, result.error, "oauth_callback");
 			}
 
 			if (result.error === "duplicate_account") {
@@ -240,65 +233,55 @@ export const useConnectorDialog = () => {
 			});
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [workspaceId, refetchAllConnectors, setIsOpen]);
+	}, [refetchAllConnectors, setIsOpen]);
 
 	// Handle OAuth connection
-	const handleConnectOAuth = useCallback(
-		async (connector: (typeof OAUTH_CONNECTORS)[number]) => {
-			if (!workspaceId || !connector.authEndpoint) return;
+	const handleConnectOAuth = useCallback(async (connector: (typeof OAUTH_CONNECTORS)[number]) => {
+		if (!connector.authEndpoint) return;
 
-			// Set connecting state immediately to disable button and show spinner
-			setConnectingId(connector.id);
+		// Set connecting state immediately to disable button and show spinner
+		setConnectingId(connector.id);
 
-			trackConnectorSetupStarted(Number(workspaceId), connector.connectorType, "oauth_click");
+		trackConnectorSetupStarted(connector.connectorType, "oauth_click");
 
-			try {
-				const url = buildBackendUrl(connector.authEndpoint, { space_id: workspaceId });
+		try {
+			const url = buildBackendUrl(connector.authEndpoint);
 
-				const response = await authenticatedFetch(url, { method: "GET" });
+			const response = await authenticatedFetch(url, { method: "GET" });
 
-				if (!response.ok) {
-					throw new Error(`Failed to initiate ${connector.title} OAuth`);
-				}
-
-				const data = await response.json();
-
-				// Validate OAuth response with Zod
-				const validatedData = parseOAuthAuthResponse(data);
-
-				// Don't clear connectingId here - let the redirect happen with button still disabled
-				// The component will unmount on redirect anyway
-				window.location.href = validatedData.auth_url;
-			} catch (error) {
-				console.error(`Error connecting to ${connector.title}:`, error);
-				trackConnectorSetupFailure(
-					Number(workspaceId),
-					connector.connectorType,
-					error instanceof Error ? error.message : "oauth_initiation_failed",
-					"oauth_init"
-				);
-				if (error instanceof Error && error.message.includes("Invalid auth URL")) {
-					toast.error(`Invalid response from ${connector.title} OAuth endpoint`);
-				} else {
-					toast.error(`Failed to connect to ${connector.title}`);
-				}
-				// Only clear connectingId on error so user can retry
-				setConnectingId(null);
+			if (!response.ok) {
+				throw new Error(`Failed to initiate ${connector.title} OAuth`);
 			}
-		},
-		[workspaceId]
-	);
+
+			const data = await response.json();
+
+			// Validate OAuth response with Zod
+			const validatedData = parseOAuthAuthResponse(data);
+
+			// Don't clear connectingId here - let the redirect happen with button still disabled
+			// The component will unmount on redirect anyway
+			window.location.href = validatedData.auth_url;
+		} catch (error) {
+			console.error(`Error connecting to ${connector.title}:`, error);
+			trackConnectorSetupFailure(
+				connector.connectorType,
+				error instanceof Error ? error.message : "oauth_initiation_failed",
+				"oauth_init"
+			);
+			if (error instanceof Error && error.message.includes("Invalid auth URL")) {
+				toast.error(`Invalid response from ${connector.title} OAuth endpoint`);
+			} else {
+				toast.error(`Failed to connect to ${connector.title}`);
+			}
+			// Only clear connectingId on error so user can retry
+			setConnectingId(null);
+		}
+	}, []);
 
 	// Handle creating webcrawler connector
 	const handleCreateWebcrawler = useCallback(async () => {
-		if (!workspaceId) return;
-
 		setConnectingId("webcrawler-connector");
-		trackConnectorSetupStarted(
-			Number(workspaceId),
-			EnumConnectorName.WEBCRAWLER_CONNECTOR,
-			"webcrawler_quick_add"
-		);
+		trackConnectorSetupStarted(EnumConnectorName.WEBCRAWLER_CONNECTOR, "webcrawler_quick_add");
 		try {
 			await createConnector({
 				data: {
@@ -312,9 +295,6 @@ export const useConnectorDialog = () => {
 					indexing_frequency_minutes: null,
 					next_scheduled_at: null,
 					enable_vision_llm: false,
-				},
-				queryParams: {
-					workspace_id: workspaceId,
 				},
 			});
 
@@ -344,7 +324,6 @@ export const useConnectorDialog = () => {
 		} catch (error) {
 			console.error("Error creating webcrawler connector:", error);
 			trackConnectorSetupFailure(
-				Number(workspaceId),
 				EnumConnectorName.WEBCRAWLER_CONNECTOR,
 				error instanceof Error ? error.message : "webcrawler_create_failed",
 				"webcrawler_quick_add"
@@ -353,19 +332,14 @@ export const useConnectorDialog = () => {
 		} finally {
 			setConnectingId(null);
 		}
-	}, [workspaceId, createConnector, refetchAllConnectors, setIsOpen]);
+	}, [createConnector, refetchAllConnectors, setIsOpen]);
 
 	// Handle connecting non-OAuth connectors (MCP servers)
-	const handleConnectNonOAuth = useCallback(
-		(connectorType: string) => {
-			if (!workspaceId) return;
+	const handleConnectNonOAuth = useCallback((connectorType: string) => {
+		trackConnectorSetupStarted(connectorType, "non_oauth_click");
 
-			trackConnectorSetupStarted(Number(workspaceId), connectorType, "non_oauth_click");
-
-			setConnectingConnectorType(connectorType);
-		},
-		[workspaceId]
-	);
+		setConnectingConnectorType(connectorType);
+	}, []);
 
 	// Handle submitting connect form
 	const handleSubmitConnectForm = useCallback(
@@ -386,9 +360,7 @@ export const useConnectorDialog = () => {
 			},
 			onIndexingStart?: (connectorId: number) => void
 		) => {
-			if (!workspaceId || !connectingConnectorType) {
-				return;
-			}
+			if (!connectingConnectorType) return;
 
 			// Prevent multiple submissions using ref for immediate check
 			if (isCreatingConnectorRef.current) return;
@@ -410,7 +382,6 @@ export const useConnectorDialog = () => {
 									server_config: (connectorData.config as { server_config: MCPServerConfig })
 										.server_config,
 								},
-								queryParams: { workspace_id: workspaceId },
 							})
 						: await createConnector({
 								data: {
@@ -419,9 +390,6 @@ export const useConnectorDialog = () => {
 									is_active: true,
 									next_scheduled_at: connectorData.next_scheduled_at as string | null,
 									enable_vision_llm: false,
-								},
-								queryParams: {
-									workspace_id: workspaceId,
 								},
 							});
 				// Refetch connectors to get the new one
@@ -512,7 +480,6 @@ export const useConnectorDialog = () => {
 								await indexConnector({
 									connector_id: connector.id,
 									queryParams: {
-										workspace_id: workspaceId,
 										start_date: startDateStr,
 										end_date: endDateStr,
 									},
@@ -531,7 +498,7 @@ export const useConnectorDialog = () => {
 								setIndexingConnectorConfig(null);
 
 								queryClient.invalidateQueries({
-									queryKey: cacheKeys.logs.summary(Number(workspaceId)),
+									queryKey: cacheKeys.logs.summary(),
 								});
 
 								await refetchAllConnectors();
@@ -557,7 +524,6 @@ export const useConnectorDialog = () => {
 			} catch (error) {
 				console.error("Error creating connector:", error);
 				trackConnectorSetupFailure(
-					Number(workspaceId),
 					connectingConnectorType ?? formData.connector_type,
 					error instanceof Error ? error.message : "connector_create_failed",
 					"non_oauth_form"
@@ -571,7 +537,6 @@ export const useConnectorDialog = () => {
 		},
 		[
 			connectingConnectorType,
-			workspaceId,
 			createConnector,
 			refetchAllConnectors,
 			updateConnector,
@@ -590,18 +555,14 @@ export const useConnectorDialog = () => {
 	}, [connectCameFromMCPList]);
 
 	// Handle viewing the accounts list of a connector type with several connections
-	const handleViewAccountsList = useCallback(
-		(connectorType: string, connectorTitle?: string) => {
-			if (!workspaceId) return;
-			// Opened nothing for a type without OAuth (Email, Nextcloud) before,
-			// which left the owner's "Enabled in this workspace" switch out of
-			// reach in a shared workspace (accountsListFor).
-			const list = accountsListFor(connectorType, connectorTitle);
-			if (list) setViewingAccountsType(list);
-			else setViewingMCPList(true);
-		},
-		[workspaceId]
-	);
+	const handleViewAccountsList = useCallback((connectorType: string, connectorTitle?: string) => {
+		// Every type but MCP opens its accounts list, the ones without OAuth
+		// (Email, Nextcloud) too: that list is where each connection's
+		// "Enabled" switch is (accountsListFor).
+		const list = accountsListFor(connectorType, connectorTitle);
+		if (list) setViewingAccountsType(list);
+		else setViewingMCPList(true);
+	}, []);
 
 	// Handle going back from accounts list view
 	const handleBackFromAccountsList = useCallback(() => {
@@ -610,9 +571,8 @@ export const useConnectorDialog = () => {
 
 	// Handle viewing MCP list
 	const handleViewMCPList = useCallback(() => {
-		if (!workspaceId) return;
 		setViewingMCPList(true);
-	}, [workspaceId]);
+	}, []);
 
 	// Handle going back from MCP list view
 	const handleBackFromMCPList = useCallback(() => {
@@ -629,7 +589,7 @@ export const useConnectorDialog = () => {
 	// Handle starting indexing
 	const handleStartIndexing = useCallback(
 		async (refreshConnectors: () => void) => {
-			if (!indexingConfig || !workspaceId) return;
+			if (!indexingConfig) return;
 
 			// Validate date range (skip for Google Drive and Webcrawler)
 			if (
@@ -701,9 +661,6 @@ export const useConnectorDialog = () => {
 						// Index with folder/file selection and indexing options
 						await indexConnector({
 							connector_id: indexingConfig.connectorId,
-							queryParams: {
-								workspace_id: workspaceId,
-							},
 							body: {
 								folders: selectedFolders || [],
 								files: selectedFiles || [],
@@ -724,15 +681,11 @@ export const useConnectorDialog = () => {
 					// Webcrawler doesn't use date ranges, just uses config (API key and URLs)
 					await indexConnector({
 						connector_id: indexingConfig.connectorId,
-						queryParams: {
-							workspace_id: workspaceId,
-						},
 					});
 				} else {
 					await indexConnector({
 						connector_id: indexingConfig.connectorId,
 						queryParams: {
-							workspace_id: workspaceId,
 							start_date: startDateStr,
 							end_date: endDateStr,
 						},
@@ -740,20 +693,14 @@ export const useConnectorDialog = () => {
 				}
 
 				// Track index with date range started event
-				trackIndexWithDateRangeStarted(
-					Number(workspaceId),
-					indexingConfig.connectorType,
-					indexingConfig.connectorId,
-					{
-						hasStartDate: !!startDate,
-						hasEndDate: !!endDate,
-					}
-				);
+				trackIndexWithDateRangeStarted(indexingConfig.connectorType, indexingConfig.connectorId, {
+					hasStartDate: !!startDate,
+					hasEndDate: !!endDate,
+				});
 
 				// Track periodic indexing started if enabled
 				if (periodicEnabled) {
 					trackPeriodicIndexingStarted(
-						Number(workspaceId),
 						indexingConfig.connectorType,
 						indexingConfig.connectorId,
 						parseInt(frequencyMinutes, 10)
@@ -770,7 +717,7 @@ export const useConnectorDialog = () => {
 
 				refreshConnectors();
 				queryClient.invalidateQueries({
-					queryKey: cacheKeys.logs.summary(Number(workspaceId)),
+					queryKey: cacheKeys.logs.summary(),
 				});
 			} catch (error) {
 				console.error("Error starting indexing:", error);
@@ -781,7 +728,6 @@ export const useConnectorDialog = () => {
 		},
 		[
 			indexingConfig,
-			workspaceId,
 			startDate,
 			endDate,
 			indexConnector,
@@ -806,8 +752,6 @@ export const useConnectorDialog = () => {
 	// Handle starting edit mode
 	const handleStartEdit = useCallback(
 		(connector: SearchSourceConnector) => {
-			if (!workspaceId) return;
-
 			// For MCP connectors from "All Connectors" tab, show the list view instead of directly editing
 			// (unless we're already in the MCP list view or on the Active tab where individual MCPs are shown)
 			if (connector.connector_type === "MCP_CONNECTOR" && !viewingMCPList && activeTab === "all") {
@@ -841,7 +785,7 @@ export const useConnectorDialog = () => {
 
 			// Track index with date range opened event
 			if (connector.is_indexable) {
-				trackIndexWithDateRangeOpened(Number(workspaceId), connector.connector_type, connector.id);
+				trackIndexWithDateRangeOpened(connector.connector_type, connector.id);
 			}
 
 			setEditingConnector(connector);
@@ -852,7 +796,7 @@ export const useConnectorDialog = () => {
 			setStartDate(undefined);
 			setEndDate(undefined);
 		},
-		[workspaceId, viewingAccountsType, viewingMCPList, handleViewMCPList, activeTab]
+		[viewingAccountsType, viewingMCPList, handleViewMCPList, activeTab]
 	);
 
 	// Handle saving connector changes. `onIndexingStart` runs only once a
@@ -860,7 +804,7 @@ export const useConnectorDialog = () => {
 	// fails) never leaves a syncing spinner on the row.
 	const handleSaveConnector = useCallback(
 		async (refreshConnectors: () => void, onIndexingStart?: (connectorId: number) => void) => {
-			if (!editingConnector || !workspaceId || isSaving) return;
+			if (!editingConnector || isSaving) return;
 
 			// Validate date range (skip for Google Drive which uses folder selection, Webcrawler which uses config, and non-indexable connectors)
 			if (
@@ -953,9 +897,6 @@ export const useConnectorDialog = () => {
 					) {
 						await indexConnector({
 							connector_id: editingConnector.id,
-							queryParams: {
-								workspace_id: workspaceId,
-							},
 							body: {
 								folders: selectedFolders || [],
 								files: selectedFiles || [],
@@ -974,9 +915,6 @@ export const useConnectorDialog = () => {
 					// Webcrawler uses config (API key and URLs), not date ranges
 					await indexConnector({
 						connector_id: editingConnector.id,
-						queryParams: {
-							workspace_id: workspaceId,
-						},
 					});
 					onIndexingStart?.(editingConnector.id);
 					indexingDescription = "Re-indexing started with updated configuration.";
@@ -985,7 +923,6 @@ export const useConnectorDialog = () => {
 					await indexConnector({
 						connector_id: editingConnector.id,
 						queryParams: {
-							workspace_id: workspaceId,
 							start_date: startDateStr,
 							end_date: endDateStr,
 						},
@@ -999,21 +936,15 @@ export const useConnectorDialog = () => {
 					editingConnector.is_indexable &&
 					(indexingDescription.includes("Re-indexing") || indexingDescription.includes("indexing"))
 				) {
-					trackIndexWithDateRangeStarted(
-						Number(workspaceId),
-						editingConnector.connector_type,
-						editingConnector.id,
-						{
-							hasStartDate: !!startDateStr,
-							hasEndDate: !!endDateStr,
-						}
-					);
+					trackIndexWithDateRangeStarted(editingConnector.connector_type, editingConnector.id, {
+						hasStartDate: !!startDateStr,
+						hasEndDate: !!endDateStr,
+					});
 				}
 
 				// Track periodic indexing if enabled
 				if (periodicEnabled && editingConnector.is_indexable) {
 					trackPeriodicIndexingStarted(
-						Number(workspaceId),
 						editingConnector.connector_type,
 						editingConnector.id,
 						frequency || parseInt(frequencyMinutes, 10)
@@ -1033,7 +964,7 @@ export const useConnectorDialog = () => {
 
 				refreshConnectors();
 				queryClient.invalidateQueries({
-					queryKey: cacheKeys.logs.summary(Number(workspaceId)),
+					queryKey: cacheKeys.logs.summary(),
 				});
 			} catch (error) {
 				console.error("Error saving connector:", error);
@@ -1044,7 +975,6 @@ export const useConnectorDialog = () => {
 		},
 		[
 			editingConnector,
-			workspaceId,
 			isSaving,
 			startDate,
 			endDate,
@@ -1063,7 +993,7 @@ export const useConnectorDialog = () => {
 	// Handle disconnecting connector
 	const handleDisconnectConnector = useCallback(
 		async (refreshConnectors: () => void) => {
-			if (!editingConnector || !workspaceId) return;
+			if (!editingConnector) return;
 
 			setIsDisconnecting(true);
 			try {
@@ -1071,20 +1001,18 @@ export const useConnectorDialog = () => {
 				if (editingConnector.connector_type === EnumConnectorName.NEXTCLOUD_CONNECTOR) {
 					// Revokes the app password in Nextcloud; imported files stay.
 					await nextcloudConnectApi.disconnect(editingConnector.id);
-					queryClient.invalidateQueries({
-						queryKey: nextcloudConnectionKey(Number(workspaceId)),
-					});
+					queryClient.invalidateQueries({ queryKey: nextcloudConnectionKey() });
 				} else if (editingConnector.connector_type === EnumConnectorName.GOOGLE_DRIVE_CONNECTOR) {
 					// Same route as the Google Drive card's Disconnect: revokes the
 					// grant at Google, and files already added stay. The generic
-					// delete below would remove them from every workspace.
+					// delete below would remove them too.
 					const { revoked } = await googleDriveApi.disconnect(editingConnector.id);
 					if (!revoked) {
 						notRevoked =
 							"Disconnected. Google did not confirm the access was removed; remove it under Security → Third-party connections in your Google Account.";
 					}
 					queryClient.invalidateQueries({
-						queryKey: googleDriveConnectionKey(Number(workspaceId)),
+						queryKey: googleDriveConnectionKey(),
 					});
 				} else {
 					await deleteConnector({
@@ -1119,7 +1047,7 @@ export const useConnectorDialog = () => {
 
 				refreshConnectors();
 				queryClient.invalidateQueries({
-					queryKey: cacheKeys.logs.summary(Number(workspaceId)),
+					queryKey: cacheKeys.logs.summary(),
 				});
 			} catch (error) {
 				console.error("Error disconnecting connector:", error);
@@ -1128,7 +1056,7 @@ export const useConnectorDialog = () => {
 				setIsDisconnecting(false);
 			}
 		},
-		[editingConnector, workspaceId, deleteConnector, cameFromMCPList, setIsOpen]
+		[editingConnector, deleteConnector, cameFromMCPList, setIsOpen]
 	);
 
 	// Handle quick index (index with selected date range, or backend defaults if none selected)
@@ -1140,16 +1068,9 @@ export const useConnectorDialog = () => {
 			startDate?: Date,
 			endDate?: Date
 		) => {
-			if (!workspaceId) {
-				if (stopIndexing) {
-					stopIndexing(connectorId);
-				}
-				return;
-			}
-
 			// Track quick index clicked event
 			if (connectorType) {
-				trackQuickIndexClicked(Number(workspaceId), connectorType, connectorId);
+				trackQuickIndexClicked(connectorType, connectorId);
 			}
 
 			try {
@@ -1160,7 +1081,6 @@ export const useConnectorDialog = () => {
 				await indexConnector({
 					connector_id: connectorId,
 					queryParams: {
-						workspace_id: workspaceId,
 						start_date: startDateStr,
 						end_date: endDateStr,
 					},
@@ -1169,7 +1089,7 @@ export const useConnectorDialog = () => {
 
 				// Invalidate queries to refresh data
 				queryClient.invalidateQueries({
-					queryKey: cacheKeys.logs.summary(Number(workspaceId)),
+					queryKey: cacheKeys.logs.summary(),
 				});
 				// Note: Don't call stopIndexing here - let useIndexingConnectors hook
 				// detect when last_indexed_at changes via real-time sync
@@ -1182,7 +1102,7 @@ export const useConnectorDialog = () => {
 				}
 			}
 		},
-		[workspaceId, indexConnector]
+		[indexConnector]
 	);
 
 	// Handle going back from edit view
@@ -1243,7 +1163,7 @@ export const useConnectorDialog = () => {
 	// mode "connect" -> always OAuth connect (add account). mode "auto" routes by
 	// account count: none -> connect, one -> edit view, many -> accounts list.
 	useEffect(() => {
-		if (!importConnectorRequest || !workspaceId) return;
+		if (!importConnectorRequest) return;
 
 		const { connectorType, mode } = importConnectorRequest;
 		setImportConnectorRequest(null);
@@ -1269,7 +1189,6 @@ export const useConnectorDialog = () => {
 		}
 	}, [
 		importConnectorRequest,
-		workspaceId,
 		allConnectors,
 		setImportConnectorRequest,
 		handleConnectOAuth,
@@ -1308,7 +1227,6 @@ export const useConnectorDialog = () => {
 		periodicEnabled,
 		frequencyMinutes,
 		enableVisionLlm,
-		workspaceId,
 		allConnectors,
 		viewingAccountsType,
 		viewingMCPList,

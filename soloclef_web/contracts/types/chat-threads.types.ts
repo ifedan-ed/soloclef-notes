@@ -67,13 +67,9 @@ export const publicChatSnapshotDetail = z.object({
 });
 
 /**
- * List public chat snapshots for workspace
+ * Every public chat snapshot of the signed-in account
  */
-export const publicChatSnapshotsBySpaceRequest = z.object({
-	workspace_id: z.number(),
-});
-
-export const publicChatSnapshotsBySpaceResponse = z.object({
+export const publicChatSnapshotsAccountResponse = z.object({
 	snapshots: z.array(publicChatSnapshotDetail),
 });
 
@@ -85,5 +81,4 @@ export type PublicChatSnapshotListRequest = z.infer<typeof publicChatSnapshotLis
 export type PublicChatSnapshotListResponse = z.infer<typeof publicChatSnapshotListResponse>;
 export type PublicChatSnapshotDeleteRequest = z.infer<typeof publicChatSnapshotDeleteRequest>;
 export type PublicChatSnapshotDetail = z.infer<typeof publicChatSnapshotDetail>;
-export type PublicChatSnapshotsBySpaceRequest = z.infer<typeof publicChatSnapshotsBySpaceRequest>;
-export type PublicChatSnapshotsBySpaceResponse = z.infer<typeof publicChatSnapshotsBySpaceResponse>;
+export type PublicChatSnapshotsAccountResponse = z.infer<typeof publicChatSnapshotsAccountResponse>;

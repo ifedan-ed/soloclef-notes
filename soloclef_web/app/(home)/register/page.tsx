@@ -9,10 +9,8 @@ import { useEffect, useState } from "react";
 import { type ExternalToast, toast } from "sonner";
 import { registerMutationAtom } from "@/atoms/auth/auth-mutation.atoms";
 import { Logo } from "@/components/Logo";
-import { useRuntimeConfig } from "@/components/providers/runtime-config";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { useHumanCheck } from "@/features/human-check/hooks/use-human-check";
 import { useSession } from "@/hooks/use-session";
 import { getAuthErrorDetails, isNetworkError, shouldRetry } from "@/lib/auth-errors";
 import { AppError, ValidationError } from "@/lib/error";
@@ -23,7 +21,6 @@ import { AmbientBackground } from "../login/AmbientBackground";
 export default function RegisterPage() {
 	const t = useTranslations("auth");
 	const tCommon = useTranslations("common");
-	const { authType } = useRuntimeConfig();
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [confirmPassword, setConfirmPassword] = useState("");
@@ -37,18 +34,13 @@ export default function RegisterPage() {
 	const router = useRouter();
 	const session = useSession();
 	const [{ mutateAsync: register, isPending: isRegistering }] = useAtom(registerMutationAtom);
-	const humanCheck = useHumanCheck("register");
 
-	// Check authentication type and redirect if not LOCAL
+	// Someone already signed in has no use for the sign-up form.
 	useEffect(() => {
 		if (session.status === "authenticated") {
 			router.replace("/dashboard");
-			return;
 		}
-		if (authType !== "LOCAL") {
-			router.push("/login");
-		}
-	}, [authType, router, session.status]);
+	}, [router, session.status]);
 
 	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
@@ -68,16 +60,6 @@ export default function RegisterPage() {
 
 		setError({ title: null, message: null }); // Clear any previous errors
 
-		if (!humanCheck.ready) {
-			setError({
-				title: t("security_check_title"),
-				message: t(
-					humanCheck.unavailable ? "security_check_unavailable" : "security_check_pending"
-				),
-			});
-			return;
-		}
-
 		// Track registration attempt
 		trackRegistrationAttempt();
 
@@ -88,11 +70,7 @@ export default function RegisterPage() {
 				is_active: true,
 				is_superuser: false,
 				is_verified: false,
-				humanCheckToken: humanCheck.token,
 			});
-
-			// auth_registration_success is now emitted server-side
-			// (UserManager.on_after_register) — authoritative vs. optimistic.
 
 			// Success toast
 			toast.success(t("register_success"), {
@@ -105,8 +83,6 @@ export default function RegisterPage() {
 				router.push("/login?registered=true");
 			}, 500);
 		} catch (err) {
-			// A token is good for one request; the next attempt needs a new one.
-			humanCheck.reset();
 			if (err instanceof AppError) {
 				switch (err.status) {
 					case 403: {
@@ -336,8 +312,6 @@ export default function RegisterPage() {
 								disabled={isRegistering}
 							/>
 						</div>
-
-						{humanCheck.widget}
 
 						<Button
 							type="submit"

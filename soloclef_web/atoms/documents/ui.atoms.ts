@@ -10,9 +10,7 @@ export interface AgentCreatedDocument {
 	id: number;
 	title: string;
 	documentType: string;
-	workspaceId: number;
 	folderId: number | null;
-	createdById: string | null;
 	createdAt: number;
 }
 

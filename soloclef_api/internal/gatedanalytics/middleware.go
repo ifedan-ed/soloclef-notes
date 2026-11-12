@@ -1,6 +1,7 @@
 package gatedanalytics
 
 import (
+	"io"
 	"net/http"
 	"strings"
 
@@ -98,3 +99,17 @@ func (r *statusRecorder) Write(body []byte) (int, error) {
 
 // Unwrap keeps the optional interfaces of the writer underneath reachable.
 func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
+
+// ReadFrom passes a whole-body copy down to the writer underneath, which for
+// a file is how it reaches net/http's sendfile. The recorder's one duty is
+// done first, as in Write: once a body has started the status is settled.
+// (An event carries the status and no byte count, so there is nothing about
+// the body itself to observe on its way past.)
+func (r *statusRecorder) ReadFrom(source io.Reader) (int64, error) {
+	r.written = true
+	if reader, offered := r.ResponseWriter.(io.ReaderFrom); offered {
+		return reader.ReadFrom(source)
+	}
+	// Shown to io.Copy as a plain writer, or it would find this method again.
+	return io.Copy(struct{ io.Writer }{r.ResponseWriter}, source)
+}

@@ -34,9 +34,6 @@ export default function NotFound() {
 				</Link>
 			</div>
 			<nav className="mt-16 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-neutral-500 dark:text-neutral-400">
-				<Link href="/pricing" className="hover:text-neutral-900 dark:hover:text-neutral-200">
-					Pricing
-				</Link>
 				<Link href="/contact" className="hover:text-neutral-900 dark:hover:text-neutral-200">
 					Contact
 				</Link>

@@ -38,11 +38,21 @@ export type ImportResult = z.infer<typeof importResultSchema>;
 
 export type PickedItem = { path: string; kind: "file" | "folder" };
 
+/**
+ * The import and preview request, field for field what the server's
+ * ImportRequest reads (both routes take the same body). It names no owner:
+ * the picks land in the library of the account the connection belongs to,
+ * which is the one signed in.
+ */
 export type ImportRequest = {
 	items: PickedItem[];
-	parser?: DocumentParser;
-	use_vision_llm?: boolean;
-	notebook_id?: number;
+	/**
+	 * Which of the four parsers reads the imported files. Always sent: the
+	 * picker does not import until one that is configured has been chosen.
+	 */
+	parser: DocumentParser;
+	use_vision_llm: boolean;
+	notebook_id: number | null;
 };
 
 const refreshableDocumentsSchema = z.object({
@@ -75,9 +85,6 @@ export const nextcloudFilesApi = {
 			z.object({ status: z.enum(["unchanged", "queued"]) })
 		),
 	/** Documents this user can refresh, each with the connection that can. */
-	refreshableDocuments: (workspaceId: number) =>
-		baseApiService.get(
-			`/api/v1/workspaces/${workspaceId}/nextcloud/refreshable-documents`,
-			refreshableDocumentsSchema
-		),
+	refreshableDocuments: () =>
+		baseApiService.get(`/api/v1/nextcloud/refreshable-documents`, refreshableDocumentsSchema),
 };

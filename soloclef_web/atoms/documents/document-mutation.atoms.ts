@@ -1,6 +1,5 @@
 import { atomWithMutation } from "jotai-tanstack-query";
 import { toast } from "sonner";
-import { activeWorkspaceIdAtom } from "@/atoms/workspaces/workspace-query.atoms";
 import type {
 	CreateDocumentRequest,
 	DeleteDocumentRequest,
@@ -13,12 +12,10 @@ import { queryClient } from "@/lib/query-client/client";
 import { globalDocumentsQueryParamsAtom } from "./ui.atoms";
 
 export const createDocumentMutationAtom = atomWithMutation((get) => {
-	const workspaceId = get(activeWorkspaceIdAtom);
 	const documentsQueryParams = get(globalDocumentsQueryParamsAtom);
 
 	return {
 		mutationKey: cacheKeys.documents.globalQueryParams(documentsQueryParams),
-		enabled: !!workspaceId,
 		mutationFn: async (request: CreateDocumentRequest) => {
 			return documentsApiService.createDocument(request);
 		},
@@ -33,32 +30,28 @@ export const createDocumentMutationAtom = atomWithMutation((get) => {
 });
 
 export const uploadDocumentMutationAtom = atomWithMutation((get) => {
-	const workspaceId = get(activeWorkspaceIdAtom);
 	const documentsQueryParams = get(globalDocumentsQueryParamsAtom);
 
 	return {
 		mutationKey: cacheKeys.documents.globalQueryParams(documentsQueryParams),
-		enabled: !!workspaceId,
 		mutationFn: async (request: UploadDocumentRequest) => {
 			return documentsApiService.uploadDocument(request);
 		},
 
 		onSuccess: () => {
 			// Note: Toast notification is handled by the caller (DocumentUploadTab) to use i18n
-			queryClient.invalidateQueries({
-				queryKey: cacheKeys.logs.summary(workspaceId ?? undefined),
-			});
+			// The prefix of every activity-summary key, so this holds whatever
+			// the summary is keyed by after it.
+			queryClient.invalidateQueries({ queryKey: ["logs", "summary"] });
 		},
 	};
 });
 
 export const deleteDocumentMutationAtom = atomWithMutation((get) => {
-	const workspaceId = get(activeWorkspaceIdAtom);
 	const documentsQueryParams = get(globalDocumentsQueryParamsAtom);
 
 	return {
 		mutationKey: cacheKeys.documents.globalQueryParams(documentsQueryParams),
-		enabled: !!workspaceId,
 		mutationFn: async (request: DeleteDocumentRequest) => {
 			return documentsApiService.deleteDocument(request);
 		},

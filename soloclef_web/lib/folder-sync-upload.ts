@@ -14,7 +14,6 @@ export interface FolderSyncProgress {
 export interface FolderSyncParams {
 	folderPath: string;
 	folderName: string;
-	workspaceId: number;
 	excludePatterns: string[];
 	fileExtensions: string[];
 	/** Omitted: the server default parser applies. */
@@ -61,7 +60,6 @@ async function uploadBatchesWithConcurrency(
 	batches: FolderFileEntry[][],
 	params: {
 		folderName: string;
-		workspaceId: number;
 		rootFolderId: number | null;
 		parser?: DocumentParser;
 		signal?: AbortSignal;
@@ -97,7 +95,6 @@ async function uploadBatchesWithConcurrency(
 					files,
 					{
 						folder_name: params.folderName,
-						workspace_id: params.workspaceId,
 						relative_paths: batch.map((e) => e.relativePath),
 						root_folder_id: resolvedRootFolderId,
 						parser: params.parser,
@@ -140,8 +137,7 @@ export async function uploadFolderScan(params: FolderSyncParams): Promise<number
 	const api = window.electronAPI;
 	if (!api) throw new Error("Electron API not available");
 
-	const { folderPath, folderName, workspaceId, excludePatterns, fileExtensions, parser, signal } =
-		params;
+	const { folderPath, folderName, excludePatterns, fileExtensions, parser, signal } = params;
 	let rootFolderId = params.rootFolderId ?? null;
 
 	params.onProgress?.({ phase: "listing", uploaded: 0, total: 0 });
@@ -154,7 +150,6 @@ export async function uploadFolderScan(params: FolderSyncParams): Promise<number
 		excludePatterns,
 		fileExtensions,
 		rootFolderId: rootFolderId ?? null,
-		workspaceId,
 		active: true,
 	});
 
@@ -164,7 +159,6 @@ export async function uploadFolderScan(params: FolderSyncParams): Promise<number
 
 	const mtimeCheckResult = await documentsApiService.folderMtimeCheck({
 		folder_name: folderName,
-		workspace_id: workspaceId,
 		files: allFiles.map((f) => ({ relative_path: f.relativePath, mtime: f.mtimeMs / 1000 })),
 	});
 
@@ -182,7 +176,6 @@ export async function uploadFolderScan(params: FolderSyncParams): Promise<number
 
 		const uploadedRootId = await uploadBatchesWithConcurrency(batches, {
 			folderName,
-			workspaceId,
 			rootFolderId: rootFolderId ?? null,
 			parser,
 			signal,
@@ -209,7 +202,6 @@ export async function uploadFolderScan(params: FolderSyncParams): Promise<number
 
 	await documentsApiService.folderSyncFinalize({
 		folder_name: folderName,
-		workspace_id: workspaceId,
 		root_folder_id: rootFolderId ?? null,
 		all_relative_paths: allFiles.map((f) => f.relativePath),
 	});

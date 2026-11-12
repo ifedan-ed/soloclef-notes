@@ -1,13 +1,10 @@
-// Package celeryqueue enqueues this tier's background work on the queues the
-// Python tier enqueues on.
+// Package celeryqueue enqueues the API's background work for the Go worker
+// (soloclef_worker), on Valkey, in the Celery wire format both speak.
 //
-// It is the one thing that unblocked the writes: a route that owes a Celery
-// message could not move here while only Python could write one
-// (custom/docs/go-api-tier.md, "Producing Celery work"). The envelope, the
-// routing and the enqueue stamp are soloclef_celery's, shared with the worker
-// tier so that the bytes cannot drift apart; this package is the deployment's
-// half of it — which Redis, which default queue, and the client this tier
-// already uses.
+// The envelope, the routing and the enqueue stamp are soloclef_celery's,
+// shared with the worker so that the bytes cannot drift apart; this package is
+// the deployment's half of it — which Valkey, which default queue, and the
+// client the API already uses.
 //
 // An enqueue that fails is returned as an error rather than hidden. The Python
 // call sites divide into two, and both need to be able to tell: a route that

@@ -30,7 +30,21 @@ export const RETIRED_SECTIONS = [
 
 const retired = [...RETIRED_VERSION_SEGMENTS, ...RETIRED_SECTIONS].join("|");
 
+/**
+ * Pages of this app's own docs that were renamed: the old address goes to the
+ * page that replaced it. The workspaces page became the account's settings
+ * and sharing page when workspaces were removed.
+ */
+export const RENAMED_PAGES: Record<string, string> = {
+	"workspaces-and-sharing": "account-and-sharing",
+};
+
 export const docsRedirects = [
 	{ source: `/docs/:section(${retired})`, destination: "/docs", permanent: true },
 	{ source: `/docs/:section(${retired})/:path*`, destination: "/docs", permanent: true },
+	...Object.entries(RENAMED_PAGES).map(([from, to]) => ({
+		source: `/docs/${from}`,
+		destination: `/docs/${to}`,
+		permanent: true,
+	})),
 ];

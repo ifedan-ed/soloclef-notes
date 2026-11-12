@@ -1,18 +1,18 @@
 import { defineQuery } from "@rocicorp/zero";
 import { z } from "zod";
 import { zql } from "../schema/index";
-import { constrainToAllowedSpaces } from "./authz";
+import { constrainThroughParent } from "./ownership";
 
-// Mirrors chat byThread: client passes the parent id, the REST route still
-// authorizes via `automation_id -> workspace`. No workspace_id on the
-// table by design.
+// A run carries no owner of its own: it is readable when its automation is
+// the caller's (the automation row is published with just its id and owner).
 export const automationRunQueries = {
 	byAutomation: defineQuery(
 		z.object({ automationId: z.number() }),
 		({ args: { automationId }, ctx }) =>
-			zql.automation_runs
-				.where("automationId", automationId)
-				.whereExists("automation", (q) => constrainToAllowedSpaces(q, ctx))
-				.orderBy("createdAt", "desc")
+			constrainThroughParent(
+				zql.automation_runs.where("automationId", automationId),
+				"automation",
+				ctx
+			).orderBy("createdAt", "desc")
 	),
 };

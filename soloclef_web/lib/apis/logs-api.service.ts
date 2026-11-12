@@ -75,9 +75,8 @@ class LogsApiService {
 			const errorMessage = parsedRequest.error.issues.map((issue) => issue.message).join(", ");
 			throw new ValidationError(`Invalid request: ${errorMessage}`);
 		}
-		const { workspace_id, ...body } = parsedRequest.data;
 		return baseApiService.post(`/api/v1/logs`, createLogResponse, {
-			body: { ...body, workspace_id },
+			body: parsedRequest.data,
 		});
 	};
 
@@ -91,9 +90,8 @@ class LogsApiService {
 			const errorMessage = parsedRequest.error.issues.map((issue) => issue.message).join(", ");
 			throw new ValidationError(`Invalid request: ${errorMessage}`);
 		}
-		const { workspace_id, ...body } = parsedRequest.data;
 		return baseApiService.put(`/api/v1/logs/${logId}`, updateLogResponse, {
-			body: workspace_id === undefined ? body : { ...body, workspace_id },
+			body: parsedRequest.data,
 		});
 	};
 
@@ -111,7 +109,7 @@ class LogsApiService {
 	};
 
 	/**
-	 * Get summary for logs by workspace
+	 * Summary of the account's activity log over the last `hours` hours
 	 */
 	getLogSummary = async (request: GetLogSummaryRequest) => {
 		const parsedRequest = getLogSummaryRequest.safeParse(request);
@@ -120,8 +118,8 @@ class LogsApiService {
 			const errorMessage = parsedRequest.error.issues.map((issue) => issue.message).join(", ");
 			throw new ValidationError(`Invalid request: ${errorMessage}`);
 		}
-		const { workspace_id, hours } = parsedRequest.data;
-		const url = `/api/v1/logs/workspaces/${workspace_id}/summary${hours ? `?hours=${hours}` : ""}`;
+		const { hours } = parsedRequest.data;
+		const url = `/api/v1/logs/summary${hours ? `?hours=${hours}` : ""}`;
 		return baseApiService.get(url, getLogSummaryResponse);
 	};
 }

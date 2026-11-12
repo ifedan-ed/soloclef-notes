@@ -13,6 +13,7 @@ import {
 import { cn } from "@/lib/utils";
 import {
 	COMPOSER_TOOL_ICONS,
+	COMPOSER_TOOL_NAME_KEYS,
 	type ComposerToolId,
 	type KeyedToolId,
 	offeredComposerTools,
@@ -23,7 +24,7 @@ const NO_KEYED_TOOLS: ReadonlySet<KeyedToolId> = new Set();
 type ComposerToolsMenuItemsProps = {
 	selected: ComposerToolId | null;
 	onSelect: (tool: ComposerToolId) => void;
-	/** Exa, Tavily and Browserbase are listed only when the workspace has their key. */
+	/** Exa and Tavily are listed only when the account has their key. */
 	connected?: ReadonlySet<KeyedToolId>;
 };
 
@@ -34,7 +35,6 @@ export function ComposerToolsMenuItems({
 	connected = NO_KEYED_TOOLS,
 }: ComposerToolsMenuItemsProps) {
 	const t = useTranslations("composer_tools");
-	const names = useTranslations("scraper_tools");
 	return (
 		<>
 			<DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
@@ -46,7 +46,7 @@ export function ComposerToolsMenuItems({
 				return (
 					<DropdownMenuItem key={id} onSelect={() => onSelect(id)} className="gap-2">
 						<Icon className="size-4" />
-						<span className="min-w-0 flex-1 truncate">{names(id)}</span>
+						<span className="min-w-0 flex-1 truncate">{t(COMPOSER_TOOL_NAME_KEYS[id])}</span>
 						{selected === id ? <Check className="size-4" aria-hidden /> : null}
 					</DropdownMenuItem>
 				);

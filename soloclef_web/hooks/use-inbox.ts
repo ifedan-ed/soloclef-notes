@@ -24,13 +24,7 @@ const SCROLL_PAGE_SIZE = 30;
 const SYNC_WINDOW_DAYS = 4;
 
 const CATEGORY_TYPES: Record<NotificationCategory, string[]> = {
-	comments: ["new_mention", "comment_reply"],
-	status: [
-		"connector_indexing",
-		"connector_deletion",
-		"document_processing",
-		"insufficient_credits",
-	],
+	status: ["connector_indexing", "connector_deletion", "document_processing"],
 	announcements: ["site_announcement"],
 };
 
@@ -56,7 +50,6 @@ function getSyncCutoffDate(): string {
  */
 export function useInbox(
 	userId: string | null,
-	workspaceId: number | null,
 	category: NotificationCategory,
 	prefetchedUnread?: { total_unread: number; recent_unread: number } | null,
 	prefetchedUnreadReady = true
@@ -85,7 +78,7 @@ export function useInbox(
 
 	// EFFECT 1: Fetch first page + unread count from API with category filter
 	useEffect(() => {
-		if (!userId || !workspaceId) return;
+		if (!userId) return;
 		if (!prefetchedUnreadReady) return;
 
 		let cancelled = false;
@@ -102,7 +95,6 @@ export function useInbox(
 			try {
 				const notificationsPromise = notificationsApiService.getNotifications({
 					queryParams: {
-						workspace_id: workspaceId,
 						category,
 						limit: INITIAL_PAGE_SIZE,
 					},
@@ -110,7 +102,7 @@ export function useInbox(
 
 				const unreadPromise = prefetchedUnread
 					? Promise.resolve(prefetchedUnread)
-					: notificationsApiService.getUnreadCount(workspaceId, undefined, category);
+					: notificationsApiService.getUnreadCount(undefined, category);
 
 				const [notificationsResponse, unreadResponse] = await Promise.all([
 					notificationsPromise,
@@ -139,12 +131,10 @@ export function useInbox(
 		return () => {
 			cancelled = true;
 		};
-	}, [userId, workspaceId, category, prefetchedUnread, prefetchedUnreadReady]);
+	}, [userId, category, prefetchedUnread, prefetchedUnreadReady]);
 
 	// EFFECT 2: Zero real-time sync for notification updates
-	const [zeroNotifications, zeroResult] = useQuery(
-		queries.notifications.byUser({ userId: userId ?? "" })
-	);
+	const [zeroNotifications, zeroResult] = useQuery(queries.notifications.mine());
 	const zeroComplete = zeroResult.type === "complete";
 	const zeroIds = useMemo(
 		() => new Set((zeroNotifications ?? []).map((item) => item.id)),
@@ -152,7 +142,7 @@ export function useInbox(
 	);
 
 	useEffect(() => {
-		if (!userId || !workspaceId || !zeroNotifications || !initialLoadDoneRef.current) return;
+		if (!userId || !zeroNotifications || !initialLoadDoneRef.current) return;
 
 		const cutoff = new Date(getSyncCutoffDate());
 
@@ -180,7 +170,6 @@ export function useInbox(
 			if (item.id == null) return false;
 			if (!categoryTypes.includes(item.type)) return false;
 			if (isExpiredAnnouncement(item)) return false;
-			if (item.workspaceId !== null && item.workspaceId !== workspaceId) return false;
 			return true;
 		});
 
@@ -198,7 +187,6 @@ export function useInbox(
 						({
 							id: item.id,
 							user_id: item.userId,
-							workspace_id: item.workspaceId ?? undefined,
 							type: item.type,
 							title: item.title,
 							message: item.message,
@@ -250,11 +238,11 @@ export function useInbox(
 			const recentUnreadCount = recentItems.filter((item) => !item.read).length;
 			setUnreadCount(olderUnreadOffsetRef.current + recentUnreadCount);
 		}
-	}, [userId, workspaceId, zeroNotifications, zeroIds, zeroComplete, categoryTypes]);
+	}, [userId, zeroNotifications, zeroIds, zeroComplete, categoryTypes]);
 
 	// Load more pages via API (cursor-based using before_date)
 	const loadMore = useCallback(async () => {
-		if (loadingMore || !hasMore || !userId || !workspaceId) return;
+		if (loadingMore || !hasMore || !userId) return;
 
 		setLoadingMore(true);
 		try {
@@ -263,7 +251,6 @@ export function useInbox(
 
 			const response = await notificationsApiService.getNotifications({
 				queryParams: {
-					workspace_id: workspaceId,
 					category,
 					before_date: beforeDate,
 					limit: SCROLL_PAGE_SIZE,
@@ -284,7 +271,7 @@ export function useInbox(
 		} finally {
 			setLoadingMore(false);
 		}
-	}, [loadingMore, hasMore, userId, workspaceId, inboxItems, category]);
+	}, [loadingMore, hasMore, userId, inboxItems, category]);
 
 	// Mark single item as read with optimistic update
 	const markAsRead = useCallback(
@@ -394,7 +381,6 @@ export function useInbox(
 	// Clear this inbox (all of it, or its unread items), loaded pages or not; a running job's items stay
 	const clearAll = useCallback(
 		async (scope: ClearScope) => {
-			if (!workspaceId) return false;
 			const prevItems = inboxItems;
 			const prevTotal = totalCount;
 			const prevUnread = unreadCount;
@@ -405,12 +391,7 @@ export function useInbox(
 			const hiddenNow = [
 				...prevItems.filter((item) => isCleared(item, scope)).map((item) => item.id),
 				...(zeroNotifications ?? [])
-					.filter(
-						(item) =>
-							categoryTypes.includes(item.type) &&
-							(item.workspaceId === null || item.workspaceId === workspaceId) &&
-							isCleared(item, scope)
-					)
+					.filter((item) => categoryTypes.includes(item.type) && isCleared(item, scope))
 					.map((item) => item.id),
 			].filter((id) => !hiddenIdsRef.current.has(id));
 			for (const id of hiddenNow) hiddenIdsRef.current.add(id);
@@ -436,7 +417,6 @@ export function useInbox(
 			try {
 				const result = await notificationsApiService.clearNotifications({
 					queryParams: {
-						workspace_id: workspaceId,
 						category,
 						filter: scope.unreadOnly ? "unread" : undefined,
 					},
@@ -454,16 +434,7 @@ export function useInbox(
 				return false;
 			}
 		},
-		[
-			inboxItems,
-			totalCount,
-			unreadCount,
-			hasMore,
-			workspaceId,
-			category,
-			categoryTypes,
-			zeroNotifications,
-		]
+		[inboxItems, totalCount, unreadCount, hasMore, category, categoryTypes, zeroNotifications]
 	);
 
 	return {

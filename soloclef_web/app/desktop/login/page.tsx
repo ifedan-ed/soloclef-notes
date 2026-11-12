@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { DEFAULT_SHORTCUTS, keyEventToAccelerator } from "@/components/desktop/shortcut-recorder";
-import { useIsGoogleAuth } from "@/components/providers/runtime-config";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,40 +13,11 @@ import { Separator } from "@/components/ui/separator";
 import { ShortcutKbd } from "@/components/ui/shortcut-kbd";
 import { Spinner } from "@/components/ui/spinner";
 import { useElectronAPI } from "@/hooks/use-platform";
-import { workspacesApiService } from "@/lib/apis/workspaces-api.service";
 import { getPostLoginRedirectPath } from "@/lib/auth-utils";
 import { BRAND } from "@/lib/brand";
 
 type ShortcutKey = "generalAssist" | "quickAsk" | "screenshotAssist";
 type ShortcutMap = typeof DEFAULT_SHORTCUTS;
-
-function GoogleGLogo({ className }: { className?: string }) {
-	return (
-		<svg
-			className={className}
-			xmlns="http://www.w3.org/2000/svg"
-			viewBox="0 0 48 48"
-			aria-hidden="true"
-		>
-			<path
-				fill="#EA4335"
-				d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
-			/>
-			<path
-				fill="#4285F4"
-				d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
-			/>
-			<path
-				fill="#FBBC05"
-				d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
-			/>
-			<path
-				fill="#34A853"
-				d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
-			/>
-		</svg>
-	);
-}
 
 const HOTKEY_ROWS: Array<{
 	key: ShortcutKey;
@@ -187,14 +157,12 @@ function HotkeyRow({
 export default function DesktopLoginPage() {
 	const router = useRouter();
 	const api = useElectronAPI();
-	const isGoogleAuth = useIsGoogleAuth();
 
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [showPassword, setShowPassword] = useState(false);
 	const [loginError, setLoginError] = useState<string | null>(null);
 	const [isLoggingIn, setIsLoggingIn] = useState(false);
-	const [isGoogleRedirecting, setIsGoogleRedirecting] = useState(false);
 
 	const [shortcuts, setShortcuts] = useState(DEFAULT_SHORTCUTS);
 	const [shortcutsLoaded, setShortcutsLoaded] = useState(false);
@@ -235,32 +203,6 @@ export default function DesktopLoginPage() {
 		[updateShortcut]
 	);
 
-	const handleGoogleLogin = async () => {
-		if (isGoogleRedirecting) return;
-		setIsGoogleRedirecting(true);
-		try {
-			await api?.startGoogleOAuth?.();
-			await autoSetWorkspace();
-			router.push(getPostLoginRedirectPath());
-		} catch (error) {
-			setIsGoogleRedirecting(false);
-			toast.error(error instanceof Error ? error.message : "Google sign-in failed");
-		}
-	};
-
-	const autoSetWorkspace = async () => {
-		try {
-			const stored = await api?.getActiveWorkspace?.();
-			if (stored) return;
-			const spaces = await workspacesApiService.getWorkspaces();
-			if (spaces?.length) {
-				await api?.setActiveWorkspace?.(String(spaces[0].id));
-			}
-		} catch {
-			// non-critical — dashboard-sync will catch it later
-		}
-	};
-
 	const handleLocalLogin = async (e: React.FormEvent) => {
 		e.preventDefault();
 		setLoginError(null);
@@ -272,8 +214,6 @@ export default function DesktopLoginPage() {
 				throw new Error("Desktop password login is not available");
 			}
 			await api.loginPassword(email, password);
-
-			await autoSetWorkspace();
 
 			setTimeout(() => {
 				router.push(getPostLoginRedirectPath());
@@ -347,80 +287,68 @@ export default function DesktopLoginPage() {
 								Sign In
 							</p> */}
 
-							{isGoogleAuth ? (
-								<Button
-									variant="outline"
-									className="w-full gap-2 h-10 bg-white text-[#1f1f1f] border-white hover:bg-zinc-100 hover:text-[#1f1f1f] dark:border-white shadow-sm font-medium"
-									disabled={isGoogleRedirecting}
-									onClick={handleGoogleLogin}
-								>
-									<GoogleGLogo className="size-4" />
-									Continue with Google
-								</Button>
-							) : (
-								<form onSubmit={handleLocalLogin} className="flex flex-col gap-3">
-									{loginError && (
-										<div className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-											{loginError}
-										</div>
-									)}
+							<form onSubmit={handleLocalLogin} className="flex flex-col gap-3">
+								{loginError && (
+									<div className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+										{loginError}
+									</div>
+								)}
 
-									<div className="flex flex-col gap-1.5">
-										<Label htmlFor="email" className="text-xs">
-											Email
-										</Label>
+								<div className="flex flex-col gap-1.5">
+									<Label htmlFor="email" className="text-xs">
+										Email
+									</Label>
+									<Input
+										id="email"
+										type="email"
+										placeholder="you@example.com"
+										required
+										value={email}
+										onChange={(e) => setEmail(e.target.value)}
+										disabled={isLoggingIn}
+										autoFocus
+										className="h-9"
+									/>
+								</div>
+
+								<div className="flex flex-col gap-1.5">
+									<Label htmlFor="password" className="text-xs">
+										Password
+									</Label>
+									<div className="relative">
 										<Input
-											id="email"
-											type="email"
-											placeholder="you@example.com"
+											id="password"
+											type={showPassword ? "text" : "password"}
+											placeholder="Enter your password"
 											required
-											value={email}
-											onChange={(e) => setEmail(e.target.value)}
+											value={password}
+											onChange={(e) => setPassword(e.target.value)}
 											disabled={isLoggingIn}
-											autoFocus
-											className="h-9"
+											className="h-9 pr-9"
 										/>
+										<Button
+											type="button"
+											variant="ghost"
+											onClick={() => setShowPassword((v) => !v)}
+											className="absolute inset-y-0 right-0 h-auto bg-transparent px-2.5 py-0 text-muted-foreground hover:bg-transparent hover:text-foreground"
+											tabIndex={-1}
+										>
+											{showPassword ? (
+												<EyeOff className="size-3.5" />
+											) : (
+												<Eye className="size-3.5" />
+											)}
+										</Button>
 									</div>
+								</div>
 
-									<div className="flex flex-col gap-1.5">
-										<Label htmlFor="password" className="text-xs">
-											Password
-										</Label>
-										<div className="relative">
-											<Input
-												id="password"
-												type={showPassword ? "text" : "password"}
-												placeholder="Enter your password"
-												required
-												value={password}
-												onChange={(e) => setPassword(e.target.value)}
-												disabled={isLoggingIn}
-												className="h-9 pr-9"
-											/>
-											<Button
-												type="button"
-												variant="ghost"
-												onClick={() => setShowPassword((v) => !v)}
-												className="absolute inset-y-0 right-0 h-auto bg-transparent px-2.5 py-0 text-muted-foreground hover:bg-transparent hover:text-foreground"
-												tabIndex={-1}
-											>
-												{showPassword ? (
-													<EyeOff className="size-3.5" />
-												) : (
-													<Eye className="size-3.5" />
-												)}
-											</Button>
-										</div>
-									</div>
-
-									<Button type="submit" disabled={isLoggingIn} className="relative h-9 mt-1">
-										<span className={isLoggingIn ? "opacity-0" : ""}>Sign in</span>
-										{isLoggingIn && (
-											<Spinner size="sm" className="absolute text-primary-foreground" />
-										)}
-									</Button>
-								</form>
-							)}
+								<Button type="submit" disabled={isLoggingIn} className="relative h-9 mt-1">
+									<span className={isLoggingIn ? "opacity-0" : ""}>Sign in</span>
+									{isLoggingIn && (
+										<Spinner size="sm" className="absolute text-primary-foreground" />
+									)}
+								</Button>
+							</form>
 						</div>
 					</div>
 				</div>

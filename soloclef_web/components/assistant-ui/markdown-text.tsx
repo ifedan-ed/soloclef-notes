@@ -11,18 +11,15 @@ import {
 import { useSetAtom } from "jotai";
 import { ExternalLinkIcon, FileIcon, Folder as FolderIcon } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useParams } from "next/navigation";
 import { useTheme } from "next-themes";
 import { createContext, memo, type ReactNode, useCallback, useContext, useRef } from "react";
 import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
-import { openDocumentViewerAtom } from "@/atoms/documents/document-viewer.atom";
 import { openEditorPanelAtom } from "@/atoms/editor/editor-panel.atom";
 import { ImagePreview, ImageRoot, ImageZoom } from "@/components/assistant-ui/image";
 import { MentionChip } from "@/components/assistant-ui/mention-chip";
 import "katex/dist/katex.min.css";
-import { toast } from "sonner";
 import { processChildrenWithCitations } from "@/components/citations/citation-renderer";
 import {
 	Table,
@@ -33,10 +30,8 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { useElectronAPI } from "@/hooks/use-platform";
-import { documentsApiService } from "@/lib/apis/documents-api.service";
 import { getVirtualPathDisplay } from "@/lib/chat/virtual-path-display";
 import { type CitationUrlMap, preprocessCitationMarkdown } from "@/lib/citations/citation-parser";
-import { getWorkspaceIdNumber } from "@/lib/route-params";
 import { tryGetHostname } from "@/lib/url";
 import { cn } from "@/lib/utils";
 
@@ -206,10 +201,7 @@ function isStandaloneDocumentsPathText(node: ReactNode): string | null {
 
 function FilePathLink({ path, className }: { path: string; className?: string }) {
 	const openEditorPanel = useSetAtom(openEditorPanelAtom);
-	const openDocumentViewer = useSetAtom(openDocumentViewerAtom);
-	const params = useParams();
 	const electronAPI = useElectronAPI();
-	const resolvedWorkspaceId = getWorkspaceIdNumber(params);
 
 	const { displayName, isFolder } = getVirtualPathDisplay(path);
 	const icon = isFolder ? <FolderIcon className="size-3.5" /> : <FileIcon className="size-3.5" />;
@@ -223,9 +215,8 @@ function FilePathLink({ path, className }: { path: string; className?: string })
 					let resolvedLocalPath = path;
 					if (electronAPI.getAgentFilesystemMounts) {
 						try {
-							const mounts = (await electronAPI.getAgentFilesystemMounts(
-								resolvedWorkspaceId
-							)) as AgentFilesystemMount[];
+							const mounts =
+								(await electronAPI.getAgentFilesystemMounts()) as AgentFilesystemMount[];
 							resolvedLocalPath = normalizeLocalVirtualPathForEditor(path, mounts);
 						} catch {
 							// Fall back to the raw path if mount lookup fails.
@@ -235,32 +226,20 @@ function FilePathLink({ path, className }: { path: string; className?: string })
 						kind: "local_file",
 						localFilePath: resolvedLocalPath,
 						title: resolvedLocalPath.split("/").pop() || resolvedLocalPath,
-						workspaceId: resolvedWorkspaceId,
 					});
 					return;
 				}
 
-				if (!resolvedWorkspaceId || !path.startsWith("/documents/")) return;
-				try {
-					const doc = await documentsApiService.getDocumentByVirtualPath({
-						workspace_id: resolvedWorkspaceId,
-						virtual_path: path,
-					});
-					openDocumentViewer({
-						documentId: doc.id,
-						workspaceId: resolvedWorkspaceId,
-						title: doc.title,
-					});
-				} catch {
-					toast.error("Document not found in knowledge base.");
-				}
+				// In the browser a path opens nothing: the chat no longer gives
+				// documents filesystem paths (it cites passages), so there is
+				// no route that turns one back into a document.
 			})();
 		},
-		[electronAPI, openDocumentViewer, openEditorPanel, path, resolvedWorkspaceId]
+		[electronAPI, openEditorPanel, path]
 	);
 
 	// Folders cannot open in a file panel — keep them as visual chips.
-	const onClick = isFolder ? undefined : handleClick;
+	const onClick = isFolder || !electronAPI ? undefined : handleClick;
 
 	return (
 		<MentionChip

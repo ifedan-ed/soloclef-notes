@@ -42,11 +42,9 @@ import { pendingUserImageDataUrlsAtom } from "@/atoms/chat/pending-user-images.a
 import { submittedRetrievalScopeAtom } from "@/atoms/chat/retrieval-scope.atom";
 import { importConnectorRequestAtom } from "@/atoms/connector-dialog/connector-dialog.atoms";
 import { connectorsAtom } from "@/atoms/connectors/connector-query.atoms";
-import { membersAtom } from "@/atoms/members/members-query.atoms";
-import { llmSetupStatusAtomFamily } from "@/atoms/model-connections/model-connections-query.atoms";
+import { llmSetupStatusAtom } from "@/atoms/model-connections/model-connections-query.atoms";
 import { currentUserAtom } from "@/atoms/user/user-query.atoms";
 import { AssistantMessage } from "@/components/assistant-ui/assistant-message";
-import { ChatSessionStatus } from "@/components/assistant-ui/chat-session-status";
 import { ChatViewport } from "@/components/assistant-ui/chat-viewport";
 import { ComposerAddMenuDrawer } from "@/components/assistant-ui/composer-add-menu-drawer";
 import {
@@ -94,6 +92,7 @@ import {
 } from "@/contracts/enums/toolIcons";
 import type { SearchSourceConnector } from "@/contracts/types/connector.types";
 import { scopeForMentionKinds } from "@/contracts/types/retrieval-scope.types";
+import { InstructionsAppliedBadge } from "@/features/chat-instructions";
 import {
 	isStructuredQuestionInterrupt,
 	StructuredQuestionPrompt,
@@ -113,16 +112,13 @@ import { NotebookAskBridge } from "@/features/notebooks/ui/chat/notebook-ask-bri
 import { NotebookSourcePicker } from "@/features/notebooks/ui/chat/notebook-source-picker";
 import { NotebookWelcome } from "@/features/notebooks/ui/chat/notebook-welcome";
 import { NotebookSourcesChip } from "@/features/notebooks/ui/notebook-sources-chip";
-import { InstructionsAppliedBadge } from "@/features/workspace-instructions";
-import { useBatchCommentsPreload } from "@/hooks/use-comments";
-import { useCommentsSync } from "@/hooks/use-comments-sync";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { useElectronAPI } from "@/hooks/use-platform";
 import { canSubmitChat } from "@/lib/chat/can-submit-chat";
 import { captureDisplayToPngDataUrl } from "@/lib/chat/display-media-capture";
 import { getMentionDocKey } from "@/lib/chat/mention-doc-key";
+import { settingsPath } from "@/lib/dashboard-paths";
 import { slideoutOpenedTickAtom } from "@/lib/layout-events";
-import { getWorkspaceIdNumber } from "@/lib/route-params";
 import { cn } from "@/lib/utils";
 import type { ComposerSuggestionNavigatorRef } from "../new-chat/use-composer-suggestion-navigator";
 import { ThreadMessagesSkeletonBody } from "./thread-messages-skeleton";
@@ -169,9 +165,18 @@ const ThreadContent: FC<ThreadProps> = ({
 	isLoadingMessages = false,
 }) => {
 	// A notebook chat always exists, but while empty it shows the notebook's
-	// own welcome (with the composer inside it), like a brand-new chat does.
+	// own welcome, like a brand-new chat does.
 	const inNotebook = useNotebookChat() !== null;
 	const hasActiveThread = hasThread && !inNotebook;
+	// A notebook has one composer, the footer's, from the first frame to the
+	// last; while its welcome shows, the composer sits right under it
+	// (footerUnderEmptyContent) instead of inside it. The welcome used to
+	// carry a composer of its own, which replaced the footer's the moment the
+	// messages had loaded (the thread counts as not empty while it loads), so
+	// the input someone was typing into was unmounted mid-word: a key pressed
+	// before the new one had focus went nowhere, and Slate defers that focus
+	// by 10 ms whenever operations are pending, as setting the carried-over
+	// text makes them. No hand-over can close that gap; one input has none.
 	return (
 		<ThreadPrimitive.Root
 			className="aui-root aui-thread-root @container relative flex h-full min-h-0 min-w-0 w-full flex-col bg-main-panel"
@@ -181,7 +186,8 @@ const ThreadContent: FC<ThreadProps> = ({
 		>
 			{inNotebook ? <NotebookAskBridge /> : null}
 			<ChatViewport
-				footerAlwaysVisible={hasActiveThread}
+				footerAlwaysVisible={hasActiveThread || inNotebook}
+				footerUnderEmptyContent={inNotebook}
 				footer={
 					<>
 						<StructuredQuestionPrompt />
@@ -251,7 +257,8 @@ const ThreadWelcome: FC = () => {
 	const greeting = useMemo(() => getTimeBasedGreeting(user), [user]);
 	const notebook = useNotebookChat();
 
-	if (notebook) return <NotebookWelcome composer={<Composer />} />;
+	// The notebook's composer is the footer's (ThreadContent says why).
+	if (notebook) return <NotebookWelcome />;
 
 	return (
 		<div className="aui-thread-welcome-root flex min-h-0 min-w-0 w-full flex-1">
@@ -348,9 +355,9 @@ const ClipboardChip: FC<{ text: string; onDismiss: () => void }> = ({ text, onDi
 };
 
 /**
- * Inline "this workspace can't chat right now" tray, mirrored on top of the
- * composer. Chat runs on the shared models every account has, so there is
- * nothing for a member to connect; this only shows if that list is gone.
+ * Inline "chat is unavailable right now" tray, mirrored on top of the
+ * composer. Chat runs on the models every account is offered, so there is
+ * nothing for the person to connect; this only shows if that list is gone.
  * The send button stays disabled independently, and the backend rejects any
  * send that slips through, so this is purely guidance.
  *
@@ -393,7 +400,6 @@ const Composer: FC<ComposerProps> = ({ isLoadingMessages = false, showExamplePro
 	const documentPickerRef = useRef<ComposerSuggestionNavigatorRef>(null);
 	const promptPickerRef = useRef<PromptPickerRef>(null);
 	const params = useParams();
-	const workspaceId = getWorkspaceIdNumber(params);
 	const chat_id = params.chat_id;
 	const aui = useAui();
 	const [failedSend, setFailedSend] = useAtom(failedSendDraftAtom);
@@ -413,18 +419,6 @@ const Composer: FC<ComposerProps> = ({ isLoadingMessages = false, showExamplePro
 		}
 		if (restore.tool !== preferredTool) setPreferredTool(restore.tool);
 	}, [failedSend, setFailedSend, isComposerInputEmpty, preferredTool, setPreferredTool, aui]);
-	// A composer that mounts over a thread that already has a draft (the
-	// notebook welcome swaps its own composer in once the chat's messages have
-	// loaded) starts from that draft, so what was typed during the swap stays.
-	const draftText = useAuiState(({ composer }) => composer.text ?? "");
-	const draftTextRef = useRef(draftText);
-	draftTextRef.current = draftText;
-	useEffect(() => {
-		const draft = draftTextRef.current;
-		if (!draft.trim() || editorRef.current?.getText()) return;
-		editorRef.current?.setText(draft);
-		setIsComposerInputEmpty(false);
-	}, []);
 	const pendingInterrupts = usePendingInterrupt()?.pendingInterrupts ?? [];
 	const isPausedForQuestion = pendingInterrupts.some(isStructuredQuestionInterrupt);
 	// Desktop-only auto-focus; on mobile, programmatic focus would
@@ -447,7 +441,7 @@ const Composer: FC<ComposerProps> = ({ isLoadingMessages = false, showExamplePro
 	const isThreadEmpty = useAuiState(({ thread }) => thread.isEmpty);
 	const isThreadRunning = useAuiState(({ thread }) => thread.isRunning);
 
-	const { data: chatSetupStatus } = useAtomValue(llmSetupStatusAtomFamily(workspaceId ?? 0));
+	const { data: chatSetupStatus } = useAtomValue(llmSetupStatusAtom);
 	const isChatUnavailable = !!chatSetupStatus && chatSetupStatus.status !== "ready";
 
 	const [longPlaceholderFits, setLongPlaceholderFits] = useState(false);
@@ -477,7 +471,6 @@ const Composer: FC<ComposerProps> = ({ isLoadingMessages = false, showExamplePro
 		isDesktop && longPlaceholderFits ? placeholderLong : tComposer("placeholder_short");
 
 	const { data: currentUser } = useAtomValue(currentUserAtom);
-	const { data: members } = useAtomValue(membersAtom);
 	const threadId = useMemo(() => {
 		if (Array.isArray(chat_id) && chat_id.length > 0) {
 			return Number.parseInt(chat_id[0], 10) || null;
@@ -488,23 +481,6 @@ const Composer: FC<ComposerProps> = ({ isLoadingMessages = false, showExamplePro
 	const isAiResponding = sessionState?.isAiResponding ?? false;
 	const respondingToUserId = sessionState?.respondingToUserId ?? null;
 	const isBlockedByOtherUser = isAiResponding && respondingToUserId !== currentUser?.id;
-
-	// One Zero subscription per thread for comment sync.
-	useCommentsSync(threadId);
-
-	// Batch-prefetch assistant message comments to avoid N+1 fetches.
-	// Returns a primitive string so useSyncExternalStore can compare by value.
-	const assistantIdsKey = useAuiState(({ thread }) =>
-		thread.messages
-			.filter((m) => m.role === "assistant" && m.id?.startsWith("msg-"))
-			.map((m) => m.id?.replace("msg-", ""))
-			.join(",")
-	);
-	const assistantDbMessageIds = useMemo(
-		() => (assistantIdsKey ? assistantIdsKey.split(",").map(Number) : []),
-		[assistantIdsKey]
-	);
-	useBatchCommentsPreload(assistantDbMessageIds);
 
 	// Always-focused composer: refocus whenever no picker has taken
 	// over input. ``threadId`` is in the deps so the effect re-fires
@@ -897,12 +873,6 @@ const Composer: FC<ComposerProps> = ({ isLoadingMessages = false, showExamplePro
 
 	return (
 		<ComposerPrimitive.Root className="aui-composer-root relative flex min-w-0 w-full flex-col gap-2 rounded-2xl">
-			<ChatSessionStatus
-				isAiResponding={isAiResponding}
-				respondingToUserId={respondingToUserId}
-				currentUserId={currentUser?.id ?? null}
-				members={members ?? []}
-			/>
 			<Popover open={showDocumentPopover} onOpenChange={handleDocumentPopoverOpenChange}>
 				{suggestionAnchorPoint && notebookChat ? (
 					<>
@@ -910,7 +880,6 @@ const Composer: FC<ComposerProps> = ({ isLoadingMessages = false, showExamplePro
 						<ComposerSuggestionPopoverContent side="top">
 							<NotebookSourcePicker
 								ref={documentPickerRef}
-								workspaceId={notebookChat.workspaceId}
 								notebookId={notebookChat.notebookId}
 								onSelectionChange={handleDocumentsMention}
 								onDone={() => {
@@ -991,7 +960,6 @@ const Composer: FC<ComposerProps> = ({ isLoadingMessages = false, showExamplePro
 						isBlockedByOtherUser={isBlockedByOtherUser}
 						isLoadingMessages={isLoadingMessages}
 						isThreadRunning={isThreadRunning || isPausedForQuestion}
-						workspaceId={workspaceId ?? 0}
 						onChatModelSelected={handleChatModelSelected}
 					/>
 				</div>
@@ -1009,7 +977,6 @@ interface ComposerActionProps {
 	isBlockedByOtherUser?: boolean;
 	isLoadingMessages?: boolean;
 	isThreadRunning?: boolean;
-	workspaceId: number;
 	onChatModelSelected?: () => void;
 	/**
 	 * Must be the same handler the editor's Enter key uses. Going through
@@ -1023,28 +990,24 @@ const ComposerAction: FC<ComposerActionProps> = ({
 	isBlockedByOtherUser = false,
 	isLoadingMessages = false,
 	isThreadRunning = false,
-	workspaceId,
 	onChatModelSelected,
 	onSend,
 }) => {
 	const mentionedDocuments = useAtomValue(mentionedDocumentsAtom);
 	const router = useRouter();
-	const openConnectors = useCallback(
-		() => router.push(`/dashboard/${workspaceId}/workspace-settings/connectors`),
-		[router, workspaceId]
-	);
+	const openConnectors = useCallback(() => router.push(settingsPath("connectors")), [router]);
 	const [toolsPopoverOpen, setToolsPopoverOpen] = useState(false);
 	const [openConnectorSubmenu, setOpenConnectorSubmenu] = useState<string | null>(null);
 	const [preferredTool, setPreferredTool] = useAtom(preferredToolAtom);
 	const isDesktop = useMediaQuery("(min-width: 640px)");
-	const { openDialog: openWorkspaceUploadDialog } = useDocumentUploadDialog();
+	const { openDialog: openLibraryUploadDialog } = useDocumentUploadDialog();
 	// In a notebook chat an upload becomes a notebook source (the only files
-	// that chat can read); elsewhere it goes to the workspace knowledge base.
+	// that chat can read); elsewhere it goes to the account's library.
 	const notebookChat = useNotebookChat();
 	const notebookUpload = notebookChat?.uploadSources;
-	// Exa, Tavily and Browserbase are offered where the workspace has their key.
-	const connectedKeyedTools = useConnectedKeyedTools(workspaceId, notebookChat?.notebookId);
-	const openUploadDialog = notebookUpload ?? openWorkspaceUploadDialog;
+	// Exa, Tavily and Browserbase are offered when the account has their key.
+	const connectedKeyedTools = useConnectedKeyedTools(notebookChat?.notebookId);
+	const openUploadDialog = notebookUpload ?? openLibraryUploadDialog;
 	const pendingScreenImages = useAtomValue(pendingUserImageDataUrlsAtom);
 	const setPendingScreenImages = useSetAtom(pendingUserImageDataUrlsAtom);
 	const electronAPI = useElectronAPI();
@@ -1064,7 +1027,7 @@ const ComposerAction: FC<ComposerActionProps> = ({
 		if (url) setPendingScreenImages((prev) => [...prev, url]);
 	}, [electronAPI, setPendingScreenImages]);
 
-	const { data: setupStatus } = useAtomValue(llmSetupStatusAtomFamily(workspaceId));
+	const { data: setupStatus } = useAtomValue(llmSetupStatusAtom);
 
 	const { data: agentTools } = useAtomValue(agentToolsAtom);
 	const disabledTools = useAtomValue(disabledToolsAtom);
@@ -1147,18 +1110,18 @@ const ComposerAction: FC<ComposerActionProps> = ({
 		hydrateDisabled();
 	}, [hydrateDisabled]);
 
-	// A workspace with no usable chat model renders the composer with an inline
+	// An account with no usable chat model renders the composer with an inline
 	// notice (see ChatUnavailableNotice) rather than being redirected away, so
 	// the send button must stay disabled here. The backend also rejects any
 	// send that lacks a resolvable model, making this defense-in-depth.
-	const isWorkspaceChatReady = setupStatus?.status === "ready";
+	const isChatModelReady = setupStatus?.status === "ready";
 
 	const isSendDisabled = !canSubmitChat({
 		isLoadingMessages,
 		isThreadRunning,
 		isBlockedByOtherUser,
 		isComposerEmpty,
-		isWorkspaceChatReady,
+		isChatModelReady,
 	});
 	const sendTooltip = isLoadingMessages
 		? "Loading conversation..."
@@ -1472,17 +1435,15 @@ const ComposerAction: FC<ComposerActionProps> = ({
 					compact={!isDesktop}
 				/>
 				<NotebookSourcesChip />
-				<InstructionsAppliedBadge workspaceId={workspaceId} compact={!isDesktop} />
+				{/* Desktop only: at phone width the composer row has no room for it
+				    beside the model picker, which it overlapped. */}
+				{isDesktop ? <InstructionsAppliedBadge /> : null}
 			</div>
 			<div
 				data-composer-model-actions
 				className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2"
 			>
-				<ChatHeader
-					workspaceId={workspaceId}
-					className="h-9 px-2"
-					onChatModelSelected={onChatModelSelected}
-				/>
+				<ChatHeader className="h-9 px-2" onChatModelSelected={onChatModelSelected} />
 				<AuiIf condition={({ thread }) => !thread.isRunning}>
 					<TooltipIconButton
 						tooltip={sendTooltip}

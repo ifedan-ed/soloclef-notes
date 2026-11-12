@@ -57,10 +57,9 @@ func TestWhichContentTypesAreReadAsJSON(t *testing.T) {
 	}
 }
 
-// A body whose fault only pydantic-core's own parser can place is not answered
-// here at all: the route forwards it, and the Python tier positions it. These
-// are the bodies that take that path, and the reason each one does.
-func TestABodyThisTierWillNotPlaceIsHandedOn(t *testing.T) {
+// A body that is not JSON is reported as such, for Middleware to refuse before
+// the route runs. These are the bodies that take that path.
+func TestABodyThatIsNotJSONIsUndecodable(t *testing.T) {
 	for _, test := range []struct {
 		name string
 		body string
@@ -72,17 +71,23 @@ func TestABodyThisTierWillNotPlaceIsHandedOn(t *testing.T) {
 		{"data after the value", `{"name":"x"} extra`},
 		{"whitespace alone", "   "},
 		{"a raw tab inside a string", "{\"name\":\"a\tb\"}"},
-		// pydantic-core's parser takes NaN, encoding/json does not, so this one
-		// decodes there and is answered there — as a boolean it cannot read.
+		// pydantic-core's parser took NaN and then refused it as a field
+		// value; it is not JSON, so it is refused as such, once, here.
 		{"NaN", `{"name":"x","is_default":NaN}`},
-		// Not UTF-8 at all, which the Python tier answers with a 400 from
-		// another handler entirely.
-		{"bytes that are not UTF-8", "{\"name\":\"\xff\"}"},
 	} {
 		_, _, err := Decode("application/json", []byte(test.body))
 		if !errors.Is(err, ErrUndecodable) {
 			t.Errorf("%s: %v, want ErrUndecodable", test.name, err)
 		}
+	}
+}
+
+// Bytes that are not UTF-8 are not text at all, which is a different refusal
+// (a 400) from text that is not JSON (a 422).
+func TestABodyThatIsNotUTF8IsNotText(t *testing.T) {
+	_, _, err := Decode("application/json", []byte("{\"name\":\"\xff\"}"))
+	if !errors.Is(err, ErrNotUTF8) {
+		t.Errorf("got %v, want ErrNotUTF8", err)
 	}
 }
 

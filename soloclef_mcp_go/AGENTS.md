@@ -14,18 +14,28 @@ be replaced rather than shaved. This tree is that replacement.
 
 **The tool surface is published.** A client has these tool names, parameter
 names and descriptions written in its configuration, and the documentation at
-`surfsense_web/content/docs/connect-your-agent.mdx` names many of them. Renaming
+`soloclef_web/content/docs/connect-your-agent.mdx` names many of them. Renaming
 or dropping one breaks a setup silently, with no error anyone sees.
 
-So the surface is not read and reimplemented, it is captured and compared:
+The contract is now this server and the Go API it calls (`soloclef_api`), not
+the Python server it was ported from. The surface is still pinned, so that it
+moves only on purpose:
 
 | Path | Role |
 |------|------|
-| `internal/toolmanifest/testdata/python_tools_list.json` | The Python server's whole `tools/list`, captured from it over HTTP. The specification, and the regression guard. |
-| `internal/toolmanifest/testdata/python_argument_refusals.json` | What the Python server answered for each bad argument, captured the same way. |
-| `internal/mcpserver/testdata/python_tool_results.json` | What it answered for each tool against a stand-in backend. |
+| `internal/toolmanifest/testdata/tools_list.json` | The whole `tools/list`. The specification, and the regression guard. |
+| `internal/toolmanifest/testdata/argument_refusals.json` | The sentence each bad argument is refused with. |
+| `internal/mcpserver/testdata/tool_results.json` | What each tool answers against a stand-in backend. |
 
 Each of those is checked by a test that fails if this server's answer moves.
+All three were first captured from the Python server; they are edited now when
+the surface changes on purpose, in the same change as the code and the
+documentation.
+
+There is no scope argument and no selection. A caller's API key or sign-in is
+its account, and every tool reads and writes that account's data through the
+Go API's user-keyed routes (`/api/v1/documents`, not a path with a scope id in
+it).
 
 ## Where the mirrors are, and why each one exists
 
@@ -34,7 +44,6 @@ Each of those is checked by a test that fails if this server's answer moves.
 | `internal/pythonjson` | JSON as the Python tier handles it: member order kept, `json.dumps(indent=2, ensure_ascii=False)`, `repr()`, and `dict.get` with an f-string. Go's own encoder sorts members, escapes HTML and prints floats its own way, and each of those shows in a tool result. |
 | `internal/toolschema` | One parameter declaration, from which both the published schema and the argument checking come. The schema is pydantic's shape; the refusals are pydantic's sentences, including its 50-character cap on a printed value. |
 | `internal/restclient` | The authenticated REST transport and the one sentence each HTTP failure becomes. |
-| `internal/workspaceselection` | Name and id resolution, and the per-caller active choice. |
 | `internal/callercredential` | The caller's credential and identity for one request. |
 | `internal/signincheck` | `GET /verify-token`, with the same short memory of a yes. |
 | `internal/protectedresource` | This server as an OAuth protected resource (RFC 9728). |
@@ -58,8 +67,10 @@ cd soloclef_mcp_go && go run ./cmd/mcp selfcheck
 ## Do not
 
 - Do not add, rename or drop a tool, a parameter or a description without the
-  same change in `surfsense_mcp` and in `connect-your-agent.mdx`. The captures
-  are regenerated from the Python server, never edited to match this one.
+  same change in the captures above and in `connect-your-agent.mdx`, in one
+  change. `go run ./cmd/mcp dump-tools` prints what the capture should become;
+  read the difference before writing it, because that difference is what every
+  client will see.
 - Do not let the SDK infer a schema from a Go type. `mcp.AddTool`'s generic form
   writes its own schema and its own refusals; both are part of the contract, so
   `Server.AddTool` is used with the schema this tree builds.

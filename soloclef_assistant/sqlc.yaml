@@ -1,0 +1,417 @@
+# The queries of the chat's tools that read the database, generated from
+# the migrations in ../soloclef_schema/migrations exactly as the API tier's
+# are (soloclef_api/sqlc.yaml says why each override is what it is).
+#
+#   sqlc generate
+version: "2"
+sql:
+  - engine: postgresql
+    schema: ../soloclef_schema/migrations
+    queries: documents/queries.sql
+    gen:
+      go:
+        package: documents
+        out: documents
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_pointers_for_null_types: true
+        output_db_file_name: connection.sql.go
+        output_models_file_name: tables.sql.go
+        overrides:
+          - db_type: uuid
+            go_type: string
+          - db_type: uuid
+            nullable: true
+            go_type:
+              type: string
+              pointer: true
+          - db_type: pg_catalog.int4
+            go_type: int64
+          - db_type: pg_catalog.int4
+            nullable: true
+            go_type:
+              type: int64
+              pointer: true
+          - db_type: pg_catalog.timestamptz
+            go_type: time.Time
+          - db_type: pg_catalog.timestamptz
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true
+          - db_type: timestamptz
+            go_type: time.Time
+          - db_type: timestamptz
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true
+  - engine: postgresql
+    schema: ../soloclef_schema/migrations
+    queries: websearch/queries.sql
+    gen:
+      go:
+        package: websearch
+        out: websearch
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_pointers_for_null_types: true
+        output_db_file_name: connection.sql.go
+        output_models_file_name: tables.sql.go
+        overrides:
+          - db_type: uuid
+            go_type: string
+          - db_type: uuid
+            nullable: true
+            go_type:
+              type: string
+              pointer: true
+          - db_type: pg_catalog.int4
+            go_type: int64
+          - db_type: pg_catalog.int4
+            nullable: true
+            go_type:
+              type: int64
+              pointer: true
+          - db_type: pg_catalog.timestamptz
+            go_type: time.Time
+          - db_type: pg_catalog.timestamptz
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true
+          - db_type: timestamptz
+            go_type: time.Time
+          - db_type: timestamptz
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true
+  - engine: postgresql
+    schema: ../soloclef_schema/migrations
+    queries: mcptools/queries.sql
+    gen:
+      go:
+        package: mcptools
+        out: mcptools
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_pointers_for_null_types: true
+        output_db_file_name: connection.sql.go
+        output_models_file_name: tables.sql.go
+        overrides:
+          - db_type: uuid
+            go_type: string
+          - db_type: uuid
+            nullable: true
+            go_type:
+              type: string
+              pointer: true
+          - db_type: pg_catalog.int4
+            go_type: int64
+          - db_type: pg_catalog.int4
+            nullable: true
+            go_type:
+              type: int64
+              pointer: true
+          - db_type: pg_catalog.timestamptz
+            go_type: time.Time
+          - db_type: pg_catalog.timestamptz
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true
+          - db_type: timestamptz
+            go_type: time.Time
+          - db_type: timestamptz
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true
+  - engine: postgresql
+    schema: ../soloclef_schema/migrations
+    queries: deliverables/queries.sql
+    gen:
+      go:
+        package: deliverables
+        out: deliverables
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_pointers_for_null_types: true
+        output_db_file_name: connection.sql.go
+        output_models_file_name: tables.sql.go
+        overrides:
+          - db_type: uuid
+            go_type: string
+          - db_type: uuid
+            nullable: true
+            go_type:
+              type: string
+              pointer: true
+          - db_type: pg_catalog.int4
+            go_type: int64
+          - db_type: pg_catalog.int4
+            nullable: true
+            go_type:
+              type: int64
+              pointer: true
+          - db_type: pg_catalog.timestamptz
+            go_type: time.Time
+          - db_type: pg_catalog.timestamptz
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true
+          - db_type: timestamptz
+            go_type: time.Time
+          - db_type: timestamptz
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true
+  - engine: postgresql
+    schema: ../soloclef_schema/migrations
+    queries: mailtools/queries.sql
+    gen:
+      go:
+        package: mailtools
+        out: mailtools
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_pointers_for_null_types: true
+        output_db_file_name: connection.sql.go
+        output_models_file_name: tables.sql.go
+        overrides:
+          - db_type: uuid
+            go_type: string
+          - db_type: uuid
+            nullable: true
+            go_type:
+              type: string
+              pointer: true
+          - db_type: pg_catalog.int4
+            go_type: int64
+          - db_type: pg_catalog.int4
+            nullable: true
+            go_type:
+              type: int64
+              pointer: true
+          - db_type: pg_catalog.timestamptz
+            go_type: time.Time
+          - db_type: pg_catalog.timestamptz
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true
+          - db_type: timestamptz
+            go_type: time.Time
+          - db_type: timestamptz
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true
+  - engine: postgresql
+    schema: ../soloclef_schema/migrations
+    queries: drivetools/queries.sql
+    gen:
+      go:
+        package: drivetools
+        out: drivetools
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_pointers_for_null_types: true
+        output_db_file_name: connection.sql.go
+        output_models_file_name: tables.sql.go
+        overrides:
+          - db_type: uuid
+            go_type: string
+          - db_type: uuid
+            nullable: true
+            go_type:
+              type: string
+              pointer: true
+          - db_type: pg_catalog.int4
+            go_type: int64
+          - db_type: pg_catalog.int4
+            nullable: true
+            go_type:
+              type: int64
+              pointer: true
+          - db_type: pg_catalog.timestamptz
+            go_type: time.Time
+          - db_type: pg_catalog.timestamptz
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true
+          - db_type: timestamptz
+            go_type: time.Time
+          - db_type: timestamptz
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true
+  - engine: postgresql
+    schema: ../soloclef_schema/migrations
+    queries: nextcloudtools/queries.sql
+    gen:
+      go:
+        package: nextcloudtools
+        out: nextcloudtools
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_pointers_for_null_types: true
+        output_db_file_name: connection.sql.go
+        output_models_file_name: tables.sql.go
+        overrides:
+          - db_type: uuid
+            go_type: string
+          - db_type: uuid
+            nullable: true
+            go_type:
+              type: string
+              pointer: true
+          - db_type: pg_catalog.int4
+            go_type: int64
+          - db_type: pg_catalog.int4
+            nullable: true
+            go_type:
+              type: int64
+              pointer: true
+          - db_type: pg_catalog.timestamptz
+            go_type: time.Time
+          - db_type: pg_catalog.timestamptz
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true
+          - db_type: timestamptz
+            go_type: time.Time
+          - db_type: timestamptz
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true
+  - engine: postgresql
+    schema: ../soloclef_schema/migrations
+    queries: accountvision/queries.sql
+    gen:
+      go:
+        package: accountvision
+        out: accountvision
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_pointers_for_null_types: true
+        output_db_file_name: connection.sql.go
+        output_models_file_name: tables.sql.go
+        overrides:
+          - db_type: uuid
+            go_type: string
+          - db_type: uuid
+            nullable: true
+            go_type:
+              type: string
+              pointer: true
+          - db_type: pg_catalog.int4
+            go_type: int64
+          - db_type: pg_catalog.int4
+            nullable: true
+            go_type:
+              type: int64
+              pointer: true
+          - db_type: pg_catalog.timestamptz
+            go_type: time.Time
+          - db_type: pg_catalog.timestamptz
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true
+          - db_type: timestamptz
+            go_type: time.Time
+          - db_type: timestamptz
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true
+  - engine: postgresql
+    schema: ../soloclef_schema/migrations
+    queries: notebookscope/queries.sql
+    gen:
+      go:
+        package: notebookscope
+        out: notebookscope
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_pointers_for_null_types: true
+        output_db_file_name: connection.sql.go
+        output_models_file_name: tables.sql.go
+        overrides:
+          - db_type: uuid
+            go_type: string
+          - db_type: uuid
+            nullable: true
+            go_type:
+              type: string
+              pointer: true
+          - db_type: pg_catalog.int4
+            go_type: int64
+          - db_type: pg_catalog.int4
+            nullable: true
+            go_type:
+              type: int64
+              pointer: true
+          - db_type: pg_catalog.timestamptz
+            go_type: time.Time
+          - db_type: pg_catalog.timestamptz
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true
+          - db_type: timestamptz
+            go_type: time.Time
+          - db_type: timestamptz
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true
+  - engine: postgresql
+    schema: ../soloclef_schema/migrations
+    queries: ownmodels/queries.sql
+    gen:
+      go:
+        package: ownmodels
+        out: ownmodels
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_pointers_for_null_types: true
+        output_db_file_name: connection.sql.go
+        output_models_file_name: tables.sql.go
+        overrides:
+          - db_type: uuid
+            go_type: string
+          - db_type: uuid
+            nullable: true
+            go_type:
+              type: string
+              pointer: true
+          - db_type: pg_catalog.int4
+            go_type: int64
+          - db_type: pg_catalog.int4
+            nullable: true
+            go_type:
+              type: int64
+              pointer: true
+          - db_type: pg_catalog.timestamptz
+            go_type: time.Time
+          - db_type: pg_catalog.timestamptz
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true
+          - db_type: timestamptz
+            go_type: time.Time
+          - db_type: timestamptz
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true

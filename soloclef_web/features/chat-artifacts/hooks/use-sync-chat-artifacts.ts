@@ -60,8 +60,7 @@ function shouldPollForPersistence(
  */
 export function useSyncChatArtifacts(
 	messages: readonly ThreadMessageLike[],
-	threadId: number | null,
-	workspaceId: number
+	threadId: number | null
 ): {
 	artifacts: ChatArtifact[];
 	isReady: boolean;
@@ -70,13 +69,13 @@ export function useSyncChatArtifacts(
 	const messageArtifacts = useMemo(() => collectArtifacts(messages), [messages]);
 	const persistencePollStartedAt = useRef(new Map<string, number>());
 	const persistedKeys = useRef(new Set<string>());
-	const canLoadPersisted = threadId != null && workspaceId > 0;
+	const canLoadPersisted = threadId != null;
 	const {
 		data: persisted = [],
 		isError,
 		isPending,
 	} = useQuery({
-		...artifactListQueryOptions(workspaceId, threadId),
+		...artifactListQueryOptions(threadId),
 		enabled: canLoadPersisted,
 		// ponytail: legacy media jobs return before Artifact persistence. Poll is
 		// bounded; replace it when those jobs publish artifact-list invalidation.

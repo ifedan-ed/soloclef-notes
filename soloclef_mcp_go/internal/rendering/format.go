@@ -29,18 +29,8 @@ const FormatParameterDescription = "'markdown' (default, human-readable) or 'jso
 // FormatParameterTitle is the field title the published schema carries.
 const FormatParameterTitle = "Response Format"
 
-const (
-	// DefaultClipChars caps a whole tool result.
-	DefaultClipChars = 20_000
-	// ItemFieldClipChars caps one field of one scraper item, so a response keeps
-	// every item as an excerpt instead of a few items in full.
-	ItemFieldClipChars = 1_500
-)
-
-// redundantItemFields duplicate another field verbatim — Reddit's "html"
-// mirrors "body" — and only enlarge an inline result. The whole record stays in
-// the stored run.
-var redundantItemFields = map[string]bool{"html": true}
+// DefaultClipChars caps a whole tool result.
+const DefaultClipChars = 20_000
 
 // ToJSON pretty-prints a payload the way every tool's JSON form prints it.
 func ToJSON(value pythonjson.Value) string {
@@ -59,50 +49,6 @@ func Clip(text string, limit int) string {
 	dropped := len(runes) - limit
 	return fmt.Sprintf("%s\n\n… [%d more characters truncated]",
 		string(runes[:limit]), dropped)
-}
-
-// CompactItems shrinks a scraper result for inline return: redundant fields
-// dropped and overlong strings excerpted per field.
-//
-// Top-level string fields only; a nested structure passes through untouched,
-// as it does in the Python original.
-func CompactItems(result pythonjson.Value, fieldLimit int) pythonjson.Value {
-	if result.Kind != pythonjson.Object {
-		return result
-	}
-	items, ok := result.Lookup("items")
-	if !ok || items.Kind != pythonjson.Array {
-		return result
-	}
-	compacted := pythonjson.Value{Kind: pythonjson.Array, Array: make([]pythonjson.Value, 0, len(items.Array))}
-	for _, item := range items.Array {
-		compacted.Array = append(compacted.Array, compactItem(item, fieldLimit))
-	}
-	replaced := pythonjson.Value{Kind: pythonjson.Object, Members: make([]pythonjson.Member, 0, len(result.Members))}
-	for _, member := range result.Members {
-		if member.Key == "items" {
-			member.Value = compacted
-		}
-		replaced.Members = append(replaced.Members, member)
-	}
-	return replaced
-}
-
-func compactItem(item pythonjson.Value, fieldLimit int) pythonjson.Value {
-	if item.Kind != pythonjson.Object {
-		return item
-	}
-	kept := pythonjson.Value{Kind: pythonjson.Object, Members: make([]pythonjson.Member, 0, len(item.Members))}
-	for _, member := range item.Members {
-		if redundantItemFields[member.Key] {
-			continue
-		}
-		if member.Value.Kind == pythonjson.String {
-			member.Value.String = Clip(member.Value.String, fieldLimit)
-		}
-		kept.Members = append(kept.Members, member)
-	}
-	return kept
 }
 
 // Text is a Markdown document assembled line by line, joined as the Python

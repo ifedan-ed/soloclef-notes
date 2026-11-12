@@ -1,0 +1,8 @@
+{
+  "parser": "pymupdf4llm",
+  "parser_version": "1.28.2",
+  "pages": [
+    {"number": 1, "markdown": "# Dosing guide \n\nGive once daily. \n\n"},
+    {"number": 2, "markdown": "|Drug|Dose|\n|---|---|\n|Amoxicillin|500 mg|\n\n"}
+  ]
+}

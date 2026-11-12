@@ -19,7 +19,7 @@ test("the sitemap lists every public page and doc on the server's own address", 
 	const entries = sitemapEntries(["/docs", "/docs/studio"], when, configured);
 	const urls = entries.map((entry) => entry.url);
 	assert.equal(urls[0], "https://notes.example.org/");
-	assert.ok(urls.includes("https://notes.example.org/pricing"));
+	assert.ok(urls.includes("https://notes.example.org/features"));
 	assert.ok(urls.includes("https://notes.example.org/docs/studio"));
 	assert.equal(urls.length, PUBLIC_PAGES.length + 1, "/docs is listed once");
 	assert.ok(entries.every((entry) => entry.lastModified === when));

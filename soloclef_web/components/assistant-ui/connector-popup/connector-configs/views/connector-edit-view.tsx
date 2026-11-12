@@ -5,13 +5,13 @@ import { ArrowLeft, Info, RefreshCw } from "lucide-react";
 import { type FC, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { setConnectorEnabledMutationAtom } from "@/atoms/connectors/connector-mutation.atoms";
-import { activeWorkspaceIdAtom } from "@/atoms/workspaces/workspace-query.atoms";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { EnumConnectorName } from "@/contracts/enums/connector";
 import { getConnectorIcon } from "@/contracts/enums/connectorIcons";
 import type { SearchSourceConnector } from "@/contracts/types/connector.types";
+import { ConnectionParserField } from "@/features/parser-choice/ui/connection-parser-field";
 import { authenticatedFetch } from "@/lib/auth-fetch";
 import { BRAND } from "@/lib/brand";
 import { getReauthEndpoint } from "@/lib/connector-telemetry";
@@ -19,14 +19,21 @@ import { buildBackendUrl } from "@/lib/env-config";
 import { cn } from "@/lib/utils";
 import { PeriodicSyncConfig } from "../../components/periodic-sync-config";
 import { VisionLLMConfig } from "../../components/vision-llm-config";
+import { EnabledSwitch } from "../../enablement/enabled-switch";
 import { getConnectorDisplayName } from "../../tabs/all-connectors-tab";
-import { EnabledInWorkspaceSwitch } from "../../workspace-enablement/enabled-in-workspace-switch";
 import { MCPServiceConfig } from "../components/mcp-service-config";
 import { getConnectorConfigComponent } from "../index";
 import { editViewActions } from "./edit-view-actions";
 
 const VISION_LLM_CONNECTOR_TYPES = new Set<SearchSourceConnector["connector_type"]>([
 	EnumConnectorName.GOOGLE_DRIVE_CONNECTOR,
+]);
+
+// The connections that bring files in, and so have a parser to choose. A
+// web-page crawl, a mailbox and an MCP server carry no files to parse.
+const FILE_CONNECTOR_TYPES = new Set<SearchSourceConnector["connector_type"]>([
+	EnumConnectorName.GOOGLE_DRIVE_CONNECTOR,
+	EnumConnectorName.NEXTCLOUD_CONNECTOR,
 ]);
 
 interface ConnectorEditViewProps {
@@ -39,7 +46,6 @@ interface ConnectorEditViewProps {
 	isIndexing?: boolean;
 	/** The server's copy of an MCP server's config is still on its way (editable-connector.ts). */
 	configPending?: boolean;
-	workspaceId?: string;
 	onPeriodicEnabledChange: (enabled: boolean) => void;
 	onFrequencyChange: (frequency: string) => void;
 	onEnableVisionLlmChange: (enabled: boolean) => void;
@@ -60,7 +66,6 @@ export const ConnectorEditView: FC<ConnectorEditViewProps> = ({
 	isDisconnecting,
 	isIndexing = false,
 	configPending = false,
-	workspaceId,
 	onPeriodicEnabledChange,
 	onFrequencyChange,
 	onEnableVisionLlmChange,
@@ -71,7 +76,6 @@ export const ConnectorEditView: FC<ConnectorEditViewProps> = ({
 	onConfigChange,
 	onNameChange,
 }) => {
-	const workspaceIdAtom = useAtomValue(activeWorkspaceIdAtom);
 	const isAuthExpired = connector.config?.auth_expired === true;
 	const reauthEndpoint = getReauthEndpoint(connector);
 	const [reauthing, setReauthing] = useState(false);
@@ -79,45 +83,20 @@ export const ConnectorEditView: FC<ConnectorEditViewProps> = ({
 	const isLive = isMCPBacked;
 	const isMCP = connector.connector_type === EnumConnectorName.MCP_CONNECTOR;
 	const [togglingEnabled, setTogglingEnabled] = useState(false);
-	// `connector.enabled_in_workspace` comes from the REST list
-	// (workspaceConnectorList keeps it on every row "Your connectors" opens),
-	// but this view keeps the snapshot it was opened with, and a deep link
-	// may hand it a row without the field. Ask the status endpoint for the
-	// stored state rather than trusting the prop.
-	const [localEnabled, setLocalEnabled] = useState(connector.enabled_in_workspace !== false);
-	useEffect(() => {
-		if (isMCP) return;
-		const spaceId = workspaceId ?? workspaceIdAtom;
-		if (!spaceId) return;
-		let cancelled = false;
-		authenticatedFetch(
-			buildBackendUrl(`/api/v1/search-source-connectors/${connector.id}/workspaces/${spaceId}`)
-		)
-			.then((res) => (res.ok ? res.json() : null))
-			.then((data) => {
-				if (!cancelled && data && typeof data.enabled === "boolean") {
-					setLocalEnabled(data.enabled);
-				}
-			})
-			.catch(() => {});
-		return () => {
-			cancelled = true;
-		};
-	}, [connector.id, workspaceId, workspaceIdAtom, isMCP]);
+	// The switch starts from the connection's own `enabled`, which every
+	// listed row carries, so nothing is asked for when the view opens. The
+	// view keeps the row it was opened with, so the state is held here and
+	// set from the server's answer to each change.
+	const [localEnabled, setLocalEnabled] = useState(connector.enabled);
 	const { mutateAsync: setConnectorEnabled } = useAtomValue(setConnectorEnabledMutationAtom);
 	const handleToggleEnabled = useCallback(
 		async (enabled: boolean) => {
-			const spaceId = workspaceId ?? workspaceIdAtom;
-			if (!spaceId) return;
 			setTogglingEnabled(true);
 			const previous = localEnabled;
 			setLocalEnabled(enabled);
 			try {
-				await setConnectorEnabled({
-					connectorId: connector.id,
-					workspaceId: Number(spaceId),
-					enabled,
-				});
+				const updated = await setConnectorEnabled({ connectorId: connector.id, enabled });
+				setLocalEnabled(updated.enabled);
 			} catch {
 				setLocalEnabled(previous);
 				toast.error(`Failed to ${enabled ? "enable" : "disable"} ${connector.name}.`);
@@ -125,23 +104,19 @@ export const ConnectorEditView: FC<ConnectorEditViewProps> = ({
 				setTogglingEnabled(false);
 			}
 		},
-		[workspaceId, workspaceIdAtom, connector.id, connector.name, setConnectorEnabled, localEnabled]
+		[connector.id, connector.name, setConnectorEnabled, localEnabled]
 	);
 	const supportsVisionLlm = VISION_LLM_CONNECTOR_TYPES.has(connector.connector_type);
-	// Another member's account-wide connection opens read-only: only its
-	// owner may change or disconnect it (editViewActions).
-	const isOthers = !isMCP && connector.is_mine === false;
-	const showsVisionToggle = !isLive && !isOthers && supportsVisionLlm && connector.is_indexable;
+	const showsVisionToggle = !isLive && supportsVisionLlm && connector.is_indexable;
+	const showsParserField = !isLive && FILE_CONNECTOR_TYPES.has(connector.connector_type);
 
 	const handleReauth = useCallback(async () => {
-		const spaceId = workspaceId ?? workspaceIdAtom;
-		if (!spaceId || !reauthEndpoint) return;
+		if (!reauthEndpoint) return;
 		setReauthing(true);
 		try {
 			const response = await authenticatedFetch(
 				buildBackendUrl(reauthEndpoint, {
 					connector_id: connector.id,
-					space_id: spaceId,
 					return_url: window.location.pathname,
 				})
 			);
@@ -162,14 +137,13 @@ export const ConnectorEditView: FC<ConnectorEditViewProps> = ({
 		} finally {
 			setReauthing(false);
 		}
-	}, [workspaceId, workspaceIdAtom, reauthEndpoint, connector.id]);
+	}, [reauthEndpoint, connector.id]);
 
 	// Get connector-specific config component (MCP-backed connectors use a generic view)
 	const ConnectorConfigComponent = useMemo(() => {
 		if (isMCPBacked) return MCPServiceConfig;
-		if (isOthers) return null;
 		return getConnectorConfigComponent(connector.connector_type);
-	}, [connector.connector_type, isMCPBacked, isOthers]);
+	}, [connector.connector_type, isMCPBacked]);
 	const { canSave, canDisconnect, disconnectWarning, subtitle, mailboxesNote } = editViewActions(
 		connector,
 		{ hasSettingsPanel: ConnectorConfigComponent !== null, hasVisionToggle: showsVisionToggle }
@@ -277,9 +251,9 @@ export const ConnectorEditView: FC<ConnectorEditViewProps> = ({
 							<p className="text-xs sm:text-base text-muted-foreground mt-1">{subtitle}</p>
 						</div>
 					</div>
-					{/* Enabled-in-this-workspace switch: not MCP, owner only */}
-					{!isMCP && connector.is_mine !== false && (
-						<EnabledInWorkspaceSwitch
+					{/* The connection's own on/off switch. MCP servers have none here. */}
+					{!isMCP && (
+						<EnabledSwitch
 							className="shrink-0"
 							checked={localEnabled}
 							disabled={togglingEnabled}
@@ -287,7 +261,7 @@ export const ConnectorEditView: FC<ConnectorEditViewProps> = ({
 						/>
 					)}
 					{/* Quick Index Button - hidden for live connectors and when auth is expired */}
-					{connector.is_indexable && !isLive && !isOthers && onQuickIndex && !isAuthExpired && (
+					{connector.is_indexable && !isLive && onQuickIndex && !isAuthExpired && (
 						<Button
 							variant="secondary"
 							size="sm"
@@ -333,9 +307,10 @@ export const ConnectorEditView: FC<ConnectorEditViewProps> = ({
 								connector={connector}
 								onConfigChange={onConfigChange}
 								onNameChange={onNameChange}
-								workspaceId={workspaceId}
 							/>
 						)}
+
+						{showsParserField && <ConnectionParserField connectorId={connector.id} />}
 
 						{/* Vision toggle */}
 						{showsVisionToggle && (
@@ -346,7 +321,6 @@ export const ConnectorEditView: FC<ConnectorEditViewProps> = ({
 						)}
 
 						{connector.is_indexable &&
-							!isOthers &&
 							(() => {
 								const requiresFolderSelection =
 									connector.connector_type === "GOOGLE_DRIVE_CONNECTOR";
@@ -378,7 +352,7 @@ export const ConnectorEditView: FC<ConnectorEditViewProps> = ({
 							})()}
 
 						{/* Info box - hidden for live connectors */}
-						{connector.is_indexable && !isLive && !isOthers && (
+						{connector.is_indexable && !isLive && (
 							<Alert>
 								<Info />
 								<AlertDescription>
@@ -436,7 +410,7 @@ export const ConnectorEditView: FC<ConnectorEditViewProps> = ({
 						Disconnect
 					</Button>
 				) : null}
-				{isAuthExpired && reauthEndpoint && !isOthers ? (
+				{isAuthExpired && reauthEndpoint ? (
 					<Button
 						onClick={handleReauth}
 						disabled={reauthing || isDisconnecting}

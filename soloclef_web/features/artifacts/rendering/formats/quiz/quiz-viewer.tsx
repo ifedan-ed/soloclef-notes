@@ -43,7 +43,7 @@ type LoadState = { status: "loading" } | { status: "error" } | { status: "ready"
 type Screen = "taking" | "score" | "review";
 const OPTION_LABELS = ["A", "B", "C", "D"] as const;
 
-export default function QuizViewer({ workspaceId, manifest }: ArtifactRendererProps) {
+export default function QuizViewer({ manifest }: ArtifactRendererProps) {
 	const primary = selectPrimaryArtifactFile(manifest);
 	const headingId = useId();
 	const headingRef = useRef<HTMLHeadingElement>(null);
@@ -58,9 +58,9 @@ export default function QuizViewer({ workspaceId, manifest }: ArtifactRendererPr
 	const [reviewIndex, setReviewIndex] = useState(0);
 	const [selectedOption, setSelectedOption] = useState<number | null>(null);
 	const [message, setMessage] = useState("");
-	const submitAnswer = useSubmitQuizAnswer(workspaceId, manifest.artifact_id, manifest.generation);
-	const skipQuestion = useSkipQuizQuestion(workspaceId, manifest.artifact_id, manifest.generation);
-	const retake = useRetakeQuiz(workspaceId, manifest.artifact_id, manifest.generation);
+	const submitAnswer = useSubmitQuizAnswer(manifest.artifact_id, manifest.generation);
+	const skipQuestion = useSkipQuizQuestion(manifest.artifact_id, manifest.generation);
+	const retake = useRetakeQuiz(manifest.artifact_id, manifest.generation);
 	const persisted = manifest.quiz_state !== undefined;
 	const t = useTranslations("quiz");
 	const tExplain = useTranslations("explain");

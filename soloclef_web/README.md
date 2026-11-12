@@ -1,11 +1,14 @@
 # Soloclef web
 
-Next.js UI for the self-host stack (App Router, `pnpm`).
+The Next.js web app (App Router, `pnpm`). It talks to the Go API and to
+zero-cache for live updates; in a deployment both sit behind the same Caddy
+(`docker/docker-compose.go.yml`).
 
 ## You need
 
 - Node.js 20+ and [pnpm](https://pnpm.io/installation) (not npm)
-- The API in [`soloclef_backend/`](../soloclef_backend/README.md) on http://localhost:8000
+- A running Go stack to talk to: `docker/docker-compose.go.yml` (the root
+  README's quick start). The web app has no API of its own.
 
 ## Run it
 
@@ -13,15 +16,20 @@ Next.js UI for the self-host stack (App Router, `pnpm`).
 cp .env.example .env
 ```
 
-In `.env`, point at a backend on your machine (the example file uses Docker hostnames):
+In `.env`, point at the stack. Its Caddy serves the API and zero-cache on
+the one address `SOLOCLEF_GO_SITE_PUBLISH` publishes (`127.0.0.1:18470` in
+`docker/.env.go.example`):
 
 ```bash
-NEXT_PUBLIC_FASTAPI_BACKEND_URL=http://localhost:8000
-SOLOCLEF_BACKEND_INTERNAL_URL=http://localhost:8000
-AUTH_TYPE=LOCAL
-ETL_DEFAULT_PARSER=LOCAL
+NEXT_PUBLIC_FASTAPI_BACKEND_URL=http://127.0.0.1:18470
+SOLOCLEF_BACKEND_INTERNAL_URL=http://127.0.0.1:18470
+NEXT_PUBLIC_ZERO_CACHE_URL=http://127.0.0.1:18470/zero
 DEPLOYMENT_MODE=self-hosted
 ```
+
+The API only answers a browser from the origins it is told about, so add
+`http://localhost:3000` to `SOLOCLEF_API_ALLOWED_ORIGINS` in `docker/.env.go`
+and restart the api service.
 
 Then:
 
@@ -30,13 +38,9 @@ pnpm install
 pnpm dev
 ```
 
-App: http://localhost:3000
-
-Match `AUTH_TYPE` with the backend.
-
-Live document/chat updates need zero-cache (the Compose stack includes it; see
-[self-hosting](content/docs/self-hosting.mdx)). Most UI PRs can run without
-it; the page just will not refresh itself.
+App: http://localhost:3000. To try a change the way it is deployed, build it
+into the stack instead (`up -d --build frontend` with the quick start's
+compose command) and open the stack's own address.
 
 ## Tests
 
@@ -45,4 +49,5 @@ pnpm test:unit
 pnpm format
 ```
 
-Playwright needs Postgres, Redis, the API, and a worker. See [tests/README.md](tests/README.md).
+Playwright runs against a throwaway copy of the Go stack. See
+[tests/README.md](tests/README.md).

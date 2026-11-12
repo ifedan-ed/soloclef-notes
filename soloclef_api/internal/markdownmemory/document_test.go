@@ -7,15 +7,13 @@ import (
 )
 
 // capture is one document asked of the running Python tier through
-// PUT /api/v1/users/me/memory (or the team route, for the scope cases), and the
-// memory_md it answered with — or the message it refused with.
+// PUT /api/v1/users/me/memory, and the memory_md it answered with — or the message it refused with.
 //
 // testdata/documents.json holds them. Nothing in it is an account's own text:
 // every document was written for the comparison against the seeded database
 // described in custom/docs/go-api-tier.md.
 type capture struct {
 	Name     string `json:"name"`
-	Scope    string `json:"scope"`
 	Stored   string `json:"stored"`
 	Sent     string `json:"sent"`
 	Answered string `json:"answered"`
@@ -36,11 +34,7 @@ func TestSaveAnswersWhatThePythonTierAnswered(t *testing.T) {
 	}
 
 	for _, want := range captures {
-		scope := UserScope
-		if want.Scope == "team" {
-			scope = TeamScope
-		}
-		got := Save(scope, want.Sent, want.Stored)
+		got := Save(want.Sent, want.Stored)
 		if got.Refusal != want.Refusal {
 			t.Errorf("%s: refusal %q, the Python tier answered %q",
 				want.Name, got.Refusal, want.Refusal)
@@ -66,40 +60,27 @@ func TestSaveRefusesALongDocumentInThePythonTiersWords(t *testing.T) {
 	const prefix = "## H\n"
 	cases := []struct {
 		name    string
-		scope   Scope
 		sent    string
 		refusal string
 	}{
 		{
-			name:  "exactly the hard limit is accepted",
-			scope: UserScope,
-			sent:  prefix + repeat("x", HardLimit-len(prefix)),
+			name: "exactly the hard limit is accepted",
+			sent: prefix + repeat("x", HardLimit-len(prefix)),
 		},
 		{
 			name:    "one character over",
-			scope:   UserScope,
 			sent:    prefix + repeat("x", HardLimit-len(prefix)+1),
 			refusal: "Memory exceeds 25,000 character limit (25,001 chars). Consolidate by merging related items, removing outdated entries, and shortening descriptions.",
 		},
 		{
-			name:  "over the limit in astral characters, which are one character each",
-			scope: UserScope,
-			sent:  prefix + repeat("\U0001f600", HardLimit),
+			name: "over the limit in astral characters, which are one character each",
+			sent: prefix + repeat("\U0001f600", HardLimit),
 			refusal: "Memory exceeds 25,000 character limit (25,005 chars). Consolidate by merging related items, " +
-				"removing outdated entries, and shortening descriptions.",
-		},
-		{
-			// Both rules apply and the length is checked first, which is the
-			// order save_memory runs them in.
-			name:  "a team document that is both too long and personal",
-			scope: TeamScope,
-			sent:  "## Preferences\n" + repeat("x", HardLimit),
-			refusal: "Memory exceeds 25,000 character limit (25,015 chars). Consolidate by merging related items, " +
 				"removing outdated entries, and shortening descriptions.",
 		},
 	}
 	for _, tc := range cases {
-		got := Save(tc.scope, tc.sent, "")
+		got := Save(tc.sent, "")
 		if got.Refusal != tc.refusal {
 			t.Errorf("%s: refusal %q, want %q", tc.name, got.Refusal, tc.refusal)
 		}

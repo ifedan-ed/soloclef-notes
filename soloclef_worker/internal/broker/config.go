@@ -93,12 +93,6 @@ type Config struct {
 	// put back because its task class was full, so a full class cannot spin.
 	DeferredRetryDelay time.Duration
 
-	// ETAHoldHorizon is how far ahead an eta may be and still be held in
-	// memory until it is due. Anything further off goes back on the queue.
-	// Celery's own countdowns here are seconds (app/notebooks/autoname,
-	// app/tasks/celery_tasks/deliverable_job_tasks).
-	ETAHoldHorizon time.Duration
-
 	// ShutdownGrace is how long in-flight work is given to finish before the
 	// worker stops waiting for it — a backstop for a deploy that reached this
 	// process while it was working, not a way to drain one.
@@ -107,13 +101,10 @@ type Config struct {
 	// for minutes to hours, so no grace this process could wait out would see
 	// one finish: at the end of it the job is killed and written FAILURE, with
 	// its billing hold held until the stale sweep, its row left GENERATING and
-	// its sandbox still rendering for nobody. Draining is the deploy gate's
-	// job, and it is required rather than conventional:
-	//
-	//	python3 soloclef_backend/scripts/deploy_gate.py --wait
-	//
-	// (see custom/docs/go-worker.md, "Restarting this worker"). The grace is
-	// what bounds the damage when the gate was skipped or failed.
+	// its sandbox still rendering for nobody. Draining is the deployment's
+	// job: restart this worker only when nothing is generating (no Studio
+	// output, podcast, video or automation run still running). The grace is
+	// what bounds the damage when that was not checked.
 	ShutdownGrace time.Duration
 
 	// Name identifies this worker in the result rows it writes.
@@ -135,7 +126,6 @@ func DefaultConfig() Config {
 		RestoreInterval:    100 * time.Second,
 		PopTimeout:         time.Second,
 		DeferredRetryDelay: time.Second,
-		ETAHoldHorizon:     5 * time.Minute,
 		// Thirty seconds is long enough for a job that was about to finish
 		// and short enough that a stop ends. It is deliberately nowhere near
 		// long enough to drain this tier's work: see ShutdownGrace above, and

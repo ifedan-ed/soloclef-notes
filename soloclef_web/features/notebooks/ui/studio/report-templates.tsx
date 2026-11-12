@@ -11,12 +11,11 @@ import { notebooksApi } from "../../api/notebooks-api";
 import type { ReportTemplate } from "../../model/notebook";
 
 /**
- * Seeded templates (from the server, editable per workspace). The pencil
+ * Seeded templates (from the server, editable per account). The pencil
  * reveals a template's prompt; edits apply to this report, and "Save as
- * default" keeps them for the workspace.
+ * default" keeps them for every notebook of the account.
  */
 export function ReportTemplates({
-	workspaceId,
 	templates,
 	selectedKey,
 	prompt,
@@ -24,7 +23,6 @@ export function ReportTemplates({
 	onPromptChange,
 	onSaved,
 }: {
-	workspaceId: number;
 	templates: ReportTemplate[];
 	selectedKey: string | null;
 	prompt: string | null;
@@ -36,7 +34,7 @@ export function ReportTemplates({
 	const [editingKey, setEditingKey] = useState<string | null>(null);
 	const [saving, setSaving] = useState(false);
 
-	// Unedited seeds are shown in the viewer's language; a workspace's own
+	// Unedited seeds are shown in the viewer's language; the account's own
 	// edit is shown as written.
 	const title = (template: ReportTemplate) =>
 		template.customized ? template.title : t(`templates.${template.key}.title`);
@@ -48,7 +46,7 @@ export function ReportTemplates({
 		setSaving(true);
 		try {
 			onSaved(
-				await notebooksApi.saveReportTemplate(workspaceId, template.key, {
+				await notebooksApi.saveReportTemplate(template.key, {
 					title: template.title,
 					description: template.description,
 					prompt: prompt.trim(),

@@ -19,24 +19,22 @@ import { useNotebook, useNotebookSources } from "./use-notebook-queries";
  * while until its new name arrives, and the name is copied into the home
  * list's cache. The old title stays painted until then; nothing flashes.
  */
-export function useNotebookWithAutoTitle(workspaceId: number, notebookId: number) {
+export function useNotebookWithAutoTitle(notebookId: number) {
 	const queryClient = useQueryClient();
 	const [titleWatch, setTitleWatch] = useState<TitleWatch | null>(null);
-	const notebook = useNotebook(workspaceId, notebookId, titleWatch);
-	const sources = useNotebookSources(workspaceId, notebookId);
+	const notebook = useNotebook(notebookId, titleWatch);
+	const sources = useNotebookSources(notebookId);
 
 	const watchTitle = useCallback(() => {
-		const current = queryClient.getQueryData<Notebook>(
-			notebookKeys.detail(workspaceId, notebookId)
-		);
+		const current = queryClient.getQueryData<Notebook>(notebookKeys.detail(notebookId));
 		const next = startTitleWatch(current);
 		if (!next) return;
 		setTitleWatch(next);
 		void queryClient.invalidateQueries({
-			queryKey: notebookKeys.detail(workspaceId, notebookId),
+			queryKey: notebookKeys.detail(notebookId),
 			exact: true,
 		});
-	}, [queryClient, workspaceId, notebookId]);
+	}, [queryClient, notebookId]);
 
 	// A source that just finished indexing may have named the notebook.
 	const ready = readySourceCount(sources.data);
@@ -51,10 +49,10 @@ export function useNotebookWithAutoTitle(workspaceId: number, notebookId: number
 	const data = notebook.data;
 	useEffect(() => {
 		if (!data) return;
-		queryClient.setQueryData<Notebook[]>(notebookKeys.list(workspaceId), (list) =>
+		queryClient.setQueryData<Notebook[]>(notebookKeys.list(), (list) =>
 			withNotebookName(list, data)
 		);
-	}, [data, queryClient, workspaceId]);
+	}, [data, queryClient]);
 
 	return { notebook, sources, watchTitle };
 }

@@ -10,34 +10,30 @@ export const deliverableJobResponse = z.object({
 	progress: z.number().min(0).max(100),
 	failure_code: z.string().nullish(),
 	artifact_id: z.number().nullish(),
-	workspace_id: z.number(),
 	thread_id: z.number().nullish(),
 	created_at: z.string(),
 	updated_at: z.string(),
 });
 
-export const deliverableJobActionPath = (
-	workspaceId: number,
-	jobId: number,
-	action: "cancel" | "retry"
-) => `/api/v1/workspaces/${workspaceId}/deliverable-jobs/${jobId}/${action}`;
+export const deliverableJobActionPath = (jobId: number, action: "cancel" | "retry") =>
+	`/api/v1/deliverable-jobs/${jobId}/${action}`;
 
 export const deliverableJobActionRequestOptions = (isDesktopClient: boolean) => ({
 	sameOrigin: !isDesktopClient,
 });
 
 class DeliverableJobsApiService {
-	private postAction(workspaceId: number, jobId: number, action: "cancel" | "retry") {
+	private postAction(jobId: number, action: "cancel" | "retry") {
 		return baseApiService.post(
-			deliverableJobActionPath(workspaceId, jobId, action),
+			deliverableJobActionPath(jobId, action),
 			deliverableJobResponse,
 			deliverableJobActionRequestOptions(baseApiService.isDesktopClient)
 		);
 	}
 
-	cancel = (workspaceId: number, jobId: number) => this.postAction(workspaceId, jobId, "cancel");
+	cancel = (jobId: number) => this.postAction(jobId, "cancel");
 
-	retry = (workspaceId: number, jobId: number) => this.postAction(workspaceId, jobId, "retry");
+	retry = (jobId: number) => this.postAction(jobId, "retry");
 }
 
 export const deliverableJobsApiService = new DeliverableJobsApiService();

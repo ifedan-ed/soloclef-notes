@@ -6,15 +6,15 @@ import { desktopDevice as desktop, phoneDevice as phone } from "./tests/helpers/
  *
  * Two targets, never mixed:
  *
- * 1. The isolated stack (default). `scripts/e2e-stack.sh up` starts a
- *    throwaway copy of the whole app — own Postgres (tmpfs), Redis, the E2E
- *    backend with fake LLMs and the /__e2e__ token mint, Celery, zero-cache,
- *    this checkout's frontend and the same Caddy routing — on
- *    http://127.0.0.1:3940. Projects `setup`, `desktop` and `phone` run here
- *    and may create, edit and delete anything.
+ * 1. The isolated stack (default). `scripts/e2e-stack-go.sh up` starts a
+ *    throwaway copy of the whole app: docker-compose.go.yml with the e2e
+ *    overlay (the /__e2e__ token mint switched on, a stand-in model proxy,
+ *    stand-in Nextcloud and Google), zero-cache, this checkout's frontend and
+ *    the same Caddy routing, on http://127.0.0.1:3945. Projects `setup`,
+ *    `desktop` and `phone` run here and may create, edit and delete anything.
  *
  * 2. Production, read-only. Project `prod-smoke` runs tests/prod-smoke against
- *    PROD_BASE_URL (default https://notes.danvics.com) with a token supplied
+ *    PROD_BASE_URL (required: no server is assumed) with a token supplied
  *    in PROD_E2E_TOKEN. Every non-GET API request is aborted by a route guard
  *    (tests/prod-smoke/guard.ts) except an explicit list of read-only POSTs.
  *
@@ -22,9 +22,12 @@ import { desktopDevice as desktop, phoneDevice as phone } from "./tests/helpers/
  * .dockerignore); @playwright/test is a devDependency.
  */
 
-const E2E_PORT = process.env.E2E_WEB_PORT || "3940";
+// The isolated stack's port, as docker/e2e-web-go/settings.env publishes it.
+const E2E_PORT = process.env.E2E_WEB_PORT || "3945";
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || `http://127.0.0.1:${E2E_PORT}`;
-const prodBaseURL = process.env.PROD_BASE_URL || "https://notes.danvics.com";
+// Unset is allowed here and refused by the prod-smoke fixtures themselves
+// (tests/prod-smoke/guard.ts), so the other projects run without it.
+const prodBaseURL = process.env.PROD_BASE_URL;
 
 process.env.PLAYWRIGHT_TEST_EMAIL ??= "e2e-test@soloclef.net";
 process.env.PLAYWRIGHT_TEST_PASSWORD ??= "E2eTestPassword123!";

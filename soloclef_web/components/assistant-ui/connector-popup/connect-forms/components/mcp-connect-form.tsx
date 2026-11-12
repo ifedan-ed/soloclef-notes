@@ -1,9 +1,7 @@
 "use client";
 
-import { useAtomValue } from "jotai";
 import { CheckCircle2, ChevronDown, ChevronUp, Info, Loader2, XCircle } from "lucide-react";
 import { type FC, useEffect, useRef, useState } from "react";
-import { activeWorkspaceIdAtom } from "@/atoms/workspaces/workspace-query.atoms";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -27,16 +25,15 @@ export const MCPConnectForm: FC<ConnectFormProps> = ({ onSubmit, isSubmitting })
 	const [showDetails, setShowDetails] = useState(false);
 	const [testResult, setTestResult] = useState<MCPConnectionTestResult | null>(null);
 
-	// Workspace Owners and Editors add their own servers (any public https
-	// address, their own key); an administrator's server is a shared one and
-	// must be on the allowed list. The server enforces both.
-	const workspaceId = useAtomValue(activeWorkspaceIdAtom);
+	// A person adds their own servers (any public https address, their own
+	// key); an administrator's server is a shared one and must be on the
+	// allowed list. The server enforces both.
 	const [canAdd, setCanAdd] = useState<boolean | null>(null);
 	const [allowListApplies, setAllowListApplies] = useState(false);
 	useEffect(() => {
 		let cancelled = false;
 		connectorsApiService
-			.getMCPPolicy(workspaceId)
+			.getMCPPolicy()
 			.then((policy) => {
 				if (cancelled) return;
 				setCanAdd(Boolean(policy?.can_add));
@@ -48,7 +45,7 @@ export const MCPConnectForm: FC<ConnectFormProps> = ({ onSubmit, isSubmitting })
 		return () => {
 			cancelled = true;
 		};
-	}, [workspaceId]);
+	}, []);
 
 	// Example config: a remote (https) server. Local stdio servers are not supported.
 	const DEFAULT_HTTP_CONFIG = JSON.stringify(
@@ -104,11 +101,10 @@ export const MCPConnectForm: FC<ConnectFormProps> = ({ onSubmit, isSubmitting })
 			return;
 		}
 
-		if (!workspaceId) return;
 		setIsTesting(true);
 		setTestResult(null);
 
-		const result = await testMCPConnection(serverConfig, workspaceId);
+		const result = await testMCPConnection(serverConfig);
 		setTestResult(result);
 		setIsTesting(false);
 	};
@@ -160,8 +156,8 @@ export const MCPConnectForm: FC<ConnectFormProps> = ({ onSubmit, isSubmitting })
 				<Alert className="border-amber-500/50 bg-amber-500/10">
 					<Info />
 					<AlertDescription>
-						Only the workspace's Owners and Editors can add MCP servers. You can still use the
-						servers already connected in chats.
+						Adding MCP servers is switched off for your account. You can still use the servers
+						already connected in chats.
 					</AlertDescription>
 				</Alert>
 			)}

@@ -9,7 +9,7 @@ import type { ResearchRequest } from "../model/research";
  * One web search for new sources at a time: starting another, clearing, or
  * leaving the page aborts the one in flight so its events never land late.
  */
-export function useResearchSearch(workspaceId: number, notebookId: number) {
+export function useResearchSearch(notebookId: number) {
 	const [state, dispatch] = useReducer(researchReducer, idleResearch);
 	const controllerRef = useRef<AbortController | null>(null);
 
@@ -28,7 +28,6 @@ export function useResearchSearch(workspaceId: number, notebookId: number) {
 			dispatch({ type: "start", request });
 			try {
 				await streamResearchSearch({
-					workspaceId,
 					notebookId,
 					request,
 					signal: controller.signal,
@@ -47,7 +46,7 @@ export function useResearchSearch(workspaceId: number, notebookId: number) {
 				if (controllerRef.current === controller) controllerRef.current = null;
 			}
 		},
-		[workspaceId, notebookId, abortInFlight]
+		[notebookId, abortInFlight]
 	);
 
 	const clear = useCallback(() => {

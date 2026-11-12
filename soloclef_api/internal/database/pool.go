@@ -1,10 +1,9 @@
 // Package database opens this service's connection pool.
 //
 // The pool is capped by configuration because Postgres' connection limit is
-// shared with the Python tier and its workers: replicas of this service are the
-// point of moving a route here, and ten of them with an uncapped pool would
-// take the database down (docker/postgresql.conf, and the API pool cap in
-// app/db.py).
+// shared with the indexer and the worker: replicas of this service share it
+// too, and ten of them with an uncapped pool would take the database down
+// (SOLOCLEF_API_DATABASE_MAX_CONNECTIONS is each replica's share).
 package database
 
 import (

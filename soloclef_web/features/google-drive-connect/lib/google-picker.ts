@@ -1,5 +1,5 @@
 import type { PickedDriveFile, PickerSession } from "../api/google-drive-api";
-import { type PickerDoc, pickedFiles } from "./picked-files";
+import { MAX_PICKED_FILES, type PickerDoc, pickedFiles } from "./picked-files";
 
 const PICKER_SCRIPT_URL = "https://apis.google.com/js/api.js";
 /** Fired on window with ``detail: boolean`` when the Picker opens or closes. */
@@ -8,7 +8,6 @@ export const PICKER_VISIBILITY_EVENT = "google-picker-visibility";
 function announce(open: boolean) {
 	window.dispatchEvent(new CustomEvent(PICKER_VISIBILITY_EVENT, { detail: open }));
 }
-export const MAX_PICKED_FILES = 50;
 
 let pickerReady: Promise<void> | null = null;
 

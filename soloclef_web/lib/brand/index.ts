@@ -1,8 +1,9 @@
 /**
  * The product's name, colours and logo paths, in one place.
  *
- * `brand.json` is the single source: the backend keeps a Python copy in
- * `soloclef_backend/app/brand.py`, and a backend test fails if the two drift.
+ * `brand.json` is the single source for the web app. The API's brand name
+ * is its own setting (SOLOCLEF_API_BRAND_NAME in docker/.env.go.example), set
+ * to the same name.
  * Cookie and browser storage keys keep their old `surfsense` spelling on
  * purpose: renaming them signs everyone out and strands what browsers
  * already hold (`custom/docs/rename-soloclef.md`); only what a person sees
@@ -11,8 +12,8 @@
  * The name, colours and logo are the product's. The site's address and its
  * contact address are the server's own, so `brand.json` leaves them empty and
  * each deployment sets them at build time (the public pages are prerendered):
- * `NEXT_PUBLIC_SITE_URL` (docker-compose.yml passes SOLOCLEF_PUBLIC_URL) and
- * `NEXT_PUBLIC_SUPPORT_EMAIL` (SUPPORT_EMAIL). Unset, the site prints no
+ * `NEXT_PUBLIC_SITE_URL` (docker-compose.go.yml passes SOLOCLEF_API_PUBLIC_URL)
+ * and `NEXT_PUBLIC_SUPPORT_EMAIL` (SOLOCLEF_API_SUPPORT_EMAIL). Unset, the site prints no
  * absolute links (no sitemap entries, canonical or share-card URL) and no
  * address. `NEXT_PUBLIC_BRAND_NAME` renames the product for a second
  * deployment under another name.
@@ -70,7 +71,7 @@ export const BRAND: Brand = resolveBrand(brandJson as Brand, {
 	contactEmail: process.env.NEXT_PUBLIC_SUPPORT_EMAIL,
 });
 
-/** "Pricing" -> "Pricing · Soloclef Notes"; no page -> the name alone. */
+/** "Features" -> "Features · Soloclef Notes"; no page -> the name alone. */
 export function brandTitle(page?: string, brand: Brand = BRAND): string {
 	const trimmed = page?.trim();
 	return trimmed ? `${trimmed} · ${brand.name}` : brand.name;

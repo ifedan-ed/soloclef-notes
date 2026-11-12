@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { brandIcon } from "@/features/scraper-tools/platform-icons";
+import { brandIcon } from "@/components/ui/brand-icon";
 import type { AcademicSourceId } from "../../../model/research-sources";
 
 /** Marks for the scholarly sources, drawn in each service's colours. */

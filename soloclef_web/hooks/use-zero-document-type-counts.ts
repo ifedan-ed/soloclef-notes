@@ -8,15 +8,11 @@ import { queries } from "@/zero/queries";
  * Real-time document type counts derived from Zero's live document sync.
  * Updates instantly as documents are created, deleted, or change type.
  */
-export function useZeroDocumentTypeCounts(
-	workspaceId: number | string | null
-): Record<string, number> | undefined {
-	const numericId = workspaceId != null ? Number(workspaceId) : null;
-
-	const [zeroDocuments] = useQuery(queries.documents.bySpace({ workspaceId: numericId ?? -1 }));
+export function useZeroDocumentTypeCounts(): Record<string, number> | undefined {
+	const [zeroDocuments] = useQuery(queries.documents.mine());
 
 	return useMemo(() => {
-		if (!zeroDocuments || numericId == null) return undefined;
+		if (!zeroDocuments) return undefined;
 
 		const counts: Record<string, number> = {};
 		for (const doc of zeroDocuments) {
@@ -25,5 +21,5 @@ export function useZeroDocumentTypeCounts(
 			}
 		}
 		return counts;
-	}, [zeroDocuments, numericId]);
+	}, [zeroDocuments]);
 }

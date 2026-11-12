@@ -1,7 +1,7 @@
 /**
- * Coming back from Microsoft's sign-in: the backend sends the browser to the
+ * Coming back from Microsoft's sign-in: the API sends the browser to the
  * page it started on with `?microsoft_mail=<outcome>` (codes in
- * `soloclef_backend/app/connectors/email_imap/microsoft/outcomes.py`).
+ * `soloclef_api/internal/microsoftmail`).
  */
 export const MICROSOFT_MAIL_PARAM = "microsoft_mail";
 

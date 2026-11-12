@@ -1,3 +1,3 @@
 [
-  "A paragraph wrapped in the control characters Python counts as whitespace and Go does not."
+  "\u001c\u001d\u001e\u001f  A paragraph wrapped in the control characters Python counts as whitespace and Go does not.  \u001f\u001e\u001d\u001c"
 ]

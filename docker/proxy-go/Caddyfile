@@ -1,0 +1,25 @@
+# Caddy for the Go stack (docker-compose.go.yml, the proxy service): the
+# site's one door. The routes are in routes.caddy, beside this file, so the
+# web e2e stack's Caddyfile can use the very same ones and add only its test
+# routes (e2e-web-go/Caddyfile).
+{
+	# Plain HTTP. TLS is the job of whatever is in front (a front proxy or a
+	# tunnel), which is also why the forwarded headers below are believed
+	# from it and from nobody else.
+	auto_https off
+	servers {
+		# X-Forwarded-Proto decides whether the API marks a session cookie
+		# Secure, and X-Forwarded-For is who the rate limiter counts. Caddy
+		# passes on what the client sent only when the client is one of
+		# these addresses; from anyone else it writes its own.
+		trusted_proxies static {$SOLOCLEF_TRUSTED_PROXIES}
+		client_ip_headers X-Forwarded-For X-Real-IP
+	}
+}
+
+# No request_body limit here: the API holds every upload to
+# SOLOCLEF_API_UPLOAD_MAX_FILE_BYTES and SOLOCLEF_API_UPLOAD_MAX_FILES itself,
+# and a second limit here would be a second number to keep in step with them.
+:80 {
+	import /etc/caddy/routes.caddy
+}

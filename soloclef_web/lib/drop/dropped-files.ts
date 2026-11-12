@@ -25,7 +25,7 @@ function droppedPath(file: File): string {
 
 /**
  * Sort a drop into loose files and whole folders, so a folder can be rebuilt in
- * the workspace with its structure instead of flattening into the root.
+ * the library with its structure instead of flattening into the root.
  */
 export function splitDroppedFolders(files: File[]): DroppedItems {
 	const loose: File[] = [];

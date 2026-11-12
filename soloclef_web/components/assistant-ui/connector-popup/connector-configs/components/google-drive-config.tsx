@@ -30,11 +30,7 @@ interface SelectedFile {
  * folders) are what one picks; saving indexes them, and periodic sync
  * re-reads the ones that changed in Drive.
  */
-export const GoogleDriveConfig: FC<ConnectorConfigProps> = ({
-	connector,
-	onConfigChange,
-	workspaceId,
-}) => {
+export const GoogleDriveConfig: FC<ConnectorConfigProps> = ({ connector, onConfigChange }) => {
 	const t = useTranslations("google_drive_connect");
 	const [files, setFiles] = useState<SelectedFile[]>(
 		(connector.config?.selected_files as SelectedFile[] | undefined) ?? []
@@ -74,9 +70,7 @@ export const GoogleDriveConfig: FC<ConnectorConfigProps> = ({
 
 	return (
 		<div className="space-y-4">
-			{workspaceId && (
-				<GoogleDriveConnectionControls workspaceId={Number(workspaceId)} showDisconnect={false} />
-			)}
+			<GoogleDriveConnectionControls showDisconnect={false} />
 			<div className="rounded-xl border border-border bg-slate-400/5 dark:bg-white/5 p-3 sm:p-6 space-y-3">
 				<div className="space-y-1">
 					<h3 className="font-medium text-sm sm:text-base">{t("synced_files_title")}</h3>

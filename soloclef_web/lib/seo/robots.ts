@@ -13,7 +13,6 @@ export function robotsRules(brand: Brand = BRAND): MetadataRoute.Robots {
 					"/desktop/",
 					"/auth/",
 					"/api/",
-					"/invite/",
 					"/public/",
 					"/verify-token/",
 					"/login",

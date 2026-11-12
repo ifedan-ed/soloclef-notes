@@ -7,7 +7,6 @@ export const promptRead = z.object({
 	name: z.string(),
 	prompt: z.string(),
 	mode: z.enum(["transform", "explore"]),
-	workspace_id: z.number().nullable(),
 	is_public: z.boolean(),
 	version: z.number(),
 	created_at: z.string(),
@@ -29,7 +28,6 @@ export const promptCreateRequest = z.object({
 	name: z.string().min(1).max(200),
 	prompt: z.string().min(1),
 	mode: z.enum(["transform", "explore"]),
-	workspace_id: z.number().nullable().optional(),
 	is_public: z.boolean().optional(),
 });
 

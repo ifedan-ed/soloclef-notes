@@ -16,7 +16,6 @@ import {
 
 const DOCUMENT = {
 	id: 7,
-	workspace_id: 3,
 	title: "Kawasaki review.pdf",
 	chunks: [
 		{ id: 41, content: "Fever for five days.", page_start: 11 },
@@ -28,7 +27,6 @@ const DOCUMENT = {
 test("Open goes to the cited chunk's page and marks its text", () => {
 	assert.deepEqual(citedOriginalTarget(DOCUMENT, 42), {
 		documentId: 7,
-		workspaceId: 3,
 		title: "Kawasaki review.pdf",
 		initialPage: 12,
 		highlightText: "IVIG within ten days of onset.",
@@ -62,7 +60,7 @@ test("the document viewer keeps the page and text it was opened with", () => {
 test("opening without a page, as other callers do, resets any earlier page", () => {
 	const store = createStore();
 	store.set(openDocumentViewerAtom, citedOriginalTarget(DOCUMENT, 42));
-	store.set(openDocumentViewerAtom, { documentId: 8, workspaceId: 3, title: "Notes" });
+	store.set(openDocumentViewerAtom, { documentId: 8, title: "Notes" });
 
 	const state = store.get(documentViewerAtom);
 	assert.equal(state.documentId, 8);
@@ -72,10 +70,10 @@ test("opening without a page, as other callers do, resets any earlier page", () 
 
 test("a nonsense page is dropped, and closing clears the page", () => {
 	const store = createStore();
-	store.set(openDocumentViewerAtom, { documentId: 7, workspaceId: 3, title: "x", initialPage: 0 });
+	store.set(openDocumentViewerAtom, { documentId: 7, title: "x", initialPage: 0 });
 	assert.equal(store.get(documentViewerAtom).initialPage, null);
 
-	store.set(openDocumentViewerAtom, { documentId: 7, workspaceId: 3, title: "x", initialPage: 4 });
+	store.set(openDocumentViewerAtom, { documentId: 7, title: "x", initialPage: 4 });
 	store.set(closeDocumentViewerAtom);
 	assert.equal(store.get(documentViewerAtom).initialPage, null);
 	assert.equal(store.get(documentViewerAtom).isOpen, false);

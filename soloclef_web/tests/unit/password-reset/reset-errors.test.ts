@@ -18,16 +18,17 @@ test("a password the server refuses asks for a longer one", () => {
 	assert.equal(classifyResetError(error), "password_too_short");
 });
 
-test("security check refusals are told apart from an outage", () => {
-	assert.equal(classifyResetError(new AppError("TURNSTILE_FAILED", 400)), "security_check_failed");
+test("the Go API names the refused password in the message", () => {
 	assert.equal(
-		classifyResetError(new AppError("TURNSTILE_REQUIRED", 400)),
-		"security_check_failed"
+		classifyResetError(
+			new AppError("RESET_PASSWORD_INVALID_PASSWORD", 400, "Bad Request", "BAD_REQUEST")
+		),
+		"password_too_short"
 	);
-	assert.equal(
-		classifyResetError(new AppError("TURNSTILE_UNAVAILABLE", 503)),
-		"security_check_unavailable"
-	);
+});
+
+test("a server with mail switched off is a plain failure", () => {
+	assert.equal(classifyResetError(new AppError("PASSWORD_RESET_UNAVAILABLE", 503)), "reset_failed");
 });
 
 test("rate limits and anything else get their own message", () => {

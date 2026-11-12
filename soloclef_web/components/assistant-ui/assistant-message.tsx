@@ -14,19 +14,16 @@ import {
 	DownloadIcon,
 	ExternalLink,
 	Globe,
-	MessageCircleReply,
 	MoreHorizontalIcon,
 	RefreshCwIcon,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import type { FC } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { commentsEnabledAtom, targetCommentIdAtom } from "@/atoms/chat/current-thread.atom";
+import { useMemo, useState } from "react";
 import {
 	globalModelConnectionsAtom,
 	modelConnectionsAtom,
 } from "@/atoms/model-connections/model-connections-query.atoms";
-import { activeWorkspaceIdAtom } from "@/atoms/workspaces/workspace-query.atoms";
 import {
 	CitationMetadataProvider,
 	useAllCitationMetadata,
@@ -38,8 +35,6 @@ import {
 	useTokenUsage,
 } from "@/components/assistant-ui/token-usage-context";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
-import { CommentPanelContainer } from "@/components/chat-comments/comment-panel-container/comment-panel-container";
-import { CommentSheet } from "@/components/chat-comments/comment-sheet/comment-sheet";
 import type { SerializableCitation } from "@/components/tool-ui/citation";
 import { LegacyDeliverableToolUI } from "@/components/tool-ui/legacy-deliverable";
 import {
@@ -59,7 +54,6 @@ import { withArtifactAnchor } from "@/features/chat-artifacts";
 import { InterleavedMessageParts } from "@/features/chat-messages/timeline";
 import { NotebookFollowups } from "@/features/notebooks/ui/chat/notebook-followups";
 import { SaveToNoteButton } from "@/features/notebooks/ui/save-to-note-button";
-import { useComments } from "@/hooks/use-comments";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { useElectronAPI } from "@/hooks/use-platform";
 import { formatMessageTimestamp } from "@/lib/format-date";
@@ -98,6 +92,13 @@ const EnqueueDeliverableJobToolUI = dynamic(
 	() =>
 		import("@/components/tool-ui/deliverable-job").then((m) => ({
 			default: m.EnqueueDeliverableJobToolUI,
+		})),
+	{ ssr: false }
+);
+const PageReaderToolUI = dynamic(
+	() =>
+		import("@/features/page-reader/ui/page-reader-card").then((m) => ({
+			default: m.PageReaderToolUI,
 		})),
 	{ ssr: false }
 );
@@ -317,7 +318,7 @@ const MessageInfoDropdown: FC<{ chatTurnId: string | null | undefined }> = ({ ch
 					name: model.display_name || model.model_id,
 					provider: connection.provider,
 					modelId: model.model_id,
-					shared: connection.scope === "GLOBAL",
+					shared: connection.scope === "global",
 				};
 				map.set(model.model_id, entry);
 				map.set(normalizedModelId, entry);
@@ -440,6 +441,8 @@ const BODY_TOOLS = {
 	enqueue_deliverable_job: withArtifactAnchor(EnqueueDeliverableJobToolUI),
 	display_image: withArtifactAnchor(GenerateImageToolUI),
 	generate_image: withArtifactAnchor(GenerateImageToolUI),
+	// Not a deliverable, but what the answer rests on: the pages it read.
+	web_crawl: PageReaderToolUI,
 } as const;
 
 const AssistantMessageInner: FC = () => {
@@ -470,155 +473,14 @@ const AssistantMessageInner: FC = () => {
 	);
 };
 
-function parseMessageId(assistantUiMessageId: string | undefined): number | null {
-	if (!assistantUiMessageId) return null;
-	const match = assistantUiMessageId.match(/^msg-(\d+)$/);
-	return match ? Number.parseInt(match[1], 10) : null;
-}
-
-export const AssistantMessage: FC = () => {
-	const [isSheetOpen, setIsSheetOpen] = useState(false);
-	const [isInlineOpen, setIsInlineOpen] = useState(false);
-	const messageRef = useRef<HTMLDivElement>(null);
-	const commentPanelRef = useRef<HTMLDivElement>(null);
-	const commentTriggerRef = useRef<HTMLButtonElement>(null);
-	const messageId = useAuiState(({ message }) => message?.id);
-	const workspaceId = useAtomValue(activeWorkspaceIdAtom);
-	const dbMessageId = parseMessageId(messageId);
-	const commentsEnabled = useAtomValue(commentsEnabledAtom);
-
-	// Desktop: >= 1024px (inline expandable), Medium: 768px-1023px (right sheet), Mobile: <768px (bottom sheet)
-	const isMediumScreen = useMediaQuery("(min-width: 768px) and (max-width: 1023px)");
-	const isDesktop = useMediaQuery("(min-width: 1024px)");
-
-	const isThreadRunning = useAuiState(({ thread }) => thread.isRunning);
-	const isLastMessage = useAuiState(({ message }) => message?.isLast ?? false);
-	const isMessageStreaming = isThreadRunning && isLastMessage;
-
-	const { data: commentsData, isSuccess: commentsLoaded } = useComments({
-		messageId: dbMessageId ?? 0,
-		enabled: !!dbMessageId,
-	});
-
-	const targetCommentId = useAtomValue(targetCommentIdAtom);
-
-	const hasTargetComment = useMemo(() => {
-		if (!targetCommentId || !commentsData?.comments) return false;
-		return commentsData.comments.some(
-			(c) => c.id === targetCommentId || c.replies?.some((r) => r.id === targetCommentId)
-		);
-	}, [targetCommentId, commentsData]);
-
-	const commentCount = commentsData?.total_count ?? 0;
-	const hasComments = commentCount > 0;
-
-	const showCommentTrigger = workspaceId && commentsEnabled && !isMessageStreaming && dbMessageId;
-
-	// Close floating panel when clicking outside (but not on portaled popover/dropdown content)
-	useEffect(() => {
-		if (!isInlineOpen) return;
-		const handleClickOutside = (e: MouseEvent) => {
-			const target = e.target as Element;
-			if (
-				commentPanelRef.current?.contains(target) ||
-				commentTriggerRef.current?.contains(target) ||
-				target.closest?.("[data-radix-popper-content-wrapper]")
-			)
-				return;
-			setIsInlineOpen(false);
-		};
-		document.addEventListener("mousedown", handleClickOutside);
-		return () => document.removeEventListener("mousedown", handleClickOutside);
-	}, [isInlineOpen]);
-
-	// Auto-open floating panel on desktop when this message has the target comment
-	useEffect(() => {
-		if (hasTargetComment && isDesktop && commentsLoaded) {
-			setIsInlineOpen(true);
-			const timeoutId = setTimeout(() => {
-				messageRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-			}, 100);
-			return () => clearTimeout(timeoutId);
-		}
-	}, [hasTargetComment, isDesktop, commentsLoaded]);
-
-	// Auto-open sheet on mobile/tablet when this message has the target comment
-	useEffect(() => {
-		if (hasTargetComment && !isDesktop && commentsLoaded) {
-			setIsSheetOpen(true);
-		}
-	}, [hasTargetComment, isDesktop, commentsLoaded]);
-
-	const sheetSide = isMediumScreen ? "right" : "bottom";
-
-	return (
-		<MessagePrimitive.Root
-			ref={messageRef}
-			className="aui-assistant-message-root group fade-in slide-in-from-bottom-1 relative mx-auto w-full max-w-(--thread-max-width) animate-in py-3 duration-150"
-			data-role="assistant"
-		>
-			{/* Fixed trigger slot prevents any vertical reflow when visibility changes */}
-			<div className="mr-2 mb-1 flex h-7 justify-end">
-				<Button
-					ref={isDesktop ? commentTriggerRef : undefined}
-					type="button"
-					variant="ghost"
-					onClick={
-						showCommentTrigger
-							? isDesktop
-								? () => setIsInlineOpen((prev) => !prev)
-								: () => setIsSheetOpen(true)
-							: undefined
-					}
-					aria-hidden={!showCommentTrigger}
-					tabIndex={showCommentTrigger ? 0 : -1}
-					className={cn(
-						"h-auto gap-1.5 rounded-full px-3 py-1 text-sm transition-colors",
-						"opacity-0 pointer-events-none",
-						showCommentTrigger && "opacity-100 pointer-events-auto",
-						isDesktop && isInlineOpen
-							? "bg-primary/10 text-primary"
-							: hasComments
-								? "text-primary hover:bg-primary/10"
-								: "text-muted-foreground hover:text-accent-foreground hover:bg-accent hover:text-accent-foreground"
-					)}
-				>
-					<MessageCircleReply className={cn("size-3.5", hasComments && "fill-current")} />
-					{hasComments ? (
-						<span>
-							{commentCount} {commentCount === 1 ? "comment" : "comments"}
-						</span>
-					) : (
-						<span>Add comment</span>
-					)}
-				</Button>
-			</div>
-
-			{/* Desktop floating comment panel — overlays on top of chat content */}
-			{showCommentTrigger && isDesktop && isInlineOpen && dbMessageId && (
-				<div
-					ref={commentPanelRef}
-					className="absolute right-0 top-10 z-30 w-full max-w-md animate-in fade-in slide-in-from-top-2 duration-200"
-				>
-					<CommentPanelContainer messageId={dbMessageId} isOpen={true} variant="inline" />
-				</div>
-			)}
-
-			<AssistantMessageInner />
-
-			{/* Comment sheet — bottom for mobile, right for medium screens */}
-			{showCommentTrigger && !isDesktop && (
-				<CommentSheet
-					messageId={dbMessageId}
-					isOpen={isSheetOpen}
-					onOpenChange={setIsSheetOpen}
-					commentCount={commentCount}
-					side={sheetSide}
-				/>
-			)}
-		</MessagePrimitive.Root>
-	);
-};
+export const AssistantMessage: FC = () => (
+	<MessagePrimitive.Root
+		className="aui-assistant-message-root group fade-in slide-in-from-bottom-1 relative mx-auto w-full max-w-(--thread-max-width) animate-in py-3 duration-150"
+		data-role="assistant"
+	>
+		<AssistantMessageInner />
+	</MessagePrimitive.Root>
+);
 
 const AssistantActionBar: FC = () => {
 	const isLast = useAuiState((s) => s.message.isLast);

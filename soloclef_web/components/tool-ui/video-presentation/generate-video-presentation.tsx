@@ -27,7 +27,6 @@ const GenerateVideoPresentationResultSchema = z.object({
 	status: z.enum(["pending", "generating", "ready", "failed"]),
 	video_presentation_id: z.number().nullish(),
 	artifact_id: z.number().nullish(),
-	workspace_id: z.number().nullish(),
 	title: z.string().nullish(),
 	message: z.string().nullish(),
 	error: z.string().nullish(),
@@ -118,13 +117,11 @@ function CompilationLoadingState({ title }: { title: string }) {
 function VideoPresentationPlayer({
 	presentationId,
 	artifactId,
-	workspaceId,
 	title,
 	shareToken,
 }: {
 	presentationId?: number;
 	artifactId?: number;
-	workspaceId?: number;
 	title: string;
 	shareToken?: string | null;
 }) {
@@ -148,8 +145,8 @@ function VideoPresentationPlayer({
 					? `/api/v1/public/${shareToken}/artifacts/${artifactId}/video`
 					: shareToken
 						? `/api/v1/public/${shareToken}/video-presentations/${presentationId}`
-						: artifactId != null && workspaceId != null
-							? `/api/v1/workspaces/${workspaceId}/artifacts/${artifactId}/video`
+						: artifactId != null
+							? `/api/v1/artifacts/${artifactId}/video`
 							: null;
 
 			if (!apiPath) throw new Error("No presentation source");
@@ -228,7 +225,7 @@ function VideoPresentationPlayer({
 		} finally {
 			setIsLoading(false);
 		}
-	}, [presentationId, artifactId, workspaceId, shareToken]);
+	}, [presentationId, artifactId, shareToken]);
 
 	useEffect(() => {
 		loadPresentation();
@@ -406,13 +403,11 @@ function VideoPresentationPlayer({
 export function StatusPoller({
 	presentationId,
 	artifactId,
-	workspaceId,
 	title,
 	shareToken,
 }: {
 	presentationId?: number;
 	artifactId?: number;
-	workspaceId?: number;
 	title: string;
 	shareToken?: string | null;
 }) {
@@ -423,7 +418,6 @@ export function StatusPoller({
 		<VideoPresentationPlayer
 			presentationId={presentationId}
 			artifactId={artifactId}
-			workspaceId={workspaceId}
 			title={title}
 			shareToken={shareToken}
 		/>
@@ -495,7 +489,6 @@ export const GenerateVideoPresentationToolUI = ({
 			<StatusPoller
 				presentationId={result.video_presentation_id}
 				artifactId={result.artifact_id ?? undefined}
-				workspaceId={result.workspace_id ?? undefined}
 				title={result.title || title}
 				shareToken={shareToken}
 			/>
@@ -507,7 +500,6 @@ export const GenerateVideoPresentationToolUI = ({
 			<VideoPresentationPlayer
 				presentationId={result.video_presentation_id}
 				artifactId={result.artifact_id ?? undefined}
-				workspaceId={result.workspace_id ?? undefined}
 				title={result.title || title}
 				shareToken={shareToken}
 			/>

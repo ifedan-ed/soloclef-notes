@@ -5,8 +5,8 @@ import "testing"
 // The key is read by the Python tier as well, so it is pinned here as a literal:
 // a change to any part of it splits one budget into two.
 func TestTheKeyIsTheOneTheLimitsLibraryWrites(t *testing.T) {
-	got := Key(DefaultLimit, "203.0.113.7", "/api/v1/workspaces/1/members")
-	want := "LIMITS:LIMITER/203.0.113.7//api/v1/workspaces/1/members/1024/1/minute"
+	got := Key(DefaultLimit, "203.0.113.7", "/api/v1/notebooks/1/notes")
+	want := "LIMITS:LIMITER/203.0.113.7//api/v1/notebooks/1/notes/1024/1/minute"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}

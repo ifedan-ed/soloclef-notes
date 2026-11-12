@@ -33,9 +33,8 @@ type Outcome struct {
 // The order is the Python function's and is load-bearing: the preamble is
 // stripped before the sentinel is looked for, so "  no update  " is a no-op;
 // the size is checked before the heading rule, so a 30,000-character document
-// with no heading is refused for its length; and the scope rule runs last, so a
-// team document that is both too long and personal is refused for its length.
-func Save(scope Scope, requested, stored string) Outcome {
+// with no heading is refused for its length.
+func Save(requested, stored string) Outcome {
 	next := strippedPreamble(pythonStrip(requested))
 
 	// strings.ToUpper is Go's simple case mapping and Python's str.upper() is
@@ -51,11 +50,6 @@ func Save(scope Scope, requested, stored string) Outcome {
 	}
 	if message, refused := headingless(next); refused {
 		return Outcome{Refusal: message, Answer: stored}
-	}
-	if scope == TeamScope {
-		if message, refused := personalHeadingIntroduced(next, stored); refused {
-			return Outcome{Refusal: message, Answer: stored}
-		}
 	}
 
 	// The document is re-rendered before it is written, which is what

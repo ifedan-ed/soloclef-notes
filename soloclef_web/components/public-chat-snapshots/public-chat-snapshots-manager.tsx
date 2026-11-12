@@ -5,18 +5,12 @@ import { useAtomValue } from "jotai";
 import { AlertCircle, Info } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { myAccessAtom } from "@/atoms/members/members-query.atoms";
 import { publicChatSnapshotsAtom } from "@/atoms/public-chat-snapshots/public-chat-snapshots-query.atoms";
-import { currentUserAtom } from "@/atoms/user/user-query.atoms";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { PublicChatSnapshotDetail } from "@/contracts/types/chat-threads.types";
 import { useDelayedFlag } from "@/features/notebooks/hooks/use-delayed-flag";
 import { publicLinksApi } from "@/features/public-sharing";
-import {
-	canRevokePublicLink,
-	canViewPublicLinks,
-} from "@/features/public-sharing/lib/public-link-access";
 import type { LiveLink } from "@/features/public-sharing/model/live-link";
 import { cacheKeys } from "@/lib/query-client/cache-keys";
 import { LiveNotebookLinkRow } from "./live-notebook-link-row";
@@ -26,28 +20,21 @@ type Row =
 	| { kind: "snapshot"; created_at: string; snapshot: PublicChatSnapshotDetail }
 	| { kind: "notebook"; created_at: string; link: LiveLink };
 
-interface PublicChatSnapshotsManagerProps {
-	workspaceId: number;
-}
-
-/** Workspace settings › Public links: every read-only link, with copy and revoke. */
-export function PublicChatSnapshotsManager({ workspaceId }: PublicChatSnapshotsManagerProps) {
+/** Settings › Public links: every read-only link of the account, with copy and revoke. */
+export function PublicChatSnapshotsManager() {
 	const t = useTranslations("publicSharing.links");
 	const queryClient = useQueryClient();
 	const { data: snapshotsData, isLoading, isError } = useAtomValue(publicChatSnapshotsAtom);
-	const { data: access } = useAtomValue(myAccessAtom);
-	const { data: me } = useAtomValue(currentUserAtom);
 	const showSkeleton = useDelayedFlag(isLoading);
 	const [revokeError, setRevokeError] = useState<string | null>(null);
 	const liveLinks = useQuery({
-		queryKey: cacheKeys.liveNotebookLinks.byWorkspace(workspaceId),
-		queryFn: () => publicLinksApi.notebookLinks(workspaceId),
-		enabled: workspaceId > 0 && canViewPublicLinks(access),
+		queryKey: cacheKeys.liveNotebookLinks.list,
+		queryFn: () => publicLinksApi.notebookLinks(),
 		meta: { suppressGlobalErrorToast: true },
 	});
 	const revokeLive = useMutation({
 		meta: { suppressGlobalErrorToast: true },
-		mutationFn: (link: LiveLink) => publicLinksApi.revokeNotebookLink(workspaceId, link.id),
+		mutationFn: (link: LiveLink) => publicLinksApi.revokeNotebookLink(link.id),
 		onSuccess: () => {
 			setRevokeError(null);
 			void queryClient.invalidateQueries({ queryKey: cacheKeys.liveNotebookLinks.all });
@@ -57,8 +44,7 @@ export function PublicChatSnapshotsManager({ workspaceId }: PublicChatSnapshotsM
 
 	const revoke = useMutation({
 		meta: { suppressGlobalErrorToast: true },
-		mutationFn: (snapshot: PublicChatSnapshotDetail) =>
-			publicLinksApi.revoke(workspaceId, snapshot.id),
+		mutationFn: (snapshot: PublicChatSnapshotDetail) => publicLinksApi.revoke(snapshot.id),
 		onSuccess: () => {
 			setRevokeError(null);
 			void queryClient.invalidateQueries({ queryKey: cacheKeys.publicChatSnapshots.all });
@@ -138,7 +124,6 @@ export function PublicChatSnapshotsManager({ workspaceId }: PublicChatSnapshotsM
 							<PublicChatSnapshotRow
 								key={`snapshot-${row.snapshot.id}`}
 								snapshot={row.snapshot}
-								canRevoke={canRevokePublicLink(access, me?.id, row.snapshot.created_by_user_id)}
 								revoking={revoke.isPending && revoke.variables?.id === row.snapshot.id}
 								onRevoke={async (snapshot) => {
 									await revoke.mutateAsync(snapshot).catch(() => undefined);

@@ -50,9 +50,9 @@ func (m *Mailer) Send(ctx context.Context, message mailer.Message) error {
 	}
 	wire, err := mime.Build(message, sender, m.boundary)
 	if err != nil {
-		// Python builds the MIME outside its try, so this is not one of the
-		// port's three failures: it is a message that cannot be built, which
-		// the queue drops rather than retries.
+		// Not one of the three failures: it is a message that cannot be
+		// built, so sending it again would fail the same way. The caller
+		// gives up on it rather than retrying.
 		return err
 	}
 	// The envelope addresses, not the headers they came from: a non-ASCII

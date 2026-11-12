@@ -43,26 +43,47 @@ func (v *Verifier) OwnsIssuer(issuer string) bool { return v.Settings.IsThisIssu
 // the person behind the agent, or ErrRefused when it is not a valid sign-in, or
 // ErrProviderUnavailable when it could not be judged either way.
 func (v *Verifier) Verify(ctx context.Context, token string) (Identity, error) {
+	claims, err := v.claims(ctx, token)
+	if err != nil {
+		return Identity{}, err
+	}
+	return identityFrom(claims), nil
+}
+
+// Claims is the claim set of a token that passed every check Verify makes:
+// the signature against the provider's published keys, the algorithm, the
+// issuer, this client as the audience and authorized party, and the times.
+//
+// It is here for the web's single sign-on (internal/oidcsignin), whose ID
+// token is judged by exactly these rules and which then reads claims an
+// agent's token does not carry (the nonce of the sign-in it answers, the
+// person's name). One verifier, so the two sign-ins cannot come to disagree
+// about what a valid token from the provider is.
+func (v *Verifier) Claims(ctx context.Context, token string) (map[string]json.RawMessage, error) {
+	return v.claims(ctx, token)
+}
+
+func (v *Verifier) claims(ctx context.Context, token string) (rawClaims, error) {
 	metadata, err := v.Directory.Metadata(ctx)
 	if err != nil {
-		return Identity{}, fmt.Errorf("%w: %w", ErrProviderUnavailable, err)
+		return nil, fmt.Errorf("%w: %w", ErrProviderUnavailable, err)
 	}
 
 	header, err := readHeader(token)
 	if err != nil {
-		return Identity{}, fmt.Errorf("%w: not a JWT: %w", ErrRefused, err)
+		return nil, fmt.Errorf("%w: not a JWT: %w", ErrRefused, err)
 	}
 	if !slices.Contains(acceptedAlgorithms, header.Algorithm) ||
 		!slices.Contains(metadata.SigningAlgorithms, header.Algorithm) {
-		return Identity{}, fmt.Errorf("%w: signed with %s", ErrRefused, header.Algorithm)
+		return nil, fmt.Errorf("%w: signed with %s", ErrRefused, header.Algorithm)
 	}
 
 	key, err := v.signingKey(ctx, header.KeyID)
 	if err != nil {
-		return Identity{}, fmt.Errorf("%w: provider keys unreadable: %w", ErrProviderUnavailable, err)
+		return nil, fmt.Errorf("%w: provider keys unreadable: %w", ErrProviderUnavailable, err)
 	}
 	if key == nil {
-		return Identity{}, fmt.Errorf("%w: signed with an unknown key", ErrRefused)
+		return nil, fmt.Errorf("%w: signed with an unknown key", ErrRefused)
 	}
 
 	claims := rawClaims{}
@@ -81,16 +102,16 @@ func (v *Verifier) Verify(ctx context.Context, token string) (Identity, error) {
 		}
 		return key.PublicKey, nil
 	}); err != nil {
-		return Identity{}, fmt.Errorf("%w: rejected: %w", ErrRefused, err)
+		return nil, fmt.Errorf("%w: rejected: %w", ErrRefused, err)
 	}
 
 	if err := checkClaims(claims, v.Settings.ClientID, metadata.Issuer, v.now()); err != nil {
-		return Identity{}, err
+		return nil, err
 	}
 	if err := checkAuthorizedParty(claims, v.Settings.ClientID); err != nil {
-		return Identity{}, err
+		return nil, err
 	}
-	return identityFrom(claims), nil
+	return claims, nil
 }
 
 // checkAuthorizedParty is the check after jwt.decode: the provider always names

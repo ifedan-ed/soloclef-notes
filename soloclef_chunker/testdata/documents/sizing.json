@@ -1,0 +1,11 @@
+{
+  "unit": "BAAI/bge-m3 tokens",
+  "chunk_size": 512,
+  "probes": {
+    "Hello world.": 3,
+    "ααααα—": 6,
+    "a\nb": 2,
+    " leading space": 2,
+    "22.5 mg/dL": 6
+  }
+}

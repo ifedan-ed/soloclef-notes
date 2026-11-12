@@ -9,56 +9,27 @@ import (
 	"context"
 )
 
-const saveTeamMemory = `-- name: SaveTeamMemory :exec
-UPDATE workspaces SET shared_memory_md = $2 WHERE id = $1
-`
-
-type SaveTeamMemoryParams struct {
-	ID             int64
-	SharedMemoryMd *string
-}
-
-func (q *Queries) SaveTeamMemory(ctx context.Context, arg SaveTeamMemoryParams) error {
-	_, err := q.db.Exec(ctx, saveTeamMemory, arg.ID, arg.SharedMemoryMd)
-	return err
-}
-
 const saveUserMemory = `-- name: SaveUserMemory :exec
 UPDATE "user" SET memory_md = $2 WHERE id = $1
 `
 
 type SaveUserMemoryParams struct {
 	ID       string
-	MemoryMd *string
+	MemoryMd string
 }
 
-// The write. The Python service assigns the attribute and commits; nothing
-// else about the row changes.
+// The write. Nothing else about the row changes.
 func (q *Queries) SaveUserMemory(ctx context.Context, arg SaveUserMemoryParams) error {
 	_, err := q.db.Exec(ctx, saveUserMemory, arg.ID, arg.MemoryMd)
 	return err
 }
 
-const teamMemory = `-- name: TeamMemory :one
-SELECT COALESCE(shared_memory_md, '') AS memory_md FROM workspaces WHERE id = $1
-`
-
-// The same for the team scope, over workspaces.shared_memory_md.
-func (q *Queries) TeamMemory(ctx context.Context, id int64) (string, error) {
-	row := q.db.QueryRow(ctx, teamMemory, id)
-	var memory_md string
-	err := row.Scan(&memory_md)
-	return memory_md, err
-}
-
 const userMemory = `-- name: UserMemory :one
-SELECT COALESCE(memory_md, '') AS memory_md FROM "user" WHERE id = $1
+SELECT memory_md FROM "user" WHERE id = $1
 `
 
-// app/services/memory/service.py:_load_target for the user scope, then
-// _get_memory. The column is nullable with a ” default, and the service reads
-// `getattr(target, "memory_md", None) or ""`, so NULL and ” are the same
-// answer.
+// The account's memory document. The column is NOT NULL with a ” default:
+// there is one way to say "nothing remembered", so nothing is coalesced.
 func (q *Queries) UserMemory(ctx context.Context, id string) (string, error) {
 	row := q.db.QueryRow(ctx, userMemory, id)
 	var memory_md string

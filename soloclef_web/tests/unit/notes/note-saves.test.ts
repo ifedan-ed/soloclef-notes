@@ -1,165 +1,121 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import { notebookKeys } from "@/features/notebooks/api/notebook-query-keys";
-import { noteSavesSettled, saveNotebookNote } from "@/features/notebooks/lib/note-saves";
-import type { NotebookNote } from "@/features/notebooks/model/notebook";
+import { createNoteSaves } from "@/features/notes/lib/note-saves";
+import type { NoteChanges, SaveState } from "@/features/notes/lib/save-queue";
 
-const NB = 2;
-
-function note(content: string, title = "Reopen check"): NotebookNote {
-	return {
-		id: 7,
-		notebook_id: NB,
-		title,
-		content,
-		converted_document_id: null,
-		origin: "hand",
-		automation_id: null,
-		created_at: "2026-10-10T10:00:00Z",
-		updated_at: "2026-10-10T10:00:00Z",
-	};
+/** Note saves whose timer is run by hand and whose sends answer when told. */
+function harness() {
+	const timers: (() => void)[] = [];
+	const sent: { noteId: number; changes: NoteChanges }[] = [];
+	const answers: { resolve: (value: string) => void; reject: (error: Error) => void }[] = [];
+	const typed: { noteId: number; changes: NoteChanges }[] = [];
+	const saved: { noteId: number; value: string }[] = [];
+	const saves = createNoteSaves<string>({
+		delayMs: 1000,
+		send: (noteId, changes) => {
+			sent.push({ noteId, changes });
+			return new Promise((resolve, reject) => answers.push({ resolve, reject }));
+		},
+		onTyped: (noteId, changes) => typed.push({ noteId, changes }),
+		onSaved: (noteId, value) => saved.push({ noteId, value }),
+		schedule: (run) => {
+			timers.push(run);
+			return timers.length - 1;
+		},
+		cancel: (handle) => {
+			timers[handle as number] = () => undefined;
+		},
+	});
+	const settle = () => new Promise((resolve) => setImmediate(resolve));
+	return { saves, sent, answers, typed, saved, settle };
 }
 
-function deferred<T>() {
-	let resolve!: (value: T) => void;
-	let reject!: (error: unknown) => void;
-	const promise = new Promise<T>((res, rej) => {
-		resolve = res;
-		reject = rej;
-	});
-	return { promise, resolve, reject };
-}
-
-const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
-
-// Each test has a workspace of its own: saves on their way are kept per workspace and note.
-let workspaces = 0;
-
-function setup() {
-	workspaces += 1;
-	const WS = workspaces;
-	const listKey = notebookKeys.notes(WS, NB);
-	const noteKey = notebookKeys.note(WS, NB, 7);
-	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-	queryClient.setQueryData(listKey, [note("First line.")]);
-	queryClient.setQueryData(noteKey, note("First line."));
-	return { WS, ref: { workspaceId: WS, notebookId: NB, noteId: 7 }, listKey, noteKey, queryClient };
-}
-
-test("the text being saved is in both of the note's caches as the save starts", async () => {
-	const { ref, listKey, noteKey, queryClient } = setup();
-	const answer = deferred<NotebookNote>();
-	const saving = saveNotebookNote(
-		queryClient,
-		ref,
-		{ content: "First line. alpha" },
-		() => answer.promise
-	);
-	// Studio's list (Back, then the note opened again) and the Notes page's note.
-	assert.equal(queryClient.getQueryData<NotebookNote[]>(listKey)?.[0].content, "First line. alpha");
-	assert.equal(queryClient.getQueryData<NotebookNote>(noteKey)?.content, "First line. alpha");
-	answer.resolve(note("First line. alpha"));
-	await saving;
-	assert.equal(queryClient.getQueryData<NotebookNote>(noteKey)?.content, "First line. alpha");
+test("what is typed is reported at once, before any save", () => {
+	const h = harness();
+	const note = h.saves.open(7, () => undefined);
+	note.queue({ content: "First line. alpha" });
+	assert.deepEqual(h.typed, [{ noteId: 7, changes: { content: "First line. alpha" } }]);
+	assert.equal(h.sent.length, 0);
 });
 
-test("a read already on its way when a save starts does not bring the old text back", async () => {
-	const { ref, listKey, queryClient } = setup();
-	const read = deferred<NotebookNote[]>();
-	const observer = new QueryObserver(queryClient, {
-		queryKey: listKey,
-		queryFn: () => read.promise,
-		staleTime: 0,
-	});
-	const unsubscribe = observer.subscribe(() => undefined);
-	void observer.refetch();
-	await tick();
-	const answer = deferred<NotebookNote>();
-	const saving = saveNotebookNote(
-		queryClient,
-		ref,
-		{ content: "First line. alpha" },
-		() => answer.promise
-	);
-	// The read was asked before the save: its answer has the text from before.
-	read.resolve([note("First line.")]);
-	await tick();
-	assert.equal(queryClient.getQueryData<NotebookNote[]>(listKey)?.[0].content, "First line. alpha");
-	answer.resolve(note("First line. alpha"));
-	await saving;
-	unsubscribe();
+test("a note opened again while its save is in flight keeps one queue: the next save waits its turn", async () => {
+	const h = harness();
+	const first = h.saves.open(7, () => undefined);
+	first.queue({ content: "First line. alpha" });
+	// Left: what is waiting is sent, and is still on its way.
+	first.close();
+	await h.settle();
+	assert.deepEqual(h.sent, [{ noteId: 7, changes: { content: "First line. alpha" } }]);
+
+	// Opened again, typed in, left again before the first save is answered.
+	const states: SaveState[] = [];
+	const second = h.saves.open(7, (state) => states.push(state));
+	assert.equal(states.at(-1), "saving", "the new opening is told a save is still going");
+	second.queue({ content: "First line. alpha beta" });
+	second.close();
+	await h.settle();
+	// One queue: the second save is not sent beside the first.
+	assert.equal(h.sent.length, 1);
+	assert.equal(h.saves.size(), 1, "closed but unsaved, the queue is kept");
+
+	h.answers[0].resolve("server: alpha");
+	await h.settle();
+	assert.deepEqual(h.sent[1], { noteId: 7, changes: { content: "First line. alpha beta" } });
+	// The older answer is not "the note as saved": newer words are in flight.
+	assert.deepEqual(h.saved, []);
+	h.answers[1].resolve("server: alpha beta");
+	await h.settle();
+	assert.deepEqual(h.saved, [{ noteId: 7, value: "server: alpha beta" }]);
+	assert.equal(h.saves.size(), 0, "closed and saved, the queue is forgotten");
 });
 
-test("a read asked while a save is on its way waits for it", async () => {
-	const { WS, ref, queryClient } = setup();
-	const answer = deferred<NotebookNote>();
-	const saving = saveNotebookNote(
-		queryClient,
-		ref,
-		{ content: "First line. alpha" },
-		() => answer.promise
-	);
-	let waited = false;
-	const reading = noteSavesSettled(WS, NB).then(() => {
-		waited = true;
-	});
-	await tick();
-	assert.equal(waited, false);
-	// Another notebook's reads do not wait for it.
-	await noteSavesSettled(WS, NB + 1);
-	answer.resolve(note("First line. alpha"));
-	await saving;
-	await reading;
-	assert.equal(waited, true);
-	// The Notes page's list waits for any note of the workspace.
-	const second = deferred<NotebookNote>();
-	const again = saveNotebookNote(queryClient, ref, { title: "Renamed" }, () => second.promise);
-	let listWaited = false;
-	const list = noteSavesSettled(WS).then(() => {
-		listWaited = true;
-	});
-	await tick();
-	assert.equal(listWaited, false);
-	second.resolve(note("First line. alpha", "Renamed"));
-	await again;
-	await list;
-	assert.equal(listWaited, true);
+test("a save that failed while the note was closed is sent again when it is opened", async () => {
+	const h = harness();
+	const first = h.saves.open(7, () => undefined);
+	first.queue({ content: "kept" });
+	first.close();
+	await h.settle();
+	h.answers[0].reject(new Error("offline"));
+	await h.settle();
+	assert.equal(h.saves.size(), 1, "the words are not forgotten");
+
+	const states: SaveState[] = [];
+	const second = h.saves.open(7, (state) => states.push(state));
+	assert.equal(states[0], "failed");
+	await h.settle();
+	assert.deepEqual(h.sent[1], { noteId: 7, changes: { content: "kept" } });
+	h.answers[1].resolve("server: kept");
+	await h.settle();
+	assert.deepEqual(h.saved, [{ noteId: 7, value: "server: kept" }]);
+	assert.equal(states.at(-1), "saved");
+	second.close();
+	await h.settle();
+	assert.equal(h.saves.size(), 0);
 });
 
-test("a note's saves reach the server in the order made; only the newest answer is kept", async () => {
-	const { ref, listKey, noteKey, queryClient } = setup();
-	const sent: string[] = [];
-	const answers = [deferred<NotebookNote>(), deferred<NotebookNote>()];
-	const send = (changes: { content?: string }) => {
-		sent.push(changes.content ?? "");
-		return answers[sent.length - 1].promise;
-	};
-	const first = saveNotebookNote(queryClient, ref, { content: "First line. alpha" }, send);
-	const second = saveNotebookNote(queryClient, ref, { content: "First line. alpha beta" }, send);
-	await tick();
-	// The second waits for the first to be answered.
-	assert.deepEqual(sent, ["First line. alpha"]);
-	answers[0].resolve(note("First line. alpha"));
-	await first;
-	await tick();
-	assert.deepEqual(sent, ["First line. alpha", "First line. alpha beta"]);
-	// The first answer is older than what the caches hold: they keep the newer text.
-	assert.equal(queryClient.getQueryData<NotebookNote>(noteKey)?.content, "First line. alpha beta");
-	assert.equal(
-		queryClient.getQueryData<NotebookNote[]>(listKey)?.[0].content,
-		"First line. alpha beta"
+test("two notes save on their own, and a closed opening hears nothing more", async () => {
+	const h = harness();
+	const heard: SaveState[] = [];
+	const one = h.saves.open(1, (state) => heard.push(state));
+	const two = h.saves.open(2, () => undefined);
+	one.queue({ title: "One" });
+	two.queue({ title: "Two" });
+	one.close();
+	const before = heard.length;
+	await h.settle();
+	h.answers[0].resolve("server: one");
+	await h.settle();
+	assert.equal(heard.length, before, "nothing is reported to an opening that closed");
+	assert.deepEqual(
+		h.sent.map((s) => s.noteId),
+		[1]
 	);
-	answers[1].resolve(note("First line. alpha beta"));
-	await second;
-	assert.equal(queryClient.getQueryData<NotebookNote>(noteKey)?.content, "First line. alpha beta");
-});
-
-test("a failed save has both caches read again", async () => {
-	const { ref, listKey, noteKey, queryClient } = setup();
-	await assert.rejects(
-		saveNotebookNote(queryClient, ref, { content: "Lost" }, () => Promise.reject(new Error("503")))
-	);
-	assert.equal(queryClient.getQueryState(listKey)?.isInvalidated, true);
-	assert.equal(queryClient.getQueryState(noteKey)?.isInvalidated, true);
+	assert.equal(h.saves.size(), 1, "note 1 is done; note 2 is open");
+	// Note 2's save goes on its own queue, and is answered on its own.
+	const flushed = two.flush();
+	await h.settle();
+	assert.deepEqual(h.sent[1], { noteId: 2, changes: { title: "Two" } });
+	h.answers[1].resolve("server: two");
+	await flushed;
+	assert.deepEqual(h.saved.at(-1), { noteId: 2, value: "server: two" });
 });

@@ -32,8 +32,8 @@ export interface NewEmailImapAccount {
 	app_password: string;
 }
 
-const base = (workspaceId: number) =>
-	`/api/v1/workspaces/${workspaceId}/connectors/email-imap/accounts`;
+// The account's own mailboxes: the server takes the account from the session.
+const base = "/api/v1/connectors/email-imap/accounts";
 
 /**
  * Email (IMAP) account management. Credentials are encrypted server-side the
@@ -41,22 +41,18 @@ const base = (workspaceId: number) =>
  * from `add` (the create response omits it).
  */
 export const emailImapApi = {
-	list: (workspaceId: number) =>
-		baseApiService.get(base(workspaceId), z.array(emailImapAccountSchema)),
-	add: (workspaceId: number, account: NewEmailImapAccount) =>
-		baseApiService.post(base(workspaceId), emailImapAccountSchema, { body: account }),
-	remove: (workspaceId: number, accountId: string) =>
-		baseApiService.delete(`${base(workspaceId)}/${encodeURIComponent(accountId)}`),
-	test: (workspaceId: number, accountId: string) =>
+	list: () => baseApiService.get(base, z.array(emailImapAccountSchema)),
+	add: (account: NewEmailImapAccount) =>
+		baseApiService.post(base, emailImapAccountSchema, { body: account }),
+	remove: (accountId: string) => baseApiService.delete(`${base}/${encodeURIComponent(accountId)}`),
+	test: (accountId: string) =>
 		baseApiService.post(
-			`${base(workspaceId)}/${encodeURIComponent(accountId)}/test`,
+			`${base}/${encodeURIComponent(accountId)}/test`,
 			testConnectionResultSchema
 		),
 	/** Test connection settings before the account exists yet (add-form). */
-	testUnsaved: (workspaceId: number, account: NewEmailImapAccount) =>
-		baseApiService.post(
-			`/api/v1/connectors/email-imap/test?workspace_id=${workspaceId}`,
-			testConnectionResultSchema,
-			{ body: account }
-		),
+	testUnsaved: (account: NewEmailImapAccount) =>
+		baseApiService.post(`/api/v1/connectors/email-imap/test`, testConnectionResultSchema, {
+			body: account,
+		}),
 };

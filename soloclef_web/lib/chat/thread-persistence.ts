@@ -10,20 +10,18 @@ import { buildBackendUrl } from "@/lib/env-config";
 // =============================================================================
 
 /**
- * Chat visibility levels - matches backend ChatVisibility enum
+ * A thread as the server answers it on create, update and full read.
+ *
+ * A thread belongs to the account that made it and to nobody else, so the
+ * record names no owner and no sharing level: the server takes
+ * the account from the session and answers 404 for anyone else's thread.
  */
-export type ChatVisibility = "PRIVATE" | "SEARCH_SPACE";
-
 export interface ThreadRecord {
 	id: number;
 	title: string;
 	archived: boolean;
-	visibility: ChatVisibility;
-	created_by_id: string | null;
-	workspace_id: number;
 	created_at: string;
 	updated_at: string;
-	has_comments?: boolean;
 }
 
 export interface TokenUsageSummary {
@@ -73,14 +71,17 @@ export interface ThreadHistoryLoadResponse {
 // =============================================================================
 
 /**
- * Create a new thread
+ * Create a new thread for the signed-in account.
+ *
+ * The body carries the title and nothing about ownership: the server keys
+ * the thread by the session's account, so there is no id a caller could
+ * send to place a thread anywhere else.
  */
-export async function createThread(workspaceId: number, title = "New Chat"): Promise<ThreadRecord> {
+export async function createThread(title = "New Chat"): Promise<ThreadRecord> {
 	return baseApiService.post<ThreadRecord>("/api/v1/threads", undefined, {
 		body: {
 			title,
 			archived: false,
-			workspace_id: workspaceId,
 		},
 	});
 }
@@ -126,7 +127,7 @@ export async function appendMessage(
 }
 
 /**
- * Get full thread details including visibility
+ * Get the thread's own record (title, archived, dates) without its messages.
  */
 export async function getThreadFull(threadId: number): Promise<ThreadRecord> {
 	return baseApiService.get<ThreadRecord>(`/api/v1/threads/${threadId}/full`);
@@ -150,21 +151,6 @@ export async function getPendingInterrupts(threadId: number): Promise<PendingInt
 	return baseApiService.get<PendingInterruptsResponse>(
 		`/api/v1/threads/${threadId}/pending-interrupts`
 	);
-}
-
-/**
- * Regeneration request parameters
- */
-export interface RegenerateParams {
-	workspaceId: number;
-	userQuery?: string | null; // New user query (for edit). Null/undefined = reload with same query
-	attachments?: Array<{
-		id: string;
-		name: string;
-		type: string;
-		content: string;
-	}>;
-	mentionedDocumentIds?: number[];
 }
 
 /**

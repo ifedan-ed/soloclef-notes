@@ -1,7 +1,6 @@
 import type { ComponentType } from "react";
 
 export interface ThreadViewProps {
-	workspaceId: number;
 	chatId: number;
 	onThreadNotFound: () => void;
 }
@@ -14,21 +13,12 @@ export interface ThreadViewProps {
  */
 export function NotebookThreadPane({
 	view: View,
-	workspaceId,
 	threadId,
 	onThreadNotFound,
 }: {
 	view: ComponentType<ThreadViewProps>;
-	workspaceId: number;
 	threadId: number;
 	onThreadNotFound: () => void;
 }) {
-	return (
-		<View
-			key={threadId}
-			workspaceId={workspaceId}
-			chatId={threadId}
-			onThreadNotFound={onThreadNotFound}
-		/>
-	);
+	return <View key={threadId} chatId={threadId} onThreadNotFound={onThreadNotFound} />;
 }

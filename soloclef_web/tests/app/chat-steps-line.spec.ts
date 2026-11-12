@@ -112,14 +112,13 @@ test("an answer's steps are one line that changes as it works; the list opens on
 	page,
 	request,
 	token,
-	workspace,
 	notebook,
 	isPhone,
 }, testInfo) => {
 	const project = testInfo.project.name;
-	await addNoteSource(request, token, workspace.id, notebook.id, "Inbox notes", "Mail notes.");
+	await addNoteSource(request, token, notebook.id, "Inbox notes", "Mail notes.");
 	const stream = await stubChatStream(page);
-	await openNotebook(page, workspace.id, notebook.id, "Chat");
+	await openNotebook(page, notebook.id, "Chat");
 	await send(page, QUESTION);
 	await stream.whenConnected();
 	const answer = assistantMessages(page).last();
@@ -173,7 +172,7 @@ test("an answer's steps are one line that changes as it works; the list opens on
 		const body = (await real.json()) as { messages: unknown[] };
 		await route.fulfill({ response: real, json: { ...body, messages: savedRows(threadId) } });
 	});
-	await openNotebook(page, workspace.id, notebook.id, "Chat");
+	await openNotebook(page, notebook.id, "Chat");
 	const reloaded = assistantMessages(page).last();
 	await expect(reloaded).toContainText(ANSWER);
 	await shot(page, "05-reloaded", project);
@@ -190,12 +189,11 @@ test("a screen reader hears the step the line settles on, once, and never the cl
 	page,
 	request,
 	token,
-	workspace,
 	notebook,
 }) => {
-	await addNoteSource(request, token, workspace.id, notebook.id, "Inbox notes", "Mail notes.");
+	await addNoteSource(request, token, notebook.id, "Inbox notes", "Mail notes.");
 	const stream = await stubChatStream(page);
-	await openNotebook(page, workspace.id, notebook.id, "Chat");
+	await openNotebook(page, notebook.id, "Chat");
 	await send(page, QUESTION);
 	await stream.whenConnected();
 	const answer = assistantMessages(page).last();

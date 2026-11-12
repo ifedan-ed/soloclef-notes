@@ -1,14 +1,13 @@
 "use client";
 
 import { useAtom } from "jotai";
-import { ChevronDown, Cloud, Dot, File as FileIcon, FolderOpen, HardDrive, X } from "lucide-react";
+import { ChevronDown, Dot, File as FileIcon, FolderOpen, X } from "lucide-react";
 
 import { useTranslations } from "next-intl";
 import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { toast } from "sonner";
 import { uploadDocumentMutationAtom } from "@/atoms/documents/document-mutation.atoms";
-import { useRuntimeConfig } from "@/components/providers/runtime-config";
 import {
 	Accordion,
 	AccordionContent,
@@ -27,7 +26,8 @@ import { Progress } from "@/components/ui/progress";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import type { DocumentParser } from "@/contracts/types/document.types";
-import { ParserCreditHint } from "@/features/billing/ui/parser-credit-hint";
+import { PARSER_NAME_KEYS } from "@/features/parser-choice/parser-labels";
+import { ParserPicker } from "@/features/parser-choice/ui/parser-picker";
 import { useEtlCapabilities } from "@/hooks/use-etl-capabilities";
 import { useElectronAPI } from "@/hooks/use-platform";
 import { documentsApiService } from "@/lib/apis/documents-api.service";
@@ -38,7 +38,6 @@ import {
 	resolveParserChoice,
 } from "@/lib/etl/parser-choice";
 import { trackDocumentUploadStarted } from "@/lib/posthog/events";
-import { getAcceptedFileTypes, getSupportedExtensionsSet } from "@/lib/supported-extensions";
 
 /** What an upload produced, for callers that link the new documents somewhere. */
 export interface DocumentUploadResult {
@@ -47,7 +46,6 @@ export interface DocumentUploadResult {
 }
 
 interface DocumentUploadTabProps {
-	workspaceId: string;
 	onSuccess?: (result: DocumentUploadResult) => void;
 	onAccordionStateChange?: (isExpanded: boolean) => void;
 	/**
@@ -138,19 +136,6 @@ function flattenTree(
 const FOLDER_BATCH_SIZE_BYTES = 20 * 1024 * 1024;
 const FOLDER_BATCH_MAX_FILES = 10;
 
-const UNAVAILABLE_REASON_KEYS = {
-	missing_api_key: "parser_unavailable_missing_api_key",
-	not_installed: "parser_unavailable_not_installed",
-	unknown_service: "parser_unavailable_unknown_service",
-} as const;
-
-function unavailableReasonKey(reason: string | null) {
-	return (
-		UNAVAILABLE_REASON_KEYS[reason as keyof typeof UNAVAILABLE_REASON_KEYS] ??
-		UNAVAILABLE_REASON_KEYS.unknown_service
-	);
-}
-
 interface RejectedNotice {
 	parser: DocumentParser | undefined;
 	names: string[];
@@ -160,24 +145,26 @@ const toggleRowClass =
 	"flex items-center justify-between rounded-lg bg-slate-400/5 dark:bg-white/5 p-3";
 
 export function DocumentUploadTab({
-	workspaceId,
 	onSuccess,
 	onAccordionStateChange,
 	initialFiles,
 }: DocumentUploadTabProps) {
 	const t = useTranslations("upload_documents");
-	const { etlService, maxFileSizeMB } = useRuntimeConfig();
 	const [files, setFiles] = useState<FileWithId[]>([]);
 	const [uploadProgress, setUploadProgress] = useState(0);
 	const [accordionValue, setAccordionValue] = useState<string>("");
 	const [useVisionLlm, setUseVisionLlm] = useState(false);
 	const [selectedParser, setSelectedParser] = useState<DocumentParser | undefined>(undefined);
 	const [rejectedNotice, setRejectedNotice] = useState<RejectedNotice | null>(null);
-	// The backend owns which parser can run, what it costs and which files it
-	// opens; until it answers nothing is offered and the server default applies.
+	// The server owns which parsers can run, which files each reads and how
+	// big a file may be. Until it answers there is nothing truthful to offer,
+	// so the tab shows that it is loading instead of a guessed file list.
 	const { data: etlCapabilities, error: etlCapabilitiesError } = useEtlCapabilities();
 	const parserChoice = resolveParserChoice(etlCapabilities, selectedParser);
 	const activeParser = parserChoice.effectiveParser;
+	// The switch exists only where the server has a vision model; without one
+	// the upload route refuses the flag, so it is neither shown nor sent.
+	const visionAvailable = etlCapabilities?.vision_available === true;
 	const [uploadDocumentMutation] = useAtom(uploadDocumentMutationAtom);
 	const { mutate: uploadDocuments, isPending: isUploading } = uploadDocumentMutation;
 	const fileInputRef = useRef<HTMLInputElement>(null);
@@ -185,7 +172,10 @@ export function DocumentUploadTab({
 	const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 	const [folderUpload, setFolderUpload] = useState<FolderUploadData | null>(null);
 	const [isFolderUploading, setIsFolderUploading] = useState(false);
-	const maxFileSizeBytes = useMemo(() => maxFileSizeMB * 1024 * 1024, [maxFileSizeMB]);
+	// The server's own limit, so the check here refuses exactly what the
+	// upload route would. Zero until it is known: nothing passes a guess.
+	const maxFileSizeBytes = etlCapabilities?.max_file_size_bytes ?? 0;
+	const maxFileSizeMB = Math.floor(maxFileSizeBytes / (1024 * 1024));
 
 	useEffect(() => {
 		return () => {
@@ -198,12 +188,12 @@ export function DocumentUploadTab({
 	const electronAPI = useElectronAPI();
 	const isElectron = !!electronAPI?.browseFiles;
 
+	// With vision on, pictures are accepted whatever the parser reads: the
+	// vision model describes them.
 	const acceptedFor = useCallback(
-		(parser: DocumentParser | undefined, visionRequested: boolean) =>
-			etlCapabilities
-				? acceptedExtensions(etlCapabilities, parser, { visionRequested })
-				: getSupportedExtensionsSet(getAcceptedFileTypes(etlService)),
-		[etlCapabilities, etlService]
+		(parser: DocumentParser | undefined, vision: boolean) =>
+			etlCapabilities ? acceptedExtensions(etlCapabilities, parser, vision) : new Set<string>(),
+		[etlCapabilities]
 	);
 	const supportedExtensionsSet = useMemo(
 		() => acceptedFor(activeParser, useVisionLlm),
@@ -214,18 +204,10 @@ export function DocumentUploadTab({
 		[supportedExtensionsSet]
 	);
 
-	const parserName = useCallback(
-		(parser: DocumentParser | undefined) =>
-			(parser ?? etlCapabilities?.default_parser) === "cloud"
-				? t("parser_cloud")
-				: t("parser_local"),
-		[etlCapabilities?.default_parser, t]
-	);
-
-	/** Drop already-selected files the new parser or vision setting cannot read. */
+	/** Drop already-selected files the new parser, or vision off, cannot read. */
 	const reapplyAcceptance = useCallback(
-		(parser: DocumentParser | undefined, visionRequested: boolean) => {
-			const accepted = acceptedFor(parser, visionRequested);
+		(parser: DocumentParser | undefined, vision: boolean) => {
+			const accepted = acceptedFor(parser, vision);
 			const fileSplit = partitionByExtension(
 				files.map((entry) => ({ entry, name: entry.file.name })),
 				accepted
@@ -254,14 +236,6 @@ export function DocumentUploadTab({
 			reapplyAcceptance(parser, useVisionLlm);
 		},
 		[reapplyAcceptance, useVisionLlm]
-	);
-
-	const handleVisionChange = useCallback(
-		(enabled: boolean) => {
-			setUseVisionLlm(enabled);
-			reapplyAcceptance(activeParser, enabled);
-		},
-		[reapplyAcceptance, activeParser]
 	);
 
 	const addFiles = useCallback(
@@ -307,9 +281,10 @@ export function DocumentUploadTab({
 	// A drop made outside the tab: one folder keeps its structure (a folder
 	// upload), anything else is added as files. Waits for the parser
 	// capabilities so the files are checked against the default parser the
-	// tab will actually use.
+	// tab will actually use; if they never arrive nothing is seeded,
+	// because there would be no parser to read the files.
 	const seededRef = useRef(false);
-	const capabilitiesSettled = etlCapabilities !== undefined || etlCapabilitiesError !== null;
+	const capabilitiesSettled = etlCapabilities !== undefined;
 	useEffect(() => {
 		if (seededRef.current || !initialFiles?.length || !capabilitiesSettled) return;
 		seededRef.current = true;
@@ -458,7 +433,7 @@ export function DocumentUploadTab({
 		setUploadProgress(0);
 		setIsFolderUploading(true);
 		const total = folderUpload.entries.length;
-		trackDocumentUploadStarted(Number(workspaceId), total, totalFileSize);
+		trackDocumentUploadStarted(total, totalFileSize);
 
 		try {
 			const batches: FolderEntry[][] = [];
@@ -503,10 +478,9 @@ export function DocumentUploadTab({
 					batch.map((e) => e.file),
 					{
 						folder_name: folderUpload.folderName,
-						workspace_id: Number(workspaceId),
 						relative_paths: batch.map((e) => e.relativePath),
 						root_folder_id: rootFolderId,
-						use_vision_llm: useVisionLlm,
+						use_vision_llm: visionAvailable && useVisionLlm,
 						parser: activeParser,
 					}
 				);
@@ -537,13 +511,16 @@ export function DocumentUploadTab({
 	};
 
 	const handleUpload = async () => {
+		// The button is disabled without a parser; this is the same rule for
+		// any other way in, and what lets the request type require one.
+		if (!activeParser) return;
 		if (folderUpload) {
 			await handleFolderUpload();
 			return;
 		}
 
 		setUploadProgress(0);
-		trackDocumentUploadStarted(Number(workspaceId), files.length, totalFileSize);
+		trackDocumentUploadStarted(files.length, totalFileSize);
 
 		progressIntervalRef.current = setInterval(() => {
 			setUploadProgress((prev) => (prev >= 90 ? prev : prev + Math.random() * 10));
@@ -553,8 +530,7 @@ export function DocumentUploadTab({
 		uploadDocuments(
 			{
 				files: rawFiles,
-				workspace_id: Number(workspaceId),
-				use_vision_llm: useVisionLlm,
+				use_vision_llm: visionAvailable && useVisionLlm,
 				parser: activeParser,
 			},
 			{
@@ -649,6 +625,21 @@ export function DocumentUploadTab({
 		);
 	};
 
+	// Nothing can be chosen truthfully before the server has said what it
+	// reads, so there is no drop zone until then: only what is happening.
+	if (!etlCapabilities) {
+		return (
+			<div className="flex min-h-40 w-full items-center justify-center rounded-lg border border-dashed border-muted-foreground/30 px-4 py-12">
+				<ParserPicker
+					variant="cards"
+					status={etlCapabilitiesError ? "failed" : "loading"}
+					choice={parserChoice}
+					onChange={handleParserChange}
+				/>
+			</div>
+		);
+	}
+
 	return (
 		<div className="space-y-2 w-full mx-auto">
 			{/* Hidden file input */}
@@ -692,7 +683,9 @@ export function DocumentUploadTab({
 							<div className="flex w-full flex-col items-center gap-4">
 								<div className="text-center space-y-1.5">
 									<p className="text-base font-medium">{t("select_files_or_folder")}</p>
-									<p className="text-sm text-muted-foreground">{t("file_size_limit")}</p>
+									<p className="text-sm text-muted-foreground">
+										{t("file_size_limit", { maxMB: maxFileSizeMB })}
+									</p>
 								</div>
 							</div>
 						) : (
@@ -704,7 +697,9 @@ export function DocumentUploadTab({
 							>
 								<div className="text-center space-y-1.5">
 									<p className="text-base font-medium">{t("tap_select_files_or_folder")}</p>
-									<p className="text-sm text-muted-foreground">{t("file_size_limit")}</p>
+									<p className="text-sm text-muted-foreground">
+										{t("file_size_limit", { maxMB: maxFileSizeMB })}
+									</p>
 								</div>
 							</Button>
 						)}
@@ -740,7 +735,9 @@ export function DocumentUploadTab({
 						)}
 						<div className={`flex flex-col items-center gap-2 ${isDragActive ? "invisible" : ""}`}>
 							<p className="text-sm font-medium">{t("drag_drop")}</p>
-							<p className="text-xs text-muted-foreground">{t("file_size_limit")}</p>
+							<p className="text-xs text-muted-foreground">
+								{t("file_size_limit", { maxMB: maxFileSizeMB })}
+							</p>
 							<div className="mt-1">{renderBrowseButton()}</div>
 						</div>
 					</div>
@@ -754,10 +751,12 @@ export function DocumentUploadTab({
 							{t("unsupported_files_title", { count: rejectedNotice.names.length })}
 						</p>
 						<p className="text-muted-foreground break-words">
-							{t("unsupported_files_desc", {
-								parser: parserName(rejectedNotice.parser),
-								files: rejectedNotice.names.join(", "),
-							})}
+							{rejectedNotice.parser
+								? t("unsupported_files_desc", {
+										parser: t(PARSER_NAME_KEYS[rejectedNotice.parser]),
+										files: rejectedNotice.names.join(", "),
+									})
+								: t("unsupported_files_no_parser", { files: rejectedNotice.names.join(", ") })}
 						</p>
 					</div>
 					<Button
@@ -866,65 +865,38 @@ export function DocumentUploadTab({
 						</div>
 					)}
 
-					<div className={toggleRowClass}>
-						<div className="space-y-0.5">
-							<p className="font-medium text-sm">{t("vision_llm_label")}</p>
-							<p className="text-xs text-muted-foreground">{t("vision_llm_desc")}</p>
-						</div>
-						<Switch checked={useVisionLlm} onCheckedChange={handleVisionChange} />
-					</div>
-
-					{parserChoice.options.length > 0 && (
-						<div className="space-y-1.5">
-							<p className="font-medium text-sm px-1">{t("parser_label")}</p>
-							<div className="grid grid-cols-2 gap-2">
-								{parserChoice.options.map((option) => {
-									const selected = activeParser === option.parser;
-									const Icon = option.parser === "cloud" ? Cloud : HardDrive;
-									return (
-										<Button
-											key={option.parser}
-											type="button"
-											onClick={() => handleParserChange(option.parser)}
-											disabled={!option.available || isAnyUploading}
-											aria-pressed={selected}
-											variant="ghost"
-											className={`h-auto w-full items-start justify-start whitespace-normal rounded-lg border p-3 text-left transition-colors hover:bg-transparent hover:text-foreground disabled:opacity-60 ${
-												selected
-													? "border-primary bg-primary/5"
-													: "border-border hover:border-muted-foreground/50"
-											}`}
-										>
-											<Icon
-												className={`h-4 w-4 mt-0.5 shrink-0 ${selected ? "text-primary" : "text-muted-foreground"}`}
-											/>
-											<div className="space-y-0.5 min-w-0">
-												<p className="font-medium text-sm">
-													{option.parser === "cloud" ? t("parser_cloud") : t("parser_local")}
-												</p>
-												<p className="text-xs text-muted-foreground">
-													{option.available
-														? option.parser === "cloud"
-															? t("parser_cloud_desc")
-															: t("parser_local_desc")
-														: t(unavailableReasonKey(option.unavailableReason))}
-													{option.available && option.costMultiplier !== null && (
-														<> {t("parser_cost_note", { multiplier: option.costMultiplier })}</>
-													)}
-													{option.available ? <ParserCreditHint parser={option.parser} /> : null}
-												</p>
-											</div>
-										</Button>
-									);
-								})}
+					{visionAvailable && (
+						<div className={toggleRowClass}>
+							<div className="space-y-0.5">
+								<p className="font-medium text-sm">{t("vision_llm_label")}</p>
+								<p className="text-xs text-muted-foreground">{t("vision_llm_desc")}</p>
 							</div>
+							<Switch
+								checked={useVisionLlm}
+								onCheckedChange={(next) => {
+									setUseVisionLlm(next);
+									// Pictures picked while it was on go when it goes off.
+									reapplyAcceptance(activeParser, next);
+								}}
+							/>
 						</div>
 					)}
+
+					<div className="space-y-1.5">
+						<p className="font-medium text-sm px-1">{t("parser_label")}</p>
+						<ParserPicker
+							variant="cards"
+							status="ready"
+							choice={parserChoice}
+							onChange={handleParserChange}
+							disabled={isAnyUploading}
+						/>
+					</div>
 
 					<Button
 						className="w-full relative"
 						onClick={handleUpload}
-						disabled={isAnyUploading || fileCount === 0}
+						disabled={isAnyUploading || fileCount === 0 || !activeParser}
 					>
 						<span className={isAnyUploading ? "opacity-0" : ""}>
 							{folderUpload

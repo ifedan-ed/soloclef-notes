@@ -79,13 +79,37 @@ func TestSendReturnsTheIdItPublished(t *testing.T) {
 	}
 }
 
+// A task published under an id of the caller's choosing carries that id, as
+// send_task(task_id=…) does. A queued deliverable job is claimed only by the
+// message whose id its row names, so a fresh id here would be a video that is
+// never rendered.
+func TestSendPublishesUnderTheIdItIsGiven(t *testing.T) {
+	producer, broker := testProducer(t)
+	const taskID = "deliverable-job:42:attempt:1"
+	id, err := producer.Send(context.Background(), Message{
+		Task: "deliverables.execute_queued", Kwargs: map[string]any{"job_id": 42}, ID: taskID,
+	})
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	push, msg := sent(t, broker)
+	if id != taskID || msg.ID != taskID || msg.RootID != taskID {
+		t.Errorf("returned %q, published id %q and root %q; want %q for all three", id, msg.ID, msg.RootID, taskID)
+	}
+	if push.key != "surfsense.heavy" {
+		t.Errorf("pushed to %q, want the heavy queue", push.key)
+	}
+	if msg.Kwargs["job_id"] != float64(42) {
+		t.Errorf("kwargs = %#v", msg.Kwargs)
+	}
+}
+
 // A task the routing table names goes on that queue, and the Redis key is
 // kombu's priority list rather than the bare queue name.
-func TestSendRoutesEveryTaskWhereTaskRoutesSendsIt(t *testing.T) {
+func TestSendRoutesEveryTaskWhereTheTableSendsIt(t *testing.T) {
 	cases := map[string]struct{ queue, key string }{
-		"delete_document":             {"surfsense", "surfsense"},
-		"index_google_drive_files":    {"surfsense.connectors", "surfsense.connectors"},
-		"generate_video_presentation": {"surfsense.heavy", "surfsense.heavy"},
+		"erase_account":            {"surfsense", "surfsense"},
+		"podcast.draft_transcript": {"surfsense.heavy", "surfsense.heavy"},
 	}
 	for task, want := range cases {
 		producer, broker := testProducer(t)
