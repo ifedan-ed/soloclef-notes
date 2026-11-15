@@ -113,27 +113,6 @@
     }
    }
   },
-  "/api/v1/agent-sign-in": {
-   "get": {
-    "tags": [
-     "crud",
-     "agent-sign-in"
-    ],
-    "summary": "Agent Sign In Details",
-    "operationId": "agent_sign_in_details_api_v1_agent_sign_in_get",
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {}
-       }
-      }
-     }
-    },
-    "parameters": []
-   }
-  },
   "/api/v1/agent/flags": {
    "get": {
     "tags": [
@@ -16885,7 +16864,6 @@
      "name",
      "position",
      "parent_id",
-     "created_by_id",
      "created_at",
      "updated_at"
     ],
@@ -18115,20 +18093,110 @@
       "type": "string",
       "enum": [
        "streamable-http",
-       "http",
        "sse"
       ],
       "title": "Transport",
       "default": "streamable-http"
+     },
+     "auth": {
+      "anyOf": [
+       {
+        "type": "object",
+        "properties": {
+         "type": {
+          "type": "string",
+          "const": "none"
+         }
+        },
+        "required": [
+         "type"
+        ],
+        "additionalProperties": false
+       },
+       {
+        "type": "object",
+        "properties": {
+         "type": {
+          "type": "string",
+          "const": "header"
+         },
+         "header_name": {
+          "type": "string"
+         },
+         "value": {
+          "type": "string"
+         }
+        },
+        "required": [
+         "type",
+         "header_name",
+         "value"
+        ],
+        "additionalProperties": false
+       },
+       {
+        "type": "object",
+        "properties": {
+         "type": {
+          "type": "string",
+          "const": "bearer"
+         },
+         "token": {
+          "type": "string"
+         }
+        },
+        "required": [
+         "type",
+         "token"
+        ],
+        "additionalProperties": false
+       },
+       {
+        "type": "object",
+        "properties": {
+         "type": {
+          "type": "string",
+          "const": "oauth"
+         },
+         "client_id": {
+          "anyOf": [
+           {
+            "type": "string"
+           },
+           {
+            "type": "null"
+           }
+          ]
+         },
+         "client_secret": {
+          "anyOf": [
+           {
+            "type": "string"
+           },
+           {
+            "type": "null"
+           }
+          ]
+         }
+        },
+        "required": [
+         "type"
+        ],
+        "additionalProperties": false
+       }
+      ],
+      "title": "Auth"
      }
     },
     "additionalProperties": false,
     "type": "object",
     "required": [
-     "url"
+     "url",
+     "transport",
+     "auth"
     ],
     "title": "MCPServerConfig",
-    "description": "A remote MCP server: an https URL and the headers that authenticate it.\n\nLocal (stdio) servers are not supported; a config with a ``command``,\n``args``, ``env`` or ``transport: \"stdio\"`` is refused. Whether the host\nmay be used is decided by the admin allowlist in the routes\n(``app.mcp_security``), not here."
+    "description": "A remote MCP server as the Go server takes it (soloclef_api, internal/searchconnectors/server_settings.go): an https URL, the transport (streamable-http or sse), how it is signed in to (auth: none, an API-key header, a bearer token or OAuth) and any extra headers. A secret sent back as the server masked it keeps the stored one. Local (stdio) servers and unknown keys are refused."
    },
    "MCPTrustToolRequest": {
     "properties": {
@@ -21633,11 +21701,6 @@
       "type": "string",
       "pattern": "^(transform|explore)$",
       "title": "Mode"
-     },
-     "is_public": {
-      "type": "boolean",
-      "title": "Is Public",
-      "default": false
      }
     },
     "type": "object",
@@ -21686,7 +21749,6 @@
      "name",
      "prompt",
      "mode",
-     "is_public",
      "version",
      "created_at"
     ],
@@ -21730,17 +21792,6 @@
        }
       ],
       "title": "Mode"
-     },
-     "is_public": {
-      "anyOf": [
-       {
-        "type": "boolean"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Is Public"
      }
     },
     "type": "object",

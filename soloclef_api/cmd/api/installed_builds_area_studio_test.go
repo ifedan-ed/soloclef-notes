@@ -7,7 +7,7 @@ func init() { registerArea(studioArea) }
 // studioAlice is the seed's owner, spelled once for the SQL below.
 const studioAlice = "'" + testpostgres.Alice + "'"
 
-// The Studio, its artifacts and sharing, as 1.0.0 and 1.1.0 use them: the
+// The Studio, its artifacts and sharing, as 1.1.0 uses them: the
 // output list and its viewers, generating, a report's suggestions, a deck's
 // and a quiz's study state, media links, a running job, the public links and
 // what a stranger opening one reads. Ids 4000-4999.
@@ -165,8 +165,8 @@ INSERT INTO output_public_links (id, user_id, notebook_output_id, share_token, c
 		// A live notebook link. Every notebook link was removed with
 		// migration 00019, so every token names nothing. No route serves the
 		// path, so a request without a credential meets the gate's 401
-		// (installedbuilds.Retired, gonePage); the updates of 2026-11-14
-		// read it as "gone", as a 404 (publicLinkFailure in publicApi.ts).
+		// (installedbuilds.Retired, gonePage); the bundle reads it as
+		// "gone", as a 404 (publicLinkFailure in publicApi.ts).
 		{Operation: "GET /api/v1/public-notebooks/{token}", Path: "/api/v1/public-notebooks/contract-notebook-link", Anonymous: true, Status: 401,
 			Why: "retired: no notebook link exists any more (installedbuilds.Retired)"},
 		{Operation: "GET /api/v1/public-notebooks/{token}/sources/{source_id}", Path: "/api/v1/public-notebooks/contract-notebook-link/sources/4010", Anonymous: true, Status: 401,

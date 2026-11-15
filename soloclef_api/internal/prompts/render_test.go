@@ -47,15 +47,14 @@ func library(t *testing.T) []Prompt {
 }
 
 // testdata/library.json is the list's expected body. It began as the Python
-// tier's answer for the same rows; prompts stopped being shared on
-// 2026-11-13, and the sharing flag is always false, kept for the installed
-// phone bundles that require it (installed-builds: prompts-is-public).
+// tier's answer for the same rows, less the sharing flag: prompts stopped
+// being shared on 2026-11-13, and no answer names it.
 //
 // What it pins that no happy-path test would: the em dash, the curly quotes
 // and the angle brackets going out unescaped; U+2028 raw inside a string; a
 // half-second created_at written `.500000` and a whole one with no fraction,
 // which is pydantic's spelling and not isoformat's; the order of the two
-// prompts tied on created_at; and is_public false on every prompt.
+// prompts tied on created_at; and no is_public on any prompt.
 func TestTheLibraryIsRenderedAsTheAppsReadIt(t *testing.T) {
 	want, err := os.ReadFile("testdata/library.json")
 	if err != nil {

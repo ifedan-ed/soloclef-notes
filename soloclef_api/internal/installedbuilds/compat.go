@@ -56,45 +56,19 @@ func (n Need) String() string {
 // Answers is every compatibility answer the server holds today.
 var Answers = []Answer{
 	{
-		ID:    "notifications-announcements-count",
-		Needs: []Need{{Operation: "GET /api/v1/notifications/unread-counts-batch", Field: "announcements"}},
-		Why: "1.0.0 and 1.1.0 add announcements.total_unread to the tab badge without a guard; " +
-			"without the field the tab screen crashed on launch (2026-11-13). It is always zero.",
-		Code: []string{"internal/notifications/routes.go"},
-	},
-	{
 		ID: "notifications-announcements-tab",
 		Needs: []Need{
 			{Operation: "GET /api/v1/notifications", Query: [2]string{"category", "announcements"}},
 			{Operation: "DELETE /api/v1/notifications", Query: [2]string{"category", "announcements"}},
 		},
-		Why: "1.0.0 and 1.1.0 list and clear the retired announcements tab every time the Inbox opens, " +
-			"and showed an error on the 422. It is an empty view: nothing listed, nothing cleared.",
+		Why: "1.1.0 lists and clears the retired announcements tab every time the Inbox opens (inboxModel.ts " +
+			"INBOX_CATEGORIES) and shows an error on a 422. It is an empty view: nothing listed, nothing cleared.",
 		Code: []string{"internal/notifications/notifications.go", "internal/notifications/view.go", "internal/notifications/routes.go"},
-	},
-	{
-		ID:    "folders-created-by-id",
-		Needs: []Need{{Operation: "GET /api/v1/folders", Field: "created_by_id"}},
-		Why: "the bundles published on 2026-11-14 check every answer against their openapi.json, which requires " +
-			"created_by_id (nullable) on a folder, and refuse the whole folder list without it: Add sources' Library " +
-			"and the automation builder's folders. It is always null, so no answer names an account.",
-		Code: []string{"internal/folders/render.go"},
-	},
-	{
-		ID: "prompts-is-public",
-		Needs: []Need{
-			{Operation: "GET /api/v1/prompts", Field: "is_public"},
-			{Operation: "POST /api/v1/prompts", Field: "is_public"},
-			{Operation: "PUT /api/v1/prompts/{prompt_id}", Field: "is_public"},
-		},
-		Why: "the bundles published on 2026-11-14 require is_public on a prompt and refuse the list, and a saved " +
-			"prompt's answer, without it (the save is kept but the phone says it failed). Nothing is shared, so false.",
-		Code: []string{"internal/prompts/render.go"},
 	},
 	{
 		ID:    "model-roles-image",
 		Needs: []Need{{Operation: "GET /api/v1/users/me/model-roles", Field: "image"}},
-		Why: "1.0.0 and 1.1.0 require image in the model roles and show the Models screen's error without it; " +
+		Why: "1.1.0 requires image in the model roles and show the Models screen's error without it; " +
 			"nothing is drawn by a model since 2026-11-14, so it is always no model and an empty menu, " +
 			"and a PUT that clears it changes nothing.",
 		Code: []string{"internal/modelchoices/roles_route.go"},
@@ -102,7 +76,7 @@ var Answers = []Answer{
 	{
 		ID:    "infographic-retired-styles",
 		Needs: []Need{{Operation: "POST /api/v1/notebooks/{notebook_id}/studio/generate"}},
-		Why: "1.0.0 and 1.1.0 offer the image model's styles kawaii, clay, anime and bricks, which a drawn poster " +
+		Why: "1.1.0 offers the image model's styles kawaii, clay, anime and bricks, which a drawn poster " +
 			"has no counterpart for, and would show a refusal for a choice the app offered; they are made in auto.",
 		Code: []string{"internal/studiogenerate/request.go"},
 	},
@@ -111,30 +85,6 @@ var Answers = []Answer{
 		Needs: []Need{{Operation: "GET /api/v1/global-model-connections"}},
 		Why: "Admin, Model connections shows only \"Couldn't load\" when the operator's list fails, hiding the " +
 			"account's own connections with it. Operator connections are not offered, so the list is empty.",
-		Code: []string{"internal/retiredsettings/retiredsettings.go", "cmd/api/main.go"},
-	},
-	{
-		ID:    "retired-community-prompts",
-		Needs: []Need{{Operation: "GET /api/v1/prompts/public"}},
-		Why:   "Admin, Community prompts shows only an error on a 404. Nothing is shared, so the list is empty.",
-		Code:  []string{"internal/retiredsettings/retiredsettings.go", "cmd/api/main.go"},
-	},
-	{
-		ID: "retired-announcements",
-		Needs: []Need{
-			{Operation: "GET /api/v1/admin/announcements"},
-			{Operation: "POST /api/v1/admin/announcements"},
-		},
-		Why: "Admin, Announcements shows only an error on a 404. Announcements are not sent, so the list is empty " +
-			"and a new one is refused in the error envelope, which the page shows as its failure.",
-		Code: []string{"internal/retiredsettings/retiredsettings.go", "cmd/api/main.go"},
-	},
-	{
-		ID:    "retired-agent-sign-in",
-		Needs: []Need{{Operation: "GET /api/v1/agent-sign-in"}},
-		Why: "Connect your agent shows \"Couldn't load the sign-in details.\" on a 404. Agent sign-in was removed " +
-			"on 2026-11-15 (agents use an API key), so the answer is sign-in off, as it always was here: the screen " +
-			"shows the API key steps alone.",
 		Code: []string{"internal/retiredsettings/retiredsettings.go", "cmd/api/main.go"},
 	},
 	{
@@ -190,26 +140,10 @@ var Retired = []Retirement{
 		Why: "a notebook link's revoke is offered only for a link the Public links page listed, and that list is always empty",
 	},
 	{
-		Operation: "POST /api/v1/admin/announcements/{announcement_id}/withdraw", Status: 404,
-		Why: "offered only for an announcement the Announcements page listed, and that list is always empty (retired-announcements)",
-	},
-	{
-		Operation: "POST /api/v1/prompts/{prompt_id}/copy", Status: 404,
-		Why: "offered only for a prompt the Community prompts page listed, and that list is always empty (retired-community-prompts)",
-	},
-	{
-		Operation: "POST /api/v1/connectors/mcp/{connector_id}/untrust-tool", Status: 404,
-		Why: "offered only for a tool in an MCP server's config.trusted_tools, which migration 15 removed and nothing writes",
-	},
-	{
 		Operation: "POST /api/v1/diagrams/mermaid", Status: 404,
 		Why: "never served by this server (the app's planned route B5); the chat shows the diagram's code, as it does offline, " +
-			"and the updates of 2026-11-14 say so without offering Try again",
+			"and says so without offering Try again",
 	},
-	agentRules("GET /api/v1/agent/permissions/rules"),
-	agentRules("POST /api/v1/agent/permissions/rules"),
-	agentRules("PATCH /api/v1/agent/permissions/rules/{rule_id}"),
-	agentRules("DELETE /api/v1/agent/permissions/rules/{rule_id}"),
 	gonePage("GET /api/v1/public-notebooks/{token}"),
 	gonePage("GET /api/v1/public-notebooks/{token}/sources/{source_id}"),
 	gonePage("GET /api/v1/public-notebooks/{token}/artifacts/{artifact_id}/manifest"),
@@ -218,21 +152,13 @@ var Retired = []Retirement{
 	gonePage("GET /api/v1/public/{share_token}/podcasts/{podcast_id}/stream"),
 }
 
-// agentRules is the old allow, deny and ask rules, replaced by "ask first"
-// marks (internal/agentrules) on 2026-11-13.
-func agentRules(operation string) Retirement {
-	return Retirement{Operation: operation, Status: 404,
-		Why: "Agent permissions calls the rules only while /api/v1/agent/flags says enable_permission, which this " +
-			"server never sends (each bundle's exceptions.json); the page shows that the rules are off, which is true"}
-}
-
 // gonePage is a public page of a shared notebook or chat, which no longer
 // exist: only a Studio output is shared. Asked without a credential, a path
 // no route serves meets the gate first, so the answer is its 401.
 func gonePage(operation string) Retirement {
 	return Retirement{Operation: operation, Status: 401,
-		Why: "no notebook link or shared chat exists any more; the bundles before 2026-11-14's updates read the 401 as " +
-			"a generic failure rather than \"this link is gone\", and the updates read it as gone"}
+		Why: "no notebook link or shared chat exists any more; the bundle reads the 401 as \"this link is gone\" " +
+			"(features/public/publicApi.ts), which is true"}
 }
 
 // NeededBy says which builds make a retired call, by Label.

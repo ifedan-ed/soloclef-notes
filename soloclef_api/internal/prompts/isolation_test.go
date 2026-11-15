@@ -69,10 +69,10 @@ SELECT setval(pg_get_serial_sequence('prompts', 'id'), 100);`)
 	}
 
 	// Each library is its owner's alone, newest first; no prompt carries a
-	// workspace, and none is shared (installed-builds: prompts-is-public).
+	// workspace, and none says it is shared.
 	status, hers := as(alice, http.MethodGet, ListPath, "")
 	if status != http.StatusOK || !strings.Contains(hers, "Her first") || strings.Contains(hers, "His own") ||
-		strings.Contains(hers, "workspace_id") || strings.Contains(hers, `"is_public":true`) ||
+		strings.Contains(hers, "workspace_id") || strings.Contains(hers, "is_public") ||
 		strings.Index(hers, "Her second") > strings.Index(hers, "Her first") {
 		t.Fatalf("her library answered %d %s", status, hers)
 	}
@@ -114,11 +114,10 @@ SELECT setval(pg_get_serial_sequence('prompts', 'id'), 100);`)
 	}
 
 	// A create is the caller's. A workspace_id or is_public an old client
-	// still sends decides nothing and is not stored; is_public is answered
-	// false, always (installed-builds: prompts-is-public).
+	// still sends decides nothing, is not stored, and is not answered.
 	status, created := as(bob, http.MethodPost, CreatePath,
 		`{"name":"New","prompt":"Do it.","mode":"transform","workspace_id":7,"is_public":true}`)
-	if status != http.StatusOK || strings.Contains(created, "workspace_id") || !strings.Contains(created, `"is_public":false`) ||
+	if status != http.StatusOK || strings.Contains(created, "workspace_id") || strings.Contains(created, "is_public") ||
 		!strings.Contains(created, `"version":1`) {
 		t.Errorf("the create answered %d %s", status, created)
 	}
@@ -130,7 +129,7 @@ SELECT setval(pg_get_serial_sequence('prompts', 'id'), 100);`)
 	// An update that names only is_public names nothing a prompt has: the
 	// row is answered as it stands and the version is not bumped.
 	if status, raw := as(alice, http.MethodPut, "/api/v1/prompts/1", `{"is_public":true}`); status != http.StatusOK ||
-		!strings.Contains(raw, `"version":3`) || !strings.Contains(raw, `"is_public":false`) {
+		!strings.Contains(raw, `"version":3`) || strings.Contains(raw, "is_public") {
 		t.Errorf("an old client's sharing switch answered %d %s", status, raw)
 	}
 	// The owner changes and removes her own.

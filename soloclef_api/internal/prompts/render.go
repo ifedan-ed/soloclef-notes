@@ -5,7 +5,9 @@ import "git.danvics.com/danvics/soloclef/soloclef_api/internal/pythonjson"
 // Build renders one prompt as PromptRead (app/schemas/prompts.py).
 //
 // The key order is the model's field order: id, name, prompt, mode,
-// is_public, version, created_at.
+// version, created_at. Nothing is shared, so no answer says whether a
+// prompt is (the is_public the Python tier sent, always false since
+// 2026-11-13, went once no installed phone bundle required it).
 //
 // created_at is pydantic's own spelling rather than isoformat's, because every
 // route of this slice but the delete declared a response_model: a `Z` where
@@ -17,10 +19,6 @@ func Build(prompt Prompt) *pythonjson.Object {
 	rendered.Set("name", prompt.Name)
 	rendered.Set("prompt", prompt.Prompt)
 	rendered.Set("mode", prompt.Mode)
-	// Nothing is shared since 2026-11-13, so always false: the phone bundles
-	// of 2026-11-14 require the key and refuse a prompt without it.
-	// installed-builds: prompts-is-public
-	rendered.Set("is_public", false)
 	rendered.Set("version", prompt.Version)
 	rendered.Set("created_at", pythonjson.PydanticDateTime(prompt.CreatedAt))
 	return rendered

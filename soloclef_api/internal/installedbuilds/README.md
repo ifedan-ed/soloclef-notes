@@ -1,7 +1,7 @@
 # Installed phone builds
 
-A phone keeps the app it installed from the App Store (or the Android preview
-APK) until its owner updates it, and an over-the-air update only replaces the
+A phone keeps the app it installed from the App Store until its owner
+updates it, and an over-the-air update only replaces the
 JavaScript bundle within one native build, at the app's next start. So a
 server change can break a phone the project no longer ships to, and while an
 update is new, phones run both its bundle and the one before. This package
@@ -20,7 +20,7 @@ build and the commit its update was published from (or will be, while
 | `openapi.json` | The app's own `soloclef_mobile/openapi.json` at that commit, byte for byte: the document the build's client was typed from. Its sha256 must equal the app's `src/lib/api/openapi.sha256` |
 | `calls.json` | Every route the build's source calls, with the query values it sends where the source pins them (the Inbox's `category=status|announcements`), and where it calls each |
 | `resolutions.json` | The paths the source mentions that the extractor cannot read as calls (a stream, a download, a page opened in the browser), resolved by hand with the reason. A resolution matches its file and text, so the next update's snapshot reuses it where lines moved |
-| `exceptions.json` | Optional: the documented ways the server's answer to this bundle differs from the snapshot on purpose (below) |
+| `exceptions.json` | Optional: the documented statuses the server answers this bundle with instead of the one it needs, on purpose (below) |
 
 Only the calls pin the server. An operation in `openapi.json` the build never
 calls does not.
@@ -49,9 +49,9 @@ And here:
 A failure names the build that breaks, the request, and what it would read:
 
 ```
-GET /api/v1/notifications/unread-counts-batch (inbox): iPhone 1.1.0 (App Store build 4),
-running the update from 731477d8a (snapshots/ios-1.1.0-build4) breaks:
-announcements: is missing; the build requires it
+GET /api/v1/notifications/unread-counts-batch (inbox): status: is missing; the build requires it
+-- breaks iPhone 1.1.0 (App Store build 4), running the update from a7cd77fe1
+(snapshots/ios-1.1.0-build4-a7cd77fe1)
 ```
 
 ## Running the contract test
@@ -106,23 +106,17 @@ calls and the server does not serve is a broken phone.
 
 ## Exceptions
 
-A bundle's `exceptions.json` lists the only two ways an answer may differ
-from its snapshot:
+A bundle's `exceptions.json` lists the one way an answer may differ from
+its snapshot: `status`, an answer the bundle gets instead of the one it
+needs, because the bundle sends something wrong and an update fixes it.
+`fixed_by` names the commit of that update; a phone running the bundle gets
+the fix at its next start once the update is published.
 
-- `fields`: response fields the snapshot requires that the server no longer
-  sends, because the bundle never reads them at run time, or reads them only
-  to a result that is right without them. `reads_checked` cites each read
-  and that the bundle does not check answers at run time; the bundles from
-  the updates of 2026-11-14 on check every answer against their
-  `openapi.json`, so for them a missing required field is a broken screen
-  and never an exception.
-- `status`: an answer the bundle gets instead of the one it needs, because
-  the bundle sends something wrong and an update fixes it. `fixed_by` names
-  the commit of that update; a phone running the bundle gets the fix at its
-  next start once the update is published.
-
-The contract test fails on an exception no answer needed, so each goes as
-soon as the server or the bundle stops differing.
+A missing response field is never excused: the installed bundle checks every
+answer against its `openapi.json` at run time, so a required field it does
+not get is a broken screen. The contract test fails on an exception no
+answer needed, so each goes as soon as the server or the bundle stops
+differing. No snapshot has one today.
 
 ## Releasing a phone update or build
 
@@ -140,7 +134,13 @@ soloclef_api/internal/installedbuilds/takesnapshot/take-snapshot.sh \
 
 It reads the commit with git, never a working tree, refuses an
 `openapi.json` the app's types were not generated from, and stops on any
-path it cannot read as a call until `resolutions.json` resolves it. Then run
+path it cannot read as a call until `resolutions.json` resolves it. A contract
+case may name the bundles it is for (`Bundles` in
+`cmd/api/installed_builds_contract_test.go`), when an update sends a call
+differently from the bundle before it: the case of the old request names the
+old bundle, and a new case names the new one. No case names one today, so
+every case covers every snapshot; the coverage test names each call left
+without a case. Then run
 the tests: a call the server does not serve, or answers in a way the bundle
 cannot read, fails before the update ships. Once it is published, set
 `"published": true` and `update_ids` to the update's ids (one per platform,
@@ -160,13 +160,11 @@ A bundle's snapshot may go when both hold:
 
 Phones report what they run when they register for push, on every start of
 the app (`push_devices`: `app_version`, `runtime_version`, `update_id`,
-`last_seen_at`). A bundle from the updates of 2026-11-14 on reports its
-update's id, which `build.json`'s `update_ids` names, so it retires by its
-own row. Bundles before then report nothing, and are counted together as
-"an older bundle" (no app version): 1.0.0's and 1.1.0's first bundles and
-their updates up to 2026-11-14 retire together, once no phone without a
-version has been seen for 30 days. A phone that never allowed notifications
-never registers and is not counted, which is why the window is long.
+`last_seen_at`). The installed bundle reports its update's id, which
+`build.json`'s `update_ids` names, so it retires by its own row; a published
+snapshot without `update_ids` fails to load. Rows with no version are phones
+on bundles already retired. A phone that never allowed notifications never
+registers and is not counted, which is why the window is long.
 
 ```bash
 docker exec <api container> soloclef-api app-versions

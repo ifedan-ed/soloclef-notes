@@ -4,10 +4,10 @@ import "git.danvics.com/danvics/soloclef/soloclef_api/internal/testpostgres"
 
 func init() { registerArea(inboxArea) }
 
-// The Inbox: what 1.0.0 and 1.1.0 ask for every time it opens -- both tabs,
-// the counts the tab badge adds up, and the clears -- including the retired
-// announcements tab that was a 422 and then a 500 on 2026-11-13. Ids
-// 1000-1099.
+// The Inbox: what 1.1.0 asks for every time it opens -- both tabs, the
+// counts the tab badge reads, and the clears -- including the retired
+// announcements tab, which the bundle still lists and clears and which was a
+// 422 and then a 500 on 2026-11-13. Ids 1000-1099.
 var inboxArea = contractArea{
 	Name:  "inbox",
 	Order: 10,

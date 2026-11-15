@@ -90,8 +90,12 @@ A phone keeps the version of the app it installed until its owner updates
 it, and an app update sent over the air reaches it only when the app next
 starts. So a server update must keep answering every version, and every
 update of it, still in use. Soloclef's tests hold each server change to the
-phone apps still installed from the App Store, and fail before a change that
-would break one is released.
+phone app still installed from the App Store, and fail before a change that
+would break it is released.
+
+The one installed version the tests hold the server to is the iPhone app
+1.1.0 (App Store build 4) on its update of 15 November 2026. Every older
+version and update, and the Android preview, is no longer supported.
 
 To see which versions and updates phones still use:
 
@@ -102,10 +106,10 @@ dc exec api soloclef-api app-versions
 It lists the newest version the App Store offers and, for each platform, app
 version and update, how many phones were seen in the last 30 days. Phones
 report what they run each time the app starts, if notifications are allowed.
-Versions and updates from before 14 November 2026 do not report it and are
-listed together.
+A phone listed with no version runs an old update that is no longer
+supported.
 
-Support for an old version or update is removed once a newer one has been
+Support for a version or update is removed once a newer one has been
 published and no phone has reported the old one for 30 days.
 
 ## What to back up

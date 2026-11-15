@@ -1,94 +1,10 @@
 [
  {
   "method": "GET",
-  "path": "/api/v1/admin/announcements",
-  "in_snapshot": true,
-  "sites": [
-   "features/settings/api.ts:166",
-   "lib/api/endpoints.ts:101"
-  ],
-  "query": {}
- },
- {
-  "method": "POST",
-  "path": "/api/v1/admin/announcements",
-  "in_snapshot": true,
-  "sites": [
-   "features/settings/api.ts:167",
-   "lib/api/endpoints.ts:102"
-  ],
-  "query": {}
- },
- {
-  "method": "POST",
-  "path": "/api/v1/admin/announcements/{announcement_id}/withdraw",
-  "in_snapshot": true,
-  "sites": [
-   "features/settings/api.ts:168",
-   "lib/api/endpoints.ts:104"
-  ],
-  "query": {}
- },
- {
-  "method": "GET",
-  "path": "/api/v1/agent-sign-in",
-  "in_snapshot": true,
-  "sites": [
-   "features/agent/ConnectAgentScreen.tsx:46"
-  ],
-  "query": {}
- },
- {
-  "method": "GET",
-  "path": "/api/v1/agent/flags",
-  "in_snapshot": true,
-  "sites": [
-   "features/settings/api.ts:156"
-  ],
-  "query": {}
- },
- {
-  "method": "GET",
-  "path": "/api/v1/agent/permissions/rules",
-  "in_snapshot": true,
-  "sites": [
-   "features/settings/api.ts:157"
-  ],
-  "query": {}
- },
- {
-  "method": "POST",
-  "path": "/api/v1/agent/permissions/rules",
-  "in_snapshot": true,
-  "sites": [
-   "features/settings/api.ts:158"
-  ],
-  "query": {}
- },
- {
-  "method": "DELETE",
-  "path": "/api/v1/agent/permissions/rules/{rule_id}",
-  "in_snapshot": true,
-  "sites": [
-   "features/settings/api.ts:160"
-  ],
-  "query": {}
- },
- {
-  "method": "PATCH",
-  "path": "/api/v1/agent/permissions/rules/{rule_id}",
-  "in_snapshot": true,
-  "sites": [
-   "features/settings/api.ts:159"
-  ],
-  "query": {}
- },
- {
-  "method": "GET",
   "path": "/api/v1/agent/tools",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:158"
+   "lib/api/endpoints.ts:171"
   ],
   "query": {}
  },
@@ -135,7 +51,7 @@
   "in_snapshot": true,
   "sites": [
    "features/studio/studyMutations.ts:23",
-   "lib/api/endpoints.ts:75"
+   "lib/api/endpoints.ts:94"
   ],
   "query": {}
  },
@@ -145,7 +61,7 @@
   "in_snapshot": true,
   "sites": [
    "features/studio/studyMutations.ts:23",
-   "lib/api/endpoints.ts:76"
+   "lib/api/endpoints.ts:95"
   ],
   "query": {
    "generation": null
@@ -157,7 +73,7 @@
   "in_snapshot": true,
   "sites": [
    "features/studio/studyMutations.ts:23",
-   "lib/api/endpoints.ts:74"
+   "lib/api/endpoints.ts:93"
   ],
   "query": {}
  },
@@ -166,8 +82,8 @@
   "path": "/api/v1/artifacts/{artifact_id}/manifest",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:190",
-   "lib/api/endpoints.ts:71"
+   "lib/api/endpoints.ts:203",
+   "lib/api/endpoints.ts:90"
   ],
   "query": {}
  },
@@ -176,7 +92,7 @@
   "path": "/api/v1/artifacts/{artifact_id}/quiz-answer",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:78"
+   "lib/api/endpoints.ts:97"
   ],
   "query": {}
  },
@@ -185,7 +101,7 @@
   "path": "/api/v1/artifacts/{artifact_id}/quiz-retake",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:80"
+   "lib/api/endpoints.ts:99"
   ],
   "query": {}
  },
@@ -194,7 +110,7 @@
   "path": "/api/v1/artifacts/{artifact_id}/quiz-skip",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:79"
+   "lib/api/endpoints.ts:98"
   ],
   "query": {}
  },
@@ -203,7 +119,7 @@
   "path": "/api/v1/artifacts/media-links",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:72",
+   "lib/api/endpoints.ts:91",
    "lib/studio/mediaLinks.ts:28"
   ],
   "query": {}
@@ -356,7 +272,7 @@
   "in_snapshot": true,
   "sites": [
    "features/automations/api.ts:22",
-   "lib/api/endpoints.ts:196"
+   "lib/api/endpoints.ts:209"
   ],
   "query": {}
  },
@@ -365,7 +281,7 @@
   "path": "/api/v1/chunks/{chunk_id}/document",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:175"
+   "lib/api/endpoints.ts:188"
   ],
   "query": {
    "chunk_window": null
@@ -387,7 +303,7 @@
   "path": "/api/v1/connectors/{connector_id}/google-drive/connection",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:123"
+   "features/settings/api.ts:119"
   ],
   "query": {}
  },
@@ -407,7 +323,7 @@
   "path": "/api/v1/connectors/{connector_id}/nextcloud/connection",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:130"
+   "features/settings/api.ts:126"
   ],
   "query": {}
  },
@@ -454,7 +370,7 @@
   "path": "/api/v1/connectors/email-imap/accounts",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:133"
+   "features/settings/api.ts:129"
   ],
   "query": {}
  },
@@ -463,7 +379,7 @@
   "path": "/api/v1/connectors/email-imap/accounts",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:135"
+   "features/settings/api.ts:131"
   ],
   "query": {}
  },
@@ -472,7 +388,7 @@
   "path": "/api/v1/connectors/email-imap/accounts/{account_id}",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:138"
+   "features/settings/api.ts:134"
   ],
   "query": {}
  },
@@ -481,7 +397,7 @@
   "path": "/api/v1/connectors/email-imap/accounts/{account_id}/test",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:139"
+   "features/settings/api.ts:135"
   ],
   "query": {}
  },
@@ -490,7 +406,7 @@
   "path": "/api/v1/connectors/email-imap/microsoft",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:141"
+   "features/settings/api.ts:137"
   ],
   "query": {}
  },
@@ -499,7 +415,7 @@
   "path": "/api/v1/connectors/email-imap/microsoft/connect",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:143"
+   "features/settings/api.ts:139"
   ],
   "query": {}
  },
@@ -508,7 +424,7 @@
   "path": "/api/v1/connectors/email-imap/test",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:140"
+   "features/settings/api.ts:136"
   ],
   "query": {}
  },
@@ -517,7 +433,7 @@
   "path": "/api/v1/connectors/mcp",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:146"
+   "features/settings/api.ts:142"
   ],
   "query": {}
  },
@@ -526,7 +442,7 @@
   "path": "/api/v1/connectors/mcp",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:148"
+   "features/settings/api.ts:144"
   ],
   "query": {}
  },
@@ -535,7 +451,7 @@
   "path": "/api/v1/connectors/mcp/{connector_id}",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:150"
+   "features/settings/api.ts:146"
   ],
   "query": {}
  },
@@ -544,7 +460,7 @@
   "path": "/api/v1/connectors/mcp/{connector_id}",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:147"
+   "features/settings/api.ts:143"
   ],
   "query": {}
  },
@@ -553,16 +469,7 @@
   "path": "/api/v1/connectors/mcp/{connector_id}",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:149"
-  ],
-  "query": {}
- },
- {
-  "method": "POST",
-  "path": "/api/v1/connectors/mcp/{connector_id}/untrust-tool",
-  "in_snapshot": true,
-  "sites": [
-   "features/settings/api.ts:153"
+   "features/settings/api.ts:145"
   ],
   "query": {}
  },
@@ -571,7 +478,7 @@
   "path": "/api/v1/connectors/mcp/policy",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:151"
+   "features/settings/api.ts:147"
   ],
   "query": {}
  },
@@ -580,7 +487,7 @@
   "path": "/api/v1/connectors/mcp/test",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:152"
+   "features/settings/api.ts:148"
   ],
   "query": {}
  },
@@ -589,7 +496,7 @@
   "path": "/api/v1/deliverable-jobs/{job_id}",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:192"
+   "lib/api/endpoints.ts:205"
   ],
   "query": {}
  },
@@ -598,7 +505,7 @@
   "path": "/api/v1/diagrams/mermaid",
   "in_snapshot": false,
   "sites": [
-   "lib/render/mermaid/mermaidClient.ts:54"
+   "lib/render/mermaid/mermaidClient.ts:58"
   ],
   "query": {}
  },
@@ -653,7 +560,7 @@
   "in_snapshot": true,
   "sites": [
    "features/sources/api.ts:97",
-   "lib/api/endpoints.ts:181"
+   "lib/api/endpoints.ts:194"
   ],
   "query": {}
  },
@@ -713,8 +620,8 @@
   "path": "/api/v1/global-model-connections",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:92",
-   "lib/api/endpoints.ts:169"
+   "features/settings/api.ts:88",
+   "lib/api/endpoints.ts:182"
   ],
   "query": {}
  },
@@ -723,7 +630,7 @@
   "path": "/api/v1/google-drive/connect",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:122"
+   "features/settings/api.ts:118"
   ],
   "query": {}
  },
@@ -732,7 +639,7 @@
   "path": "/api/v1/google-drive/connection",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:121",
+   "features/settings/api.ts:117",
    "features/sources/api.ts:94"
   ],
   "query": {}
@@ -742,7 +649,7 @@
   "path": "/api/v1/logs",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:104"
+   "features/settings/api.ts:100"
   ],
   "query": {
    "level": null,
@@ -756,7 +663,7 @@
   "path": "/api/v1/logs/{log_id}",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:106"
+   "features/settings/api.ts:102"
   ],
   "query": {}
  },
@@ -765,7 +672,7 @@
   "path": "/api/v1/logs/summary",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:105"
+   "features/settings/api.ts:101"
   ],
   "query": {
    "hours": null
@@ -776,8 +683,8 @@
   "path": "/api/v1/model-connections",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:93",
-   "lib/api/endpoints.ts:170"
+   "features/settings/api.ts:89",
+   "lib/api/endpoints.ts:183"
   ],
   "query": {}
  },
@@ -786,7 +693,7 @@
   "path": "/api/v1/model-connections/{connection_id}",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:165"
+   "features/settings/api.ts:153"
   ],
   "query": {}
  },
@@ -795,7 +702,7 @@
   "path": "/api/v1/model-connections/{connection_id}",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:164"
+   "features/settings/api.ts:152"
   ],
   "query": {}
  },
@@ -804,7 +711,7 @@
   "path": "/api/v1/model-providers",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:163"
+   "features/settings/api.ts:151"
   ],
   "query": {}
  },
@@ -822,7 +729,7 @@
   "path": "/api/v1/nextcloud/connection",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:126",
+   "features/settings/api.ts:122",
    "features/sources/api.ts:85"
   ],
   "query": {}
@@ -832,7 +739,7 @@
   "path": "/api/v1/nextcloud/login",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:127"
+   "features/settings/api.ts:123"
   ],
   "query": {}
  },
@@ -841,7 +748,7 @@
   "path": "/api/v1/nextcloud/login/{flow_id}",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:129"
+   "features/settings/api.ts:125"
   ],
   "query": {}
  },
@@ -850,7 +757,7 @@
   "path": "/api/v1/nextcloud/login/{flow_id}/poll",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:128"
+   "features/settings/api.ts:124"
   ],
   "query": {}
  },
@@ -868,7 +775,7 @@
   "path": "/api/v1/notebook-links",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:111"
+   "features/settings/api.ts:107"
   ],
   "query": {}
  },
@@ -877,7 +784,7 @@
   "path": "/api/v1/notebook-links/{link_id}",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:112"
+   "features/settings/api.ts:108"
   ],
   "query": {}
  },
@@ -886,7 +793,7 @@
   "path": "/api/v1/notebook-report-templates",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:64"
+   "lib/api/endpoints.ts:83"
   ],
   "query": {}
  },
@@ -895,7 +802,7 @@
   "path": "/api/v1/notebook-report-templates/{template_key}",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:67"
+   "lib/api/endpoints.ts:86"
   ],
   "query": {}
  },
@@ -904,7 +811,7 @@
   "path": "/api/v1/notebook-report-templates/{template_key}",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:66"
+   "lib/api/endpoints.ts:85"
   ],
   "query": {}
  },
@@ -913,7 +820,7 @@
   "path": "/api/v1/notebooks",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:37"
+   "lib/api/endpoints.ts:56"
   ],
   "query": {}
  },
@@ -922,7 +829,7 @@
   "path": "/api/v1/notebooks",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:115"
+   "lib/api/endpoints.ts:128"
   ],
   "query": {}
  },
@@ -931,7 +838,7 @@
   "path": "/api/v1/notebooks/{notebook_id}",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:121"
+   "lib/api/endpoints.ts:134"
   ],
   "query": {}
  },
@@ -940,7 +847,7 @@
   "path": "/api/v1/notebooks/{notebook_id}",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:38"
+   "lib/api/endpoints.ts:57"
   ],
   "query": {}
  },
@@ -950,7 +857,7 @@
   "in_snapshot": true,
   "sites": [
    "features/notebooks/notebookActions.ts:92",
-   "lib/api/endpoints.ts:118"
+   "lib/api/endpoints.ts:131"
   ],
   "query": {}
  },
@@ -959,7 +866,7 @@
   "path": "/api/v1/notebooks/{notebook_id}/copy",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:124"
+   "lib/api/endpoints.ts:137"
   ],
   "query": {}
  },
@@ -969,7 +876,7 @@
   "in_snapshot": true,
   "sites": [
    "features/notebooks/notebookActions.ts:99",
-   "lib/api/endpoints.ts:129"
+   "lib/api/endpoints.ts:142"
   ],
   "query": {}
  },
@@ -979,7 +886,7 @@
   "in_snapshot": true,
   "sites": [
    "features/notebooks/notebookActions.ts:99",
-   "lib/api/endpoints.ts:127"
+   "lib/api/endpoints.ts:140"
   ],
   "query": {}
  },
@@ -988,7 +895,7 @@
   "path": "/api/v1/notebooks/{notebook_id}/followups",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:154"
+   "lib/api/endpoints.ts:167"
   ],
   "query": {}
  },
@@ -997,7 +904,7 @@
   "path": "/api/v1/notebooks/{notebook_id}/public-link",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:144"
+   "lib/api/endpoints.ts:157"
   ],
   "query": {}
  },
@@ -1006,7 +913,7 @@
   "path": "/api/v1/notebooks/{notebook_id}/public-link",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:139"
+   "lib/api/endpoints.ts:152"
   ],
   "query": {}
  },
@@ -1015,7 +922,7 @@
   "path": "/api/v1/notebooks/{notebook_id}/public-link",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:142"
+   "lib/api/endpoints.ts:155"
   ],
   "query": {}
  },
@@ -1052,7 +959,7 @@
   "in_snapshot": true,
   "sites": [
    "features/sources/api.ts:73",
-   "lib/api/endpoints.ts:173"
+   "lib/api/endpoints.ts:186"
   ],
   "query": {}
  },
@@ -1061,7 +968,7 @@
   "path": "/api/v1/notebooks/{notebook_id}/sources",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:39"
+   "lib/api/endpoints.ts:58"
   ],
   "query": {}
  },
@@ -1101,7 +1008,7 @@
   "in_snapshot": true,
   "sites": [
    "features/sources/api.ts:67",
-   "lib/api/endpoints.ts:178"
+   "lib/api/endpoints.ts:191"
   ],
   "query": {}
  },
@@ -1120,7 +1027,7 @@
   "path": "/api/v1/notebooks/{notebook_id}/studio/generate",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:47"
+   "lib/api/endpoints.ts:66"
   ],
   "query": {}
  },
@@ -1129,7 +1036,7 @@
   "path": "/api/v1/notebooks/{notebook_id}/studio/outputs",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:46"
+   "lib/api/endpoints.ts:65"
   ],
   "query": {}
  },
@@ -1138,7 +1045,7 @@
   "path": "/api/v1/notebooks/{notebook_id}/studio/outputs/{output_id}",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:50"
+   "lib/api/endpoints.ts:69"
   ],
   "query": {}
  },
@@ -1147,7 +1054,7 @@
   "path": "/api/v1/notebooks/{notebook_id}/studio/outputs/{output_id}",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:49"
+   "lib/api/endpoints.ts:68"
   ],
   "query": {}
  },
@@ -1156,7 +1063,7 @@
   "path": "/api/v1/notebooks/{notebook_id}/studio/outputs/{output_id}/public-link",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:63"
+   "lib/api/endpoints.ts:82"
   ],
   "query": {}
  },
@@ -1165,7 +1072,7 @@
   "path": "/api/v1/notebooks/{notebook_id}/studio/outputs/{output_id}/report-suggestions/{suggestion_id}/add",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:56"
+   "lib/api/endpoints.ts:75"
   ],
   "query": {}
  },
@@ -1174,7 +1081,7 @@
   "path": "/api/v1/notebooks/{notebook_id}/studio/outputs/{output_id}/report-suggestions/{suggestion_id}/dismiss",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:58"
+   "lib/api/endpoints.ts:77"
   ],
   "query": {}
  },
@@ -1183,7 +1090,7 @@
   "path": "/api/v1/notebooks/{notebook_id}/studio/outputs/{output_id}/report-view",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:54"
+   "lib/api/endpoints.ts:73"
   ],
   "query": {}
  },
@@ -1192,7 +1099,7 @@
   "path": "/api/v1/notebooks/{notebook_id}/studio/outputs/{output_id}/view",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:52"
+   "lib/api/endpoints.ts:71"
   ],
   "query": {}
  },
@@ -1201,8 +1108,8 @@
   "path": "/api/v1/notebooks/{notebook_id}/studio/suggestions",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:151",
-   "lib/api/endpoints.ts:61"
+   "lib/api/endpoints.ts:164",
+   "lib/api/endpoints.ts:80"
   ],
   "query": {
    "kind": null,
@@ -1218,7 +1125,7 @@
   "path": "/api/v1/notebooks/{notebook_id}/threads",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:132"
+   "lib/api/endpoints.ts:145"
   ],
   "query": {}
  },
@@ -1227,8 +1134,8 @@
   "path": "/api/v1/notebooks/{notebook_id}/threads",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:41",
-   "lib/api/endpoints.ts:83"
+   "lib/api/endpoints.ts:102",
+   "lib/api/endpoints.ts:60"
   ],
   "query": {}
  },
@@ -1237,7 +1144,7 @@
   "path": "/api/v1/notebooks/{notebook_id}/threads",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:43"
+   "lib/api/endpoints.ts:62"
   ],
   "query": {}
  },
@@ -1246,7 +1153,7 @@
   "path": "/api/v1/notebooks/search",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:134"
+   "lib/api/endpoints.ts:147"
   ],
   "query": {
    "q": null,
@@ -1274,7 +1181,7 @@
   "sites": [
    "features/notes/noteActions.ts:26",
    "features/notes/noteActions.ts:31",
-   "lib/api/endpoints.ts:187"
+   "lib/api/endpoints.ts:200"
   ],
   "query": {}
  },
@@ -1355,7 +1262,7 @@
   "path": "/api/v1/notifications",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:98"
+   "lib/api/endpoints.ts:117"
   ],
   "query": {
    "category": [
@@ -1372,7 +1279,7 @@
   "path": "/api/v1/notifications",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:90"
+   "lib/api/endpoints.ts:109"
   ],
   "query": {
    "category": [
@@ -1393,7 +1300,7 @@
   "path": "/api/v1/notifications/{notification_id}",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:96"
+   "lib/api/endpoints.ts:115"
   ],
   "query": {}
  },
@@ -1403,7 +1310,7 @@
   "in_snapshot": true,
   "sites": [
    "features/inbox/inboxQueries.ts:112",
-   "lib/api/endpoints.ts:93"
+   "lib/api/endpoints.ts:112"
   ],
   "query": {}
  },
@@ -1413,7 +1320,7 @@
   "in_snapshot": true,
   "sites": [
    "features/inbox/inboxQueries.ts:121",
-   "lib/api/endpoints.ts:94"
+   "lib/api/endpoints.ts:113"
   ],
   "query": {}
  },
@@ -1422,7 +1329,7 @@
   "path": "/api/v1/notifications/unread-counts-batch",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:92"
+   "lib/api/endpoints.ts:111"
   ],
   "query": {}
  },
@@ -1458,7 +1365,7 @@
   "path": "/api/v1/podcasts/languages",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:68"
+   "lib/api/endpoints.ts:87"
   ],
   "query": {}
  },
@@ -1477,7 +1384,7 @@
   "in_snapshot": true,
   "sites": [
    "features/prompts/promptQueries.ts:15",
-   "lib/api/endpoints.ts:156"
+   "lib/api/endpoints.ts:169"
   ],
   "query": {}
  },
@@ -1509,29 +1416,11 @@
   "query": {}
  },
  {
-  "method": "POST",
-  "path": "/api/v1/prompts/{prompt_id}/copy",
-  "in_snapshot": true,
-  "sites": [
-   "features/settings/api.ts:170"
-  ],
-  "query": {}
- },
- {
-  "method": "GET",
-  "path": "/api/v1/prompts/public",
-  "in_snapshot": true,
-  "sites": [
-   "features/settings/api.ts:169"
-  ],
-  "query": {}
- },
- {
   "method": "GET",
   "path": "/api/v1/public-notebooks/{token}",
   "in_snapshot": false,
   "sites": [
-   "features/public/publicApi.ts:35"
+   "features/public/publicApi.ts:39"
   ],
   "query": {}
  },
@@ -1540,7 +1429,7 @@
   "path": "/api/v1/public-notebooks/{token}/artifacts/{artifact_id}/download",
   "in_snapshot": false,
   "sites": [
-   "features/public/publicApi.ts:35"
+   "features/public/publicApi.ts:39"
   ],
   "query": {}
  },
@@ -1549,7 +1438,7 @@
   "path": "/api/v1/public-notebooks/{token}/artifacts/{artifact_id}/manifest",
   "in_snapshot": false,
   "sites": [
-   "features/public/publicApi.ts:35"
+   "features/public/publicApi.ts:39"
   ],
   "query": {}
  },
@@ -1558,7 +1447,7 @@
   "path": "/api/v1/public-notebooks/{token}/sources/{source_id}",
   "in_snapshot": false,
   "sites": [
-   "features/public/publicApi.ts:35"
+   "features/public/publicApi.ts:39"
   ],
   "query": {}
  },
@@ -1567,7 +1456,7 @@
   "path": "/api/v1/public/{share_token}",
   "in_snapshot": true,
   "sites": [
-   "features/public/publicApi.ts:33"
+   "features/public/publicApi.ts:37"
   ],
   "query": {}
  },
@@ -1577,7 +1466,7 @@
   "in_snapshot": true,
   "sites": [
    "features/public/PublicCards.tsx:49",
-   "features/public/publicApi.ts:34"
+   "features/public/publicApi.ts:38"
   ],
   "query": {}
  },
@@ -1604,7 +1493,7 @@
   "path": "/api/v1/push/devices",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:108"
+   "lib/api/endpoints.ts:121"
   ],
   "query": {
    "token": null
@@ -1615,7 +1504,7 @@
   "path": "/api/v1/push/devices",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:107"
+   "lib/api/endpoints.ts:120"
   ],
   "query": {}
  },
@@ -1624,7 +1513,7 @@
   "path": "/api/v1/push/preferences",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:109"
+   "lib/api/endpoints.ts:122"
   ],
   "query": {}
  },
@@ -1633,7 +1522,7 @@
   "path": "/api/v1/push/preferences",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:110"
+   "lib/api/endpoints.ts:123"
   ],
   "query": {}
  },
@@ -1643,8 +1532,8 @@
   "in_snapshot": true,
   "sites": [
    "features/automations/api.ts:39",
-   "features/settings/api.ts:115",
-   "lib/api/endpoints.ts:194"
+   "features/settings/api.ts:111",
+   "lib/api/endpoints.ts:207"
   ],
   "query": {
    "limit": null
@@ -1655,7 +1544,7 @@
   "path": "/api/v1/search-source-connectors/{connector_id}",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:116"
+   "features/settings/api.ts:112"
   ],
   "query": {}
  },
@@ -1664,7 +1553,7 @@
   "path": "/api/v1/search-source-connectors/{connector_id}/enabled",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:118"
+   "features/settings/api.ts:114"
   ],
   "query": {}
  },
@@ -1673,7 +1562,7 @@
   "path": "/api/v1/search-source-connectors/{connector_id}/index",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:117"
+   "features/settings/api.ts:113"
   ],
   "query": {}
  },
@@ -1691,7 +1580,7 @@
   "path": "/api/v1/snapshots",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:109"
+   "features/settings/api.ts:105"
   ],
   "query": {}
  },
@@ -1700,7 +1589,7 @@
   "path": "/api/v1/snapshots/{snapshot_id}",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:110"
+   "features/settings/api.ts:106"
   ],
   "query": {}
  },
@@ -1718,7 +1607,7 @@
   "path": "/api/v1/system-instructions/lint",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:88"
+   "features/settings/api.ts:84"
   ],
   "query": {}
  },
@@ -1757,7 +1646,7 @@
   "path": "/api/v1/threads/{thread_id}/messages",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:87"
+   "lib/api/endpoints.ts:106"
   ],
   "query": {
    "skip": null,
@@ -1814,7 +1703,7 @@
   "path": "/api/v1/threads/{thread_id}/snapshots",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:146"
+   "lib/api/endpoints.ts:159"
   ],
   "query": {}
  },
@@ -1823,7 +1712,7 @@
   "path": "/api/v1/threads/{thread_id}/turn-status",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:85",
+   "lib/api/endpoints.ts:104",
    "lib/chat/engine.ts:197"
   ],
   "query": {}
@@ -1833,8 +1722,8 @@
   "path": "/api/v1/users/me/chat-model",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:94",
-   "lib/api/endpoints.ts:166"
+   "features/settings/api.ts:90",
+   "lib/api/endpoints.ts:179"
   ],
   "query": {}
  },
@@ -1843,8 +1732,8 @@
   "path": "/api/v1/users/me/chat-model",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:95",
-   "lib/api/endpoints.ts:168"
+   "features/settings/api.ts:91",
+   "lib/api/endpoints.ts:181"
   ],
   "query": {}
  },
@@ -1853,8 +1742,8 @@
   "path": "/api/v1/users/me/llm-setup-status",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:91",
-   "lib/api/endpoints.ts:160"
+   "features/settings/api.ts:87",
+   "lib/api/endpoints.ts:173"
   ],
   "query": {}
  },
@@ -1890,7 +1779,7 @@
   "path": "/api/v1/users/me/model-roles",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:96"
+   "features/settings/api.ts:92"
   ],
   "query": {}
  },
@@ -1899,7 +1788,7 @@
   "path": "/api/v1/users/me/model-roles",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:97"
+   "features/settings/api.ts:93"
   ],
   "query": {}
  },
@@ -1908,7 +1797,7 @@
   "path": "/api/v1/users/me/quick-model",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:98"
+   "features/settings/api.ts:94"
   ],
   "query": {}
  },
@@ -1917,7 +1806,7 @@
   "path": "/api/v1/users/me/quick-model",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:99"
+   "features/settings/api.ts:95"
   ],
   "query": {}
  },
@@ -1926,7 +1815,7 @@
   "path": "/api/v1/users/me/settings",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:84"
+   "features/settings/api.ts:80"
   ],
   "query": {}
  },
@@ -1935,7 +1824,7 @@
   "path": "/api/v1/users/me/settings",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:85"
+   "features/settings/api.ts:81"
   ],
   "query": {}
  },
@@ -1944,7 +1833,7 @@
   "path": "/api/v1/users/me/studio-model",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:100"
+   "features/settings/api.ts:96"
   ],
   "query": {}
  },
@@ -1953,7 +1842,7 @@
   "path": "/api/v1/users/me/studio-model",
   "in_snapshot": true,
   "sites": [
-   "features/settings/api.ts:101"
+   "features/settings/api.ts:97"
   ],
   "query": {}
  },
@@ -2043,7 +1932,7 @@
   "path": "/users/me",
   "in_snapshot": true,
   "sites": [
-   "lib/api/endpoints.ts:36",
+   "lib/api/endpoints.ts:55",
    "lib/files/fs.ts:146"
   ],
   "query": {}

@@ -141,20 +141,6 @@ func registerArea(area contractArea) { registeredAreas = append(registeredAreas,
 // a connection's credential seals it with this, as the server would.
 const contractSessionSecret = "contract-test-session-secret-0123456789abcdef"
 
-// The bundles by what they send, where a later update changed a request:
-// those published before the fixes of 2026-11-14 (installed_builds_area_*
-// cases name them in Bundles), and the updates with the fixes.
-var (
-	bundlesBeforeTheFixes = []string{
-		"ios-1.1.0-build4-731477d8a", "ios-1.1.0-build4-1ca5807aa",
-		"ios-1.0.0-build3-a7ba0c1c3", "ios-1.0.0-build3-d10b80439",
-		"android-1.0.0-preview-a7ba0c1c3", "android-1.0.0-preview-d10b80439",
-	}
-	bundlesWithTheFixes = []string{
-		"ios-1.1.0-build4-d98236e09", "ios-1.0.0-build3-a7a0adf68", "android-1.0.0-preview-a7a0adf68",
-	}
-)
-
 // contractPassword is Alice's password in the throwaway database.
 const contractPassword = "contract-password-for-a-throwaway-database"
 
@@ -288,7 +274,7 @@ func emptyContractValkey(t *testing.T) {
 }
 
 // judge says how an answer breaks the bundles that send the request, and
-// marks in used each snapshot exception that excused something.
+// marks in used each snapshot exception that excused its status.
 func judge(builds []installedbuilds.Build, c contractCase, status int, body []byte, used map[string]bool) []string {
 	var problems []string
 	if status >= 500 && c.Unavailable == "" {
@@ -323,10 +309,7 @@ func judge(builds []installedbuilds.Build, c contractCase, status int, body []by
 		if !sender.call.InSnapshot {
 			continue
 		}
-		found, excused := sender.build.CheckAnswer(sender.call, status, body)
-		for _, index := range excused {
-			used[installedbuilds.ExceptionID(sender.build, index)] = true
-		}
+		found := sender.build.CheckAnswer(sender.call, status, body)
 		for _, problem := range found {
 			if _, seen := breaks[problem]; !seen {
 				order = append(order, problem)

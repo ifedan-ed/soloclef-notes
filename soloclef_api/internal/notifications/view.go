@@ -63,10 +63,10 @@ func readView(query url.Values, paging bool) (view, []errorenvelope.Failure) {
 		case statusCategory:
 			out.narrow(statusTypes)
 		case retiredAnnouncementsCategory:
-			// Announcements are gone, but the phone builds 1.0.0 and 1.1.0 in
-			// the App Store still ask for (and clear) this tab every time the
-			// Inbox opens and show an error on a 422. It is an empty view:
-			// no rows, nothing to clear.
+			// Announcements are gone, but iPhone 1.1.0 from the App Store
+			// still asks for (and clears) this tab every time the Inbox
+			// opens and shows an error on a 422. It is an empty view: no
+			// rows, nothing to clear.
 			// installed-builds: notifications-announcements-tab
 			out.none = true
 		default:

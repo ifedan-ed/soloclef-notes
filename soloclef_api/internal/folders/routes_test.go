@@ -255,8 +255,7 @@ func routeCases(t *testing.T, newWorld func(*testing.T) world) {
 		if clinic.CreatedAt != clinic.UpdatedAt || !strings.HasPrefix(clinic.CreatedAt, "2026-03-04T05:06:08") {
 			t.Errorf("created_at %q and updated_at %q should be the one reading of the clock", clinic.CreatedAt, clinic.UpdatedAt)
 		}
-		// The keys a client reads, in order, and no owner among them: the
-		// owner's key is there for installed bundles, and always null.
+		// The keys a client reads, in order, and no owner among them.
 		var keys []string
 		decoder := json.NewDecoder(strings.NewReader(string(made.raw)))
 		decoder.Token()
@@ -266,11 +265,8 @@ func routeCases(t *testing.T, newWorld func(*testing.T) world) {
 			var skipped json.RawMessage
 			decoder.Decode(&skipped)
 		}
-		if want := []string{"id", "name", "position", "parent_id", "created_by_id", "created_at", "updated_at", "metadata"}; !reflect.DeepEqual(keys, want) {
+		if want := []string{"id", "name", "position", "parent_id", "created_at", "updated_at", "metadata"}; !reflect.DeepEqual(keys, want) {
 			t.Errorf("a folder's keys are %v, want %v", keys, want)
-		}
-		if !strings.Contains(string(made.raw), `"created_by_id":null`) {
-			t.Errorf("a folder names its owner: %s", made.raw)
 		}
 
 		wards := s.create(owner, "Wards", &clinic.ID)

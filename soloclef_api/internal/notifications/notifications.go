@@ -94,7 +94,7 @@ var statusTypes = []string{"connector_indexing", "connector_deletion", "document
 // Status tab under its heading.
 const statusCategory = "status"
 
-// retiredAnnouncementsCategory is the Inbox tab the App Store builds 1.0.0
-// and 1.1.0 still ask for; it is always empty (view.go, routes.go).
+// retiredAnnouncementsCategory is the Inbox tab iPhone 1.1.0 from the App
+// Store still asks for; it is always empty (view.go, routes.go).
 // installed-builds: notifications-announcements-tab
 const retiredAnnouncementsCategory = "announcements"

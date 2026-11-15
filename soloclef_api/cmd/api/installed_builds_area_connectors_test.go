@@ -104,35 +104,21 @@ var connectorsArea = contractArea{
 		{Operation: "GET /api/v1/connectors/mcp", Path: "/api/v1/connectors/mcp", Status: 200},
 		{Operation: "GET /api/v1/connectors/mcp/policy", Path: "/api/v1/connectors/mcp/policy", Status: 200},
 		{Operation: "GET /api/v1/connectors/mcp/{connector_id}", Path: "/api/v1/connectors/mcp/6003", Status: 200},
-		// Offered only for a trusted tool, and no server has any since
-		// migration 15 (installedbuilds.Retired).
-		{Operation: "POST /api/v1/connectors/mcp/{connector_id}/untrust-tool", Path: "/api/v1/connectors/mcp/6003/untrust-tool", Status: 404,
-			Body: `{"tool_name":"search"}`, Why: "retired: installedbuilds.Retired says what the build does with it"},
 		// Test reaches the MCP server; nothing listens there in this test.
-		// The bundles before the fixes send no `auth`, which the server
-		// refuses 422: their exceptions.json names the update that fixes it.
-		{Operation: "POST /api/v1/connectors/mcp/test", Path: "/api/v1/connectors/mcp/test", Status: 200, Bundles: bundlesBeforeTheFixes,
-			Body: `{"url":"https://tools.example.test/mcp","headers":{},"transport":"streamable-http","connector_id":6003}`},
-		// The sheet's save: the builds' server_config is {url, headers,
-		// transport}, the key in a header (MCPServerConfig in their snapshot).
-		{Operation: "POST /api/v1/connectors/mcp", Path: "/api/v1/connectors/mcp", Status: 201, Bundles: bundlesBeforeTheFixes,
-			Body: `{"name":"Notes tools","server_config":{"url":"https://notes-tools.example.test/mcp","headers":{"Authorization":"Bearer not-a-real-key"},"transport":"streamable-http"}}`},
-		{Operation: "PUT /api/v1/connectors/mcp/{connector_id}", Path: "/api/v1/connectors/mcp/6003", Status: 200, Bundles: bundlesBeforeTheFixes,
-			Body: `{"name":"Some tools","server_config":{"url":"https://tools.example.test/mcp","headers":{},"transport":"streamable-http"}}`},
-		// The updates with the fixes (mcpServerSettings.ts): a bearer header
+		// The bundle's settings (mcpServerSettings.ts): a bearer header
 		// becomes the bearer sign-in, a saved server keeps its own (a mask
 		// keeps the stored secret), anything else is none with its headers.
-		{Operation: "POST /api/v1/connectors/mcp/test", Path: "/api/v1/connectors/mcp/test", Status: 200, Bundles: bundlesWithTheFixes,
+		{Operation: "POST /api/v1/connectors/mcp/test", Path: "/api/v1/connectors/mcp/test", Status: 200,
 			Body: `{"url":"https://tools.example.test/mcp","headers":{},"transport":"streamable-http","auth":{"type":"none"},"connector_id":6003}`},
 		// A save is held to where the server may connect, which needs the
 		// internet (the name must resolve to public addresses), and this
-		// test has none: the destination's 400 is what a save gets here. It
-		// comes after the settings were read, so it is the proof the fixed
-		// body is accepted where the old one is the 422 above.
-		{Operation: "POST /api/v1/connectors/mcp", Path: "/api/v1/connectors/mcp", Status: 400, Bundles: bundlesWithTheFixes,
+		// test has none: the destination's 400 is what a save gets here. The
+		// destination is checked after the settings are read, so the 400 is
+		// the proof the body is accepted: a body the server refuses is a 422.
+		{Operation: "POST /api/v1/connectors/mcp", Path: "/api/v1/connectors/mcp", Status: 400,
 			Body: `{"name":"Notes tools 2","server_config":{"url":"https://notes-tools-2.example.test/mcp","headers":{},"transport":"streamable-http","auth":{"type":"bearer","token":"not-a-real-key"}}}`,
 			Why:  "the settings are accepted; the destination check needs the internet, which this test does not have"},
-		{Operation: "PUT /api/v1/connectors/mcp/{connector_id}", Path: "/api/v1/connectors/mcp/6003", Status: 400, Bundles: bundlesWithTheFixes,
+		{Operation: "PUT /api/v1/connectors/mcp/{connector_id}", Path: "/api/v1/connectors/mcp/6003", Status: 400,
 			Body: `{"name":"Some tools","server_config":{"url":"https://tools.example.test/mcp","headers":{"X-Org":"contract"},"transport":"streamable-http","auth":{"type":"none"}}}`,
 			Why:  "the settings are accepted; the destination check needs the internet, which this test does not have"},
 		{Operation: "DELETE /api/v1/connectors/mcp/{connector_id}", Path: "/api/v1/connectors/mcp/6003", Status: 204},
@@ -230,7 +216,7 @@ func connectorsSeed() string {
 	}
 	nextcloud := encode(map[string]any{"server_url": "http://127.0.0.1:9", "username": "ada", "login_name": "ada", "display_name": "Ada",
 		"auth_method": "login_flow", "app_password": seal("not-a-real-app-password"), "_token_encrypted": true})
-	mcp := encode(map[string]any{"server_config": server, "trusted_tools": []string{"search"}})
+	mcp := encode(map[string]any{"server_config": server})
 	mail := encode(map[string]any{"accounts": []any{map[string]any{"id": "acct-6004", "label": "Work", "host": "imap.example.test", "port": 993,
 		"use_tls": true, "username": "ada@example.test", "app_password": seal("not-a-real-password"), "_encrypted": true, "created_at": "2026-11-01T08:00:00Z"}}})
 	return fmt.Sprintf(`

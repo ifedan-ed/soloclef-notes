@@ -371,16 +371,10 @@ func (r Routes) unreadBatch(x *exchange) {
 	if !ok {
 		return
 	}
-	// Announcements are gone, but the phone builds 1.0.0 and 1.1.0 already in
-	// the App Store add `announcements.total_unread` to the badge without a
-	// guard and crash on the tab screen when it is missing (2026-11-13). The
-	// field stays, always zero, until no installed build reads it; builds
-	// from the app's go-api line onwards read `status` only.
-	// installed-builds: notifications-announcements-count
+	// One count per tab, and status is the only tab.
 	x.send(struct {
-		Status        unread `json:"status"`
-		Announcements unread `json:"announcements"`
-	}{unread{row.StatusTotal, row.StatusRecent}, unread{}})
+		Status unread `json:"status"`
+	}{unread{row.StatusTotal, row.StatusRecent}})
 }
 
 func (r Routes) sourceTypes(x *exchange) {

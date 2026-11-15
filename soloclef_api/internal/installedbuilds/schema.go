@@ -20,8 +20,7 @@ type mismatch struct {
 	at, problem string
 }
 
-// missingProblem is a required field's absence: the one problem a
-// snapshot's exception can excuse.
+// missingProblem is a required field's absence.
 const missingProblem = "is missing; the build requires it"
 
 func (m mismatch) String() string {
@@ -34,8 +33,8 @@ func (m mismatch) String() string {
 // compatibility checks one JSON value against a snapshot schema the way an
 // installed build reads it:
 //
-//   - a field the schema lists as required must be there; a build reads it
-//     without a guard (the announcements count of 2026-11-13 was one);
+//   - a field the schema lists as required must be there; the bundle checks
+//     every answer against its openapi.json and refuses one without it;
 //   - a value present must have a type the schema allows, null included
 //     only where the schema says so;
 //   - an enum or const value must be one the build knows.

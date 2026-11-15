@@ -4,7 +4,7 @@ import "git.danvics.com/danvics/soloclef/soloclef_api/internal/testpostgres"
 
 func init() { registerArea(chatArea) }
 
-// The chat, as 1.0.0 and 1.1.0 use it inside a notebook: the notebook's
+// The chat, as 1.1.0 uses it inside a notebook: the notebook's
 // chats, a chat's saved messages, its turn status and the approvals it waits
 // on, the action log and its undo, asking (new_chat), asking again
 // (regenerate), answering approvals (resume), Stop, the follow-up questions,

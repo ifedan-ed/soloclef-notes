@@ -18,6 +18,7 @@
 package installedbuilds
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
@@ -48,18 +49,13 @@ type Build struct {
 	// SourceBranch is the branch its next update will come from.
 	SourceCommit string `json:"source_commit"`
 	SourceBranch string `json:"source_branch"`
-	// ReportsAppVersion says whether the bundle sends `app_version`,
-	// `update_id` and `runtime_version` when it registers for push
-	// (push_devices); bundles before the updates of 2026-11-14 send none,
-	// and are counted together as "an older bundle" (README.md).
-	ReportsAppVersion bool `json:"reports_app_version"`
 	// Published says whether the update was published: a snapshot of an
 	// update not yet published holds the server to it before it ships.
 	Published *bool `json:"published"`
 	// UpdateIDs are expo-updates' ids of the published update, one per
-	// platform it went to, which a phone running it reports
-	// (push_devices.update_id). Filled in after publishing; empty for a
-	// bundle that does not report one.
+	// platform it went to, which a phone running it reports when it
+	// registers for push (push_devices.update_id, with app_version and
+	// runtime_version). Filled in after publishing; empty until then.
 	UpdateIDs []string `json:"update_ids"`
 	// OpenAPISHA256 is the sha256 the app's generated types were made from
 	// (its src/lib/api/openapi.sha256), which openapi.json must match.
@@ -140,15 +136,24 @@ func load(dir string) (Build, error) {
 	if err != nil {
 		return build, err
 	}
-	if err := json.Unmarshal(raw, &build); err != nil {
+	// A key this type does not read (one a retired rule used, such as
+	// reports_app_version) fails rather than being ignored: build.json is
+	// written by hand, and a key that silently does nothing is a rule
+	// someone believes is held.
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&build); err != nil {
 		return build, fmt.Errorf("build.json: %w", err)
 	}
 	build.Dir = dir
 	if build.Published == nil {
 		return build, fmt.Errorf("build.json does not say whether the update is published (\"published\": true or false)")
 	}
-	if *build.Published && build.ReportsAppVersion && len(build.UpdateIDs) == 0 {
-		return build, fmt.Errorf("build.json: a published update that reports its id needs update_ids, read from its publication, so app-versions can count it")
+	// Every installed bundle reports its update's id, so a published one
+	// without its ids could never be told apart in app-versions, and so
+	// never retired by the rule in README.md.
+	if *build.Published && len(build.UpdateIDs) == 0 {
+		return build, fmt.Errorf("build.json: a published update needs update_ids, read from its publication, so app-versions can count it")
 	}
 	for name, value := range map[string]string{"build": build.Name, "platform": build.Platform, "app_version": build.AppVersion,
 		"source_commit": build.SourceCommit, "openapi_sha256": build.OpenAPISHA256} {
@@ -219,11 +224,12 @@ func (b Build) responseSchema(call Call, status string) schema {
 }
 
 // CheckAnswer says how an answer of this status would break the build, or
-// nothing when the build reads it as it was compiled to, and which of the
-// build's exceptions excused a missing field (by index). A status the
-// snapshot does not declare as a success is not checked here: the caller
-// decides which statuses a case expects.
-func (b Build) CheckAnswer(call Call, status int, body []byte) (problems []string, excused []int) {
+// nothing when the build reads it as it was compiled to. There is no excuse
+// for a missing field: the installed bundle checks every answer against its
+// openapi.json at run time, so a field it requires and does not get is a
+// broken screen. A status the snapshot does not declare as a success is not
+// checked here: the caller decides which statuses a case expects.
+func (b Build) CheckAnswer(call Call, status int, body []byte) (problems []string) {
 	node := b.responseSchema(call, fmt.Sprint(status))
 	// A success the snapshot does not declare (201 where it says 200) is
 	// still a success to the build, whose client reads any 2xx alike: its
@@ -239,28 +245,20 @@ func (b Build) CheckAnswer(call Call, status int, body []byte) (problems []strin
 	// describe (a stream, a file): there is nothing the build was compiled
 	// to read in it.
 	if len(node) == 0 {
-		return nil, nil
+		return nil
 	}
 	value, err := decode(body)
 	if err != nil {
-		return []string{fmt.Sprintf("the answer is not JSON (%v); the build parses it as JSON", err)}, nil
+		return []string{fmt.Sprintf("the answer is not JSON (%v); the build parses it as JSON", err)}
 	}
 	components, _ := b.spec["components"].(map[string]any)
 	check := compatibility{components: components}
 	check.check("", value, node)
 
 	for _, found := range check.found {
-		// A missing field this bundle never reads is excused by its
-		// snapshot's exceptions.json, and said to have been used.
-		if found.problem == missingProblem {
-			if index := b.excusedField(call, found.at); index >= 0 {
-				excused = append(excused, index)
-				continue
-			}
-		}
 		problems = append(problems, found.String())
 	}
-	return problems, excused
+	return problems
 }
 
 // RequiresField says whether the snapshot's success answer for a call

@@ -60,7 +60,7 @@ func TestAFilterThatIsNotUnderstoodIsRefusedByName(t *testing.T) {
 		{"category=comments", "category"},
 		// The administrator's announcements were removed: their type is a
 		// name the inbox no longer knows. (Their tab is still read, as an
-		// empty view, for the installed phone builds:
+		// empty view, for the installed phone build:
 		// TestTheRetiredAnnouncementsTabIsEmpty.)
 		{"type=site_announcement", "type"},
 		{"source_type=GOOGLE_DRIVE_CONNECTOR", "source_type"},
@@ -91,8 +91,8 @@ func TestAFilterThatIsNotUnderstoodIsRefusedByName(t *testing.T) {
 	}
 }
 
-// The App Store builds 1.0.0 and 1.1.0 still ask for the retired
-// announcements tab; it must be an empty view, never every row.
+// iPhone 1.1.0 from the App Store still asks for the retired announcements
+// tab; it must be an empty view, never every row.
 func TestTheRetiredAnnouncementsTabIsEmpty(t *testing.T) {
 	got, failures := readView(url.Values{"category": {"announcements"}}, true)
 	if len(failures) != 0 {

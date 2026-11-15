@@ -26,8 +26,10 @@ func TestTheSnapshotsAreTheInstalledBuilds(t *testing.T) {
 	}
 }
 
-// checked is CheckAnswer's problems.
-func checked(problems []string, _ []int) []string { return problems }
+// installed is the snapshot of the one bundle still installed: iPhone 1.1.0
+// (App Store build 4) on the update of 2026-11-15. The tests below read a
+// real snapshot rather than a made-up one, so they name it.
+const installed = "ios-1.1.0-build4-a7cd77fe1"
 
 // snapshot is one build's snapshot by its directory.
 func snapshot(t *testing.T, dir string) Build {
@@ -52,28 +54,29 @@ func call(t *testing.T, build Build, operation string) Call {
 	return Call{}
 }
 
-// The answer that crashed 1.1.0 on 2026-11-13, and the one that fixed it,
-// read against the snapshot itself.
-func TestTheUnreadCountsWithoutAnnouncementsBreakTheBuild(t *testing.T) {
-	build := snapshot(t, "ios-1.1.0-build4-731477d8a")
+// The installed bundle reads only the status count from the badge's batch
+// (the announcements count, which crashed 1.1.0's first bundle on
+// 2026-11-13 when it went missing, is no longer required), read against the
+// snapshot itself.
+func TestTheUnreadCountsAreReadAsTheBuildReadsThem(t *testing.T) {
+	build := snapshot(t, installed)
 	batch := call(t, build, "GET /api/v1/notifications/unread-counts-batch")
 
-	broken := checked(build.CheckAnswer(batch, 200, []byte(`{"status":{"total_unread":4,"recent_unread":2}}`)))
-	if len(broken) != 1 || !strings.Contains(broken[0], "announcements") || !strings.Contains(broken[0], "missing") {
-		t.Errorf("the answer without announcements: %q", broken)
+	broken := build.CheckAnswer(batch, 200, []byte(`{"announcements":{"total_unread":0,"recent_unread":0}}`))
+	if len(broken) != 1 || !strings.Contains(broken[0], "status") || !strings.Contains(broken[0], "missing") {
+		t.Errorf("the answer without status: %q", broken)
 	}
-	fixed := checked(build.CheckAnswer(batch, 200, []byte(`{"status":{"total_unread":4,"recent_unread":2},"announcements":{"total_unread":0,"recent_unread":0}}`)))
-	if len(fixed) != 0 {
-		t.Errorf("the hot-fixed answer: %q", fixed)
+	if fine := build.CheckAnswer(batch, 200, []byte(`{"status":{"total_unread":4,"recent_unread":2}}`)); len(fine) != 0 {
+		t.Errorf("the answer the server sends: %q", fine)
 	}
-	if !build.RequiresField(batch, "announcements") || !build.RequiresField(batch, "announcements.total_unread") || build.RequiresField(batch, "news") {
+	if !build.RequiresField(batch, "status") || !build.RequiresField(batch, "status.total_unread") || build.RequiresField(batch, "announcements") {
 		t.Error("RequiresField does not read the snapshot's fields")
 	}
 }
 
 // What else counts as breaking, and what does not.
 func TestAnAnswerIsReadAsTheBuildReadsIt(t *testing.T) {
-	build := snapshot(t, "ios-1.1.0-build4-731477d8a")
+	build := snapshot(t, installed)
 	notebooks := call(t, build, "GET /api/v1/notebooks")
 	me := call(t, build, "GET /users/me")
 	for _, c := range []struct {
@@ -88,7 +91,7 @@ func TestAnAnswerIsReadAsTheBuildReadsIt(t *testing.T) {
 		{"not JSON", me, `<html>`, []string{"not JSON"}},
 		{"a list's item", notebooks, `[{"id":"one"}]`, []string{"[0].id: is string"}},
 	} {
-		got := strings.Join(checked(build.CheckAnswer(c.call, 200, []byte(c.body))), "\n")
+		got := strings.Join(build.CheckAnswer(c.call, 200, []byte(c.body)), "\n")
 		if len(c.says) == 0 && got != "" {
 			t.Errorf("%s: %s", c.name, got)
 		}
@@ -110,8 +113,8 @@ func TestANeedIsReadFromWhatTheBuildSends(t *testing.T) {
 	}{
 		{Need{Operation: "GET /api/v1/notifications", Query: [2]string{"category", "announcements"}}, true},
 		{Need{Operation: "GET /api/v1/notifications", Query: [2]string{"category", "news"}}, false},
-		{Need{Operation: "GET /api/v1/notifications/unread-counts-batch", Field: "announcements"}, true},
-		{Need{Operation: "GET /api/v1/notifications/unread-counts-batch", Field: "news"}, false},
+		{Need{Operation: "GET /api/v1/notifications/unread-counts-batch", Field: "status"}, true},
+		{Need{Operation: "GET /api/v1/notifications/unread-counts-batch", Field: "announcements"}, false},
 		{Need{Operation: "GET /api/v1/notebook-links"}, true},
 		{Need{Operation: "GET /api/v1/nothing"}, false},
 	} {

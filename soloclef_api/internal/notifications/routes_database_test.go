@@ -106,14 +106,14 @@ INSERT INTO notifications (id, user_id, type, title, message, read, metadata, cr
 
 	// The counts and the source types.
 	status, body = as(alice, "GET", UnreadBatchPath)
-	expect("her unread in the tab", status, body, 200, `{"status":{"total_unread":4,"recent_unread":2},"announcements":{"total_unread":0,"recent_unread":0}}`)
+	expect("her unread in the tab", status, body, 200, `{"status":{"total_unread":4,"recent_unread":2}}`)
 	status, body = as(alice, "GET", UnreadCountPath)
 	expect("her unread", status, body, 200, `{"total_unread":5,"recent_unread":2}`)
 	status, body = as(alice, "GET", UnreadCountPath+"?category=status")
 	expect("her unread in the tab, without the old type", status, body, 200, `{"total_unread":4,"recent_unread":2}`)
 	status, body = as(alice, "GET", UnreadCountPath+"?category=status&type=document_processing")
 	expect("her unread of one type", status, body, 200, `{"total_unread":2,"recent_unread":2}`)
-	// The retired announcements tab (App Store builds 1.0.0 and 1.1.0) and
+	// The retired announcements tab (iPhone 1.1.0 still asks for it) and
 	// filters with no type in common are empty, never an error: these go
 	// through the real routes and Postgres, which refused the NUL
 	// placeholder these views once sent.
@@ -125,8 +125,6 @@ INSERT INTO notifications (id, user_id, type, title, message, read, metadata, cr
 	expect("the retired tab, unread", status, body, 200, `"items":[],"total":0`)
 	status, body = as(alice, "GET", ListPath+"?type=document_processing&source_type=connector:GOOGLE_DRIVE_CONNECTOR")
 	expect("filters with no type in common", status, body, 200, `"items":[],"total":0`)
-	status, body = as(alice, "GET", UnreadBatchPath)
-	expect("the batch keeps a zero announcements count", status, body, 200, `"announcements":{"total_unread":0,"recent_unread":0}`)
 	status, body = as(alice, "GET", SourceTypesPath)
 	expect("her source types", status, body, 200,
 		`{"sources":[{"key":"connector:GOOGLE_DRIVE_CONNECTOR","type":"GOOGLE_DRIVE_CONNECTOR","category":"connector","count":1},{"key":"document:FILE","type":"FILE","category":"document","count":2}]}`)

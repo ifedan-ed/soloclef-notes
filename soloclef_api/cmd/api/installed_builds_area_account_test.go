@@ -13,7 +13,7 @@ func init() { registerArea(accountArea) }
 // last of all. Ids 2000-2999.
 //
 // Alice is made an administrator here: the admin screens (model
-// connections, announcements) are only reached by one, and their success
+// providers and connections) are only reached by one, and their success
 // is what the builds read. Nothing in another area depends on her not
 // being one.
 // accountModelProxy is the service the model routes need and this test does not run.
@@ -62,25 +62,15 @@ INSERT INTO notebooks (id, user_id, title) VALUES (2070, '` + testpostgres.Alice
 		{Operation: "GET /auth/password", Path: "/auth/password", Status: 200},
 		{Operation: "GET /auth/devices", Path: "/auth/devices", Status: 200},
 
-		// What every start sends in the background: the push registration
-		// (1.1.0 an Expo token and no kind; 1.0.0 an iPhone's APNs token, or
-		// Android's Expo token, with the kind), its removal at sign-out, the
-		// presence beat, and a screen's crash report.
-		{Operation: "POST /api/v1/push/devices", Path: "/api/v1/push/devices", Bearer: "{{phone_access}}", Status: 200, Bundles: bundlesBeforeTheFixes,
-			Body: `{"token":"ExponentPushToken[contract-1-1-0]","platform":"ios","label":"Alice's iPhone","language":"en","session_id":"{{phone_session}}"}`},
-		{Operation: "POST /api/v1/push/devices", Path: "/api/v1/push/devices", Bearer: "{{phone_access}}", Status: 200, Bundles: bundlesBeforeTheFixes,
-			Body: `{"token":"0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0","kind":"apns","environment":"production","platform":"ios","label":"Alice's iPhone","language":"en","session_id":"{{phone_session}}"}`},
-		{Operation: "POST /api/v1/push/devices", Path: "/api/v1/push/devices", Bearer: "{{phone_access}}", Status: 200, Bundles: bundlesBeforeTheFixes,
-			Body: `{"token":"ExponentPushToken[contract-android]","kind":"expo","platform":"android","label":"Alice's Pixel","language":"en","session_id":"{{phone_session}}"}`},
-		// The updates with the fixes say which version and bundle they run
-		// (lib/push/register.ts, lib/appVersion): an iPhone with its APNs
-		// token (1.1.0 too, from that update on), Android with Expo's; an
-		// update's id, or null for the bundle built into the app.
-		{Operation: "POST /api/v1/push/devices", Path: "/api/v1/push/devices", Bearer: "{{phone_access}}", Status: 200, Bundles: bundlesWithTheFixes,
-			Body: `{"token":"0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0","kind":"apns","environment":"production","platform":"ios","label":"Alice's iPhone","language":"en","session_id":"{{phone_session}}","app_version":"1.1.0","update_id":"0193a3c4-5e6f-7a8b-9c0d-1e2f3a4b5c6d","runtime_version":"4a69ecbff714"}`},
-		{Operation: "POST /api/v1/push/devices", Path: "/api/v1/push/devices", Bearer: "{{phone_access}}", Status: 200, Bundles: bundlesWithTheFixes,
-			Body: `{"token":"ExponentPushToken[contract-android]","kind":"expo","platform":"android","label":"Alice's Pixel","language":"en","session_id":"{{phone_session}}","app_version":"1.0.0","update_id":null,"runtime_version":"045907f6ded804422dfcd485e0b8138a98cb426c"}`},
-		{Operation: "DELETE /api/v1/push/devices", Path: "/api/v1/push/devices?token=ExponentPushToken%5Bcontract-android%5D", Bearer: "{{phone_access}}", Status: 204},
+		// What every start sends in the background: the push registration,
+		// which says which version and bundle the phone runs
+		// (lib/push/register.ts, lib/appVersion): an iPhone's APNs token, the
+		// app's version, its runtime, and the update's id (null for the bundle
+		// built into the app). Then its removal at sign-out, the presence
+		// beat, and a screen's crash report.
+		{Operation: "POST /api/v1/push/devices", Path: "/api/v1/push/devices", Bearer: "{{phone_access}}", Status: 200,
+			Body: `{"token":"0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0","kind":"apns","environment":"production","platform":"ios","label":"Alice's iPhone","language":"en","session_id":"{{phone_session}}","app_version":"1.1.0","update_id":"01a1e03b-db26-7530-aac0-81d0fffb29cc","runtime_version":"4a69ecbff714"}`},
+		{Operation: "DELETE /api/v1/push/devices", Path: "/api/v1/push/devices?token=0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0", Bearer: "{{phone_access}}", Status: 204},
 		{Operation: "GET /api/v1/push/preferences", Path: "/api/v1/push/preferences", Status: 200},
 		{Operation: "PUT /api/v1/push/preferences", Path: "/api/v1/push/preferences", Body: `{"choices":{"output":false}}`, Status: 200},
 		// lib/push/presence.ts: not in the builds' openapi.json; the answer
@@ -131,15 +121,11 @@ INSERT INTO notebooks (id, user_id, title) VALUES (2070, '` + testpostgres.Alice
 			Capture: map[string]string{"pat_id": "id"}},
 		{Operation: "DELETE /api/v1/pats/{pat_id}", Path: "/api/v1/pats/{{pat_id}}", Status: 204},
 
-		// Prompts (the chat's / panel and Settings → Prompts), and the
-		// community shelf the builds still list and copy from.
+		// Prompts (the chat's / panel and Settings → Prompts).
 		{Operation: "GET /api/v1/prompts", Path: "/api/v1/prompts", Status: 200},
 		{Operation: "POST /api/v1/prompts", Path: "/api/v1/prompts", Body: `{"name":"Summarise","prompt":"Summarise this in three lines.","mode":"transform"}`, Status: 200,
 			Capture: map[string]string{"prompt_id": "id"}},
 		{Operation: "PUT /api/v1/prompts/{prompt_id}", Path: "/api/v1/prompts/{{prompt_id}}", Body: `{"name":"Summarise briefly","prompt":"Summarise this in two lines.","mode":"transform"}`, Status: 200},
-		{Operation: "GET /api/v1/prompts/public", Path: "/api/v1/prompts/public", Status: 200},
-		{Operation: "POST /api/v1/prompts/{prompt_id}/copy", Path: "/api/v1/prompts/{{prompt_id}}/copy", Status: 404,
-			Why: "retired: installedbuilds.Retired says what the build does with it"},
 		{Operation: "DELETE /api/v1/prompts/{prompt_id}", Path: "/api/v1/prompts/{{prompt_id}}", Status: 200},
 
 		// Memory (features/memory).
@@ -147,19 +133,8 @@ INSERT INTO notebooks (id, user_id, title) VALUES (2070, '` + testpostgres.Alice
 		{Operation: "PUT /api/v1/users/me/memory", Path: "/api/v1/users/me/memory", Body: `{"memory_md":"## Notes\n- Studies tides."}`, Status: 200},
 		{Operation: "POST /api/v1/users/me/memory/reset", Path: "/api/v1/users/me/memory/reset", Body: `{}`, Status: 200},
 
-		// The chat's + menu, the agent's flags and the connect-your-agent page.
+		// The chat's + menu.
 		{Operation: "GET /api/v1/agent/tools", Path: "/api/v1/agent/tools", Status: 200},
-		{Operation: "GET /api/v1/agent/flags", Path: "/api/v1/agent/flags", Status: 200},
-		{Operation: "GET /api/v1/agent-sign-in", Path: "/api/v1/agent-sign-in", Status: 200},
-		// Settings → Agent permissions (features/settings/admin).
-		{Operation: "GET /api/v1/agent/permissions/rules", Path: "/api/v1/agent/permissions/rules", Status: 404,
-			Why: "retired: installedbuilds.Retired says what the build does with it"},
-		{Operation: "POST /api/v1/agent/permissions/rules", Path: "/api/v1/agent/permissions/rules", Body: `{"permission":"web_search","pattern":"*","action":"allow","thread_id":null}`, Status: 404,
-			Why: "retired: installedbuilds.Retired says what the build does with it"},
-		{Operation: "PATCH /api/v1/agent/permissions/rules/{rule_id}", Path: "/api/v1/agent/permissions/rules/2050", Body: `{"action":"deny"}`, Status: 404,
-			Why: "retired: installedbuilds.Retired says what the build does with it"},
-		{Operation: "DELETE /api/v1/agent/permissions/rules/{rule_id}", Path: "/api/v1/agent/permissions/rules/2050", Status: 404,
-			Why: "retired: installedbuilds.Retired says what the build does with it"},
 
 		// The Studio's language picker.
 		// The languages come from the speech service's settings, which this
@@ -176,11 +151,6 @@ INSERT INTO notebooks (id, user_id, title) VALUES (2070, '` + testpostgres.Alice
 		{Operation: "GET /api/v1/model-providers", Path: "/api/v1/model-providers", Status: 200},
 		{Operation: "PUT /api/v1/model-connections/{connection_id}", Path: "/api/v1/model-connections/2010", Body: `{"enabled":false}`, Status: 200},
 		{Operation: "DELETE /api/v1/model-connections/{connection_id}", Path: "/api/v1/model-connections/2010", Status: 200},
-		{Operation: "GET /api/v1/admin/announcements", Path: "/api/v1/admin/announcements", Status: 200},
-		{Operation: "POST /api/v1/admin/announcements", Path: "/api/v1/admin/announcements", Body: `{"title":"Maintenance","body":"Tonight at ten.","link":null,"expires_at":null}`, Status: 403,
-			Why: "announcements are not sent (retired-announcements); the page shows the refusal as its failure"},
-		{Operation: "POST /api/v1/admin/announcements/{announcement_id}/withdraw", Path: "/api/v1/admin/announcements/2060/withdraw", Status: 404,
-			Why: "retired: installedbuilds.Retired says what the build does with it"},
 
 		// The browser hand-offs (features/settings/connectors/handoff.ts,
 		// features/sources/drive/driveHandoff.ts): start, the page the

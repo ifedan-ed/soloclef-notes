@@ -7,8 +7,7 @@ func init() { registerArea(libraryArea) }
 // The library: a notebook's own row and its sources, notes, documents and
 // their versions, folders, uploads, research and the report templates, as
 // the installed builds send them (features/notebooks, features/notes,
-// features/sources, lib/uploads, lib/api/endpoints.ts at 731477d8a and
-// a7ba0c1c3, which send the same requests here). Ids 3000-3999.
+// features/sources, lib/uploads, lib/api/endpoints.ts). Ids 3000-3999.
 //
 // Notebooks 3001 (read, edited, its sources), 3002 (deleted), 3003
 // (copied), 3004 (pinned and unpinned). Document 3001 has two versions,

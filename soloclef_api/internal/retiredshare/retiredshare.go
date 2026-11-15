@@ -1,5 +1,5 @@
 // Package retiredshare answers three sharing routes that were removed when
-// public links became Studio outputs only, for installed phone builds.
+// public links became Studio outputs only, for the installed phone build.
 //
 //	GET  /api/v1/notebook-links                       200 {"links": []}
 //	POST /api/v1/notebooks/{notebook_id}/public-link  403, the error envelope
@@ -7,11 +7,11 @@
 //
 // # Why they are here
 //
-// The App Store builds 1.0.0 and 1.1.0 still call them. Settings → Public
+// iPhone 1.1.0 from the App Store still calls them. Settings → Public
 // links reads the notebook links beside the output links (GET
 // /api/v1/snapshots, internal/publiclinks) and shows "Couldn't load" when
 // either fails, so on a 404 nobody could see or revoke their output links
-// from those builds. Sharing a notebook or a chat from the notebook menu
+// from it. Sharing a notebook or a chat from the notebook menu
 // says "This can't be shared publicly." on a 403, which is the truth now;
 // on a 404 it says "Couldn't create the link. Please try again.", which
 // invites trying again for ever.
@@ -23,8 +23,8 @@
 // like every route of an account (cmd/api lists them as gated), so a
 // stranger gets the gate's 401 first.
 //
-// They go when no installed build calls them. No other retired route is
-// answered: a build that is not in the App Store is not kept working.
+// They go when no installed build calls them (compat.go of
+// internal/installedbuilds).
 package retiredshare
 
 import (
@@ -41,7 +41,7 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/requestcontext"
 )
 
-// The paths, as the installed phone builds call them.
+// The paths, as the installed phone build calls them.
 const (
 	NotebookLinksPath = "/api/v1/notebook-links"
 	NotebookLinkPath  = "/api/v1/notebooks/{notebook_id}/public-link"

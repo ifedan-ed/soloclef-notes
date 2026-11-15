@@ -527,21 +527,17 @@ func serve(ctx context.Context, settings config.Config, parserEnv func(string) s
 		Errors: errors,
 		Logger: logger,
 	}.Register(api)
-	// For installed phone builds (1.0.0 and 1.1.0): the notebook-link list
+	// For the installed phone build (iPhone 1.1.0): the notebook-link list
 	// is empty and sharing a notebook or a chat is refused, where a 404 broke
-	// their Public links page and share menu (internal/retiredshare).
+	// its Public links page and share menu (internal/retiredshare).
 	// installed-builds: retired-notebook-links
 	// installed-builds: retired-notebook-share
 	// installed-builds: retired-chat-share
 	retiredshare.Routes{Errors: errors, Logger: logger}.Register(api)
-	// For installed phone builds too: the Settings and Admin pages of
-	// removed features get their lists, empty, and Connect your agent gets
-	// agent sign-in off, where a 404 broke each page
+	// For it too: Admin, Model connections gets the operator's list, empty,
+	// where a 404 hid the account's own connections
 	// (internal/retiredsettings).
 	// installed-builds: retired-operator-connections
-	// installed-builds: retired-community-prompts
-	// installed-builds: retired-announcements
-	// installed-builds: retired-agent-sign-in
 	retiredsettings.Routes{Errors: errors, Logger: logger}.Register(api)
 	// A Studio output's public link, the only thing that can be shared:
 	// making one (its owner), and the page and files a stranger holding the
@@ -2463,7 +2459,8 @@ func servedRoutes() []string {
 	// The inbox, the agent flags, a thread's action log and its undo.
 	routes = append(routes, notifications.Served()...)
 	routes = append(routes, agentflags.Served()...)
-	// The retired sharing routes installed phone builds still call.
+	// The retired sharing and settings routes the installed phone build
+	// still calls.
 	routes = append(routes, retiredshare.Served()...)
 	routes = append(routes, retiredsettings.Served()...)
 	routes = append(routes, agentactions.Served()...)
