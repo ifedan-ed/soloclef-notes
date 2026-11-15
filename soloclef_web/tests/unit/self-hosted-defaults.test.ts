@@ -26,7 +26,6 @@ const SHIPPED_DIRS = [
 	"messages",
 	"public",
 	"types",
-	"zero",
 ];
 const SHIPPED_FILES = [
 	"Dockerfile",

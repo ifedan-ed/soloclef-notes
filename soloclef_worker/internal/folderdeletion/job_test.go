@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"git.danvics.com/danvics/soloclef/soloclef_celery/celery"
+
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange/livechangetest"
 )
 
 type recordingRemover struct {
@@ -28,7 +30,7 @@ func message(kwargs map[string]any, documents ...any) *celery.Message {
 }
 
 func TestTheMessageMustNameItsAccount(t *testing.T) {
-	job := &Job{Remover: &recordingRemover{}, Attempts: 1}
+	job := &Job{Remover: &recordingRemover{}, Attempts: 1, Changes: &livechangetest.Recorder{}}
 	err := job.Run(context.Background(), message(map[string]any{"folder_subtree_ids": []any{}}, float64(1)))
 	if err == nil {
 		t.Fatal("a deletion that names no account was run")
@@ -49,7 +51,7 @@ func TestTheMessageMustNameItsAccount(t *testing.T) {
 // nil pool would show by panicking.
 func TestADocumentThatWillNotGoStopsTheJobBeforeTheFolders(t *testing.T) {
 	recovered := &recordingRemover{failures: 2}
-	job := &Job{Remover: recovered, Attempts: 3, Backoff: time.Millisecond}
+	job := &Job{Remover: recovered, Attempts: 3, Backoff: time.Millisecond, Changes: &livechangetest.Recorder{}}
 	if err := job.Run(context.Background(), message(map[string]any{"user_id": "u"}, float64(4), float64(5))); err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +59,7 @@ func TestADocumentThatWillNotGoStopsTheJobBeforeTheFolders(t *testing.T) {
 		t.Fatalf("removed %v", recovered.removed)
 	}
 	stuck := &recordingRemover{failures: 99}
-	job = &Job{Remover: stuck, Attempts: 2, Backoff: time.Millisecond}
+	job = &Job{Remover: stuck, Attempts: 2, Backoff: time.Millisecond, Changes: &livechangetest.Recorder{}}
 	if err := job.Run(context.Background(), message(map[string]any{"user_id": "u", "folder_subtree_ids": []any{float64(7)}}, float64(4))); err == nil {
 		t.Fatal("a job that could not remove a document reported success")
 	}

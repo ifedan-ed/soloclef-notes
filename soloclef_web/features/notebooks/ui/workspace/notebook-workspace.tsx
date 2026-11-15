@@ -11,14 +11,18 @@ import { NOTEBOOKS_HOME } from "@/lib/dashboard-paths";
 import { cn } from "@/lib/utils";
 import { notebookKeys } from "../../api/notebook-query-keys";
 import { type NotebookChanges, notebooksApi } from "../../api/notebooks-api";
-import { useNotebookWithAutoTitle } from "../../hooks/use-auto-title";
 import {
 	useCopyNotebook,
 	useCreateNotebook,
 	useSetFeatured,
 	useUpdateNotebook,
 } from "../../hooks/use-notebook-actions";
-import { useNotebookThreads, useStudioOutputs } from "../../hooks/use-notebook-queries";
+import {
+	useNotebook,
+	useNotebookSources,
+	useNotebookThreads,
+	useStudioOutputs,
+} from "../../hooks/use-notebook-queries";
 import { usePanelPreference } from "../../hooks/use-panel-preference";
 import {
 	type NotebookFocus,
@@ -42,7 +46,10 @@ type MobileTab = "sources" | "chat" | "studio";
 export function NotebookWorkspace({ notebookId }: { notebookId: number }) {
 	const t = useTranslations("notebooks");
 	const queryClient = useQueryClient();
-	const { notebook, sources, watchTitle } = useNotebookWithAutoTitle(notebookId);
+	// Its automatic name arrives like any rename: the change stream reports
+	// `notebooks` and the notebook and the home list are read again.
+	const notebook = useNotebook(notebookId);
+	const sources = useNotebookSources(notebookId);
 	const [sourcesCollapsed, setSourcesCollapsed] = usePanelPreference("sources");
 	const [studioCollapsed, setStudioCollapsed] = usePanelPreference("studio");
 	// A link from the home search can name a source (?source=) or note (?note=)
@@ -203,7 +210,6 @@ export function NotebookWorkspace({ notebookId }: { notebookId: number }) {
 			uploadSources,
 			openResearch,
 			showChat,
-			watchTitle,
 		}),
 		[
 			notebookId,
@@ -219,7 +225,6 @@ export function NotebookWorkspace({ notebookId }: { notebookId: number }) {
 			uploadSources,
 			openResearch,
 			showChat,
-			watchTitle,
 		]
 	);
 

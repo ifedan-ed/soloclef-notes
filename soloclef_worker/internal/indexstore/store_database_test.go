@@ -9,6 +9,9 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange"
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange/livechangetest"
 )
 
 // databaseEnv names a throwaway Postgres that soloclef_schema's migrate
@@ -43,7 +46,7 @@ func TestLoadAppliesTheConnectorsParserWhenTheDocumentNamesNone(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pool.Close()
-	store := New(pool)
+	store := New(pool, &livechangetest.Recorder{})
 
 	var userID string
 	if err := pool.QueryRow(ctx, `
@@ -130,7 +133,7 @@ func TestReplaceWritesChunksUnderTheDocumentsOwnerAndNoOther(t *testing.T) {
 	// Registered first so it runs last: the accounts below are deleted
 	// through this pool by their own clean-ups.
 	t.Cleanup(pool.Close)
-	store := New(pool)
+	store := New(pool, &livechangetest.Recorder{})
 
 	account := func() string {
 		t.Helper()
@@ -202,7 +205,7 @@ func TestReplaceNeverOverwritesANoteSavedWhileItWasIndexed(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
-	store := New(pool)
+	store := New(pool, &livechangetest.Recorder{})
 	var owner string
 	if err := pool.QueryRow(ctx, `
 		INSERT INTO "user" (email, hashed_password, is_verified) VALUES ($1, 'not a password', true)
@@ -274,7 +277,7 @@ func TestLoadReadsTheVisionSwitchAndTheOwnersVisionChoice(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pool.Close()
-	store := New(pool)
+	store := New(pool, &livechangetest.Recorder{})
 
 	account := func() string {
 		t.Helper()
@@ -325,6 +328,74 @@ func TestLoadReadsTheVisionSwitchAndTheOwnersVisionChoice(t *testing.T) {
 		}
 		if loaded.Vision != case_.vision || loaded.VisionChoice != case_.visionUsed {
 			t.Errorf("%s: vision %v, choice %q", name, loaded.Vision, loaded.VisionChoice)
+		}
+	}
+}
+
+// Each status move a client shows is told to the document's owner once it
+// is written, naming the document; a move that did not happen (a stage on a
+// document no longer processing, a document being deleted) tells nobody.
+func TestEveryStatusMoveIsToldToTheOwner(t *testing.T) {
+	address := os.Getenv(databaseEnv)
+	if address == "" {
+		t.Skipf("%s is not set; scripts/index_end_to_end_test.sh starts the database this test needs", databaseEnv)
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	told := &livechangetest.Recorder{}
+	store := New(pool, told)
+
+	var userID string
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO "user" (email, hashed_password, is_verified)
+		VALUES ($1, 'not a password', true)
+		RETURNING id::text`, "live-"+token(t)+"@example.test").Scan(&userID); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _, _ = pool.Exec(ctx, `DELETE FROM "user" WHERE id = $1::uuid`, userID) }()
+	var documentID int64
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO documents (title, document_type, content, content_hash, user_id, status)
+		VALUES ('live.md', 'FILE', '', $1, $2::uuid, '{"state": "pending"}')
+		RETURNING id`, token(t)+token(t), userID).Scan(&documentID); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := store.Begin(ctx, documentID, StageParsing, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Stage(ctx, documentID, StageEmbedding); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Fail(ctx, documentID, "the parser said no"); err != nil {
+		t.Fatal(err)
+	}
+	// Failed, so no longer processing: a late stage moves nothing.
+	if err := store.Stage(ctx, documentID, StageIndexing); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE documents SET status = '{"state": "deleting"}' WHERE id = $1`, documentID); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Begin(ctx, documentID, StageParsing, 2); err != ErrGone {
+		t.Fatalf("begin on a document being deleted: %v", err)
+	}
+	if err := store.Fail(ctx, documentID, "late"); err != nil {
+		t.Fatal(err)
+	}
+
+	calls := told.Calls()
+	if len(calls) != 3 {
+		t.Fatalf("told %d times, want begin, stage and fail: %+v", len(calls), calls)
+	}
+	for _, call := range calls {
+		if call.UserID != userID || len(call.Changes) != 1 ||
+			call.Changes[0] != (livechange.Change{Kind: livechange.Documents, ID: documentID}) {
+			t.Errorf("told %+v", call)
 		}
 	}
 }

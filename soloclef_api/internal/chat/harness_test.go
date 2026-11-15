@@ -34,6 +34,8 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/requestbody"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/requestcontext"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/ownmodels"
+
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange/livechangetest"
 )
 
 // The accounts of the tests. Ada has threads 1 and 2; Dee has thread 3; Ben
@@ -573,6 +575,8 @@ type app struct {
 	assembly *scripted
 	registry *turns.Registry
 	shutdown context.CancelFunc
+	// changes is every live change the service told.
+	changes *livechangetest.Recorder
 }
 
 type appOption func(*Service, *scripted)
@@ -603,8 +607,10 @@ func newApp(t testing.TB, m model.Model, tools []tool.Tool, options ...appOption
 	var ticks atomic.Int64
 	start := time.Date(2026, 11, 11, 9, 0, 0, 0, time.UTC)
 	models, _, _ := menu(m)
+	changes := &livechangetest.Recorder{}
 	service := &Service{
-		Rows: data, Notebooks: data, Queue: data, Turns: registry, Assembler: assembly, Store: store, Models: models, Choices: models.Choices.(ModelChoices),
+		Changes: changes,
+		Rows:    data, Notebooks: data, Queue: data, Turns: registry, Assembler: assembly, Store: store, Models: models, Choices: models.Choices.(ModelChoices),
 		Titler: fixedTitle{title: "Cell division"},
 		// Far above anything a test says, so that only the tests of
 		// summarising summarise.
@@ -635,7 +641,7 @@ func newApp(t testing.TB, m model.Model, tools []tool.Tool, options ...appOption
 		},
 	}
 	server := httptest.NewServer(requestcontext.Middleware(logger, bodies.Wrap(withCaller)))
-	a := &app{t: t, server: server, rows: data, service: service, assembly: assembly, registry: registry, shutdown: shutdown}
+	a := &app{t: t, server: server, rows: data, service: service, assembly: assembly, registry: registry, shutdown: shutdown, changes: changes}
 	t.Cleanup(func() {
 		shutdown()
 		service.Wait()

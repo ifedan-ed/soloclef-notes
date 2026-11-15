@@ -20,6 +20,8 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_celery/produce"
 	"git.danvics.com/danvics/soloclef/soloclef_connectors/nextcloud"
 	filestore "git.danvics.com/danvics/soloclef/soloclef_filestore"
+
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange/livechangetest"
 )
 
 // yard is a download pool over a stand-in Nextcloud, a stand-in database
@@ -51,7 +53,7 @@ func newYard(t testing.TB, files map[string]node, concurrency int, maxBytes int6
 		func(account Account) nextcloud.Remote {
 			return nextcloud.NewClient(account, y.cloud.server.Client().Transport, quick)
 		},
-		slog.New(slog.NewTextHandler(io.Discard, nil)))
+		&livechangetest.Recorder{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -292,13 +294,13 @@ func TestAPoolWithAPartMissingIsNotBuilt(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	for name, build := range map[string]func() (*Downloads, error){
 		"no concurrency": func() (*Downloads, error) {
-			return NewDownloads(context.Background(), 0, 1, y.table, store, y.queue, connect, logger)
+			return NewDownloads(context.Background(), 0, 1, y.table, store, y.queue, connect, &livechangetest.Recorder{}, logger)
 		},
 		"no size limit": func() (*Downloads, error) {
-			return NewDownloads(context.Background(), 1, 0, y.table, store, y.queue, connect, logger)
+			return NewDownloads(context.Background(), 1, 0, y.table, store, y.queue, connect, &livechangetest.Recorder{}, logger)
 		},
 		"no queue": func() (*Downloads, error) {
-			return NewDownloads(context.Background(), 1, 1, y.table, store, nil, connect, logger)
+			return NewDownloads(context.Background(), 1, 1, y.table, store, nil, connect, &livechangetest.Recorder{}, logger)
 		},
 	} {
 		if _, err := build(); err == nil {

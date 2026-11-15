@@ -7,7 +7,7 @@ import type { ResearchImportItem } from "../model/research";
 
 /**
  * Adds chosen web results as notebook sources. They come back pending; the
- * sources query keeps polling until indexing flips them to ready.
+ * change stream refreshes the sources as indexing flips them to ready.
  */
 export function useResearchImport(notebookId: number) {
 	const queryClient = useQueryClient();

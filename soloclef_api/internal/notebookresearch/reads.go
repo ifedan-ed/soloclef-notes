@@ -17,6 +17,8 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_celery/produce"
 
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/pagereader"
+
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange"
 )
 
 const (
@@ -60,6 +62,9 @@ type Reads struct {
 	// originals is where an address that is a PDF is kept (originals.go).
 	originals Originals
 	logger    *slog.Logger
+	// changes tells the person's open notebook that an imported page's
+	// source moved (being read, read, failed), as its spinner follows.
+	changes livechange.Publisher
 	// lifetime ends when the server stops: every read under way stops.
 	lifetime context.Context
 	// slots bounds how many reads run at once, so one import of fifty
@@ -71,19 +76,19 @@ type Reads struct {
 
 // NewReads builds the reader. concurrency is how many pages are read at
 // once across every import.
-func NewReads(lifetime context.Context, concurrency int, pool *pgxpool.Pool, pages PageReader, papers Papers, indexing Indexing, originals Originals, logger *slog.Logger) (*Reads, error) {
+func NewReads(lifetime context.Context, concurrency int, pool *pgxpool.Pool, pages PageReader, papers Papers, indexing Indexing, originals Originals, changes livechange.Publisher, logger *slog.Logger) (*Reads, error) {
 	switch {
 	case lifetime == nil:
 		return nil, errors.New("notebookresearch: the reads' lifetime is not set")
 	case concurrency < 1:
 		return nil, errors.New("notebookresearch: the reads' concurrency must be at least 1")
-	case pool == nil || pages == nil || papers == nil || indexing == nil || logger == nil:
-		return nil, errors.New("notebookresearch: the reads need the pool, the page reader, the scholarly sources, the indexing queue and the logger")
+	case pool == nil || pages == nil || papers == nil || indexing == nil || changes == nil || logger == nil:
+		return nil, errors.New("notebookresearch: the reads need the pool, the page reader, the scholarly sources, the indexing queue, the live-change publisher and the logger")
 	}
 	if err := originals.check(); err != nil {
 		return nil, err
 	}
-	return &Reads{pool: pool, pages: pages, papers: papers, indexing: indexing, originals: originals, logger: logger,
+	return &Reads{pool: pool, pages: pages, papers: papers, indexing: indexing, originals: originals, changes: changes, logger: logger,
 		lifetime: lifetime, slots: make(chan struct{}, concurrency), now: func() time.Time { return time.Now().UTC() }}, nil
 }
 
@@ -139,6 +144,11 @@ func (r *Reads) fill(documentID int64, userID, requestID string) {
 		r.markUnread(documentID, userID)
 		return
 	}
+	// Claimed: the source is being read now. And once more however the
+	// read ends (stored, failed, enqueued, or marked unread by the queue),
+	// after its last write.
+	r.changed(ctx, userID, documentID)
+	defer r.changed(ctx, userID, documentID)
 	var about imported
 	// Metadata this package wrote; if it cannot be read back there is no
 	// address, and the document falls back to its title below.
@@ -355,5 +365,21 @@ func (r *Reads) markUnread(documentID int64, userID string) {
 	if _, err := New(r.pool).MarkUnread(ctx, MarkUnreadParams{Reason: interrupted, Now: r.now(), ID: documentID, UserID: userID}); err != nil {
 		r.logger.ErrorContext(ctx, "an unread import could not be marked; importing it again after ten minutes reads it",
 			"document_id", documentID, "error", err.Error())
+		return
 	}
+	r.changed(ctx, userID, documentID)
+}
+
+// imported tells the owner's open clients that a notebook gained sources:
+// its list and the library both show them.
+func (r *Reads) imported(ctx context.Context, userID string, notebookID int64) {
+	r.changes.Publish(ctx, userID, livechange.Change{Kind: livechange.Notebooks, ID: notebookID},
+		livechange.Change{Kind: livechange.Documents})
+}
+
+// changed tells the owner's open clients the imported document moved. It
+// is a document change only: the notebook's sources list reads each
+// source's state from its document.
+func (r *Reads) changed(ctx context.Context, userID string, documentID int64) {
+	r.changes.Publish(ctx, userID, livechange.Change{Kind: livechange.Documents, ID: documentID})
 }

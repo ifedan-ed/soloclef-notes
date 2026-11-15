@@ -40,15 +40,16 @@ export function LayoutDataProvider({ children }: LayoutDataProviderProps) {
 	const { data: user } = useAtomValue(currentUserAtom);
 	const userId = user?.id ? String(user.id) : null;
 
-	// The server's unread total, which the inbox counts on from before its own sync window.
-	const { data: batchUnread, isLoading: isBatchUnreadLoading } = useQuery({
+	// The server's unread totals; the change stream reads them again whenever
+	// notifications change (`inbox`), so the badge follows without polling.
+	const { data: batchUnread } = useQuery({
 		queryKey: cacheKeys.notifications.batchUnreadCounts(),
 		queryFn: () => notificationsApiService.getBatchUnreadCounts(),
 		enabled: !!userId,
 		staleTime: 30_000,
 	});
 
-	const statusInbox = useInbox(userId, "status", batchUnread?.status, !isBatchUnreadLoading);
+	const statusInbox = useInbox(userId, "status", batchUnread?.status);
 
 	// Share the status inbox through an atom so child components (the
 	// connector popup) read it without a second useInbox of their own.

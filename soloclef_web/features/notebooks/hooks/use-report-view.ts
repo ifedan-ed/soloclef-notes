@@ -32,7 +32,8 @@ export function useReportView(notebookId: number, outputId: number, enabled: boo
 			notebooksApi.addReportSuggestion(notebookId, outputId, suggestionId),
 		onSuccess: (next) => {
 			store(next);
-			// The new output shows in the Studio list (and is polled from there).
+			// The new output shows in the Studio list, and its progress arrives
+			// there through the change stream.
 			void queryClient.invalidateQueries({
 				queryKey: notebookKeys.outputs(notebookId),
 			});

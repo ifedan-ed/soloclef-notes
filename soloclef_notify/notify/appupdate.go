@@ -126,6 +126,9 @@ func (n *Notifier) AppUpdated(ctx context.Context, update AppUpdate) ([]int64, e
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("notify: %w", err)
 	}
+	// Written or rewritten as news: the open inbox and its badge show it
+	// now, whatever becomes of the push.
+	n.told(ctx, update.UserID)
 	if _, err := n.Publisher.Send(ctx, DeliverToMessage(id, told)); err != nil {
 		return told, fmt.Errorf("notify: the update row %d is written and its push could not be queued: %w", id, err)
 	}

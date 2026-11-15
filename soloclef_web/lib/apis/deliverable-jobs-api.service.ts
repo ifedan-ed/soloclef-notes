@@ -15,6 +15,8 @@ export const deliverableJobResponse = z.object({
 	updated_at: z.string(),
 });
 
+export type DeliverableJob = z.infer<typeof deliverableJobResponse>;
+
 export const deliverableJobActionPath = (jobId: number, action: "cancel" | "retry") =>
 	`/api/v1/deliverable-jobs/${jobId}/${action}`;
 
@@ -30,6 +32,9 @@ class DeliverableJobsApiService {
 			deliverableJobActionRequestOptions
 		);
 	}
+
+	get = (jobId: number) =>
+		baseApiService.get(`/api/v1/deliverable-jobs/${jobId}`, deliverableJobResponse);
 
 	cancel = (jobId: number) => this.postAction(jobId, "cancel");
 

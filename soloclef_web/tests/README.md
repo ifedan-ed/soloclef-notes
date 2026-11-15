@@ -58,8 +58,8 @@ rebuild api proxy` rebuilds only the ones named (`proxy` is the web app).
 ## What is real and what is faked
 
 Real: Postgres, Valkey, Qdrant, MinIO, the parser service, the indexer and the
-worker, zero-cache, Caddy, the API's routes, permissions and persistence, the
-web app's static build, and every browser interaction. Nothing in the application has
+worker, Caddy, the API's routes and its change stream, permissions and
+persistence, the web app's static build, and every browser interaction. Nothing in the application has
 a test-only branch: a fake is a stand-in at an address the stack already
 calls.
 
@@ -123,7 +123,6 @@ form. On top of that, `tests/prod-smoke/guard.ts` aborts, in the browser, every
 request that is not GET/HEAD/OPTIONS, except these reads that the app
 implements as POST:
 
-- `POST /api/zero/query` (Zero query resolution);
 - `POST /api/v1/messages/comments/batch` (comment counts for visible messages);
 - `POST /api/v1/notebooks/<nb>/followups` (follow-up questions).
 

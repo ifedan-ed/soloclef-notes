@@ -25,11 +25,19 @@ export function useThreadDetail(threadId: number | null | undefined) {
 	});
 }
 
-export function useThreadMessages(threadId: number | null | undefined) {
+/**
+ * A thread's saved messages. `paused` keeps the cached read but asks nothing
+ * new (an invalidation only marks it stale); the read happens when it
+ * unpauses.
+ */
+export function useThreadMessages(
+	threadId: number | null | undefined,
+	{ paused = false }: { paused?: boolean } = {}
+) {
 	return useQuery<ThreadHistoryLoadResponse>({
 		queryKey: cacheKeys.threads.messages(threadId ?? 0),
 		queryFn: () => getThreadMessages(threadId as number),
-		enabled: isValidThreadId(threadId),
+		enabled: isValidThreadId(threadId) && !paused,
 		staleTime: THREAD_MESSAGES_STALE_TIME_MS,
 	});
 }

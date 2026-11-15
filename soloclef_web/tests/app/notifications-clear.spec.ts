@@ -4,7 +4,8 @@ import { expect, test, uniqueName } from "./fixtures";
 
 /**
  * Notifications: Delete from an item's menu, and Clear all on a tab after
- * asking, with the delete reaching another open tab through Zero. A running
+ * asking, with the delete reaching another open tab through the change
+ * stream (an `inbox` change makes it read its newest page again). A running
  * job's item has no Delete and Clear all leaves it. The ⋯ menu shows on a
  * touch screen at any width. The tabs are All and Unread.
  *
@@ -129,7 +130,7 @@ test("Delete from an item's menu, also gone from another open tab", async ({
 
 	await expect(panel(page).getByText(titles.ward)).toHaveCount(0);
 	await expect(panel(page).getByText(titles.discharge)).toBeVisible();
-	// The other tab drops it with no reload: Zero carried the delete.
+	// The other tab drops it with no reload: the change stream carried the delete.
 	await expect(panel(other).getByText(titles.ward)).toHaveCount(0);
 	await expect.poll(() => serverTitles(request, token, tag)).toEqual([titles.discharge]);
 	await other.close();
@@ -175,7 +176,7 @@ test("Clear all on Unread asks first and leaves the read items", async ({
 	await ask.getByRole("button", { name: "Clear all" }).click();
 	await expect(panel(page).getByText(titles.ward)).toHaveCount(0);
 
-	// The read item stays, here and in the other tab, which Zero told of the delete.
+	// The read item stays, here and in the other tab, which the change stream told of the delete.
 	await tab(page, "All").click();
 	await expect(panel(page).getByText(titles.discharge)).toBeVisible();
 	await expect(panel(other).getByText(titles.ward)).toHaveCount(0);

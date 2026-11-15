@@ -44,7 +44,6 @@ import { useServerTurn } from "@/features/chat-thread/server-turn/use-server-tur
 import { preferredToolAtom } from "@/features/composer-tools/preferred-tool.atom";
 import { useAgentActionsQuery } from "@/hooks/use-agent-actions-query";
 import { useChatSessionStateSync } from "@/hooks/use-chat-session-state";
-import { useMessagesSync } from "@/hooks/use-messages-sync";
 import { useThreadDetail, useThreadMessages } from "@/hooks/use-thread-queries";
 import { documentsApiService } from "@/lib/apis/documents-api.service";
 import {
@@ -147,7 +146,12 @@ export function ChatThreadView({ chatId, onThreadNotFound }: ChatThreadViewProps
 	const stagedDecisionsByInterruptIdRef = useRef<Map<string, HitlResponse[]>>(new Map());
 
 	const threadDetailQuery = useThreadDetail(activeThreadId);
-	const threadMessagesQuery = useThreadMessages(activeThreadId);
+	// Not read while this page streams the thread's turn: a refresh in the
+	// middle (the change stream reports every saved message) would bring back
+	// a half-written answer, and the moment the stream ended the hydration
+	// below would paint it over the finished one. The stream's end invalidates
+	// the messages, so they are read once, whole, right after.
+	const threadMessagesQuery = useThreadMessages(activeThreadId, { paused: localRunning });
 	const hydratedMessagesRef = useRef<{
 		threadId: number | null;
 		data: typeof threadMessagesQuery.data;
@@ -158,51 +162,11 @@ export function ChatThreadView({ chatId, onThreadNotFound }: ChatThreadViewProps
 	const isThreadMessagesLoading = shouldHideStaleMessages && !threadMessagesQuery.error;
 	const runtimeMessages = shouldHideStaleMessages ? EMPTY_MESSAGES : displayMessages;
 
-	// Sync session state and messages via Zero, so a turn running in another
-	// tab or device shows here. Kept on the page because "AI responding"
-	// reflects the currently-viewed thread.
+	// "AI is responding" for this thread, from any tab or device. Kept on the
+	// page because it reflects the currently-viewed thread. The messages of a
+	// turn this page does not stream arrive through useThreadMessages: the
+	// change stream refreshes it as the turn saves them (features/live-changes).
 	useChatSessionStateSync(activeThreadId);
-
-	const handleSyncedMessagesUpdate = useCallback(
-		(
-			syncedMessages: {
-				id: number;
-				thread_id: number;
-				role: string;
-				content: unknown;
-				author_id: string | null;
-				created_at: string;
-				turn_id?: string | null;
-			}[]
-		) => {
-			if (localRunning) {
-				return;
-			}
-
-			setMessages((prev) => {
-				if (syncedMessages.length < prev.length) {
-					return prev;
-				}
-
-				// A thread has one author, the account that owns it, so a synced
-				// row needs no name or picture looked up for it.
-				return reconcileInterruptedAssistantMessages(syncedMessages).map((msg) =>
-					convertToThreadMessage({
-						id: msg.id,
-						thread_id: msg.thread_id,
-						role: msg.role.toLowerCase() as "user" | "assistant" | "system",
-						content: msg.content,
-						author_id: msg.author_id,
-						created_at: msg.created_at,
-						turn_id: msg.turn_id ?? null,
-					})
-				);
-			});
-		},
-		[localRunning]
-	);
-
-	useMessagesSync(activeThreadId, handleSyncedMessagesUpdate);
 
 	// A turn this page does not stream: started in another tab or device, or
 	// before a reload. The page shows it as running (Stop, no Regenerate) from

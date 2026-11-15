@@ -30,7 +30,8 @@
 //     of this package's own frames is in run.go).
 //   - The rows: new_chat_messages.content is the list of parts the apps
 //     render history from (package parts), and new_chat_threads and
-//     chat_session_state are synced to open pages by Zero.
+//     chat_session_state, which the apps read back through the threads
+//     routes when the change stream says a thread moved.
 //   - The request bodies and the refusals the apps branch on (THREAD_BUSY
 //     and its relatives, in a "detail" object).
 //

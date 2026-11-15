@@ -25,6 +25,8 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/maildrafts"
 	filestore "git.danvics.com/danvics/soloclef/soloclef_filestore"
 	"git.danvics.com/danvics/soloclef/soloclef_mail/mailer"
+
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange/livechangetest"
 )
 
 // databaseVariable names a throwaway Postgres. **Every account in it is
@@ -59,7 +61,7 @@ VALUES (5, '`+alice+`', 50, 'tok-output', 'h5', '{}', NULL);`)
 	outbox := &Outbox{}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	routes := Routes{
-		Pool: pool, Files: files, Secret: secret, Outbox: outbox, Errors: errorenvelope.Writer{}, Logger: logger,
+		Pool: pool, Files: files, Secret: secret, Outbox: outbox, Changes: &livechangetest.Recorder{}, Errors: errorenvelope.Writer{}, Logger: logger,
 		MintSession: func(_ context.Context, userID string, at time.Time) (string, error) {
 			return "token-for-" + userID, nil
 		},
@@ -384,7 +386,7 @@ func TestAShortSeedSecretIsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	routes := Routes{
-		Pool: pool, Files: files, Outbox: &Outbox{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Pool: pool, Files: files, Outbox: &Outbox{}, Changes: &livechangetest.Recorder{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		MintSession: func(context.Context, string, time.Time) (string, error) { return "", nil },
 	}
 	for _, short := range []string{"", "guessable", strings.Repeat("s", minSecretChars-1)} {

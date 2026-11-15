@@ -19,6 +19,8 @@ import (
 
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/testpostgres"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/deliverables"
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange"
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange/livechangetest"
 	"git.danvics.com/danvics/soloclef/soloclef_notify/notify"
 	"git.danvics.com/danvics/soloclef/soloclef_studio/sandbox"
 )
@@ -109,11 +111,12 @@ INSERT INTO deliverable_jobs (id, user_id, kind, title, thread_id, tool_call_id,
 			Index: func(context.Context, int64, string) error { return nil }},
 	}
 	lifetime, stop := context.WithCancel(context.Background())
-	notifier := &notify.Notifier{Database: pool, Publisher: &recordedPushes{}, Log: logs}
+	changes := &livechangetest.Recorder{}
+	notifier := &notify.Notifier{Database: pool, Publisher: &recordedPushes{}, Changes: changes, Log: logs}
 	// As many runs at once as there are decks, so the limit, not the
 	// runner, is what makes some wait.
 	runner, err := NewRunner(RunnerParts{Pool: pool, Models: deckerModels{decker{deck: deck}}, Specialist: specialist,
-		Notifier: notifier, Concurrent: decks, Accepting: lifetime, Lifetime: lifetime, Logger: logs})
+		Notifier: notifier, Changes: changes, Concurrent: decks, Accepting: lifetime, Lifetime: lifetime, Logger: logs})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,6 +176,20 @@ INSERT INTO deliverable_jobs (id, user_id, kind, title, thread_id, tool_call_id,
 	defer mu.Unlock()
 	if mostWaiting == 0 {
 		t.Error("no deck ever waited: the test did not reach the limit")
+	}
+	// Each deck's card heard its claim and its ending, and a deck that
+	// waited heard its wait start and end: the open Studio panel follows
+	// "waiting for a sandbox" without a reload.
+	outputs := 0
+	for _, call := range changes.Calls() {
+		for _, change := range call.Changes {
+			if change.Kind == livechange.Outputs {
+				outputs++
+			}
+		}
+	}
+	if outputs < 2*decks+2 {
+		t.Errorf("%d Studio changes told for %d decks, some of which waited; want at least %d", outputs, decks, 2*decks+2)
 	}
 	t.Logf("%d decks against a limit of %d: all ready in %s; at most %d waiting at once, %d database connections and %d goroutines over the start held while any waited",
 		decks, limit, elapsed.Round(time.Millisecond), mostWaiting, connsWhileWaiting, goroutinesWhileWaiting)

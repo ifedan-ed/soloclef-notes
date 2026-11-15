@@ -11,14 +11,17 @@
 //   - notify: the one notification step (write the row, schedule the push)
 //   - pushpolicy: the kinds of push, the person's switches and quiet hours
 //   - presence: the "is this person looking at Soloclef now" signal's keys
+//   - livechange: the live-change bus, "read this again" for a person's
+//     open web tabs and app (the API streams it to them)
 //   - pushsend: what a push sender is (a message, the service's answer)
 //   - apns: the sender for iPhones, straight to Apple over HTTP/2
 //   - expo: the sender for Android phones, through Expo's service
 //   - delivery: the worker's jobs that send pushes and read receipts
 //
 // It requires pgx and the Celery protocol module and nothing else: each tier
-// reaches Valkey with its own client, so the two calls on it (the presence
-// read and a fence) are interfaces a tier satisfies in a few lines.
+// reaches Valkey with its own client, so the three calls on it (the presence
+// read, a fence and a live-change publish) are interfaces a tier satisfies in a
+// few lines.
 module git.danvics.com/danvics/soloclef/soloclef_notify
 
 go 1.24.4

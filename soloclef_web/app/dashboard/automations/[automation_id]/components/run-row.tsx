@@ -1,7 +1,7 @@
 "use client";
 import { ChevronDown, ChevronRight, Hand } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { LiveRunSummary } from "@/hooks/use-automation-runs";
+import type { RunSummary } from "@/contracts/types/automation.types";
 import { formatDuration } from "@/lib/automations/run-duration";
 import { isRunInFlight } from "@/lib/automations/run-outcome";
 import { formatRelativeDate } from "@/lib/format-date";
@@ -10,7 +10,7 @@ import { RunDetailsPanel } from "./run-details-panel";
 import { RunStatusBadge } from "./run-status-badge";
 
 interface RunRowProps {
-	run: LiveRunSummary;
+	run: RunSummary;
 	automationId: number;
 	/** Show Cancel while the run is waiting or running (``automations:execute``). */
 	/** The run a link named: shown expanded and scrolled into view. */
@@ -19,8 +19,8 @@ interface RunRowProps {
 
 /**
  * One run row. Click to expand → renders the details panel inline.
- * Status and step_results come live from the parent's Zero query; the
- * panel itself only fetches the heavy REST fields on first expand. A run
+ * The status comes from the parent's runs list, which the change stream
+ * keeps current; the panel reads the run in full only once expanded. A run
  * still waiting or running gets a Cancel beside the toggle.
  */
 export function RunRow({ run, automationId, initiallyOpen = false }: RunRowProps) {
@@ -68,12 +68,7 @@ export function RunRow({ run, automationId, initiallyOpen = false }: RunRowProps
 			</div>
 
 			{open && (
-				<RunDetailsPanel
-					automationId={automationId}
-					runId={run.id}
-					liveSteps={run.step_results}
-					liveStatus={run.status}
-				/>
+				<RunDetailsPanel automationId={automationId} runId={run.id} liveStatus={run.status} />
 			)}
 		</div>
 	);

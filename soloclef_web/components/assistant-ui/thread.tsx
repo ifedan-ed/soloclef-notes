@@ -28,7 +28,6 @@ import {
 	hydrateDisabledToolsAtom,
 	toggleToolAtom,
 } from "@/atoms/agent-tools/agent-tools.atoms";
-import { chatSessionStateAtom } from "@/atoms/chat/chat-session-state.atom";
 import {
 	type MentionedDocumentInfo,
 	mentionedDocumentsAtom,
@@ -422,17 +421,12 @@ const Composer: FC<ComposerProps> = ({ isLoadingMessages = false, showExamplePro
 	const currentPlaceholder =
 		isDesktop && longPlaceholderFits ? placeholderLong : tComposer("placeholder_short");
 
-	const { data: currentUser } = useAtomValue(currentUserAtom);
 	const threadId = useMemo(() => {
 		if (Array.isArray(chat_id) && chat_id.length > 0) {
 			return Number.parseInt(chat_id[0], 10) || null;
 		}
 		return typeof chat_id === "string" ? Number.parseInt(chat_id, 10) || null : null;
 	}, [chat_id]);
-	const sessionState = useAtomValue(chatSessionStateAtom);
-	const isAiResponding = sessionState?.isAiResponding ?? false;
-	const respondingToUserId = sessionState?.respondingToUserId ?? null;
-	const isBlockedByOtherUser = isAiResponding && respondingToUserId !== currentUser?.id;
 
 	// Always-focused composer: refocus whenever no picker has taken
 	// over input. ``threadId`` is in the deps so the effect re-fires
@@ -669,7 +663,7 @@ const Composer: FC<ComposerProps> = ({ isLoadingMessages = false, showExamplePro
 	);
 
 	const handleSubmit = useCallback(() => {
-		if (isLoadingMessages || isThreadRunning || isBlockedByOtherUser || isPausedForQuestion) return;
+		if (isLoadingMessages || isThreadRunning || isPausedForQuestion) return;
 		if (showDocumentPopover || showPromptPicker) return;
 
 		// Capture chips before the reset below clears the live atom, so
@@ -693,7 +687,6 @@ const Composer: FC<ComposerProps> = ({ isLoadingMessages = false, showExamplePro
 		showPromptPicker,
 		isLoadingMessages,
 		isThreadRunning,
-		isBlockedByOtherUser,
 		isPausedForQuestion,
 		aui,
 		mentionedDocuments,
@@ -871,7 +864,6 @@ const Composer: FC<ComposerProps> = ({ isLoadingMessages = false, showExamplePro
 					</div>
 					<ComposerAction
 						onSend={handleSubmit}
-						isBlockedByOtherUser={isBlockedByOtherUser}
 						isLoadingMessages={isLoadingMessages}
 						isThreadRunning={isThreadRunning || isPausedForQuestion}
 						onChatModelSelected={handleChatModelSelected}
@@ -888,7 +880,6 @@ const Composer: FC<ComposerProps> = ({ isLoadingMessages = false, showExamplePro
 };
 
 interface ComposerActionProps {
-	isBlockedByOtherUser?: boolean;
 	isLoadingMessages?: boolean;
 	isThreadRunning?: boolean;
 	onChatModelSelected?: () => void;
@@ -901,7 +892,6 @@ interface ComposerActionProps {
 }
 
 const ComposerAction: FC<ComposerActionProps> = ({
-	isBlockedByOtherUser = false,
 	isLoadingMessages = false,
 	isThreadRunning = false,
 	onChatModelSelected,
@@ -997,17 +987,14 @@ const ComposerAction: FC<ComposerActionProps> = ({
 	const isSendDisabled = !canSubmitChat({
 		isLoadingMessages,
 		isThreadRunning,
-		isBlockedByOtherUser,
 		isComposerEmpty,
 		isChatModelReady,
 	});
 	const sendTooltip = isLoadingMessages
 		? "Loading conversation..."
-		: isBlockedByOtherUser
-			? "Wait for AI to finish responding"
-			: isComposerEmpty
-				? "Enter a message or add a screenshot to send"
-				: "Send message";
+		: isComposerEmpty
+			? "Enter a message or add a screenshot to send"
+			: "Send message";
 
 	return (
 		<div

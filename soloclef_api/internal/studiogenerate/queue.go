@@ -84,6 +84,8 @@ func (r *Runner) claim() {
 	}
 	for _, row := range claimed {
 		job := Job{ID: row.ID, UserID: row.UserID, Attempt: row.AttemptCount}
+		// Queued is running now: the card says so at once.
+		r.changed(r.accepting, job.UserID)
 		// The place and the count are taken here, before the goroutine,
 		// so that the next claim sees the place as taken and the drain
 		// sees the run as in progress.

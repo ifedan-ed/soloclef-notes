@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"git.danvics.com/danvics/soloclef/soloclef_celery/produce"
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange"
 	"git.danvics.com/danvics/soloclef/soloclef_notify/notify"
 
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/celeryqueue"
@@ -24,7 +25,7 @@ func (p queuePublisher) Send(ctx context.Context, message produce.Message) (stri
 // notifier is this process's one notification step (soloclef_notify/notify):
 // what the Studio's artifact runner and the mail connector's waiting
 // drafts report through. The push itself is the worker's.
-func notifier(pool *pgxpool.Pool, queue celeryqueue.Enqueuer, logger *slog.Logger) (*notify.Notifier, error) {
-	n := &notify.Notifier{Database: pool, Publisher: queuePublisher{queue: queue}, Log: logger}
+func notifier(pool *pgxpool.Pool, queue celeryqueue.Enqueuer, changes livechange.Publisher, logger *slog.Logger) (*notify.Notifier, error) {
+	n := &notify.Notifier{Database: pool, Publisher: queuePublisher{queue: queue}, Changes: changes, Log: logger}
 	return n, n.Check()
 }

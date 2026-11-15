@@ -28,19 +28,16 @@ import { RunStepResultCard } from "./run-step-result-card";
 interface RunDetailsPanelProps {
 	automationId: number;
 	runId: number;
-	/** Live step entries from Zero; rendered while the run is in-flight and
-	 * also kept as the authoritative source once it finishes. */
-	liveSteps: RunStepResult[];
-	/** Live run status from Zero. Used to hide diagnostic sections that
-	 * only make sense after the run reaches a terminal state. */
+	/** The run's status from the runs list. Used to hide diagnostic sections
+	 * that only make sense after the run reaches a terminal state. */
 	liveStatus: RunStatus;
 }
 
 /**
- * Expanded view of a single run. Steps render immediately from the live
- * Zero row so the panel updates as the run progresses; the heavy REST
- * payload (output, artifacts, resolved inputs, run-level error) is
- * fetched lazily and merged in when it arrives.
+ * Expanded view of a single run, read whole when it opens (GET .../runs/{id})
+ * and again whenever the change stream reports the automation's runs moved,
+ * so the steps tick while the run is in flight. Output, artifacts, inputs and
+ * the run-level error appear once it ends.
  *
  * Surfacing order is outcome-first: a run-level error (when present),
  * then per-step cards that render the agent's markdown ``final_message``
@@ -49,22 +46,11 @@ interface RunDetailsPanelProps {
  * definition — surfacing it would dominate the panel without informing
  * what the user is trying to learn ("did this work? what did it do?").
  */
-export function RunDetailsPanel({
-	automationId,
-	runId,
-	liveSteps,
-	liveStatus,
-}: RunDetailsPanelProps) {
+export function RunDetailsPanel({ automationId, runId, liveStatus }: RunDetailsPanelProps) {
 	const isTerminal = liveStatus !== "pending" && liveStatus !== "running";
-	// Defer the REST round-trip until the run can actually carry heavy
-	// fields — output/artifacts/error are only written at terminal mark.
-	const {
-		data: run,
-		isLoading,
-		error,
-	} = useAutomationRun(automationId, runId, {
-		enabled: isTerminal,
-	});
+	const { data: run, isLoading, error } = useAutomationRun(automationId, runId);
+	// The schema keeps step results as opaque records; RunStepResult is the typed view.
+	const liveSteps = (run?.step_results ?? []) as RunStepResult[];
 
 	const runError = run?.error && Object.keys(run.error).length > 0 ? run.error : null;
 	const hasOutput = !!run?.output && Object.keys(run.output).length > 0;

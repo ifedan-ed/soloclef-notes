@@ -43,6 +43,7 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/indexing"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/indexstore"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/indextask"
+	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/livepublish"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/metrics"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/namerequest"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/process"
@@ -128,7 +129,10 @@ func run() error {
 	if err := schemaversion.Check(starting, pool); err != nil {
 		return err
 	}
-	documents := indexstore.New(pool)
+	// Each status move, and each notification, is told to the owner's open
+	// screens over the broker's connection (internal/livepublish).
+	live := livepublish.New(rdb, slog.Default())
+	documents := indexstore.New(pool, live)
 
 	files, err := filestore.OpenStores(config.FileStorage)
 	if err != nil {
@@ -205,7 +209,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	notifier, err := pushdelivery.Notifier(pool, notices, log)
+	notifier, err := pushdelivery.Notifier(pool, notices, live, log)
 	if err != nil {
 		return err
 	}

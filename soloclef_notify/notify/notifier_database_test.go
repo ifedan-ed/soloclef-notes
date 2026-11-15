@@ -13,12 +13,15 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"git.danvics.com/danvics/soloclef/soloclef_notify/internal/notifytest"
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange"
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange/livechangetest"
 	"git.danvics.com/danvics/soloclef/soloclef_notify/notify"
 )
 
 func notifier(pool *pgxpool.Pool) (*notify.Notifier, *notifytest.Publisher) {
 	published := &notifytest.Publisher{}
-	return &notify.Notifier{Database: pool, Publisher: published, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}, published
+	return &notify.Notifier{Database: pool, Publisher: published, Changes: &livechangetest.Recorder{},
+		Log: slog.New(slog.NewTextHandler(io.Discard, nil))}, published
 }
 
 type row struct {
@@ -87,6 +90,10 @@ func TestAFinishedStudioOutputWritesOneRowAndQueuesItsPush(t *testing.T) {
 	got := rows(t, pool, user)
 	if len(got) != 1 || got[0].Type != "studio_output" || got[0].Title != "Slide deck ready" || got[0].Read {
 		t.Fatalf("rows = %+v", got)
+	}
+	// The open inbox hears of the row as it is written.
+	if kinds := n.Changes.(*livechangetest.Recorder).Kinds(user); len(kinds) != 1 || kinds[0] != livechange.Inbox {
+		t.Errorf("live changes = %v", kinds)
 	}
 	m := got[0].Metadata
 	if m["output_id"] != float64(output) || m["notebook_id"] != float64(notebook) || m["status"] != "completed" || m["retry"] != false {

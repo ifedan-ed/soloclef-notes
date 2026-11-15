@@ -2,14 +2,17 @@ import type { ServerTurnStatus } from "./turn-status-api";
 
 /**
  * While another page's turn runs on this thread, how often this page asks the
- * backend whether it is still running. A Zero change, the tab becoming visible
- * or a 409 from the backend also triggers an immediate check. Hidden tabs do
- * not poll. Documented in custom/docs/chat-turns.md.
+ * backend whether it is still running. The change stream reports a turn
+ * starting and ending (`chats`), which triggers an immediate check, as do the
+ * tab becoming visible and a 409 from the backend. The poll stays for what
+ * the stream does not report: a turn passing into "cancelling" while it saves
+ * its partial answer. Hidden tabs do not poll. Documented in
+ * custom/docs/chat-turns.md.
  */
 export const SERVER_TURN_POLL_MS = 4_000;
 
 /**
- * After a hint that the turn just changed (Zero's flag flipped, a 409, a Stop
+ * After a hint that the turn just changed (the responding flag flipped, a 409, a Stop
  * was answered), the follow-up check comes this soon instead: the backend
  * keeps the thread busy until the answer is saved, a moment after the hint.
  */

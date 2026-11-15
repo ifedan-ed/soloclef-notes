@@ -10,6 +10,7 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/academic"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/addsources"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/sourceidentity"
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange"
 )
 
 // The chat's add_sources, over the import the research box uses, a real
@@ -61,6 +62,17 @@ func TestTheChatAddsPapersAndPagesThroughTheImport(t *testing.T) {
 	}
 	if out[2].Reason != noSuchPMID || out[3].Reason != sourceidentity.NotIdentity || out[5].Reason != notPublic {
 		t.Errorf("reasons: %q %q %q", out[2].Reason, out[3].Reason, out[5].Reason)
+	}
+	// Her open notebook heard of its new sources when the import committed,
+	// mid-turn, before any read began; nobody else heard anything.
+	if calls := h.changes.Calls(); len(calls) == 0 || calls[0].UserID != alice ||
+		calls[0].Changes[0] != (livechange.Change{Kind: livechange.Notebooks, ID: 10}) {
+		t.Errorf("live changes %+v", calls)
+	}
+	for _, call := range h.changes.Calls() {
+		if call.UserID != alice {
+			t.Errorf("another account heard %+v", call)
+		}
 	}
 	// One search and one fetch for every PubMed id, not one each.
 	if got := strings.Count(strings.Join(h.papers.asked, " "), "pubmed-by-id"); got != 1 {

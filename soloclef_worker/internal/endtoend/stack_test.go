@@ -28,6 +28,7 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange/livechangetest"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/chunking"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/embedding"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/indexing"
@@ -117,7 +118,7 @@ func open(tb testing.TB, useRealProxy bool) *stack {
 		tb.Fatal(err)
 	}
 	tb.Cleanup(pool.Close)
-	documents := indexstore.New(pool)
+	documents := indexstore.New(pool, &livechangetest.Recorder{})
 
 	// A bucket of this run's own, made the way an operator makes one.
 	bucket := "soloclef-index-" + suffix

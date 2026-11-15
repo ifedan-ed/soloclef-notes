@@ -1,19 +1,15 @@
 "use client";
 
 import { useAuiState, useThreadRuntime } from "@assistant-ui/react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { CornerDownRight } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useEffect } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { notebookKeys } from "../../api/notebook-query-keys";
 import { notebooksApi } from "../../api/notebooks-api";
 import { useDelayedFlag } from "../../hooks/use-delayed-flag";
 import { answerTextOf } from "../../lib/answer-text";
 import { useNotebookChat } from "../../state/notebook-chat-context";
-
-/** Notebooks whose chat has a turn running (or just finished) on this page. */
-const turnsRunning = new Set<number>();
 
 /**
  * Three suggested next questions under the latest answer of a notebook chat,
@@ -40,22 +36,6 @@ export function NotebookFollowups() {
 		retry: false,
 	});
 	const showSkeleton = useDelayedFlag(settled && followups.isLoading, 400);
-
-	// A turn just ended: an unnamed notebook may have named itself from the
-	// question. Kept per notebook, not per message, because the finished
-	// answer is re-keyed (remounted) once persisted.
-	const notebookId = notebook?.notebookId ?? 0;
-	if (running && isLast && notebookId) turnsRunning.add(notebookId);
-	const watchTitle = notebook?.watchTitle;
-	const queryClient = useQueryClient();
-	useEffect(() => {
-		if (!settled || !turnsRunning.delete(notebookId)) return;
-		watchTitle?.();
-		// What the turn made (a deck, a quiz, a video queued) is listed in
-		// the notebook's Studio, which is read again so it shows there now
-		// and not at the next reload.
-		void queryClient.invalidateQueries({ queryKey: notebookKeys.outputs(notebookId) });
-	}, [settled, notebookId, watchTitle, queryClient]);
 
 	if (!enabled || !settled) return null;
 

@@ -1,11 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { noteFromAnswer } from "@/features/notebooks/lib/note-from-answer";
-import {
-	formatDuration,
-	isInFlight,
-	outputsRefetchInterval,
-} from "@/features/notebooks/lib/output-meta";
+import { formatDuration, isInFlight } from "@/features/notebooks/lib/output-meta";
 import { relativeTime } from "@/features/notebooks/lib/relative-time";
 import {
 	enabledCount,
@@ -54,10 +50,11 @@ test("durations read like a player", () => {
 	assert.equal(formatDuration(-3), "0:00");
 });
 
-test("the studio list polls only while something is generating", () => {
+test("queued and running outputs are in flight, finished ones are not", () => {
 	assert.equal(isInFlight("queued"), true);
-	assert.equal(outputsRefetchInterval(["ready", "failed"]), false);
-	assert.equal(outputsRefetchInterval(["ready", "running"]), 4000);
+	assert.equal(isInFlight("running"), true);
+	assert.equal(isInFlight("ready"), false);
+	assert.equal(isInFlight("failed"), false);
 });
 
 test("a saved answer loses its citation tokens and gets a title", () => {

@@ -24,10 +24,9 @@
 #   - the public pages' example address and contact, which the suite reads
 #     back, and memory caps sized for a test host.
 #
-# zero-cache, the MCP server and Caddy (which serves the web app's files)
-# are the Go stack's own services, run here as a deployment runs them. The
-# sandbox service is not started: the sandbox switch is off in the
-# settings.
+# The MCP server and Caddy (which serves the web app's files) are the Go
+# stack's own services, run here as a deployment runs them. The sandbox
+# service is not started: the sandbox switch is off in the settings.
 #
 # Nothing here can touch the live site or another test: the project is
 # soloclefgo-e2e (the script names it; the boot test's is soloclefgo-boot),
@@ -119,10 +118,6 @@ services:
         aliases:
           - oauth2.googleapis.com
           - www.googleapis.com
-
-  # The Go stack's own, held to what a test host can spare.
-  zero-cache:
-    mem_limit: 2g
 
   # The deployment's Caddy, with the web app's files in it, and with this
   # stack's Caddyfile over its own: the same routes and the three test-only

@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"git.danvics.com/danvics/soloclef/soloclef_notify/internal/notifytest"
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange"
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange/livechangetest"
 	"git.danvics.com/danvics/soloclef/soloclef_notify/notify"
 )
 
@@ -82,6 +84,10 @@ func TestAnUpdateIsPushedOnlyToThePhonesNamed(t *testing.T) {
 	}
 	if title != "Soloclef 1.2.0 is out" || version != "1.2.0" || link != storeListing {
 		t.Errorf("row = %q, %q, %q", title, version, link)
+	}
+	// The owner's open inbox heard of the row, once.
+	if kinds := h.notifier.Changes.(*livechangetest.Recorder).Kinds(user); len(kinds) != 1 || kinds[0] != livechange.Inbox {
+		t.Errorf("live changes = %v", kinds)
 	}
 }
 

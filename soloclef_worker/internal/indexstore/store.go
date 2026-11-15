@@ -37,6 +37,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange"
 )
 
 // The states and stages written to `documents.status`.
@@ -159,10 +161,22 @@ func chooseParser(document, connector *string) (string, ParserSource) {
 // Store reads and writes through one pool.
 type Store struct {
 	pool *pgxpool.Pool
+	// changes tells the owner's open screens each time the status they
+	// show moved (begun, a new stage, failed, ready): what makes a source's
+	// spinner say "Reading" then "Embedding" and then stop, without a poll.
+	changes livechange.Publisher
 }
 
 // New wraps a pool the caller opened and will close.
-func New(pool *pgxpool.Pool) *Store { return &Store{pool: pool} }
+func New(pool *pgxpool.Pool, changes livechange.Publisher) *Store {
+	return &Store{pool: pool, changes: changes}
+}
+
+// moved tells the owner's open clients one document's status changed. It is
+// called after the statement committed (each is its own transaction).
+func (s *Store) moved(ctx context.Context, userID string, documentID int64) {
+	s.changes.Publish(ctx, userID, livechange.Change{Kind: livechange.Documents, ID: documentID})
+}
 
 // Load reads the document and its original file, or ErrGone.
 func (s *Store) Load(ctx context.Context, documentID int64) (Document, error) {
@@ -231,17 +245,20 @@ func (s *Store) Load(ctx context.Context, documentID int64) (Document, error) {
 // Begin marks the document processing, at its first stage, on this attempt.
 // A document being deleted is left alone and reported as ErrGone.
 func (s *Store) Begin(ctx context.Context, documentID int64, stage string, attempt int) error {
-	tag, err := s.pool.Exec(ctx, `
+	var owner string
+	err := s.pool.QueryRow(ctx, `
 		UPDATE documents
 		SET status = jsonb_build_object('state', 'processing', 'stage', $2::text, 'attempt', $3::int)
-		WHERE id = $1 AND COALESCE(status ->> 'state', 'ready') <> 'deleting'`,
-		documentID, stage, attempt)
+		WHERE id = $1 AND COALESCE(status ->> 'state', 'ready') <> 'deleting'
+		RETURNING user_id::text`,
+		documentID, stage, attempt).Scan(&owner)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrGone
+	}
 	if err != nil {
 		return fmt.Errorf("indexstore: marking document %d processing: %w", documentID, err)
 	}
-	if tag.RowsAffected() == 0 {
-		return ErrGone
-	}
+	s.moved(ctx, owner, documentID)
 	return nil
 }
 
@@ -249,14 +266,21 @@ func (s *Store) Begin(ctx context.Context, documentID int64, stage string, attem
 // nothing on a document that is no longer processing: a job that lost a race
 // must not move a finished document's status.
 func (s *Store) Stage(ctx context.Context, documentID int64, stage string) error {
-	_, err := s.pool.Exec(ctx, `
+	var owner string
+	err := s.pool.QueryRow(ctx, `
 		UPDATE documents
 		SET status = status || jsonb_build_object('stage', $2::text)
-		WHERE id = $1 AND status ->> 'state' = 'processing'`,
-		documentID, stage)
+		WHERE id = $1 AND status ->> 'state' = 'processing'
+		RETURNING user_id::text`,
+		documentID, stage).Scan(&owner)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// No longer processing: nothing moved, nobody to tell.
+		return nil
+	}
 	if err != nil {
 		return fmt.Errorf("indexstore: recording that document %d is %s: %w", documentID, stage, err)
 	}
+	s.moved(ctx, owner, documentID)
 	return nil
 }
 
@@ -268,14 +292,20 @@ const reasonLimit = 500
 // document's chunks are left as they were, so a re-index that fails does not
 // take a searchable document out of search.
 func (s *Store) Fail(ctx context.Context, documentID int64, reason string) error {
-	_, err := s.pool.Exec(ctx, `
+	var owner string
+	err := s.pool.QueryRow(ctx, `
 		UPDATE documents
 		SET status = jsonb_build_object('state', 'failed', 'reason', left($2::text, $3::int))
-		WHERE id = $1 AND COALESCE(status ->> 'state', 'ready') <> 'deleting'`,
-		documentID, reason, reasonLimit)
+		WHERE id = $1 AND COALESCE(status ->> 'state', 'ready') <> 'deleting'
+		RETURNING user_id::text`,
+		documentID, reason, reasonLimit).Scan(&owner)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
 	if err != nil {
 		return fmt.Errorf("indexstore: marking document %d failed: %w", documentID, err)
 	}
+	s.moved(ctx, owner, documentID)
 	return nil
 }
 
@@ -503,6 +533,7 @@ func (s *Store) Replace(ctx context.Context, replacement Replacement) (removed [
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("indexstore: committing the chunks of document %d: %w", replacement.DocumentID, err)
 	}
+	s.moved(ctx, replacement.UserID, replacement.DocumentID)
 	return removed, nil
 }
 

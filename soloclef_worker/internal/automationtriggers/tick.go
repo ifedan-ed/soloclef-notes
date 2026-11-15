@@ -42,6 +42,8 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_celery/produce"
 
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/broker"
+
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange"
 )
 
 // Task is the tick's name.
@@ -107,7 +109,9 @@ type Timing struct {
 type Starter struct {
 	Rows      Rows
 	Publisher Sender
-	Log       *slog.Logger
+	// Changes tells the owner's open automation page a run is waiting.
+	Changes livechange.Publisher
+	Log     *slog.Logger
 }
 
 // Start creates the fire's run, if its automation allows one now, and
@@ -125,6 +129,7 @@ func (s Starter) Start(ctx context.Context, fire Fire) (bool, error) {
 		s.Log.Info("a trigger fired and no run was started", "trigger", fire.TriggerID, "automation", fire.AutomationID, "outcome", int(outcome))
 		return false, nil
 	}
+	s.Changes.Publish(ctx, fire.UserID, livechange.Change{Kind: livechange.Automations, ID: fire.AutomationID})
 	if _, err := s.Publisher.Send(ctx, runqueue.Execute(runID, 0)); err != nil {
 		// The run exists; the tick's second duty publishes it.
 		s.Log.Warn("a run's message was not published; the tick will publish it", "run", runID, "error", err.Error())

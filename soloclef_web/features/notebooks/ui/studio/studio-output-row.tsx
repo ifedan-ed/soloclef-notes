@@ -151,7 +151,11 @@ export function StudioOutputRow({
 	}
 
 	return (
-		<div className="group flex min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-accent">
+		<div
+			className="group flex min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-accent"
+			data-testid="studio-output"
+			data-status={output.status}
+		>
 			<span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
 				{inFlight ? <Spinner size="xs" /> : <Icon className="size-4" aria-hidden />}
 			</span>

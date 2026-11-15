@@ -6,7 +6,7 @@ import { researchApi } from "../api/research-api";
 
 /**
  * "Read a web page": adds a pasted URL as a notebook source. It comes back
- * pending; the sources query keeps polling until the page is read and indexed.
+ * pending; the change stream refreshes the sources until it is read and indexed.
  * Errors are shown inline by the research box, so no global toast.
  */
 export function useReadWebPage(notebookId: number) {

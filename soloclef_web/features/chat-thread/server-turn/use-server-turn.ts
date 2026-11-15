@@ -9,7 +9,7 @@ interface UseServerTurnOptions {
 	threadId: number | null;
 	/** This page holds the turn's live stream (it sent the message). */
 	ownsStream: boolean;
-	/** Zero's "AI is responding" flag for this thread; a change triggers a check. */
+	/** The "AI is responding" flag for this thread (turn-status, kept current by the change stream); a change triggers a check. */
 	respondingHint: boolean;
 	/** A turn this page watched has ended: reload the thread's messages. */
 	onFinished: () => void;

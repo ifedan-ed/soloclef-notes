@@ -14,6 +14,8 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_celery/produce"
 	"git.danvics.com/danvics/soloclef/soloclef_connectors/nextcloud"
 	filestore "git.danvics.com/danvics/soloclef/soloclef_filestore"
+
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange"
 )
 
 // Indexing queues a document's index job, and marks the document failed if
@@ -79,6 +81,9 @@ type Downloads struct {
 	connect  Connect
 	maxBytes int64
 	logger   *slog.Logger
+	// changes tells the owner's open screens that an imported file's
+	// document moved (downloaded and queued for indexing, or failed).
+	changes livechange.Publisher
 
 	// ctx is the pool's lifetime; cancelling it ends every download.
 	ctx    context.Context
@@ -92,18 +97,18 @@ type Downloads struct {
 // NewDownloads builds the pool. lifetime is the server's own context: when
 // it ends, so does every download. concurrency is how many files are
 // fetched at once, and maxBytes the largest file kept.
-func NewDownloads(lifetime context.Context, concurrency int, maxBytes int64, rows Rows, files filestore.Writer, indexing Indexing, connect Connect, logger *slog.Logger) (*Downloads, error) {
+func NewDownloads(lifetime context.Context, concurrency int, maxBytes int64, rows Rows, files filestore.Writer, indexing Indexing, connect Connect, changes livechange.Publisher, logger *slog.Logger) (*Downloads, error) {
 	switch {
 	case concurrency < 1:
 		return nil, fmt.Errorf("nextcloudimport: the download concurrency must be at least 1, got %d", concurrency)
 	case maxBytes < 1:
 		return nil, fmt.Errorf("nextcloudimport: the per-file limit must be positive, got %d", maxBytes)
-	case rows == nil || files == nil || indexing == nil || connect == nil || logger == nil:
+	case rows == nil || files == nil || indexing == nil || connect == nil || changes == nil || logger == nil:
 		return nil, errors.New("nextcloudimport: a dependency of the download pool is missing")
 	}
 	ctx, cancel := context.WithCancel(lifetime)
 	return &Downloads{
-		rows: rows, files: files, indexing: indexing, connect: connect, maxBytes: maxBytes, logger: logger,
+		rows: rows, files: files, indexing: indexing, connect: connect, maxBytes: maxBytes, logger: logger, changes: changes,
 		ctx: ctx, cancel: cancel, slots: make(chan struct{}, concurrency),
 	}, nil
 }
@@ -119,6 +124,9 @@ func (d *Downloads) Start(jobs []Job, logContext produce.LogContext) {
 		d.running.Add(1)
 		go func() {
 			defer d.running.Done()
+			// However it ended, after its last write.
+			defer d.changes.Publish(context.WithoutCancel(d.ctx), job.UserID,
+				livechange.Change{Kind: livechange.Documents, ID: job.DocumentID})
 			select {
 			case d.slots <- struct{}{}:
 				defer func() { <-d.slots }()

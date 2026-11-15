@@ -147,6 +147,9 @@ Whatever you use, it must:
 - pass `X-Forwarded-Proto` and `X-Forwarded-For`;
 - not buffer responses, because chat answers, live updates and the MCP
   server all stream;
+- keep a quiet connection open for at least a minute: each open tab and
+  phone holds one connection to `/api/v1/events`, which sends a few bytes
+  every 25 seconds;
 - accept a request as large as one upload: the largest file times the most
   files per upload, 500 MB with the example values;
 - let a request run for several minutes.

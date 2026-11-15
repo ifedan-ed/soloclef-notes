@@ -39,7 +39,9 @@ test("only hashed files are looked for in the volume, and only when this build l
 	assert.ok(directive("root @keptAsset \\S+") < directive("root \\* /srv"));
 });
 
-test("the image keeps its files and prunes with a 14-day window at every start", () => {
+test("the image keeps its files and prunes with a 14-day window at start and hourly", () => {
 	assert.match(dockerfile, /^COPY site-image\/kept-assets\.sh \/usr\/local\/bin\/kept-assets$/m);
-	assert.match(dockerfile, /kept-assets keep && kept-assets prune 14;.*exec caddy run/);
+	// `run` keeps this build's files, then prunes now and every 3600 s,
+	// beside Caddy (kept-assets.sh, run).
+	assert.match(dockerfile, /kept-assets run 14 3600 &.*exec caddy run/);
 });

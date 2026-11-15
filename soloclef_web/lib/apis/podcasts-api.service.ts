@@ -14,8 +14,8 @@ const BASE = "/api/v1/podcasts";
 const voiceOptionList = z.array(voiceOption);
 
 class PodcastsApiService {
-	// Full state including the deserialized brief and transcript; thin lifecycle
-	// fields (status, spec, spec_version) also arrive live via Zero.
+	// Full state including the deserialized brief and transcript. The podcast
+	// card reads it again whenever the change stream reports an `outputs` change.
 	getDetail = async (podcastId: number) => {
 		return baseApiService.get(`${BASE}/${podcastId}`, podcastDetail);
 	};

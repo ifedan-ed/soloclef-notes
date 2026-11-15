@@ -8,9 +8,14 @@ import { TextShimmerLoader } from "@/components/prompt-kit/loader";
 import { Mp4ArtifactCard } from "@/components/tool-ui/save-artifact";
 import { Button } from "@/components/ui/button";
 import { ArtifactFormatIcon } from "@/features/artifacts/ui/artifact-format-icon";
-import { type LiveDeliverableJob, useDeliverableJobLive } from "@/hooks/use-deliverable-job-live";
+import {
+	type LiveDeliverableJob,
+	storeDeliverableJob,
+	useDeliverableJobLive,
+} from "@/hooks/use-deliverable-job-live";
 import { deliverableJobsApiService } from "@/lib/apis/deliverable-jobs-api.service";
 import { BRAND } from "@/lib/brand";
+import { queryClient } from "@/lib/query-client/client";
 
 const EnqueueDeliverableJobArgsSchema = z.object({
 	title: z.string(),
@@ -93,8 +98,8 @@ function ActionButton({ job, action }: { job: LiveDeliverableJob; action: "cance
 	const run = async () => {
 		setIsPending(true);
 		try {
-			await deliverableJobsApiService[action](job.id);
-			// Zero owns reconciliation; do not locally invent a lifecycle state.
+			// The server's answer is the job's new state; nothing is invented here.
+			storeDeliverableJob(queryClient, await deliverableJobsApiService[action](job.id));
 		} catch (error) {
 			toast.error(
 				error instanceof Error

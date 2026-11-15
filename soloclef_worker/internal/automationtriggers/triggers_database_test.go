@@ -19,6 +19,8 @@ import (
 
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/testdatabase"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/testredis"
+
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange/livechangetest"
 )
 
 const digest = `{"name":"Digest","plan":[{"step_id":"a","action":"agent_task","params":{"query":"q"}}],"execution":{"concurrency":"always"}}`
@@ -118,7 +120,7 @@ func TestAScheduleFiresOnceAcrossTwoWorkers(t *testing.T) {
 	published := &outbox{}
 	worker := func() *Tick {
 		tick := &Tick{
-			Starter: Starter{Rows: Store{Pool: pool, Log: log}, Publisher: published, Log: log},
+			Starter: Starter{Rows: Store{Pool: pool, Log: log}, Publisher: published, Changes: &livechangetest.Recorder{}, Log: log},
 			Fence:   RedisFence{Redis: rdb},
 			Timing:  Timing{Every: time.Minute, Batch: 50, RepublishAfter: 2 * time.Minute, OverdueGrace: 5 * time.Minute},
 			Now:     func() time.Time { return now },
@@ -232,7 +234,7 @@ func TestATickRepublishesALostRunAndEndsAnOverdueOne(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	published := &outbox{}
 	tick := &Tick{
-		Starter: Starter{Rows: Store{Pool: pool, Log: log}, Publisher: published, Log: log},
+		Starter: Starter{Rows: Store{Pool: pool, Log: log}, Publisher: published, Changes: &livechangetest.Recorder{}, Log: log},
 		Timing:  Timing{Every: time.Minute, Batch: 50, RepublishAfter: 2 * time.Minute, OverdueGrace: 5 * time.Minute},
 		Now:     time.Now,
 	}
@@ -278,7 +280,7 @@ func TestAnEventFiresItsOwnAccountsMatchingTriggersOnce(t *testing.T) {
 	published := &outbox{}
 	reader := func(name string) *Events {
 		events := &Events{
-			Redis: rdb, Starter: Starter{Rows: Store{Pool: pool, Log: log}, Publisher: published, Log: log},
+			Redis: rdb, Starter: Starter{Rows: Store{Pool: pool, Log: log}, Publisher: published, Changes: &livechangetest.Recorder{}, Log: log},
 			Consumer: name, Block: 50 * time.Millisecond, ClaimIdle: time.Hour, Batch: 10, Now: time.Now,
 		}
 		if err := events.Check(); err != nil {

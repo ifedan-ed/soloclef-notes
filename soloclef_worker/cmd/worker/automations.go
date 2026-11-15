@@ -28,6 +28,7 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_notify/notify"
 
 	"git.danvics.com/danvics/soloclef/soloclef_ingest/parserconfig"
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/automationrun"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/automationtriggers"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/indexrequest"
@@ -101,7 +102,7 @@ type automationParts struct {
 // draft a run makes may attach the owner's documents and Studio outputs,
 // read from there when the owner sends it.
 func automationJobs(settings workerconfig.Config, pool *pgxpool.Pool, rdb redis.UniversalClient, stores *filestore.Stores, writer filestore.Writer,
-	indexer *indexrequest.Publisher, notifier *notify.Notifier, log *slog.Logger) ([]jobs.Job, *automationParts, error) {
+	indexer *indexrequest.Publisher, notifier *notify.Notifier, live livechange.Publisher, log *slog.Logger) ([]jobs.Job, *automationParts, error) {
 	cfg, err := automationrun.LoadConfig(os.Getenv)
 	if err != nil {
 		return nil, nil, err
@@ -226,7 +227,7 @@ func automationJobs(settings workerconfig.Config, pool *pgxpool.Pool, rdb redis.
 	}
 
 	run := &automationrun.Job{
-		Rows: rows, Assembler: agents, Store: checkpoints, Publisher: publisher, Indexer: indexer, Notifier: notifier,
+		Rows: rows, Assembler: agents, Store: checkpoints, Publisher: publisher, Indexer: indexer, Notifier: notifier, Changes: live,
 		ReleaseSandbox: releaseSandbox,
 		Timing: automationrun.Timing{
 			StatusInterval: automationStatusInterval, RetryStep: automationRetryStep,
@@ -237,7 +238,7 @@ func automationJobs(settings workerconfig.Config, pool *pgxpool.Pool, rdb redis.
 	if err := run.Check(); err != nil {
 		return fail(err)
 	}
-	starter := automationtriggers.Starter{Rows: automationtriggers.Store{Pool: pool, Log: log}, Publisher: publisher, Log: log}
+	starter := automationtriggers.Starter{Rows: automationtriggers.Store{Pool: pool, Log: log}, Publisher: publisher, Changes: live, Log: log}
 	tick := &automationtriggers.Tick{
 		Starter: starter, Fence: automationtriggers.RedisFence{Redis: rdb},
 		Timing: automationtriggers.Timing{

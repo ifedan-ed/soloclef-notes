@@ -1,5 +1,4 @@
 import type { LucideIcon } from "lucide-react";
-import type { DocumentsProcessingStatus } from "@/hooks/use-documents-processing";
 
 export interface User {
 	email: string;
@@ -13,7 +12,6 @@ export interface NavItem {
 	icon: LucideIcon;
 	isActive?: boolean;
 	badge?: string | number;
-	statusIndicator?: DocumentsProcessingStatus;
 }
 
 export interface PageUsage {

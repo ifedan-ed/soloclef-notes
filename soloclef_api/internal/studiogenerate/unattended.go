@@ -50,7 +50,10 @@ func (r *Runner) showWaiting(job Job) func(ctx context.Context, waiting bool) {
 		if err := New(r.pool).SetRunningPhase(closing, SetRunningPhaseParams{Phase: &phase, Now: r.now(), ID: job.ID, UserID: job.UserID, Attempt: job.Attempt}); err != nil {
 			r.logger.Warn("a studio job's phase could not be written", slog.Int64("job_id", job.ID),
 				slog.String("phase", phase), slog.String("error", err.Error()))
+			return
 		}
+		// "Waiting for a sandbox" and back is what the card shows.
+		r.changed(closing, job.UserID)
 	}
 }
 

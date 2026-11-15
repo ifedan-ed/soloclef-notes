@@ -25,6 +25,8 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/testdatabase"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/testredis"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/videojob"
+
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange/livechangetest"
 )
 
 // stack is the worker as wired for push, against a throwaway Postgres and
@@ -50,7 +52,7 @@ func startStack(t *testing.T, ctx context.Context) *stack {
 	if err != nil {
 		t.Fatal(err)
 	}
-	notifier, err := Notifier(pool, producer, log)
+	notifier, err := Notifier(pool, producer, &livechangetest.Recorder{}, log)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +76,7 @@ func startStack(t *testing.T, ctx context.Context) *stack {
 		// A Studio job that ends: the video render switched off, which
 		// fails the queued video at once, as a deployment without a sandbox
 		// does.
-		jobs.Job{Task: videojob.Task, Deadline: time.Minute, Run: videojob.Refusal{Pool: pool, Notifier: notifier}.Run},
+		jobs.Job{Task: videojob.Task, Deadline: time.Minute, Run: videojob.Refusal{Pool: pool, Notifier: notifier, Changes: &livechangetest.Recorder{}}.Run},
 	)
 	if err != nil {
 		t.Fatal(err)

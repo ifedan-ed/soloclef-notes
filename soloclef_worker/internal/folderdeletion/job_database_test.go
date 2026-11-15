@@ -11,6 +11,8 @@ import (
 
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/documentremoval"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/testdatabase"
+
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange/livechangetest"
 )
 
 func TestAFolderAndItsDocumentsGoTogether(t *testing.T) {
@@ -33,7 +35,7 @@ func TestAFolderAndItsDocumentsGoTogether(t *testing.T) {
 		(9300003, $4::uuid, $5, 'c', 'FILE', 'x', 'h', '{"state":"ready"}')`, owner, parent, child, stranger, theirs)
 
 	job := &Job{Pool: pool, Remover: documentremoval.Removal{Pool: pool, Files: stores,
-		Vectors: documentremoval.Qdrant{URL: qdrant.URL, Alias: "chunks", HTTP: &http.Client{}}}, Attempts: 2, Backoff: time.Millisecond}
+		Vectors: documentremoval.Qdrant{URL: qdrant.URL, Alias: "chunks", HTTP: &http.Client{}}}, Attempts: 2, Backoff: time.Millisecond, Changes: &livechangetest.Recorder{}}
 	// The stranger's document and folder are named too, as a forged message
 	// would: they must survive.
 	err := job.Run(ctx, message(map[string]any{"user_id": owner, "folder_subtree_ids": []any{float64(parent), float64(child), float64(theirs)}},

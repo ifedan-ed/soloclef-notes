@@ -1,13 +1,12 @@
 import { atomWithMutation } from "jotai-tanstack-query";
 import { toast } from "sonner";
 import { automationsApiService } from "@/lib/apis/automations-api.service";
-import { cacheKeys } from "@/lib/query-client/cache-keys";
 import { queryClient } from "@/lib/query-client/client";
 
 /**
- * Cancel one pending or running run. The run list needs no refetch: its
- * status arrives live over Zero. Only the run's detail (which carries the
- * "Cancelled" reason) is refreshed.
+ * Cancel one pending or running run. The automation's runs (the list and
+ * the run's detail, which carries the "Cancelled" reason) are read again at
+ * once, rather than waiting for the change stream to report the cancel.
  */
 export const cancelRunMutationAtom = atomWithMutation(() => ({
 	meta: { suppressGlobalErrorToast: true },
@@ -15,9 +14,8 @@ export const cancelRunMutationAtom = atomWithMutation(() => ({
 		return automationsApiService.cancelRun(vars.automationId, vars.runId);
 	},
 	onSuccess: (_run, vars) => {
-		queryClient.invalidateQueries({
-			queryKey: cacheKeys.automations.run(vars.automationId, vars.runId),
-		});
+		// The runs list's prefix, which the run's detail shares (cache-keys.ts).
+		queryClient.invalidateQueries({ queryKey: ["automations", "runs", vars.automationId] });
 		toast.success("Run cancelled");
 	},
 	onError: (error: Error) => {

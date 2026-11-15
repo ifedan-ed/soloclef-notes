@@ -10,35 +10,33 @@ const OWN_ERROR_TOAST = { suppressGlobalErrorToast: true } as const;
 
 import { notebookKeys } from "../api/notebook-query-keys";
 import { notebooksApi, type SourceTarget } from "../api/notebooks-api";
-import {
-	notebookRefetchInterval,
-	notebooksRefetchInterval,
-	type TitleWatch,
-} from "../lib/auto-title";
-import { outputsRefetchInterval } from "../lib/output-meta";
 import { withToggled } from "../lib/source-selection";
 import type { StudioRequestBody } from "../lib/studio-request";
 import type { Notebook, NotebookSource } from "../model/notebook";
+
+/*
+ * None of these reads polls. The change stream (features/live-changes) reads
+ * them again when the server reports a change: `notebooks` (created, renamed,
+ * named automatically, sources added or ticked), `documents` (a source's
+ * indexing status and stage, counts) and `outputs` (Studio progress and
+ * finish). They used to poll while a source indexed, an output generated or
+ * an automatic name was due.
+ */
 
 export function useNotebooks() {
 	return useQuery({
 		queryKey: notebookKeys.list(),
 		queryFn: () => notebooksApi.list(),
 		placeholderData: keepPreviousData,
-		// A notebook about to name itself: look again until its name lands.
-		refetchInterval: (query) => notebooksRefetchInterval(query.state.data),
 	});
 }
 
-export function useNotebook(notebookId: number, titleWatch: TitleWatch | null = null) {
+export function useNotebook(notebookId: number) {
 	const queryClient = useQueryClient();
 	return useQuery({
 		queryKey: notebookKeys.detail(notebookId),
 		queryFn: () => notebooksApi.get(notebookId),
 		enabled: notebookId > 0,
-		// Its automatic name is on the way (a source just became ready, or a
-		// chat turn ended): look again, briefly, until it arrives.
-		refetchInterval: (query) => notebookRefetchInterval(query.state.data, titleWatch),
 		// Arriving from the list: paint the card's data at once, refresh behind it.
 		placeholderData: () =>
 			queryClient
@@ -52,11 +50,6 @@ export function useNotebookSources(notebookId: number) {
 		queryKey: notebookKeys.sources(notebookId),
 		queryFn: () => notebooksApi.sources(notebookId),
 		enabled: notebookId > 0,
-		// Sources still being indexed flip to ready on their own.
-		refetchInterval: (query) =>
-			query.state.data?.some((s) => s.status === "pending" || s.status === "processing")
-				? 5000
-				: false,
 	});
 }
 
@@ -74,8 +67,6 @@ export function useStudioOutputs(notebookId: number) {
 		queryFn: () => notebooksApi.outputs(notebookId),
 		enabled: notebookId > 0,
 		placeholderData: keepPreviousData,
-		refetchInterval: (query) =>
-			outputsRefetchInterval((query.state.data ?? []).map((output) => output.status)),
 	});
 }
 

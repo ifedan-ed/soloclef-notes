@@ -10,6 +10,8 @@ import (
 
 	"git.danvics.com/danvics/soloclef/soloclef_celery/celery"
 	"git.danvics.com/danvics/soloclef/soloclef_notify/notify"
+
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange"
 )
 
 // Refusal answers the message on a deployment with the render switched off
@@ -21,6 +23,8 @@ type Refusal struct {
 	// Notifier tells the owner the video failed, as a render that failed
 	// would.
 	Notifier Notifier
+	// Changes tells the owner's open Studio panel the job ended.
+	Changes livechange.Publisher
 }
 
 // refusedBecause is the row's internal_error: why this job did not run.
@@ -47,6 +51,7 @@ func (r Refusal) Run(ctx context.Context, msg *celery.Message) error {
 	if err != nil {
 		return fmt.Errorf("videojob: marking job %d failed: %w", jobID, err)
 	}
+	r.Changes.Publish(ctx, owner, livechange.Change{Kind: livechange.Outputs})
 	if err := r.Notifier.StudioFinished(ctx, notify.StudioRun{UserID: owner, JobID: jobID, Failed: true}); err != nil {
 		return fmt.Errorf("videojob: job %d is marked failed and its notification could not be written: %w", jobID, err)
 	}

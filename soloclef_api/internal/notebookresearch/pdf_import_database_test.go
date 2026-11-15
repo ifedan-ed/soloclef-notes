@@ -58,6 +58,8 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_ingest/parse"
 	"git.danvics.com/danvics/soloclef/soloclef_ingest/parserconfig"
 	"git.danvics.com/danvics/soloclef/soloclef_ingest/selection"
+
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange/livechangetest"
 )
 
 const (
@@ -223,7 +225,7 @@ func TestAPDFLinkIsImportedAsAnUploadedPDFIs(t *testing.T) {
 
 	queued := &indexing{}
 	reader := readerFor(t, unusedPDFText{})
-	reads, err := NewReads(context.Background(), 2, pool, reader, &papers{}, queued, Originals{Files: store, MaxBytes: 64 << 10}, quiet())
+	reads, err := NewReads(context.Background(), 2, pool, reader, &papers{}, queued, Originals{Files: store, MaxBytes: 64 << 10}, &livechangetest.Recorder{}, quiet())
 	if err != nil {
 		t.Fatal(err)
 	}

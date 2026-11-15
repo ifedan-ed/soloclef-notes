@@ -579,39 +579,3 @@ func TestWhatADeleteTakesWithItAndWhatItLeaves(t *testing.T) {
 		t.Errorf("the other account has %d chunks, not the 1 it had", chunks)
 	}
 }
-
-// zero-cache sends every published column of a row to whoever syncs the row,
-// so what the publication lists is a security boundary.
-func TestThePublicationSendsNoSecretsAndCarriesTheOwner(t *testing.T) {
-	pool := migrated(t)
-	published := column[string](t, pool, `
-		SELECT tablename || '.' || attname FROM pg_publication_tables, unnest(attnames) AS attname
-		WHERE pubname = 'zero_publication'`)
-	if len(published) == 0 {
-		t.Fatal("zero_publication publishes nothing")
-	}
-	for _, secret := range []string{
-		"search_source_connectors.config", "user.email", "user.hashed_password", "user.id",
-		"connections.api_key", "personal_access_tokens.token_hash", "refresh_tokens.token_hash",
-	} {
-		if slices.Contains(published, secret) {
-			t.Errorf("zero_publication publishes %s", secret)
-		}
-	}
-	// Each published table says whose a row is, itself or through a parent
-	// that is published with its owner.
-	throughParent := map[string]string{
-		"new_chat_messages":  "new_chat_threads.user_id",
-		"chat_session_state": "new_chat_threads.user_id",
-		"automation_runs":    "automations.user_id",
-	}
-	for _, table := range column[string](t, pool, `SELECT tablename::text FROM pg_publication_tables WHERE pubname = 'zero_publication'`) {
-		owner := table + ".user_id"
-		if parent, ok := throughParent[table]; ok {
-			owner = parent
-		}
-		if !slices.Contains(published, owner) {
-			t.Errorf("zero_publication publishes %s without %s, so a client cannot be limited to its own rows", table, owner)
-		}
-	}
-}

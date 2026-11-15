@@ -19,13 +19,11 @@ import {
  *   - /studio/suggestions   (welcome-card questions, Studio dialog ideas)
  *   - /sources/<id>/guide   (source guides)
  *
- * WebSockets (Zero sync) are not routed by Playwright; Zero only writes
- * through POST /api/zero/mutate, which is blocked here.
+ * The change stream (GET /api/v1/events) is a read and passes.
  */
 
 /** Reads implemented as POST. Keep this list short and explicit. */
 export const READ_ONLY_POSTS: { pattern: RegExp; why: string }[] = [
-	{ pattern: /\/api\/zero\/query$/, why: "Zero query resolution (reads)" },
 	{
 		pattern: /\/api\/v1\/notebooks\/\d+\/followups$/,
 		why: "follow-up questions (read)",

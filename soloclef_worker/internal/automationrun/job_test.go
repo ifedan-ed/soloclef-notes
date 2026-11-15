@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -26,6 +27,9 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_celery/produce"
 	"git.danvics.com/danvics/soloclef/soloclef_ingest/fileread"
 	"git.danvics.com/danvics/soloclef/soloclef_notify/notify"
+
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange"
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange/livechangetest"
 )
 
 const ada = "11111111-1111-4111-8111-111111111111"
@@ -249,6 +253,8 @@ type fixture struct {
 	opened *[]string
 	// told is every ending reported to the owner.
 	told *told
+	// changes is every live change the job told.
+	changes *livechangetest.Recorder
 	// released is every thread whose sandbox the job gave back.
 	released *[]int64
 }
@@ -313,9 +319,10 @@ func newFixture(t *testing.T, definition string, replies ...modeltest.Reply) *fi
 	rows := &ledger{status: "pending", run: Run{ID: 7, AutomationID: 3, UserID: ada, Name: "Digest", ThreadID: 900,
 		Snapshot: []byte(definition), Inputs: []byte(`{"fired_at":"2026-11-12T09:00:00Z"}`)}}
 	publisher, index, built, notified := &sent{}, &indexed{}, &recording{Assembler: agents}, &told{}
+	changes := &livechangetest.Recorder{}
 	var released []int64
 	job := &Job{
-		Rows: rows, Assembler: built, Store: store, Publisher: publisher, Indexer: index, Notifier: notified,
+		Rows: rows, Assembler: built, Store: store, Publisher: publisher, Indexer: index, Notifier: notified, Changes: changes,
 		ReleaseSandbox: func(_ context.Context, threadID int64) error {
 			released = append(released, threadID)
 			return nil
@@ -326,7 +333,7 @@ func newFixture(t *testing.T, definition string, replies ...modeltest.Reply) *fi
 	if err := job.Check(); err != nil {
 		t.Fatal(err)
 	}
-	return &fixture{job: job, rows: rows, app: connected, script: script, sent: publisher, index: index, built: built, opened: &opened, told: notified, released: &released}
+	return &fixture{job: job, rows: rows, app: connected, script: script, sent: publisher, index: index, built: built, opened: &opened, told: notified, changes: changes, released: &released}
 }
 
 func (f *fixture) run(t *testing.T) Ending {
@@ -371,6 +378,11 @@ func TestARunIsAHeadlessTurnThatRecordsItsTranscriptResultAndTokens(t *testing.T
 	}
 	if got := f.told.reported(); len(got) != 1 || got[0] != (notify.AutomationRun{UserID: f.rows.run.UserID, AutomationID: 3, RunID: 7, Name: "Digest", Status: Succeeded}) {
 		t.Errorf("told %+v", got)
+	}
+	// The owner's open automation page heard the run start and end.
+	if calls := f.changes.Calls(); len(calls) != 2 || calls[0].Changes[0] != (livechange.Change{Kind: livechange.Automations, ID: 3}) ||
+		calls[1].Changes[0] != (livechange.Change{Kind: livechange.Automations, ID: 3}) || calls[1].UserID != f.rows.run.UserID {
+		t.Errorf("live changes %+v", calls)
 	}
 	// The run's own thread is done with: its sandbox's place is given back.
 	if len(*f.released) != 1 || (*f.released)[0] != 900 {
@@ -666,6 +678,12 @@ func TestAStepsAnswerIsSavedAsANote(t *testing.T) {
 	want := Note{UserID: ada, AutomationID: 3, NotebookID: 5, Title: "Digest, 12 November 2026", Markdown: "Four phases [citation:481]."}
 	if ending.Status != Succeeded || len(f.rows.notes) != 1 || f.rows.notes[0] != want {
 		t.Fatalf("ended %s, saved %+v; want %+v", ending.Status, f.rows.notes, want)
+	}
+	// The notebook it was filed in hears of the note.
+	if kinds := f.changes.Kinds(ada); !reflect.DeepEqual(kinds, []livechange.Kind{livechange.Automations,
+		livechange.Notes, livechange.Documents, livechange.Notebooks,
+		livechange.Automations, livechange.Documents, livechange.Outputs}) {
+		t.Errorf("live changes %v", kinds)
 	}
 	if saved := step.Result.SavedNote; saved == nil || *saved != (SavedNote{DocumentID: 4401, NotebookID: 5, Title: want.Title}) {
 		t.Errorf("the step says it saved %+v", saved)

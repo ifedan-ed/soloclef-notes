@@ -15,9 +15,8 @@ const PUBLIC_ROUTE_PREFIXES = [
 	"/auth",
 	"/docs",
 	"/public",
-	// The public site. A marketing route missing from this list still renders,
-	// but only on the client: `ZeroProvider` mounts the authenticated sync
-	// provider for it, which emits no SSR HTML, so a crawler sees an empty shell.
+	// The public site. A marketing route missing from this list would send a
+	// visitor to the login page whenever one of its requests answered 401.
 	"/features",
 	"/contact",
 	"/privacy",

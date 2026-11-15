@@ -60,6 +60,8 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"git.danvics.com/danvics/soloclef/soloclef_celery/produce"
+
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange"
 )
 
 // Database is the pool: statements, and a transaction for a collapsing
@@ -79,15 +81,18 @@ type Publisher interface {
 type Notifier struct {
 	Database  Database
 	Publisher Publisher
-	Log       *slog.Logger
+	// Changes tells the person's open web tabs and app that the inbox
+	// changed, so its list and badge update without a reload.
+	Changes livechange.Publisher
+	Log     *slog.Logger
 	// Now is nil for the system clock; only a test names another.
 	Now func() time.Time
 }
 
 // Check reports what is missing. Called once at start-up by each tier.
 func (n *Notifier) Check() error {
-	if n == nil || n.Database == nil || n.Publisher == nil || n.Log == nil {
-		return errors.New("notify: the notifier needs a database, a publisher and a logger")
+	if n == nil || n.Database == nil || n.Publisher == nil || n.Changes == nil || n.Log == nil {
+		return errors.New("notify: the notifier needs a database, a publisher, a live-change publisher and a logger")
 	}
 	return nil
 }
@@ -133,12 +138,15 @@ func (n *Notifier) record(ctx context.Context, e event) (int64, error) {
 		if err != nil {
 			return 0, fmt.Errorf("notify: writing the inbox row: %w", err)
 		}
+		n.told(ctx, e.userID)
 		return id, n.schedule(ctx, id, 0)
 	}
 	id, opened, err := n.collapse(ctx, e)
 	if err != nil {
 		return 0, err
 	}
+	// A grown row changed too (its count and title), so either way.
+	n.told(ctx, e.userID)
 	if !opened {
 		// The row's own push is already scheduled (or sent); this event is
 		// in its count.
@@ -197,6 +205,13 @@ func (n *Notifier) collapse(ctx context.Context, e event) (id int64, opened bool
 		return 0, false, fmt.Errorf("notify: %w", err)
 	}
 	return id, opened, nil
+}
+
+// told tells the person's open clients the inbox changed: after the row is
+// committed, and before the push is queued, whose failure must not keep the
+// open inbox from showing the row.
+func (n *Notifier) told(ctx context.Context, userID string) {
+	n.Changes.Publish(ctx, userID, livechange.Change{Kind: livechange.Inbox})
 }
 
 // schedule publishes the row's push. A broker that is down loses the push,

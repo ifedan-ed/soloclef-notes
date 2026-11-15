@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange"
 )
 
 // removeTimeout bounds taking back the files of a seed whose rows did not
@@ -131,6 +133,8 @@ func (r Routes) seedOutput(x *exchange) {
 	ctx := x.ctx.Context()
 	now := r.now()
 	var answer outputAnswer
+	// Whose the notebook is, for the live change after the commit.
+	var owner string
 	err := r.inTransaction(ctx, func(q *Queries, stored *[]string) error {
 		if asked.Status != "ready" && asked.Status != "running" && asked.Status != "failed" {
 			return errInvalid("status must be ready, running or failed")
@@ -146,6 +150,7 @@ func (r Routes) seedOutput(x *exchange) {
 			seed.files[0].data = []byte(asked.HTML)
 		}
 		userID, err := q.NotebookOwner(ctx, asked.NotebookID)
+		owner = userID
 		if errors.Is(err, pgx.ErrNoRows) {
 			return errAbsent("notebook not found")
 		}
@@ -238,6 +243,7 @@ func (r Routes) seedOutput(x *exchange) {
 	if x.failed("could not seed the studio output", err) {
 		return
 	}
+	r.Changes.Publish(ctx, owner, livechange.Change{Kind: livechange.Outputs, NotebookID: asked.NotebookID})
 	x.send(http.StatusOK, answer)
 }
 
@@ -256,6 +262,7 @@ func (r Routes) completeOutput(x *exchange) {
 	}
 	ctx := x.ctx.Context()
 	answer := outputAnswer{OutputID: asked.OutputID}
+	var owner string
 	err := r.inTransaction(ctx, func(q *Queries, stored *[]string) error {
 		output, err := q.QueuedOutput(ctx, QueuedOutputParams{OutputID: asked.OutputID, NotebookID: asked.NotebookID})
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -264,6 +271,7 @@ func (r Routes) completeOutput(x *exchange) {
 		if err != nil {
 			return err
 		}
+		owner = output.UserID
 		seed, err := filesFor(output.Kind, output.Title)
 		if err != nil {
 			return err
@@ -278,5 +286,7 @@ func (r Routes) completeOutput(x *exchange) {
 	if x.failed("could not complete the output", err) {
 		return
 	}
+	r.Changes.Publish(ctx, owner, livechange.Change{Kind: livechange.Outputs, NotebookID: asked.NotebookID},
+		livechange.Change{Kind: livechange.Documents})
 	x.send(http.StatusOK, answer)
 }

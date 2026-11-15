@@ -21,6 +21,8 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_notify/notify"
 
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/jobs"
+
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange"
 )
 
 // How delivery paces itself. These are decisions about the jobs, made once
@@ -61,8 +63,8 @@ func Producer(rdb redis.UniversalClient, defaultQueue string) (produce.Producer,
 
 // Notifier is the one notification step for this process: the worker's
 // jobs and the indexer call it when work ends.
-func Notifier(pool *pgxpool.Pool, publisher notify.Publisher, log *slog.Logger) (*notify.Notifier, error) {
-	notifier := &notify.Notifier{Database: pool, Publisher: publisher, Log: log}
+func Notifier(pool *pgxpool.Pool, publisher notify.Publisher, changes livechange.Publisher, log *slog.Logger) (*notify.Notifier, error) {
+	notifier := &notify.Notifier{Database: pool, Publisher: publisher, Changes: changes, Log: log}
 	return notifier, notifier.Check()
 }
 

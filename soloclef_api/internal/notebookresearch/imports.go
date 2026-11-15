@@ -113,7 +113,12 @@ func (i Imports) Add(ctx context.Context, at Importing, items []item) ([]Importe
 	if err != nil {
 		return nil, err
 	}
-	// After the commit: a read takes the row the moment it starts.
+	// After the commit: the owner's open notebook lists the new sources
+	// now. A paper whose text came with it is ready already and is never
+	// read, so nothing later would say so; from the chat's add_sources it
+	// would otherwise wait for the turn's end.
+	i.Reads.imported(ctx, at.UserID, at.NotebookID)
+	// A read takes the row the moment it starts.
 	for _, documentID := range done.toRead {
 		i.Reads.Start(documentID, at.UserID, at.RequestID)
 	}

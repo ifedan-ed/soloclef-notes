@@ -1,16 +1,14 @@
 "use client";
 
-import { useQuery } from "@rocicorp/zero/react";
+import { type QueryClient, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { queries } from "@/zero/queries";
+import {
+	type DeliverableJob,
+	deliverableJobsApiService,
+} from "@/lib/apis/deliverable-jobs-api.service";
+import { cacheKeys } from "@/lib/query-client/cache-keys";
 
-export type DeliverableJobStatus =
-	| "queued"
-	| "running"
-	| "cancelling"
-	| "cancelled"
-	| "failed"
-	| "ready";
+export type DeliverableJobStatus = DeliverableJob["status"];
 
 export interface LiveDeliverableJob {
 	id: number;
@@ -24,26 +22,43 @@ export interface LiveDeliverableJob {
 	threadId: number | null;
 }
 
+/**
+ * A video job's lifecycle, read over REST (GET /deliverable-jobs/{id}) and
+ * read again whenever the change stream reports an `outputs` change, which
+ * the server sends on every phase, progress and finish write.
+ */
 export function useDeliverableJobLive(jobId: number | undefined) {
-	const [row, result] = useQuery(queries.deliverableJobs.byId({ jobId: jobId ?? -1 }));
+	const { data, isPending } = useQuery({
+		queryKey: cacheKeys.deliverableJobs.detail(jobId ?? 0),
+		queryFn: () => deliverableJobsApiService.get(jobId as number),
+		enabled: !!jobId,
+		// A job that is gone is a state the card shows, not an error to toast.
+		meta: { suppressGlobalErrorToast: true },
+	});
 
-	const job = useMemo<LiveDeliverableJob | undefined>(() => {
-		if (!jobId || !row) return undefined;
-		return {
-			id: row.id,
-			kind: row.kind,
-			title: row.title,
-			status: row.status as DeliverableJobStatus,
-			phase: row.phase ?? null,
-			progress: row.progress,
-			failureCode: row.failureCode ?? null,
-			artifactId: row.artifactId ?? null,
-			threadId: row.threadId ?? null,
-		};
-	}, [jobId, row]);
+	const job = useMemo<LiveDeliverableJob | undefined>(
+		() => (jobId && data ? toLiveJob(data) : undefined),
+		[jobId, data]
+	);
 
+	return { job, isLoading: !!jobId && isPending };
+}
+
+/** Cancel and retry answer with the job as it now is: the card shows it at once. */
+export function storeDeliverableJob(queryClient: QueryClient, job: DeliverableJob): void {
+	queryClient.setQueryData(cacheKeys.deliverableJobs.detail(job.id), job);
+}
+
+function toLiveJob(job: DeliverableJob): LiveDeliverableJob {
 	return {
-		job,
-		isLoading: !!jobId && !row && result.type !== "complete",
+		id: job.id,
+		kind: job.kind,
+		title: job.title,
+		status: job.status,
+		phase: job.phase ?? null,
+		progress: job.progress,
+		failureCode: job.failure_code ?? null,
+		artifactId: job.artifact_id ?? null,
+		threadId: job.thread_id ?? null,
 	};
 }

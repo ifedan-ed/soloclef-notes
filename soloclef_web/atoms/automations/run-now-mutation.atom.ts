@@ -4,9 +4,8 @@ import { automationsApiService } from "@/lib/apis/automations-api.service";
 import { queryClient } from "@/lib/query-client/client";
 
 /**
- * Start a run of an automation by hand. The new run appears in the list
- * live over Zero; the paged run history is invalidated for the pages that
- * read it over HTTP.
+ * Start a run of an automation by hand. The runs list is read again at once;
+ * the run's progress after that arrives through the change stream.
  */
 export const runNowMutationAtom = atomWithMutation(() => ({
 	meta: { suppressGlobalErrorToast: true },

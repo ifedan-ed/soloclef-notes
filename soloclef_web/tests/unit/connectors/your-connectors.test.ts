@@ -12,10 +12,6 @@ import type { ConnectorRow } from "@/components/assistant-ui/connector-popup/hoo
 import { showsIndexedLine } from "@/components/assistant-ui/connector-popup/your-connectors/account-card";
 import { ConnectorRowStatus } from "@/components/assistant-ui/connector-popup/your-connectors/connector-row-status";
 import {
-	liveRowsChanged,
-	liveRowsKey,
-} from "@/components/assistant-ui/connector-popup/your-connectors/live-rows";
-import {
 	getConnectorsResponse,
 	type SearchSourceConnector,
 } from "@/contracts/types/connector.types";
@@ -160,40 +156,6 @@ test("the on/off switch is labelled Enabled", () => {
 	assert.match(html, /aria-label="Enabled"/);
 	assert.match(html, /aria-checked="false"/);
 	assert.doesNotMatch(html, /workspace/i);
-});
-
-test("the last MCP server removed in another tab makes the panel ask for the list again", () => {
-	// Zero had the one server; it is deleted elsewhere and Zero completes with [].
-	const before = liveRowsKey([listedMcp]);
-	assert.equal(liveRowsChanged(before, []), true);
-});
-
-test("the REST list is refetched only when Zero's rows change", () => {
-	const second = connector({ id: 8, connector_type: "MCP_CONNECTOR" });
-	// Nothing to compare with before the first complete result.
-	assert.equal(liveRowsChanged(null, [listedMcp]), false);
-	const key = liveRowsKey([listedMcp, second]);
-	// The same rows in another order: no refetch.
-	assert.equal(liveRowsChanged(key, [second, listedMcp]), false);
-	// Fields Zero does not sync play no part: the list is the source of them.
-	assert.equal(liveRowsChanged(key, [{ ...listedMcp, config: {}, enabled: false }, second]), false);
-	// A server added or removed: refetch.
-	assert.equal(liveRowsChanged(key, [listedMcp]), true);
-	assert.equal(
-		liveRowsChanged(key, [
-			listedMcp,
-			second,
-			connector({ id: 9, connector_type: "MCP_CONNECTOR" }),
-		]),
-		true
-	);
-	// The rows shown are the REST list's alone, so a synced field that changed
-	// (a rename, a finished indexing run) is also a reason to ask again.
-	assert.equal(liveRowsChanged(key, [{ ...listedMcp, name: "Renamed" }, second]), true);
-	assert.equal(
-		liveRowsChanged(key, [listedMcp, { ...second, last_indexed_at: "2026-11-11T09:00:00Z" }]),
-		true
-	);
 });
 
 test("an Email connection whose last mailbox was removed is not listed", () => {

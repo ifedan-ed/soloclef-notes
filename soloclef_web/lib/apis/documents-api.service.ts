@@ -35,6 +35,7 @@ import {
 	uploadDocumentRequest,
 	uploadDocumentResponse,
 } from "@/contracts/types/document.types";
+import { folderListResponse } from "@/contracts/types/folder.types";
 import { ValidationError } from "../error";
 import { baseApiService } from "./base-api.service";
 import { uploadFormData } from "./upload-form";
@@ -397,6 +398,11 @@ class DocumentsApiService {
 		} finally {
 			clearTimeout(timeoutId);
 		}
+	};
+
+	/** Every folder of the account, flat, ordered by position (the client builds the tree). */
+	getFolders = async () => {
+		return baseApiService.get(`/api/v1/folders`, folderListResponse);
 	};
 
 	/**

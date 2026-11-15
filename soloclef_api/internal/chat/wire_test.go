@@ -37,6 +37,8 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_connectors/mcpserver"
 	"git.danvics.com/danvics/soloclef/soloclef_connectors/sealedsecret"
 	"git.danvics.com/danvics/soloclef/soloclef_ingest/parse"
+
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange/livechangetest"
 )
 
 func complete() Settings {
@@ -235,7 +237,7 @@ func TestTheChatAsAServerRunsIt(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	queue := &queued{}
 	started := time.Now()
-	service, release, err := NewService(ctx, settings, Deps{Pool: pool, Files: local, Queue: queue, HTTP: &http.Client{}, Voices: noVoices{}, Logger: logger, Lifetime: lifetime,
+	service, release, err := NewService(ctx, settings, Deps{Pool: pool, Files: local, Queue: queue, HTTP: &http.Client{}, Voices: noVoices{}, Changes: &livechangetest.Recorder{}, Logger: logger, Lifetime: lifetime,
 		Parsers: parserchoicetest.Registry(t, parse.Local),
 		// No draft is made here; the two are what a draft would need.
 		DraftNotifier: maildrafts.NoNotifications{}, FileStore: stores,

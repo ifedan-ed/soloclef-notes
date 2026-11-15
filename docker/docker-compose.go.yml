@@ -6,14 +6,13 @@
 #
 # This file is the whole site, and nothing else is needed to run it: the API
 # with the chat in it, the indexer, the parser service, the worker, the four
-# stores they keep things in, the web app's live sync (zero-cache), the MCP
-# server agents connect to, Caddy in front of all of them serving the web
-# app's static files, and, when a deployment switches it on, the sandbox
-# service reports, workbooks and pages are built in. MinIO is the file store here, by
-# default and with no other choice offered: FILE_STORAGE_BACKEND is s3 for
-# every service that reads or writes a file. The one thing outside it is the
-# model proxy (LiteLLM), which every model call goes through and which runs
-# on its own network.
+# stores they keep things in, the MCP server agents connect to, Caddy in
+# front of all of them serving the web app's static files, and, when a
+# deployment switches it on, the sandbox service reports, workbooks and pages
+# are built in. MinIO is the file store here, by default and with no other
+# choice offered: FILE_STORAGE_BACKEND is s3 for every service that reads or
+# writes a file. The one thing outside it is the model proxy (LiteLLM), which
+# every model call goes through and which runs on its own network.
 #
 # What it must never do is touch another stack on the same host, and four
 # things keep it from doing so:
@@ -116,20 +115,10 @@ services:
 
   postgres:
     image: pgvector/pgvector:pg17
-    # Logical replication is what the web app's live sync (zero-cache) reads
-    # the database through: it follows the publication the schema creates
-    # (zero_publication). The level is a start-up setting, so it is said
-    # here, where the server starts, and costs nothing while nobody
-    # subscribes. The other two are the image's own defaults, written down
-    # because zero-cache needs a sender and a slot to be there.
-    command:
-      - postgres
-      - -c
-      - wal_level=logical
-      - -c
-      - max_wal_senders=10
-      - -c
-      - max_replication_slots=10
+    # The image's own settings. Nothing reads the database by logical
+    # replication (the open screens' live updates come from the API,
+    # soloclef_api/internal/livechanges), so wal_level is the default,
+    # replica: no logical decoding cost on every write.
     environment:
       POSTGRES_USER: ${SOLOCLEF_GO_POSTGRES_USER:?}
       POSTGRES_DB: ${SOLOCLEF_GO_POSTGRES_DB:?}
@@ -1159,85 +1148,6 @@ services:
 
   # ── The site ──────────────────────────────────────────────────────────────
 
-  # The web app's live sync. It follows Postgres by logical replication (the
-  # publication zero_publication, which the schema's first migration
-  # creates; Postgres above is started with wal_level=logical for it), keeps
-  # a replica of the published rows, and asks the API which rows an account
-  # may see (ZERO_QUERY_URL below). The browser reaches it through Caddy at
-  # /zero.
-  #
-  # It takes its database as a URL in the environment and cannot read a
-  # password file, so the URL is put together here from the mounted secret,
-  # as it is for the indexer and the worker. It keeps its own state (what
-  # each client has been sent, and the change log) in the same database,
-  # under schemas of its own.
-  #
-  # The admin password guards zero-cache's own inspection routes (/statz
-  # and the inspector), which Caddy's /zero route would otherwise hand to
-  # anyone; zero-cache refuses to start without one. It is made new, at
-  # random, on each start and told to nobody: nothing in this stack uses
-  # those routes, and a password with no file is one that cannot leak. An
-  # operator who wants the inspector sets one in an override of their own.
-  zero-cache:
-    image: rocicorp/zero:1.6.0
-    entrypoint: ["/bin/sh", "-ec"]
-    command:
-      - |
-        url="postgresql://$${POSTGRES_USER}:$$(cat "$$POSTGRES_PASSWORD_FILE")@${COMPOSE_PROJECT_NAME}-postgres-1:5432/$${POSTGRES_DB}?sslmode=disable"
-        export ZERO_UPSTREAM_DB="$$url" ZERO_CVR_DB="$$url" ZERO_CHANGE_DB="$$url"
-        export ZERO_ADMIN_PASSWORD="$$(head -c 32 /dev/urandom | base64)"
-        exec npx zero-cache
-    environment:
-      POSTGRES_USER: ${SOLOCLEF_GO_POSTGRES_USER:?}
-      POSTGRES_DB: ${SOLOCLEF_GO_POSTGRES_DB:?}
-      POSTGRES_PASSWORD_FILE: ${SOLOCLEF_GO_POSTGRES_PASSWORD_FILE:?}
-      # The replica, on a volume: rebuilding it from Postgres on every start
-      # is possible (ZERO_AUTO_RESET) but slow on a large database.
-      ZERO_REPLICA_FILE: /data/zero.db
-      ZERO_APP_PUBLICATIONS: zero_publication
-      # A migration that changes the publication makes zero-cache start its
-      # replica over, instead of stopping until somebody does it by hand.
-      ZERO_AUTO_RESET: "true"
-      # Left to itself zero-cache starts one sync process per CPU but one.
-      ZERO_NUM_SYNC_WORKERS: ${SOLOCLEF_GO_ZERO_SYNC_WORKERS:?}
-      # The API builds each synced query for the person asking
-      # (soloclef_api/internal/zerosync), on a path Caddy never routes to it,
-      # so only this network reaches it. There is no mutate URL: the web
-      # app writes through the API, never through Zero.
-      ZERO_QUERY_URL: http://${COMPOSE_PROJECT_NAME}-api-1:8080/internal/zero/query
-      # The API knows a person by their session cookie.
-      ZERO_QUERY_FORWARD_COOKIES: "true"
-      # How often an open connection's cookie is checked again through
-      # the query URL (the API's credential gate, so the same sign-in
-      # check as every API call). A browser signed out from elsewhere -- the devices
-      # list, signing out everywhere, a new password -- has every new query
-      # and every API call refused at once; this bounds how long an already
-      # open connection keeps receiving updates to a minute, not zero-cache's
-      # default five. One API read per open tab per minute.
-      ZERO_AUTH_REVALIDATE_INTERVAL_SECONDS: "60"
-    secrets:
-      - postgres_password
-    volumes:
-      - zero_data:/data
-    depends_on:
-      postgres:
-        condition: service_healthy
-      # The publication is the schema's: there is nothing to follow before.
-      migrate:
-        condition: service_completed_successfully
-    # The first start copies every published row before it answers, so the
-    # grace is long; a start with a replica on the volume is quick.
-    healthcheck:
-      test: ["CMD", "curl", "--silent", "--fail", "--output", "/dev/null", "http://127.0.0.1:4848/keepalive"]
-      interval: 5s
-      timeout: 5s
-      retries: 12
-      start_period: 600s
-    # It flushes its replica and its connections on a stop.
-    stop_grace_period: 60s
-    restart: unless-stopped
-    logging: *logging
-
   # The MCP server agents connect to (soloclef_mcp_go): streamable HTTP at
   # /mcp, through Caddy. It holds no secret and no database: every request
   # carries the caller's own API key, and it calls the API with that key and
@@ -1319,8 +1229,6 @@ services:
     depends_on:
       api:
         condition: service_started
-      zero-cache:
-        condition: service_started
       mcp:
         condition: service_started
     # Caddy's admin endpoint, on loopback inside the container only.
@@ -1376,8 +1284,6 @@ volumes:
   # A podcast's voiced lines while it is made; each podcast's directory is
   # removed when it is finished, failed or cancelled.
   podcast_work:
-  # zero-cache's replica of the published rows.
-  zero_data:
   # The copy of the sandbox service's key the API and the worker read; empty
   # while the sandbox is off.
   sandbox_key:

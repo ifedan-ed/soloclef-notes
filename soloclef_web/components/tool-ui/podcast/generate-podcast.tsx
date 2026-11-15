@@ -1,6 +1,7 @@
 "use client";
 
 import type { ToolCallMessagePartProps } from "@assistant-ui/react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, RotateCcw, Undo2, X } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
@@ -17,7 +18,8 @@ import {
 	AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { type LivePodcast, usePodcastLive } from "@/hooks/use-podcast-live";
+import type { PodcastDetail } from "@/contracts/types/podcast.types";
+import { type LivePodcast, storePodcastDetail, usePodcastLive } from "@/hooks/use-podcast-live";
 import { podcastsApiService } from "@/lib/apis/podcasts-api.service";
 import { BRAND } from "@/lib/brand";
 import { BriefReview } from "./brief-review";
@@ -62,13 +64,14 @@ function NoticeState({ title, message }: { title: string; message: string }) {
  * so a stray click is guarded by an inline confirm step.
  */
 function RegenerateButton({ podcast }: { podcast: LivePodcast }) {
+	const queryClient = useQueryClient();
 	const [confirming, setConfirming] = useState(false);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
 	const regenerate = async () => {
 		setIsSubmitting(true);
 		try {
-			await podcastsApiService.regenerate(podcast.id);
+			storePodcastDetail(queryClient, await podcastsApiService.regenerate(podcast.id));
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : "Failed to regenerate the podcast");
 		} finally {
@@ -126,12 +129,13 @@ function RegenerateButton({ podcast }: { podcast: LivePodcast }) {
  * dialog — the card header is too cramped to host a confirmation row).
  */
 function BackOutButton({ podcastId, hasEpisode }: { podcastId: number; hasEpisode: boolean }) {
+	const queryClient = useQueryClient();
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
-	const run = async (call: (id: number) => Promise<unknown>, failure: string) => {
+	const run = async (call: (id: number) => Promise<PodcastDetail>, failure: string) => {
 		setIsSubmitting(true);
 		try {
-			await call(podcastId);
+			storePodcastDetail(queryClient, await call(podcastId));
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : failure);
 		} finally {
@@ -195,7 +199,7 @@ function BackOutButton({ podcastId, hasEpisode }: { podcastId: number; hasEpisod
 	);
 }
 
-/** Status-driven card for an authenticated viewer, fed by Zero push. */
+/** Status-driven card for an authenticated viewer, kept current by the change stream. */
 function LivePodcastCard({
 	podcastId,
 	fallbackTitle,
@@ -219,7 +223,7 @@ function LivePodcastCard({
 
 	const title = podcast.title || fallbackTitle;
 	// A finished episode is exactly a stamped Artifact; it decides
-	// revert-vs-cancel and feeds the player, both straight from the Zero row.
+	// revert-vs-cancel and feeds the player, both straight from the podcast read.
 	const artifactId = podcast.artifactId ?? undefined;
 	const backOut = <BackOutButton podcastId={podcast.id} hasEpisode={artifactId != null} />;
 
@@ -295,8 +299,8 @@ function LivePodcastCard({
 /**
  * Tool UI for `generate_podcast`. The tool only prepares the podcast (it
  * returns with the brief awaiting review), so this card follows the lifecycle
- * by Zero push, rendering the brief form inline at the gate. It only ever
- * runs in the owner's own chat: a chat has no public page.
+ * through the change stream, rendering the brief form inline at the gate. It
+ * only ever runs in the owner's own chat: a chat has no public page.
  */
 export const GeneratePodcastToolUI = ({
 	args,

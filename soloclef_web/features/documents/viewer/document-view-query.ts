@@ -18,13 +18,9 @@ export function documentViewQueryOptions(documentId: number) {
 			}
 			return DocumentViewManifestSchema.parse(await response.json());
 		},
+		// No polling while the document is still being indexed: the server
+		// reports every status write on the change stream (`documents`), which
+		// reads this manifest again (features/live-changes).
 		staleTime: 30_000,
-		refetchInterval: (query) => {
-			const manifest = query.state.data;
-			return manifest?.presentation === "missing_original" &&
-				(manifest.status === "pending" || manifest.status === "processing")
-				? 2_000
-				: false;
-		},
 	});
 }

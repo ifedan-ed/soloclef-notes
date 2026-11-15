@@ -217,6 +217,9 @@ func (r Routes) turn(ctx huma.Context) {
 		answer.fail("could not write the turn's messages", err)
 		return
 	}
+	// The question is saved and the flag is up: the owner's other screens
+	// show the turn running.
+	s.threadChanged(turnCtx, caller.UserID, thread.ID)
 	out, flush, err := r.openStream(response)
 	if err != nil {
 		answer.fail("could not pace the stream", err)
@@ -358,6 +361,7 @@ func (r Routes) resume(ctx huma.Context) {
 		answer.fail("could not write the turn's message", err)
 		return
 	}
+	s.threadChanged(turnCtx, caller.UserID, thread.ID)
 	out, flush, err := r.openStream(response)
 	if err != nil {
 		answer.fail("could not pace the stream", err)

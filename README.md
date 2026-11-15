@@ -86,6 +86,9 @@ app, an iPhone app and an MCP server for AI agents.
 - An inbox, and push notifications on iPhone and Android when an output is
   ready, an import fails, an automation finishes or a draft is waiting. Each
   kind can be switched off, with quiet hours.
+- Open tabs and the phone app update by themselves: an upload turning ready,
+  a Studio output's progress, a new chat message or inbox row shows without a
+  reload, in every tab and device signed in to the account.
 
 **Accounts**
 - Email and password, optional single sign-on through any OpenID Connect

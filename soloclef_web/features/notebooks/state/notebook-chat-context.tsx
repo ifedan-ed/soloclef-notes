@@ -32,8 +32,6 @@ export interface NotebookChatContextValue {
 	openResearch?: () => void;
 	/** Brings the chat into view (the phone's Chat tab). */
 	showChat?: () => void;
-	/** A turn ended: an unnamed notebook may just have named itself from the question. */
-	watchTitle?: () => void;
 }
 
 const NotebookChatContext = createContext<NotebookChatContextValue | null>(null);

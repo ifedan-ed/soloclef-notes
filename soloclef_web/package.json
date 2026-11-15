@@ -79,7 +79,6 @@
 		"@radix-ui/react-toolbar": "^1.1.11",
 		"@radix-ui/react-tooltip": "^1.2.7",
 		"@react-three/fiber": "^9.7.0",
-		"@rocicorp/zero": "1.6.0",
 		"@slate-serializers/html": "^2.2.3",
 		"@streamdown/code": "^1.0.2",
 		"@streamdown/math": "^1.0.2",

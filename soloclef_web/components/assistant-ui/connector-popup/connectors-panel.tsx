@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronRight, LayoutGrid, Search, X } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	Drawer,
@@ -16,9 +16,8 @@ import { EnumConnectorName } from "@/contracts/enums/connector";
 import { getConnectorIcon } from "@/contracts/enums/connectorIcons";
 import type { SearchSourceConnector } from "@/contracts/types/connector.types";
 import { useMcpOAuthReturn } from "@/features/mcp-server-form/hooks/use-mcp-oauth-return";
-import { useConnectorsSync } from "@/hooks/use-connectors-sync";
+import { useDocumentTypeCounts } from "@/hooks/use-document-type-counts";
 import { useEditableConnector } from "@/hooks/use-editable-connector";
-import { useZeroDocumentTypeCounts } from "@/hooks/use-zero-document-type-counts";
 import { cacheKeys } from "@/lib/query-client/cache-keys";
 import { queryClient } from "@/lib/query-client/client";
 import { cn } from "@/lib/utils";
@@ -31,7 +30,6 @@ import { type ConnectorRow, useConnectorRows } from "./hooks/use-connector-rows"
 import { AllConnectorsTab } from "./tabs/all-connectors-tab";
 import { ConnectorAccountsListView } from "./views/connector-accounts-list-view";
 import { ConnectorRowStatus } from "./your-connectors/connector-row-status";
-import { liveRowsChanged, liveRowsKey } from "./your-connectors/live-rows";
 
 /**
  * Connector management surface (Settings > Connectors) rendered inside the
@@ -48,7 +46,7 @@ import { liveRowsChanged, liveRowsKey } from "./your-connectors/live-rows";
  * inert on a route and ignored.
  */
 export function ConnectorsSection() {
-	const documentTypeCounts = useZeroDocumentTypeCounts();
+	const documentTypeCounts = useDocumentTypeCounts();
 	const [drawerOpen, setDrawerOpen] = useState(false);
 
 	const {
@@ -100,10 +98,10 @@ export function ConnectorsSection() {
 		setConnectorName,
 	} = useConnectorDialog();
 
-	const { connectors: liveConnectors, loading: liveLoading } = useConnectorsSync();
-
 	// The REST list is the whole list: every connection of the account, with
-	// its config and its on/off state. Nothing is merged into it.
+	// its config and its on/off state. A change elsewhere (another tab, a
+	// finished indexing run) refreshes it through the change stream
+	// (`connectors`, features/live-changes).
 	const connectors = useMemo(
 		() => (allConnectors ?? []) as SearchSourceConnector[],
 		[allConnectors]
@@ -112,17 +110,6 @@ export function ConnectorsSection() {
 	const refreshConnectors = async () => {
 		await queryClient.invalidateQueries({ queryKey: cacheKeys.connectors.all() });
 	};
-
-	// Zero only says that something changed elsewhere (another tab, a
-	// finished indexing run): the REST list is then asked again (live-rows.ts).
-	const liveKeyRef = useRef<string | null>(null);
-	useEffect(() => {
-		if (liveLoading) return;
-		if (liveRowsChanged(liveKeyRef.current, liveConnectors)) {
-			void queryClient.invalidateQueries({ queryKey: cacheKeys.connectors.all() });
-		}
-		liveKeyRef.current = liveRowsKey(liveConnectors);
-	}, [liveLoading, liveConnectors]);
 
 	// Back from an MCP server's OAuth sign-in: the list is asked again (the
 	// server is now signed in) and the server's view opens once it is listed.

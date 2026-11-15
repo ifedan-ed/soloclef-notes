@@ -24,6 +24,8 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/websearch"
 	filestore "git.danvics.com/danvics/soloclef/soloclef_filestore"
 	"git.danvics.com/danvics/soloclef/soloclef_ingest/parse"
+
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange/livechangetest"
 )
 
 // localOriginals keeps imported PDFs on a disk of the test's own.
@@ -51,6 +53,8 @@ type harness struct {
 	indexing *indexing
 	pages    *pages
 	papers   *papers
+	// changes is every live change the import and its reads told.
+	changes *livechangetest.Recorder
 }
 
 func newHarness(t *testing.T) *harness {
@@ -65,7 +69,8 @@ INSERT INTO notebooks (id, user_id, title, updated_at) VALUES
 		}},
 		papers: &papers{pubmed: []academic.Paper{tidesPaper}, fullText: map[string]string{"PMC900": "Methods\nWe watched the sea."}},
 	}
-	reads, err := NewReads(context.Background(), 2, pool, h.pages, h.papers, h.indexing, localOriginals(t), quiet())
+	h.changes = &livechangetest.Recorder{}
+	reads, err := NewReads(context.Background(), 2, pool, h.pages, h.papers, h.indexing, localOriginals(t), h.changes, quiet())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -310,7 +315,7 @@ INSERT INTO documents (id, user_id, title, document_type, content, content_hash,
 	lifetime, stop := context.WithCancel(context.Background())
 	stop()
 	queued := &indexing{}
-	reads, err := NewReads(lifetime, 1, pool, &pages{}, &papers{}, queued, localOriginals(t), quiet())
+	reads, err := NewReads(lifetime, 1, pool, &pages{}, &papers{}, queued, localOriginals(t), &livechangetest.Recorder{}, quiet())
 	if err != nil {
 		t.Fatal(err)
 	}

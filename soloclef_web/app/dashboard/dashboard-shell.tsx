@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { USER_QUERY_KEY } from "@/atoms/user/user-query.atoms";
+import { LiveChangesStream } from "@/features/live-changes/ui/live-changes-stream";
 import { useGlobalLoadingEffect } from "@/hooks/use-global-loading";
 import { useSession } from "@/hooks/use-session";
 import { redirectToLogin } from "@/lib/auth-utils";
@@ -34,6 +35,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
 	return (
 		<div className="h-full flex flex-col ">
+			{/* Here and not in the root layout: only past the session check is
+			    there an account whose changes to follow. */}
+			<LiveChangesStream />
 			<div className="flex-1 min-h-0">{children}</div>
 		</div>
 	);

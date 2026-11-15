@@ -30,7 +30,7 @@ export function parseStarted(raw: string | null): number[] {
 
 /**
  * Outputs the user started that have just finished: in flight in the
- * previous poll, ready or failed in this one.
+ * previous read of the list, ready or failed in this one.
  */
 export function justFinished(
 	previous: ReadonlyMap<number, string>,

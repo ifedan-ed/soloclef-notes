@@ -37,7 +37,8 @@ export type SuggestionPhase = "open" | "starting" | "running" | "ready" | "faile
 
 /**
  * What a suggestion card shows: the offer, a progress card while its output
- * is made (from the Studio list, which polls), the output itself once ready,
+ * is made (from the Studio list, which the change stream keeps current),
+ * the output itself once ready,
  * or a failure with a retry.
  */
 export function suggestionPhase(

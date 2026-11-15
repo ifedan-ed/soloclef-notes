@@ -38,6 +38,8 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/pagereader"
 	"git.danvics.com/danvics/soloclef/soloclef_ingest/fileread"
 	"git.danvics.com/danvics/soloclef/soloclef_studio/sandbox"
+
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange"
 )
 
 // Settings is what a deployment says about its chat. Every field without
@@ -194,6 +196,9 @@ type Deps struct {
 	// FileStore is the tier's file store, which a mail draft's attached
 	// documents and Studio outputs are read from (assembly.ToolDeps).
 	FileStore mailattachments.Stores
+	// Changes is the live-change bus a turn tells the owner's other
+	// screens through (Service.Changes).
+	Changes livechange.Publisher
 	// Sources makes the import a notebook's chat adds papers and pages to
 	// its sources with (add_sources): the research box's import, built over
 	// the page reader and the scholarly sources this chat builds, so the two
@@ -286,6 +291,8 @@ func NewService(ctx context.Context, settings Settings, deps Deps) (*Service, fu
 		return nil, nil, fmt.Errorf("chat: the HTTP client has a %s timeout, which would cut every answer that streams for longer", deps.HTTP.Timeout)
 	case deps.Voices == nil:
 		return nil, nil, errors.New("chat: the podcast voice catalogue is not set")
+	case deps.Changes == nil:
+		return nil, nil, errors.New("chat: the live-change publisher is not set")
 	case deps.Logger == nil:
 		return nil, nil, errors.New("chat: the logger is not set")
 	case deps.Lifetime == nil:
@@ -390,8 +397,13 @@ func NewService(ctx context.Context, settings Settings, deps Deps) (*Service, fu
 		Pool: deps.Pool, Store: checkpoints, Files: deps.Files, HTTP: deps.HTTP, Voices: deps.Voices, Logger: deps.Logger,
 		PublishVideo: deliverablejobs.PublishVideo(deps.Queue, TurnPath),
 		// The Go indexer's own job, the one a restored version's text is
-		// indexed with.
+		// indexed with. It runs once the artifact's rows have committed,
+		// which is also when a notebook's Studio lists what its chat just
+		// made (notebookoutput): the owner's open Studio panel and library
+		// hear of it now, mid-turn, not when the turn ends.
 		Index: func(ctx context.Context, documentID int64, userID string) error {
+			deps.Changes.Publish(ctx, userID, livechange.Change{Kind: livechange.Outputs},
+				livechange.Change{Kind: livechange.Documents, ID: documentID})
 			_, err := deps.Queue.Enqueue(ctx, storeddocuments.ReindexOf(documentID, celeryqueue.LogContextFor(TurnPath, "", userID)))
 			return err
 		},
@@ -474,7 +486,7 @@ func NewService(ctx context.Context, settings Settings, deps Deps) (*Service, fu
 		Titler:  ModelTitler{},
 		Timing:  Timing{MaxTurn: settings.MaxTurn, KeepAlive: keepAliveEvery, SaveEvery: saveEvery, Title: titleTimeout, Stall: stallTimeout},
 		Summary: SummaryLimits{Above: summariseAbove, Keep: summaryKeep, ResultChars: summaryResultChars},
-		Logger:  deps.Logger, Now: time.Now, Lifetime: deps.Lifetime,
+		Changes: deps.Changes, Logger: deps.Logger, Now: time.Now, Lifetime: deps.Lifetime,
 	}
 	if err := service.Check(); err != nil {
 		closeAll()

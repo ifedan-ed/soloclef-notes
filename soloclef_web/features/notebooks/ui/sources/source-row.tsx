@@ -49,7 +49,11 @@ export function SourceRow({
 	// mounted so that closing it can animate.
 	const [reindex, setReindex] = useState<"never" | "open" | "closed">("never");
 	return (
-		<div className="group flex min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-accent">
+		<div
+			className="group flex min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-accent"
+			data-testid="notebook-source"
+			data-status={source.status ?? undefined}
+		>
 			<span className="flex size-5 shrink-0 items-center justify-center text-muted-foreground">
 				{source.kind === "folder" ? (
 					<Folder className="size-4" />

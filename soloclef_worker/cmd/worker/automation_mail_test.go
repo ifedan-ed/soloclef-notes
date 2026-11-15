@@ -23,6 +23,8 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/automationrun"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/testdatabase"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/workerconfig"
+
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange/livechangetest"
 )
 
 // nothingPublished is a notification step's queue that takes every message.
@@ -83,7 +85,7 @@ func TestAnAutomationRunReadsAndDraftsStalwartMail(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer files.Close()
-	notifier := &notify.Notifier{Database: pool, Publisher: nothingPublished{}, Log: log}
+	notifier := &notify.Notifier{Database: pool, Publisher: nothingPublished{}, Changes: &livechangetest.Recorder{}, Log: log}
 	tools, closeTools, err := automationTools(settings, cfg, pool, files, &http.Client{}, own, notifier, log)
 	if err != nil {
 		t.Fatalf("the run's tools: %v", err)

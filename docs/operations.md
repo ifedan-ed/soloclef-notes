@@ -84,6 +84,41 @@ dc up -d proxy
 
 Tabs that were open then reload once when they next load code.
 
+### Live updates
+
+Each open tab, and the phone app while it is in front, holds one connection
+to the API at `/api/v1/events`. The API sends a short notice there whenever
+something the account can see changes, and the page reads what it shows
+again. An update ends these connections; each tab reconnects within a few
+seconds and reads its screen again, so nothing is missed. A tab that was
+asleep or offline does the same when it comes back.
+
+The connections need nothing from you beyond the proxy settings in
+[Install](self-hosting.md#4-put-https-in-front). The API and the worker must
+use the same Valkey, as the Compose file sets up.
+
+### Updating from a version with zero-cache
+
+Versions before live updates moved into the API ran a `zero-cache` service,
+with Postgres started at `wal_level=logical`. The update removes both, and
+the order matters: Postgres does not start without `wal_level=logical` while
+zero-cache's replication slot exists, and the migration that removes the
+slot must run while Postgres still has it.
+
+```bash
+git pull
+dc build
+docker stop soloclefgo-zero-cache-1
+dc run --rm --no-deps migrate
+dc up -d --build --remove-orphans
+docker volume rm soloclefgo_zero_data
+```
+
+`dc run --no-deps` migrates against the Postgres that is running, without
+recreating it. The `up` then recreates Postgres with its default settings,
+starts everything else and removes the zero-cache container. Delete the line
+`SOLOCLEF_GO_ZERO_SYNC_WORKERS` from `docker/.env.go`; nothing reads it.
+
 ## Phone apps already installed
 
 A phone keeps the version of the app it installed until its owner updates

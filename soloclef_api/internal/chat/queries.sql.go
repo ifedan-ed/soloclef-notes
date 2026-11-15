@@ -740,7 +740,7 @@ type ThreadForTurnParams struct {
 	UserID   string
 }
 
-// The rows of a chat turn. The web app, the phone app and Zero read
+// The rows of a chat turn. The web app and the phone app read
 // new_chat_threads, new_chat_messages and chat_session_state as they are, so
 // the shapes written here are a contract with them, not a choice.
 //

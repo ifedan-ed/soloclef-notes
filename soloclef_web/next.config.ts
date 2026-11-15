@@ -24,7 +24,6 @@ if (process.env.NODE_ENV === "production" && !process.env.NEXT_PUBLIC_SITE_URL?.
 //   - the security headers, the old-address redirects, the signed-in "/"
 //     redirect, the address of a dynamic page (/dashboard/notebooks/<id>,
 //     /public/<token>, ...) and the cache headers: Caddy;
-//   - the Zero query route zero-cache calls: the Go API (internal/zerosync);
 //   - the /api/v1, /auth and /verify-token pass-throughs: Caddy already sends
 //     those paths to the API directly;
 //   - what a page read on the server: the cookies and the support address

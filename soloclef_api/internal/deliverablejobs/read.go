@@ -23,10 +23,9 @@ const ReadPath = "/api/v1/deliverable-jobs/{job_id}"
 // it: kind, title, status, phase, progress, failure and the artifact it
 // made.
 //
-// Why it exists beside Zero: the web reads the job through Zero's
-// `deliverableJobs` query, but the phone app also runs on polling (a build
-// with Zero off, or a phone whose zero-cache refused it), and polling has
-// nothing to read but this. The Python tier answered it under a workspace;
+// The web and the phone read the job card here, again each time the live
+// stream says an output changed (internal/livechanges). The Python tier
+// answered it under a workspace;
 // a job is the account's now, so the path has no workspace and the lookup
 // names the owner: another account's job is the same 404 as one never made.
 type ReadRoute struct {

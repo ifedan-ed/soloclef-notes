@@ -17,6 +17,7 @@ import (
 
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/inflight"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/deliverables"
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange"
 	"git.danvics.com/danvics/soloclef/soloclef_notify/notify"
 )
 
@@ -115,6 +116,10 @@ type RunnerParts struct {
 	// Model unset: each run sets its account's.
 	Specialist deliverables.Specialist
 	Notifier   Notifier
+	// Changes tells the owner's open Studio panels that a job's row moved
+	// (claimed, waiting for a sandbox, given back, ended), which is what
+	// moves its card without a reload.
+	Changes livechange.Publisher
 	// Concurrent is how many runs this process makes at once; the rest wait
 	// as `queued`, for this process or another.
 	Concurrent int
@@ -143,6 +148,7 @@ type Runner struct {
 	pool       *pgxpool.Pool
 	models     Models
 	notifier   Notifier
+	changes    livechange.Publisher
 	specialist deliverables.Specialist
 	logger     *slog.Logger
 	accepting  context.Context
@@ -174,6 +180,8 @@ func NewRunner(parts RunnerParts) (*Runner, error) {
 		return nil, errors.New("studiogenerate: the models are not set")
 	case parts.Notifier == nil:
 		return nil, errors.New("studiogenerate: the notifier is not set")
+	case parts.Changes == nil:
+		return nil, errors.New("studiogenerate: the live-change publisher is not set")
 	case parts.Specialist.Store == nil:
 		return nil, errors.New("studiogenerate: the specialist has no checkpoint store")
 	case parts.Concurrent < 1:
@@ -184,7 +192,7 @@ func NewRunner(parts RunnerParts) (*Runner, error) {
 		return nil, errors.New("studiogenerate: the logger is not set")
 	}
 	return &Runner{
-		pool: parts.Pool, models: parts.Models, notifier: parts.Notifier, specialist: parts.Specialist,
+		pool: parts.Pool, models: parts.Models, notifier: parts.Notifier, changes: parts.Changes, specialist: parts.Specialist,
 		logger: parts.Logger, accepting: parts.Accepting, lifetime: parts.Lifetime,
 		now:       func() time.Time { return time.Now().UTC() },
 		beatEvery: heartbeatEvery, sweepEvery: sweepEvery,
@@ -263,6 +271,12 @@ func (r *Runner) run(job Job) {
 		}
 	}
 	r.finish(job, end)
+}
+
+// changed tells the owner's open clients that a job's row moved. Not on
+// its heartbeat: a beat changes nothing a card shows.
+func (r *Runner) changed(ctx context.Context, userID string) {
+	r.changes.Publish(ctx, userID, livechange.Change{Kind: livechange.Outputs})
 }
 
 // notify tells the owner a run is ready or failed; a cancel is not told.
@@ -436,6 +450,7 @@ func (r *Runner) finish(job Job, end ending) {
 	// Only an ending this attempt wrote is reported: a job cancelled
 	// outright meanwhile keeps its cancellation, and nobody needs telling.
 	if written == 1 {
+		r.changed(closing, job.UserID)
 		r.notify(closing, job, end)
 	}
 	level := slog.LevelInfo

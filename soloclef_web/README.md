@@ -1,8 +1,8 @@
 # Soloclef web
 
-The Next.js web app (App Router, `pnpm`). It talks to the Go API and to
-zero-cache for live updates; in a deployment both sit behind the same Caddy
-(`docker/docker-compose.go.yml`).
+The Next.js web app (App Router, `pnpm`). It talks to the Go API, which also
+sends the live updates (`GET /api/v1/events`); in a deployment Caddy serves
+the app's files and the API on one address (`docker/docker-compose.go.yml`).
 
 ## You need
 
@@ -16,14 +16,12 @@ zero-cache for live updates; in a deployment both sit behind the same Caddy
 cp .env.example .env
 ```
 
-In `.env`, point at the stack. Its Caddy serves the API and zero-cache on
-the one address `SOLOCLEF_GO_SITE_PUBLISH` publishes (`127.0.0.1:18470` in
+In `.env`, point at the stack. Its Caddy serves the API on the one address `SOLOCLEF_GO_SITE_PUBLISH` publishes (`127.0.0.1:18470` in
 `docker/.env.go.example`):
 
 ```bash
 NEXT_PUBLIC_FASTAPI_BACKEND_URL=http://127.0.0.1:18470
 SOLOCLEF_BACKEND_INTERNAL_URL=http://127.0.0.1:18470
-NEXT_PUBLIC_ZERO_CACHE_URL=http://127.0.0.1:18470/zero
 DEPLOYMENT_MODE=self-hosted
 ```
 

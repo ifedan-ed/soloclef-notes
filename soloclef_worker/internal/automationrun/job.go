@@ -96,6 +96,8 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_celery/celery"
 	"git.danvics.com/danvics/soloclef/soloclef_celery/produce"
 	"git.danvics.com/danvics/soloclef/soloclef_notify/notify"
+
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange"
 )
 
 // Task is the message this job reads.
@@ -241,6 +243,9 @@ type Job struct {
 	// Notifier is told of every ending this job writes; an ending written
 	// from elsewhere first (a cancel) is not this job's to report.
 	Notifier Notifier
+	// Changes tells the owner's open automation page that a run started
+	// or ended, and their notebook that a note it filed arrived.
+	Changes livechange.Publisher
 	// ReleaseSandbox removes the run's thread's sandbox when the run ends
 	// (deliverables.NewSpecialist's forget). The thread is the run's own
 	// and nothing resumes it, so its place in the account's sandbox limit
@@ -256,7 +261,7 @@ type Job struct {
 func (j *Job) Check() error {
 	switch {
 	case j.Rows == nil || j.Assembler == nil || j.Store == nil || j.Publisher == nil || j.Indexer == nil || j.Notifier == nil ||
-		j.ReleaseSandbox == nil || j.Log == nil || j.Now == nil:
+		j.Changes == nil || j.ReleaseSandbox == nil || j.Log == nil || j.Now == nil:
 		return errors.New("automationrun: a dependency is missing")
 	case j.Timing.StatusInterval <= 0 || j.Timing.RetryStep <= 0 || j.Timing.MaxPauses < 1 || j.Timing.ResultChars < 1:
 		return errors.New("automationrun: the timing is incomplete")
@@ -283,6 +288,7 @@ func (j *Job) Run(ctx context.Context, msg *celery.Message) error {
 		j.Log.Info("an automation run was not started", "run", runID, "reason", claim.String())
 		return nil
 	}
+	j.Changes.Publish(ctx, run.UserID, livechange.Change{Kind: livechange.Automations, ID: run.AutomationID})
 	ending := j.execute(ctx, run)
 
 	closing, cancel := context.WithTimeout(context.WithoutCancel(ctx), closingWrite)
@@ -296,6 +302,11 @@ func (j *Job) Run(ctx context.Context, msg *celery.Message) error {
 		return fmt.Errorf("automationrun: writing run %d's ending: %w", run.ID, err)
 	}
 	j.Log.Info("an automation run ended", "run", run.ID, "automation", run.AutomationID, "status", ending.Status, "kept", written)
+	// Its steps ran as the owner's own chat turns, which may have made
+	// documents and Studio outputs: those lists are told as well.
+	j.Changes.Publish(closing, run.UserID,
+		livechange.Change{Kind: livechange.Automations, ID: run.AutomationID},
+		livechange.Change{Kind: livechange.Documents}, livechange.Change{Kind: livechange.Outputs})
 	if written {
 		// A notification that cannot be written is logged; the run's
 		// ending, and its email, stand.
@@ -820,6 +831,9 @@ func (j *Job) file(ctx context.Context, run Run, notebookID int64, output *StepO
 		return
 	}
 	output.SavedNote = &SavedNote{DocumentID: id, NotebookID: notebookID, Title: title}
+	j.Changes.Publish(saving, run.UserID,
+		livechange.Change{Kind: livechange.Notes, ID: id}, livechange.Change{Kind: livechange.Documents, ID: id},
+		livechange.Change{Kind: livechange.Notebooks, ID: notebookID})
 	// After the commit: the indexer reads the row the moment it takes the
 	// message. A note whose job was not queued is saved and readable; it
 	// is found by search once something else queues it, so it is logged.

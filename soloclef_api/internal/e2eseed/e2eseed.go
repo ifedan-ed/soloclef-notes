@@ -59,6 +59,8 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/humawriter"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/requestcontext"
 	filestore "git.danvics.com/danvics/soloclef/soloclef_filestore"
+
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange"
 )
 
 // The paths.
@@ -99,8 +101,13 @@ type Routes struct {
 	// Outbox is where this stack's mail goes instead of out (cmd/api hands
 	// the same one to the sign-in routes as their mailer).
 	Outbox *Outbox
-	Errors errorenvelope.Writer
-	Logger *slog.Logger
+	// Changes is the live-change bus: the Studio seeds stand in for the
+	// runner, which tells the owner's open Studio panel when an output
+	// moves, so they tell it too, or a test of live updates would test a
+	// path the product never takes.
+	Changes livechange.Publisher
+	Errors  errorenvelope.Writer
+	Logger  *slog.Logger
 	// Now is nil for the system clock; only a test names another.
 	Now func() time.Time
 }
@@ -119,6 +126,8 @@ func (r Routes) Check() error {
 		return errors.New("e2eseed: nothing to mint a session token with")
 	case r.Outbox == nil:
 		return errors.New("e2eseed: no outbox for the stack's mail")
+	case r.Changes == nil:
+		return errors.New("e2eseed: no live-change publisher")
 	case r.Logger == nil:
 		return errors.New("e2eseed: no logger")
 	}

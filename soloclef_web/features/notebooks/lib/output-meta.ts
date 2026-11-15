@@ -10,8 +10,3 @@ export function formatDuration(totalSeconds: number): string {
 export function isInFlight(status: string): boolean {
 	return status === "queued" || status === "running";
 }
-
-/** Poll quickly while something is generating, not at all otherwise. */
-export function outputsRefetchInterval(statuses: string[]): number | false {
-	return statuses.some(isInFlight) ? 4000 : false;
-}

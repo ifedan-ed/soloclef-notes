@@ -25,6 +25,8 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/inflight"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/assembly"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/cite"
+
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange"
 )
 
 // Timing is how a turn is paced. Every field is required: each is a
@@ -94,6 +96,11 @@ type Service struct {
 	Parts Parts
 	// Summary says when a long thread is summarised (summary.go).
 	Summary SummaryLimits
+	// Changes tells the owner's other open tabs and the phone that a thread
+	// moved: a turn started (the "AI is responding" flag), its answer so
+	// far was saved, it ended, or the thread was named. They reload the
+	// thread over REST; the tab streaming the turn needs none of it.
+	Changes livechange.Publisher
 	Logger  *slog.Logger
 	Now     func() time.Time
 
@@ -132,6 +139,8 @@ func (s *Service) Check() error {
 		return errors.New("chat: Models is not set")
 	case s.Titler == nil:
 		return errors.New("chat: Titler is not set")
+	case s.Changes == nil:
+		return errors.New("chat: Changes is not set")
 	case s.Logger == nil:
 		return errors.New("chat: Logger is not set")
 	case s.Now == nil:
@@ -334,7 +343,7 @@ func (s *Service) finish(ctx context.Context, j job, writer *uistream.Writer, bu
 	}()
 	go func() {
 		defer helpers.Done()
-		s.saveProgress(beside, j.opened.AssistantMessageID, builder, steps)
+		s.saveProgress(beside, j.turn.UserID, j.turn.ThreadID, j.opened.AssistantMessageID, builder, steps)
 	}()
 	// The title needs only the question, so it is asked for now and is
 	// usually ready long before the answer is.
@@ -429,6 +438,10 @@ func (s *Service) finish(ctx context.Context, j job, writer *uistream.Writer, bu
 		closed.Content = content
 		err = s.Rows.CloseTurn(closing, closed)
 	}
+	if err == nil {
+		// Saved and no longer responding: the flag is down everywhere.
+		s.threadChanged(closing, j.turn.UserID, j.turn.ThreadID)
+	}
 	if err != nil {
 		// The answer streamed but is not saved: the worst outcome there
 		// is, because a reload loses it. It is the stream's error too.
@@ -445,6 +458,7 @@ func (s *Service) finish(ctx context.Context, j job, writer *uistream.Writer, bu
 		if err := s.Rows.SetTitle(closing, j.turn.UserID, j.turn.ThreadID, title); err != nil {
 			s.Logger.WarnContext(closing, "a thread's title could not be saved", "thread_id", j.turn.ThreadID, "error", err.Error())
 		} else {
+			s.threadChanged(closing, j.turn.UserID, j.turn.ThreadID)
 			writer.Data("thread-title-update", struct {
 				ThreadID int64  `json:"threadId"`
 				Title    string `json:"title"`
@@ -504,7 +518,9 @@ func (s *Service) fillPausedCards(ctx context.Context, j job, builder *parts.Bui
 			filled, lines, err = steps.fillActivities(filled)
 		}
 		if err == nil && (cards || lines) {
-			err = s.Rows.StoreContent(ctx, j.pausedMessage, filled)
+			if err = s.Rows.StoreContent(ctx, j.pausedMessage, filled); err == nil {
+				s.threadChanged(ctx, j.turn.UserID, j.turn.ThreadID)
+			}
 		}
 	}
 	if err != nil {
@@ -529,7 +545,7 @@ const closeTimeout = 30 * time.Second
 // saveProgress writes the answer so far every SaveEvery while it changes,
 // so a page that reloads in the middle of an answer shows it up to a few
 // seconds ago instead of an empty bubble.
-func (s *Service) saveProgress(ctx context.Context, messageID int64, builder *parts.Builder, steps *journal) {
+func (s *Service) saveProgress(ctx context.Context, userID string, threadID, messageID int64, builder *parts.Builder, steps *journal) {
 	ticker := time.NewTicker(s.Timing.SaveEvery)
 	defer ticker.Stop()
 	var saved uint64
@@ -559,7 +575,15 @@ func (s *Service) saveProgress(ctx context.Context, messageID int64, builder *pa
 			continue
 		}
 		saved = version
+		// Another of the owner's screens following this turn reads the
+		// answer so far again: as often as it is saved, and no oftener.
+		s.threadChanged(ctx, userID, threadID)
 	}
+}
+
+// threadChanged tells the owner's open clients that a thread moved.
+func (s *Service) threadChanged(ctx context.Context, userID string, threadID int64) {
+	s.Changes.Publish(ctx, userID, livechange.Change{Kind: livechange.Chats, ID: threadID})
 }
 
 // emptyAnswer is an answer's content before anything has streamed.

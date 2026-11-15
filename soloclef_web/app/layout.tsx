@@ -7,7 +7,6 @@ import { ClientErrorReporter } from "@/components/providers/ClientErrorReporter"
 import { GlobalLoadingProvider } from "@/components/providers/GlobalLoadingProvider";
 import { I18nProvider } from "@/components/providers/I18nProvider";
 import { PostHogProvider } from "@/components/providers/PostHogProvider";
-import { ZeroProvider } from "@/components/providers/ZeroProvider";
 import {
 	OrganizationJsonLd,
 	SoftwareApplicationJsonLd,
@@ -125,9 +124,7 @@ export default function RootLayout({
 									<ReactQueryClientProvider>
 										<AuthCutoverPurge />
 										<ClientErrorReporter />
-										<ZeroProvider>
-											<GlobalLoadingProvider>{children}</GlobalLoadingProvider>
-										</ZeroProvider>
+										<GlobalLoadingProvider>{children}</GlobalLoadingProvider>
 									</ReactQueryClientProvider>
 									<Toaster />
 								</RootProvider>

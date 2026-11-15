@@ -18,6 +18,8 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_studio/artifactsave"
 
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/testdatabase"
+
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange/livechangetest"
 )
 
 // queuedVideo writes a job as the API tier's chat does: queued, under the
@@ -337,7 +339,7 @@ func TestASwitchedOffRenderRefusesAtOnce(t *testing.T) {
 	testdatabase.Exec(t, pool, `UPDATE deliverable_jobs SET status = 'cancelled' WHERE id = $1`, cancelled.ID)
 	notified := &recordingNotifier{}
 	for _, id := range []int64{queued.ID, cancelled.ID} {
-		if err := (Refusal{Pool: pool, Notifier: notified}).Run(ctx, &celery.Message{Task: Task, Kwargs: map[string]any{"job_id": float64(id)}}); err != nil {
+		if err := (Refusal{Pool: pool, Notifier: notified, Changes: &livechangetest.Recorder{}}).Run(ctx, &celery.Message{Task: Task, Kwargs: map[string]any{"job_id": float64(id)}}); err != nil {
 			t.Fatal(err)
 		}
 	}

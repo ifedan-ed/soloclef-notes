@@ -1,5 +1,6 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, Loader2, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -35,9 +36,10 @@ import {
 	speakerRole,
 	type VoiceOption,
 } from "@/contracts/types/podcast.types";
-import type { LivePodcast } from "@/hooks/use-podcast-live";
+import { type LivePodcast, storePodcastDetail } from "@/hooks/use-podcast-live";
 import { podcastsApiService } from "@/lib/apis/podcasts-api.service";
 import { AppError } from "@/lib/error";
+import { cacheKeys } from "@/lib/query-client/cache-keys";
 import { VoicePreviewButton } from "./voice-preview-button";
 
 // A "*" voice speaks whatever language the text is in (mirrors the backend
@@ -62,10 +64,11 @@ interface BriefReviewProps {
  * The brief gate, rendered inline in the chat card: a pre-filled
  * near-confirmation. One-click approve is the easy path; every field stays
  * overridable and saves through the version-guarded PATCH so concurrent edits
- * surface instead of clobbering. Approval needs no local follow-up — the
- * pushed status flips the card to its drafting state.
+ * surface instead of clobbering. Approval answers with the podcast in its
+ * drafting state, which goes straight into the cache and flips the card.
  */
 export function BriefReview({ podcast, spec }: BriefReviewProps) {
+	const queryClient = useQueryClient();
 	const [draft, setDraft] = useState<PodcastSpec>(spec);
 	const [durationUnit, setDurationUnit] = useState<DurationUnit>(() =>
 		defaultDurationUnit(spec.duration.max_seconds)
@@ -187,11 +190,16 @@ export function BriefReview({ podcast, spec }: BriefReviewProps) {
 	const saveIfDirty = async (): Promise<boolean> => {
 		if (!isDirty) return true;
 		try {
-			await podcastsApiService.updateSpec(podcast.id, draft, podcast.specVersion);
+			storePodcastDetail(
+				queryClient,
+				await podcastsApiService.updateSpec(podcast.id, draft, podcast.specVersion)
+			);
 			return true;
 		} catch (error) {
 			if (error instanceof AppError && error.status === 409) {
 				toast.warning("The brief changed elsewhere — reloaded the latest version.");
+				// The stream may not have brought the other edit yet: read it now.
+				void queryClient.invalidateQueries({ queryKey: cacheKeys.podcasts.detail(podcast.id) });
 				setDraft(spec);
 			} else {
 				toast.error(error instanceof Error ? error.message : "Failed to save the brief");
@@ -204,7 +212,7 @@ export function BriefReview({ podcast, spec }: BriefReviewProps) {
 		setIsSubmitting(true);
 		try {
 			if (!(await saveIfDirty())) return;
-			await podcastsApiService.approveBrief(podcast.id);
+			storePodcastDetail(queryClient, await podcastsApiService.approveBrief(podcast.id));
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : "Failed to approve the brief");
 		} finally {

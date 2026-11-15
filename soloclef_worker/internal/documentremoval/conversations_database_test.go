@@ -18,13 +18,15 @@ func TestAnErasedAccountsConversationsGo(t *testing.T) {
 	stranger := testdatabase.Account(t, f.pool)
 	// The ids are chosen so the stranger's begin with the owner's: "chat-
 	// 9300001" must not take "chat-93000010" with it.
-	testdatabase.Exec(t, f.pool, `
-		INSERT INTO new_chat_threads (id, user_id, title) VALUES (9300001, $1::uuid, 'mine'), (93000010, $2::uuid, 'theirs');
-		INSERT INTO deliverable_jobs (id, user_id, kind, title, tool_call_id, attempt_count)
-		VALUES (9300002, $1::uuid, 'artifact', 'mine', 'm', 2), (93000020, $2::uuid, 'artifact', 'theirs', 't', 1);
-		INSERT INTO automations (id, user_id, name, definition) VALUES (9300003, $1::uuid, 'mine', '{}'), (93000030, $2::uuid, 'theirs', '{}');
-		INSERT INTO automation_runs (id, automation_id, definition_snapshot) VALUES (9300004, 9300003, '{}'), (93000040, 93000030, '{}')`,
+	// One statement per call: a statement with parameters is prepared, and
+	// Postgres prepares one command at a time.
+	testdatabase.Exec(t, f.pool, `INSERT INTO new_chat_threads (id, user_id, title) VALUES (9300001, $1::uuid, 'mine'), (93000010, $2::uuid, 'theirs')`,
 		owner, stranger)
+	testdatabase.Exec(t, f.pool, `INSERT INTO deliverable_jobs (id, user_id, kind, title, tool_call_id, attempt_count)
+		VALUES (9300002, $1::uuid, 'artifact', 'mine', 'm', 2), (93000020, $2::uuid, 'artifact', 'theirs', 't', 1)`, owner, stranger)
+	testdatabase.Exec(t, f.pool, `INSERT INTO automations (id, user_id, name, definition) VALUES (9300003, $1::uuid, 'mine', '{}'), (93000030, $2::uuid, 'theirs', '{}')`,
+		owner, stranger)
+	testdatabase.Exec(t, f.pool, `INSERT INTO automation_runs (id, automation_id, definition_snapshot) VALUES (9300004, 9300003, '{}'), (93000040, 93000030, '{}')`)
 	mine := []string{
 		"chat-9300001", "chat-9300001/call-1", "chat-9300001/call-1/call-2", "chat-9300001.turn",
 		"studio-job-9300002-attempt-1", "studio-job-9300002-attempt-2", "studio-job-9300002-attempt-2/call-1",

@@ -13,11 +13,13 @@ const NO_STAGES: ReadonlyMap<number, DocumentStage> = new Map();
  * What the indexer is doing with each source that is still being indexed.
  *
  * The notebook's source list says only that a source is not ready. The
- * status poll says which step it is on, so a slow upload shows whether it
+ * status read says which step it is on, so a slow upload shows whether it
  * is waiting on the parser or on the embeddings. Only the documents being
- * indexed are asked about, and nothing is asked once none is.
+ * indexed are asked about, and nothing is asked once none is. The server
+ * reports every stage write on the change stream (`documents`), whose
+ * refresh of the "documents" keys reads this again: no polling.
  *
- * The stage is a courtesy beside the spinner. If the poll fails the row
+ * The stage is a courtesy beside the spinner. If the read fails the row
  * keeps its spinner and shows no stage; it does not show an error for
  * something that is not the upload failing.
  */
@@ -36,9 +38,7 @@ export function useSourceStages(
 				).items
 			),
 		enabled: documentIds.length > 0,
-		// Faster than the source list's own five seconds: a stage can pass in
-		// two, and a label that skips from "reading" to done explains nothing.
-		refetchInterval: 2000,
+		meta: { suppressGlobalErrorToast: true },
 		// A finished document's last stage is not kept around for the next one.
 		gcTime: 0,
 	});

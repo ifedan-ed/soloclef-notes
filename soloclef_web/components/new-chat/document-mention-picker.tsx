@@ -1,6 +1,5 @@
 "use client";
 
-import { useQuery as useZeroQuery } from "@rocicorp/zero/react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useAtomValue } from "jotai";
 import { ChevronLeft, ChevronRight, Files, Unplug } from "lucide-react";
@@ -42,7 +41,7 @@ import type { Document, SearchDocumentTitlesResponse } from "@/contracts/types/d
 import { useArtifactsByDocument } from "@/features/artifacts/hooks/use-artifacts-by-document";
 import { documentsApiService } from "@/lib/apis/documents-api.service";
 import { getMentionDocKey } from "@/lib/chat/mention-doc-key";
-import { queries } from "@/zero/queries";
+import { cacheKeys } from "@/lib/query-client/cache-keys";
 
 export type DocumentMentionPickerRef = ComposerSuggestionNavigatorRef;
 
@@ -171,7 +170,11 @@ export const DocumentMentionPicker = forwardRef<
 	const [currentPage, setCurrentPage] = useState(0);
 	const [hasMore, setHasMore] = useState(false);
 	const [isLoadingMore, setIsLoadingMore] = useState(false);
-	const [zeroFolders] = useZeroQuery(queries.folders.mine());
+	// The folder tree, read again when the change stream reports `folders`.
+	const { data: folders } = useQuery({
+		queryKey: cacheKeys.folders.all(),
+		queryFn: () => documentsApiService.getFolders(),
+	});
 	const { data: connectors = [], isLoading: isConnectorsLoading } = useAtomValue(connectorsAtom);
 	const activeConnectors = useMemo(() => connectors.filter(isConnectorActive), [connectors]);
 	const artifactsByDocument = useArtifactsByDocument();
@@ -265,12 +268,12 @@ export const DocumentMentionPicker = forwardRef<
 	}, [accumulatedDocuments, deferredSearch, isSingleCharSearch]);
 
 	const folderMentions = useMemo(() => {
-		const all = (zeroFolders ?? []).map((f) => makeFolderMention({ id: f.id, title: f.name }));
+		const all = (folders ?? []).map((f) => makeFolderMention({ id: f.id, title: f.name }));
 		if (!hasSearch) return all;
 		const needle = (isSingleCharSearch ? deferredSearch : debouncedSearch).trim().toLowerCase();
 		if (!needle) return all;
 		return all.filter((f) => f.title.toLowerCase().includes(needle));
-	}, [zeroFolders, debouncedSearch, deferredSearch, isSingleCharSearch, hasSearch]);
+	}, [folders, debouncedSearch, deferredSearch, isSingleCharSearch, hasSearch]);
 
 	const connectorMentions = useMemo(
 		() => activeConnectors.map(makeConnectorMention),

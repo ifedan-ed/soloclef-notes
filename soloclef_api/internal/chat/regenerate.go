@@ -303,6 +303,9 @@ func (r Routes) regenerate(ctx huma.Context) {
 		answer.fail("could not replace the turn's messages", err)
 		return
 	}
+	// The old answer is gone and the new turn is running.
+	s.threadChanged(turnCtx, thread.UserID, thread.ID)
+
 	out, flush, err := r.openStream(response)
 	if err != nil {
 		answer.fail("could not pace the stream", err)

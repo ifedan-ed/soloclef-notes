@@ -173,7 +173,7 @@ test.describe("A note on the Notes page", () => {
 
 		const editor = page.locator('[data-slate-editor="true"]');
 		await expect(editor).toContainText("The correlation was moderate and positive");
-		// Let any late query, Zero push or autosave land.
+		// Let any late query, live-change refresh or autosave land.
 		await page.waitForTimeout(2500);
 		const log = await frames(page);
 		await testInfo.attach("frames.json", { body: JSON.stringify(log, null, 1) });

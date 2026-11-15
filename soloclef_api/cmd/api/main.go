@@ -20,6 +20,7 @@ import (
 	"syscall"
 	"time"
 
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange"
 	"git.danvics.com/danvics/soloclef/soloclef_schema/schemaversion"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -68,6 +69,7 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/instructionslint"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/jmapconnect"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/knowledgebase"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/livechanges"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/mailaccounts"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/mailconfirm"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/markdownmemory"
@@ -112,7 +114,6 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/supportcontact"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/uploadvision"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/websearchconnect"
-	"git.danvics.com/danvics/soloclef/soloclef_api/internal/zerosync"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/academic"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/addsources"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/assembly"
@@ -271,7 +272,20 @@ func serve(ctx context.Context, settings config.Config, parserEnv func(string) s
 		return err
 	}
 	defer queue.Close()
-	notices, err := notifier(pool, queue, logger)
+	// The live-change bus (internal/livechanges): every write a person can
+	// see is told to their open web tabs and app over it, and this process
+	// streams what it hears to the ones connected here. It is the Valkey the
+	// limiter counts in and connects on first use, as the queue does.
+	liveValkey, err := livechanges.NewValkey(settings.RedisURL)
+	if err != nil {
+		return err
+	}
+	defer liveValkey.Close()
+	liveChanges := livechange.Bus{Send: liveValkey.Send, Logger: logger}
+	liveHub := livechanges.NewHub(nil)
+	go liveValkey.Listen(ctx, liveHub, logger)
+
+	notices, err := notifier(pool, queue, liveChanges, logger)
 	if err != nil {
 		return err
 	}
@@ -616,7 +630,7 @@ func serve(ctx context.Context, settings config.Config, parserEnv func(string) s
 		seedOutbox := &e2eseed.Outbox{}
 		mail = seedOutbox
 		seeds := e2eseed.Routes{
-			Pool: pool, Files: seedFiles, Secret: settings.E2ESeedSecret, Outbox: seedOutbox,
+			Pool: pool, Files: seedFiles, Secret: settings.E2ESeedSecret, Outbox: seedOutbox, Changes: liveChanges,
 			MintSession: func(ctx context.Context, userID string, now time.Time) (string, error) {
 				return signin.MintSession(ctx, pool, settings.SessionSecret, userID, now)
 			},
@@ -679,6 +693,10 @@ func serve(ctx context.Context, settings config.Config, parserEnv func(string) s
 	}
 	defer presenceMarks.Close()
 	presencebeat.Route{Marks: presenceMarks, Errors: errors, Logger: logger}.Register(api)
+	// The stream that tells a signed-in tab or app what to read again
+	// (internal/livechanges).
+	livechanges.Route{Hub: liveHub, Lifetime: ctx, Errors: errors, Logger: logger,
+		Stall: writeTimeout, Heartbeat: livechanges.Heartbeat, MaxLife: livechanges.MaxLife}.Register(api)
 
 	// Notes: ten routes (internal/notes). A note is a document, so a save
 	// queues its indexing on the queue an upload's goes through (delayed, so
@@ -1244,7 +1262,7 @@ func serve(ctx context.Context, settings config.Config, parserEnv func(string) s
 			importRows, importFiles,
 			// The same queue and marker an upload's index job goes through.
 			indexqueue.Indexing{Queue: queue, Marker: indexqueue.PostgresMarker{Pool: pool}, Logger: logger},
-			connect, logger)
+			connect, liveChanges, logger)
 		if err != nil {
 			return err
 		}
@@ -1291,7 +1309,8 @@ func serve(ctx context.Context, settings config.Config, parserEnv func(string) s
 	studiooutputs.Routes{Pool: pool, Removal: removal, Errors: errors, Logger: logger}.Register(api)
 	// The stop button on a deliverable being made (internal/deliverablejobs).
 	deliverablejobs.CancelRoute{Database: pool, Errors: errors, Logger: logger}.Register(api)
-	// The job card's read, which the phone polls when it is not on Zero.
+	// The job card's read, which the web and the phone read again when the
+	// live stream says an output moved.
 	deliverablejobs.ReadRoute{Database: pool, Errors: errors, Logger: logger}.Register(api)
 	// And its Retry button: the job's next attempt, queued and published as
 	// the chat first published it, so the worker is told in one spelling.
@@ -1444,7 +1463,7 @@ func serve(ctx context.Context, settings config.Config, parserEnv func(string) s
 	addSources := func(pages *pagereader.Reader, papers *academic.Sources) (addsources.Adder, error) {
 		reads, err := notebookresearch.NewReads(serving, researchConcurrentReads, pool, pages, papers,
 			indexqueue.Indexing{Queue: queue, Marker: indexqueue.PostgresMarker{Pool: pool}, Logger: logger},
-			notebookresearch.Originals{Files: researchFiles, MaxBytes: settings.UploadMaxFileBytes}, logger)
+			notebookresearch.Originals{Files: researchFiles, MaxBytes: settings.UploadMaxFileBytes}, liveChanges, logger)
 		if err != nil {
 			return nil, err
 		}
@@ -1504,9 +1523,12 @@ func serve(ctx context.Context, settings config.Config, parserEnv func(string) s
 			MaxPerAccount:  settings.SandboxMaxPerAccount,
 		},
 	}, chat.Deps{
-		Pool:  pool,
-		Files: chatFiles,
-		Queue: queue,
+		// A turn tells the owner's other open tabs and the phone that its
+		// thread moved (internal/livechanges).
+		Changes: liveChanges,
+		Pool:    pool,
+		Files:   chatFiles,
+		Queue:   queue,
 		// No Timeout, on purpose, and NewService refuses a client that has
 		// one: an answer streams for longer than any whole-request limit
 		// that would suit a search. Each call is bounded by its turn's
@@ -1654,7 +1676,7 @@ func serve(ctx context.Context, settings config.Config, parserEnv func(string) s
 	// the jobs of a process that died, at start and every minute.
 	studioRunner, err := studiogenerate.NewRunner(studiogenerate.RunnerParts{
 		Pool: pool, Models: chatService.Parts.Models, Specialist: chatService.Parts.Deliverables,
-		Notifier: notices, Concurrent: studioConcurrentRuns,
+		Notifier: notices, Changes: liveChanges, Concurrent: studioConcurrentRuns,
 		Accepting: ctx, Lifetime: chatLifetime, Logger: logger,
 	})
 	if err != nil {
@@ -1900,13 +1922,19 @@ func serve(ctx context.Context, settings config.Config, parserEnv func(string) s
 	// knows who sent it, and the probe is exempt there too (@limiter.exempt).
 	// Inside the gate, because the event is only recorded for a caller the
 	// gate resolved and found gated.
-	answer := gate.Wrap(api.Adapter())
+	//
+	// Inside the gate too: each successful write tells the caller's open
+	// tabs and app what it changed, which needs the caller
+	// (internal/livechanges, Writes).
+	routed := http.Handler(api.Adapter())
 	if events != nil {
-		answer = gate.Wrap(gatedanalytics.Middleware{
+		routed = gatedanalytics.Middleware{
 			Sink:     &gatedanalytics.PostHogSink{Queue: events},
 			Template: gatedanalytics.RouteTemplates(served...),
-		}.Wrap(api.Adapter()))
+		}.Wrap(routed)
 	}
+	routed = livechanges.Writes{Publisher: liveChanges, Routes: served, Rules: livechanges.Rules}.Wrap(routed)
+	answer := gate.Wrap(routed)
 	// Outside the gate on purpose: a body that is not JSON is refused before
 	// the credential is looked at, the order clients have always seen
 	// (internal/requestbody). Being outside the gate is also why it bounds
@@ -1945,13 +1973,6 @@ func serve(ctx context.Context, settings config.Config, parserEnv func(string) s
 		Gated:    answer,
 		Served:   served,
 		TestOnly: testOnlyRoutes,
-		// zero-cache's ZERO_QUERY_URL: the web app's live sync asks here
-		// which rows a named query may see. Behind the gate, so the cookie
-		// zero-cache forwards decides whose rows those are
-		// (internal/zerosync).
-		Internal: map[string]http.Handler{
-			http.MethodPost + " " + zerosync.Path: gate.Wrap(zerosync.Handler{Errors: errors, Logger: logger}),
-		},
 	}.handler()
 	if err != nil {
 		return err
@@ -2103,17 +2124,6 @@ type frontDoor struct {
 	// a stack that switched them on; nil everywhere else, and then no such
 	// path is mounted (internal/e2eseed).
 	TestOnly []string
-	// Internal is the routes only another service of the stack calls, by
-	// "METHOD /path", each handler already behind whatever credential check
-	// it needs. They are mounted outside the CSRF check and the per-client
-	// limiter, because their one caller is a server: zero-cache's query
-	// route (internal/zerosync) receives the browser's cookie forwarded
-	// with no Origin header, which the CSRF check would refuse, and every
-	// request comes from zero-cache's one address, which the limiter would
-	// count as one very busy client. Neither check protects anything there:
-	// the route writes nothing, and the stack's Caddy never sends /internal
-	// to the API, so no browser reaches it.
-	Internal map[string]http.Handler
 }
 
 func (d frontDoor) handler() (http.Handler, error) {
@@ -2162,9 +2172,6 @@ func (d frontDoor) handler() (http.Handler, error) {
 	// refuses a request without the stack's seed secret.
 	for _, pair := range d.TestOnly {
 		routes.Handle(pair, d.Forgeries.Middleware(d.Ungated))
-	}
-	for pair, handler := range d.Internal {
-		routes.Handle(pair, handler)
 	}
 	gated := d.Forgeries.Middleware(d.Limiter.Wrap(d.Gated))
 	routes.Handle("/", gated)
@@ -2474,6 +2481,7 @@ func servedRoutes() []string {
 	// and the sign-in options.
 	routes = append(routes, pushdevices.Served()...)
 	routes = append(routes, presencebeat.Served()...)
+	routes = append(routes, livechanges.Served()...)
 	routes = append(routes, signinoptions.Served()...)
 	// The task log list, the studio's views and media links, an output's
 	// public link (public, and counted all the same: the rate limiter counts

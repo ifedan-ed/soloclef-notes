@@ -21,6 +21,7 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_notify/expo"
 	"git.danvics.com/danvics/soloclef/soloclef_notify/expo/expotest"
 	"git.danvics.com/danvics/soloclef/soloclef_notify/internal/notifytest"
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange/livechangetest"
 	"git.danvics.com/danvics/soloclef/soloclef_notify/notify"
 )
 
@@ -97,7 +98,7 @@ func newHarness(t *testing.T) *harness {
 	if err := h.jobs.Check(); err != nil {
 		t.Fatal(err)
 	}
-	h.notifier = &notify.Notifier{Database: pool, Publisher: h.published, Log: log, Now: func() time.Time { return h.now }}
+	h.notifier = &notify.Notifier{Database: pool, Publisher: h.published, Changes: &livechangetest.Recorder{}, Log: log, Now: func() time.Time { return h.now }}
 	return h
 }
 

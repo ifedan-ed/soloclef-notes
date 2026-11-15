@@ -19,6 +19,7 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_notify/notify"
 	"git.danvics.com/danvics/soloclef/soloclef_studio/deckrender"
 
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/accounterasure"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/appupdate"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/audiofile"
@@ -29,6 +30,7 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/indexrequest"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/jobreconcile"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/jobs"
+	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/livepublish"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/llm"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/notebookname"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/podcast"
@@ -219,6 +221,9 @@ func table(settings workerconfig.Config, pool *pgxpool.Pool, rdb redis.Universal
 		return nil, err
 	}
 	removal := documentremoval.Removal{Pool: pool, Vectors: vectors, Files: files}
+	// What each job tells the owner's open screens when it writes a row
+	// they show (live_changes.go), over the broker's connection.
+	live := livepublish.New(rdb, log)
 
 	// The one notification step, which every job here that finishes work
 	// for a person calls, and the jobs that push what it wrote
@@ -231,7 +236,7 @@ func table(settings workerconfig.Config, pool *pgxpool.Pool, rdb redis.Universal
 	if err != nil {
 		return nil, err
 	}
-	notifier, err := pushdelivery.Notifier(pool, notices, log)
+	notifier, err := pushdelivery.Notifier(pool, notices, live, log)
 	if err != nil {
 		return nil, err
 	}
@@ -248,7 +253,7 @@ func table(settings workerconfig.Config, pool *pgxpool.Pool, rdb redis.Universal
 	pushJobs = append(pushJobs, updateJobs...)
 
 	podcasts := &podcast.Job{
-		Rows:     podcast.Store{Pool: pool, Files: writer},
+		Rows:     livePodcasts{Rows: podcast.Store{Pool: pool, Files: writer}, changes: live},
 		Models:   writers,
 		Voicer:   voicer,
 		Audio:    tools,
@@ -264,12 +269,12 @@ func table(settings workerconfig.Config, pool *pgxpool.Pool, rdb redis.Universal
 	if err := podcasts.Check(); err != nil {
 		return nil, err
 	}
-	naming := &notebookname.Job{Rows: notebookname.Store{Pool: pool}, Model: quick, CallTimeout: settings.CallTimeout, Log: log, Now: time.Now}
+	naming := &notebookname.Job{Rows: liveNaming{Rows: notebookname.Store{Pool: pool}, changes: live}, Model: quick, CallTimeout: settings.CallTimeout, Log: log, Now: time.Now}
 	if err := naming.Check(); err != nil {
 		return nil, err
 	}
 
-	video, err := videoJob(settings, pool, writer, voicer, tools, indexer, writers, notifier, log)
+	video, err := videoJob(settings, pool, writer, voicer, tools, indexer, writers, notifier, live, log)
 	if err != nil {
 		return nil, err
 	}
@@ -279,12 +284,12 @@ func table(settings workerconfig.Config, pool *pgxpool.Pool, rdb redis.Universal
 		return nil, err
 	}
 
-	drive, driveTick, err := driveJobs(settings, pool, rdb, writer, indexer, log)
+	drive, driveTick, err := driveJobs(settings, pool, rdb, writer, indexer, live, log)
 	if err != nil {
 		return nil, err
 	}
 
-	automation, automations, err := automationJobs(settings, pool, rdb, files, writer, indexer, notifier, log)
+	automation, automations, err := automationJobs(settings, pool, rdb, files, writer, indexer, notifier, live, log)
 	if err != nil {
 		return nil, err
 	}
@@ -293,7 +298,7 @@ func table(settings workerconfig.Config, pool *pgxpool.Pool, rdb redis.Universal
 		jobs.Job{Task: podcast.Task, Deadline: podcastDeadline, Run: podcasts.Run},
 		jobs.Job{Task: notebookname.Task, Deadline: namingDeadline, Run: naming.Run},
 		jobs.Job{Task: folderdeletion.Task, Deadline: folderDeadline,
-			Run: (&folderdeletion.Job{Pool: pool, Remover: removal, Attempts: removalAttempts, Backoff: removalBackoff}).Run},
+			Run: (&folderdeletion.Job{Pool: pool, Remover: removal, Attempts: removalAttempts, Backoff: removalBackoff, Changes: live}).Run},
 		jobs.Job{Task: accounterasure.Task, Deadline: erasureDeadline,
 			Run: (&accounterasure.Job{Eraser: removal, Attempts: removalAttempts, Backoff: removalBackoff}).Run},
 		video,
@@ -311,13 +316,13 @@ func table(settings workerconfig.Config, pool *pgxpool.Pool, rdb redis.Universal
 // videoJob is the video render, or, on a deployment that switched it off,
 // the job that tells each queued video so at once.
 func videoJob(settings workerconfig.Config, pool *pgxpool.Pool, writer filestore.Writer, voicer speech.Client,
-	tools audiofile.Tools, indexer *indexrequest.Publisher, writers llm.Writers, notifier *notify.Notifier, log *slog.Logger) (jobs.Job, error) {
+	tools audiofile.Tools, indexer *indexrequest.Publisher, writers llm.Writers, notifier *notify.Notifier, live livechange.Publisher, log *slog.Logger) (jobs.Job, error) {
 	video, err := videojob.LoadConfig(os.Getenv, settings.Speech)
 	if err != nil {
 		return jobs.Job{}, err
 	}
 	if !video.Enabled {
-		return jobs.Job{Task: videojob.Task, Deadline: refusalDeadline, Run: videojob.Refusal{Pool: pool, Notifier: notifier}.Run}, nil
+		return jobs.Job{Task: videojob.Task, Deadline: refusalDeadline, Run: videojob.Refusal{Pool: pool, Notifier: notifier, Changes: live}.Run}, nil
 	}
 	// The frames are drawn in the slide fonts, written once into a folder
 	// of the process's own that lives as long as it does.
@@ -330,7 +335,7 @@ func videoJob(settings workerconfig.Config, pool *pgxpool.Pool, writer filestore
 		return jobs.Job{}, err
 	}
 	job := &videojob.Job{
-		Rows:     videojob.Store{Pool: pool},
+		Rows:     liveVideos{Rows: videojob.Store{Pool: pool}, changes: live},
 		Raster:   raster,
 		Models:   writers,
 		Voicer:   voicer,

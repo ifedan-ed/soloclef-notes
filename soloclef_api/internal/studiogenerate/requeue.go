@@ -50,6 +50,8 @@ func (r *Runner) release(job Job) {
 			slog.Int64("job_id", job.ID), slog.String("error", err.Error()))
 		return
 	}
+	// Queued again (or failed): the card moves back to waiting.
+	r.changed(closing, job.UserID)
 	r.logger.Warn("a studio job was cut off by the shutdown", slog.Int64("job_id", job.ID),
 		slog.Int64("attempt", job.Attempt), slog.String("now", released.Status), slog.Int64("next_attempt", released.AttemptCount))
 	if released.Status == string(DeliverableJobStatusFailed) {
@@ -75,6 +77,7 @@ func (r *Runner) sweep() {
 		return
 	}
 	for _, job := range swept {
+		r.changed(r.accepting, job.UserID)
 		r.logger.Warn("a studio job whose process went away was taken up", slog.Int64("job_id", job.ID),
 			slog.String("now", job.Status), slog.Int64("attempt", job.AttemptCount))
 		// A cancel the dead process never finished is the person's own

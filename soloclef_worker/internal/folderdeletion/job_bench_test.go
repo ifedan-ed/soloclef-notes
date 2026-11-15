@@ -14,6 +14,8 @@ import (
 
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/documentremoval"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/testdatabase"
+
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange/livechangetest"
 )
 
 // A folder of two hundred documents of ten chunks each, removed against a
@@ -37,7 +39,7 @@ func BenchmarkAFolderOfTwoHundredDocuments(b *testing.B) {
 	local, _ := filestore.OpenLocal(b.TempDir())
 	stores, _ := filestore.NewStores(local)
 	job := &Job{Pool: pool, Remover: documentremoval.Removal{Pool: pool, Files: stores,
-		Vectors: documentremoval.Qdrant{URL: qdrant.URL, Alias: "chunks", HTTP: &http.Client{}}}, Attempts: 1, Backoff: time.Millisecond}
+		Vectors: documentremoval.Qdrant{URL: qdrant.URL, Alias: "chunks", HTTP: &http.Client{}}}, Attempts: 1, Backoff: time.Millisecond, Changes: &livechangetest.Recorder{}}
 
 	var took time.Duration
 	for n := 0; n < b.N; n++ {

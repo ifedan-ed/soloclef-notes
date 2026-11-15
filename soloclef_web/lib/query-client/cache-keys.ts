@@ -20,6 +20,8 @@ export const cacheKeys = {
 	threads: {
 		detail: (threadId: number) => ["threads", "detail", threadId] as const,
 		messages: (threadId: number) => ["threads", "messages", threadId] as const,
+		// Whether a turn runs on the thread ("AI is responding").
+		turnStatus: (threadId: number) => ["threads", "turn-status", threadId] as const,
 	},
 	documents: {
 		globalQueryParams: (queries: GetDocumentsRequest["queryParams"]) =>
@@ -27,6 +29,20 @@ export const cacheKeys = {
 		withQueryParams: (queries: GetDocumentsRequest["queryParams"]) =>
 			["documents-with-queries", ...stableEntries(queries)] as const,
 		document: (documentId: string) => ["document", documentId] as const,
+		// Under "documents", so whatever refreshes the document lists refreshes these.
+		typeCounts: () => ["documents", "type-counts"] as const,
+	},
+	// The account's folder tree, flat (GET /folders).
+	folders: {
+		all: () => ["folders"] as const,
+	},
+	// A podcast run's full state (GET /podcasts/{id}).
+	podcasts: {
+		detail: (podcastId: number) => ["podcasts", podcastId] as const,
+	},
+	// A deliverable (video) job's lifecycle (GET /deliverable-jobs/{id}).
+	deliverableJobs: {
+		detail: (jobId: number) => ["deliverable-jobs", jobId] as const,
 	},
 	logs: {
 		list: () => ["logs", "list"] as const,
@@ -98,6 +114,8 @@ export const cacheKeys = {
 		all: () => ["prompts"] as const,
 	},
 	notifications: {
+		// The newest page of one inbox: what a change refreshes (hooks/use-inbox.ts).
+		head: (category: string) => ["notifications", "head", category] as const,
 		search: (search: string, tab: string) => ["notifications", "search", search, tab] as const,
 		sourceTypes: () => ["notifications", "source-types"] as const,
 		batchUnreadCounts: () => ["notifications", "unread-counts-batch"] as const,

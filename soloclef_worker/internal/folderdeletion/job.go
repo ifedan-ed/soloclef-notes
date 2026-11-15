@@ -31,6 +31,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"git.danvics.com/danvics/soloclef/soloclef_celery/celery"
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange"
 )
 
 // Task is the message's name.
@@ -48,6 +49,9 @@ type Job struct {
 	// Attempts and Backoff bound the retries of one document.
 	Attempts int
 	Backoff  time.Duration
+	// Changes tells the owner's open screens the folder's documents and
+	// folders are gone, once they are.
+	Changes livechange.Publisher
 }
 
 // Run is the jobs.Handler.
@@ -61,6 +65,8 @@ func (j *Job) Run(ctx context.Context, msg *celery.Message) error {
 			return fmt.Errorf("folderdeletion: stopped before deleting the folders: %w", err)
 		}
 	}
+	// Told however far it got: what was removed is gone from the lists.
+	defer j.Changes.Publish(ctx, userID, livechange.Change{Kind: livechange.Documents}, livechange.Change{Kind: livechange.Folders})
 	if len(folders) == 0 {
 		return nil
 	}

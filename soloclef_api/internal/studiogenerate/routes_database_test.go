@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,6 +27,8 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/testpostgres"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/deliverables"
 	"git.danvics.com/danvics/soloclef/soloclef_celery/produce"
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange"
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange/livechangetest"
 	"git.danvics.com/danvics/soloclef/soloclef_notify/notify"
 )
 
@@ -165,6 +168,8 @@ type harness struct {
 	routes Routes
 	// pushes is every push the notification step asked for.
 	pushes *recordedPushes
+	// changes is every live change the runners and the inbox told.
+	changes *livechangetest.Recorder
 	// sandboxes is every sandbox the runner removed.
 	sandboxes *removedSandboxes
 	// runners is every runner started; the routes wake them all, as a job
@@ -206,7 +211,7 @@ func (h *harness) runnerOfSize(accepting, lifetime context.Context, places int) 
 	h.t.Helper()
 	runner, err := NewRunner(RunnerParts{
 		Pool: h.pool, Models: h.models, Specialist: h.specialist,
-		Notifier: h.notifier, Concurrent: places, Accepting: accepting, Lifetime: lifetime, Logger: h.quiet,
+		Notifier: h.notifier, Changes: h.changes, Concurrent: places, Accepting: accepting, Lifetime: lifetime, Logger: h.quiet,
 	})
 	if err != nil {
 		h.t.Fatal(err)
@@ -325,7 +330,8 @@ INSERT INTO notebook_sources (id, notebook_id, user_id, document_id, folder_id, 
 	// row and ask for its push.
 	h.pushes = &recordedPushes{}
 	h.specialist, h.quiet = specialist, quiet
-	h.notifier = &notify.Notifier{Database: pool, Publisher: h.pushes, Log: quiet}
+	h.changes = &livechangetest.Recorder{}
+	h.notifier = &notify.Notifier{Database: pool, Publisher: h.pushes, Changes: h.changes, Log: quiet}
 	routes := Routes{
 		Pool: pool, Models: models{h.model}, Runner: h, Videos: h.videos, SandboxEnabled: sandbox,
 		OpenPodcast: func(ctx context.Context, owner deliverables.Owner, brief deliverables.PodcastBrief, request deliverables.PodcastRequest) (int64, error) {
@@ -437,6 +443,14 @@ func TestAnArtifactIsMadeFromTheCallersOwnSourcesAlone(t *testing.T) {
 		AND metadata -> 'push' ->> 'path' = '/notebook/10?pane=studio' AND metadata -> 'push' ->> 'body' = 'Tides'`)
 	if h.pushes.count() != 1 || h.count("notifications WHERE user_id = '"+bob+"'") != 0 {
 		t.Errorf("%d pushes asked for; his inbox has %d rows", h.pushes.count(), h.count("notifications WHERE user_id = '"+bob+"'"))
+	}
+	// Her open Studio panel heard the run start and end, then her inbox;
+	// he heard nothing.
+	if got := h.changes.Kinds(alice); !reflect.DeepEqual(got, []livechange.Kind{livechange.Outputs, livechange.Outputs, livechange.Inbox}) {
+		t.Errorf("her live changes: %v", got)
+	}
+	if got := h.changes.Kinds(bob); len(got) != 0 {
+		t.Errorf("his live changes: %v", got)
 	}
 	task := h.model.requests[0].Messages[len(h.model.requests[0].Messages)-1].Content
 	// Headed by its subject, the notebook, and not by its listing title.

@@ -14,6 +14,7 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_connectors/drivegrant"
 	"git.danvics.com/danvics/soloclef/soloclef_filestore"
 
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/drivesync"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/indexrequest"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/jobreconcile"
@@ -48,12 +49,12 @@ const (
 // on a deployment that switched the sync off, the one job that tells each
 // picked file so at once. The tick is nil when there is none to seed.
 func driveJobs(settings workerconfig.Config, pool *pgxpool.Pool, rdb redis.UniversalClient, writer filestore.Writer,
-	indexer *indexrequest.Publisher, log *slog.Logger) ([]jobs.Job, *drivesync.Tick, error) {
+	indexer *indexrequest.Publisher, live livechange.Publisher, log *slog.Logger) ([]jobs.Job, *drivesync.Tick, error) {
 	config, err := drivesync.LoadConfig(os.Getenv)
 	if err != nil {
 		return nil, nil, err
 	}
-	rows := drivesync.Store{Pool: pool}
+	rows := liveDrive{Rows: drivesync.Store{Pool: pool}, changes: live}
 	if !config.Enabled {
 		return []jobs.Job{{Task: drivesync.Task, Deadline: refusalDeadline, Run: drivesync.Refusal{Rows: rows, Log: log}.Run}}, nil, nil
 	}

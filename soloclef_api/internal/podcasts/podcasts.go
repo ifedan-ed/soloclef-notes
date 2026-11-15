@@ -8,9 +8,9 @@
 // machine: a brief is proposed and reviewed (`awaiting_brief`), approved
 // (`drafting`), voiced (`rendering`) and delivered (`ready`). A finished
 // episode can be sent back to the brief gate for a new take, and that can be
-// undone while the old audio is still there. The frontend watches the status
-// through Zero; these routes are the actions, and the one read that carries
-// what Zero does not -- the brief and the transcript.
+// undone while the old audio is still there. The apps read the status again
+// when the change stream says an output moved; these routes are the
+// actions, and the reads of the brief and the transcript.
 //
 // Which voices exist is soloclef_assistant/voices' business. This package asks it for
 // the roster and never looks past it.

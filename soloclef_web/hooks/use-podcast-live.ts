@@ -1,14 +1,16 @@
 "use client";
 
-import { useQuery } from "@rocicorp/zero/react";
+import { type QueryClient, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { type PodcastSpec, type PodcastStatus, podcastSpec } from "@/contracts/types/podcast.types";
-import { queries } from "@/zero/queries";
+import type { PodcastDetail, PodcastSpec, PodcastStatus } from "@/contracts/types/podcast.types";
+import { podcastsApiService } from "@/lib/apis/podcasts-api.service";
+import { cacheKeys } from "@/lib/query-client/cache-keys";
 
 /**
- * Thin live row sourced from Zero's `podcast_runs` publication. Drives the
- * lifecycle UI by push (no polling); heavy fields (transcript, audio) stay on
- * REST/the Artifact and are fetched lazily when a gate or the player needs them.
+ * The lifecycle fields a podcast card renders from. Read over REST
+ * (GET /podcasts/{id}) and read again whenever the change stream says a
+ * Studio output moved (`outputs`, features/live-changes), so the card follows
+ * the run without polling.
  */
 export interface LivePodcast {
 	id: number;
@@ -28,32 +30,42 @@ interface UsePodcastLiveResult {
 }
 
 export function usePodcastLive(podcastId: number | undefined): UsePodcastLiveResult {
-	const [row, result] = useQuery(queries.podcastRuns.byId({ podcastId: podcastId ?? -1 }));
+	const { data, isPending } = useQuery({
+		queryKey: cacheKeys.podcasts.detail(podcastId ?? 0),
+		queryFn: () => podcastsApiService.getDetail(podcastId as number),
+		enabled: !!podcastId,
+		// A deleted podcast is a state the card shows ("Podcast Unavailable"),
+		// not an error to toast.
+		meta: { suppressGlobalErrorToast: true },
+	});
 
-	const podcast = useMemo<LivePodcast | undefined>(() => {
-		if (!podcastId || !row) return undefined;
-		return {
-			id: row.id,
-			title: row.title,
-			status: row.status as PodcastStatus,
-			spec: parseSpec(row.spec),
-			specVersion: row.specVersion,
-			durationSeconds: row.durationSeconds ?? null,
-			error: row.error ?? null,
-			artifactId: row.artifactId ?? null,
-			threadId: row.threadId ?? null,
-		};
-	}, [podcastId, row]);
+	const podcast = useMemo<LivePodcast | undefined>(
+		() => (podcastId && data ? toLivePodcast(data) : undefined),
+		[podcastId, data]
+	);
 
-	// Pre-hydration window: no row AND Zero hasn't confirmed completeness yet.
-	const isLoading = !!podcastId && !row && result.type !== "complete";
-
-	return { podcast, isLoading };
+	return { podcast, isLoading: !!podcastId && isPending };
 }
 
-/** The JSONB column holds the snake_case spec; reject anything malformed. */
-function parseSpec(raw: unknown): PodcastSpec | null {
-	if (raw == null) return null;
-	const parsed = podcastSpec.safeParse(raw);
-	return parsed.success ? parsed.data : null;
+/**
+ * Every podcast action answers with the podcast as it now is: put it in the
+ * cache at once, so the card moves on without waiting for the stream's
+ * refetch, and the brief form's next save carries the new spec version.
+ */
+export function storePodcastDetail(queryClient: QueryClient, detail: PodcastDetail): void {
+	queryClient.setQueryData(cacheKeys.podcasts.detail(detail.id), detail);
+}
+
+function toLivePodcast(detail: PodcastDetail): LivePodcast {
+	return {
+		id: detail.id,
+		title: detail.title,
+		status: detail.status,
+		spec: detail.spec,
+		specVersion: detail.spec_version,
+		durationSeconds: detail.duration_seconds,
+		error: detail.error,
+		artifactId: detail.artifact_id ?? null,
+		threadId: detail.thread_id,
+	};
 }

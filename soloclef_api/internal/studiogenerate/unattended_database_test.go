@@ -15,6 +15,7 @@ import (
 
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/testpostgres"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/deliverables"
+	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange/livechangetest"
 	"git.danvics.com/danvics/soloclef/soloclef_notify/notify"
 )
 
@@ -102,8 +103,9 @@ INSERT INTO deliverable_jobs (id, user_id, kind, title, thread_id, tool_call_id,
 			Index: func(context.Context, int64, string) error { return nil }},
 	}
 	lifetime, stop := context.WithCancel(context.Background())
-	notifier := &notify.Notifier{Database: pool, Publisher: &recordedPushes{}, Log: quiet}
-	runner, err := NewRunner(RunnerParts{Pool: pool, Models: boasterModels{}, Specialist: specialist, Notifier: notifier,
+	changes := &livechangetest.Recorder{}
+	notifier := &notify.Notifier{Database: pool, Publisher: &recordedPushes{}, Changes: changes, Log: quiet}
+	runner, err := NewRunner(RunnerParts{Pool: pool, Models: boasterModels{}, Specialist: specialist, Notifier: notifier, Changes: changes,
 		Concurrent: 2, Accepting: lifetime, Lifetime: lifetime, Logger: quiet})
 	if err != nil {
 		t.Fatal(err)

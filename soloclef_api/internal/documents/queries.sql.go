@@ -595,8 +595,8 @@ type UpdateRestoredDocumentParams struct {
 //
 // The last predicate keeps a restore that changes nothing from writing a
 // row: a version identical to the document, restored onto a document already
-// waiting to be reindexed, would otherwise be an UPDATE that Zero replicates
-// to every open client for no change.
+// waiting to be reindexed, would otherwise be a write (a new row version,
+// and WAL) for no change.
 func (q *Queries) UpdateRestoredDocument(ctx context.Context, arg UpdateRestoredDocumentParams) error {
 	_, err := q.db.Exec(ctx, updateRestoredDocument,
 		arg.SourceMarkdown,

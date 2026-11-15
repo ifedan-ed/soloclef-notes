@@ -22,9 +22,134 @@ After pulling, compare `docker/.env.go` with `docker/.env.go.example`. If a
 new setting was added, Compose stops before starting anything and names it.
 Copy the new lines across and fill them in.
 
-Restarting the worker stops whatever it is making at that moment, such as an
-audio overview, a video or an automation run. Update when nothing is running
-if you can. Interrupted outputs can be made again with Try again.
+### What an update does to work in progress
+
+An update waits for the work that is running before it restarts a service,
+up to a limit, so you can update at any time.
+
+| Service | What it waits for | Longest wait |
+| --- | --- | --- |
+| `api` | Studio outputs being made (everything except audio overviews and videos) and chat answers being written | 5 minutes |
+| `worker` | Videos, audio overviews, automation runs | 15 minutes |
+
+The wait ends as soon as nothing is running, so an update on a quiet server
+does not wait at all. While the API waits it keeps answering: the site stays
+up, and a Studio output asked for during the update is made by the new
+version as soon as it starts.
+
+Work still running when the limit passes is not lost:
+
+- A Studio output or a video is made again from the start by the new
+  version. It shows as still being made, not as failed. An output stopped by
+  three updates in a row fails with "The server restarted while it was being
+  made", and can be made again with Try again.
+- A Studio output that was waiting for a free sandbox goes back to waiting
+  in the new version, in a fresh sandbox once one is free.
+- An audio overview carries on from the lines already voiced.
+- A chat answer keeps what it had written so far, and you can ask again.
+
+If the API stops unexpectedly, its Studio outputs are taken up the same way
+within about four minutes, by another copy of the API or by the API when it
+starts again.
+
+To stop a service at once instead of waiting, send the stop a second time:
+press Ctrl-C again, or run `dc kill api`. What it was making is taken up again
+as above.
+
+### Open tabs
+
+A page loads parts of its code only when they are first needed, such as the
+video player. Each build names those files differently, so a tab opened
+before an update would ask for files the new build does not have.
+
+The `proxy` service keeps them for it. Each time it starts, it adds its own
+build's code files (everything under `/_next/static`) to the volume
+`soloclefgo_site_assets`, and serves a file from there when the running
+build does not have it. A build's files are removed 14 days after another
+build replaced it, checked every hour, and the volume keeps at most the 20
+most recent builds. A build whose code files come to more than 256 MiB is
+not kept. Pages themselves always come from the running build.
+
+Only regular files are served from the volume. Anything else found in it,
+such as a symbolic link, is removed at start and at every hourly check, and
+the proxy's log says so.
+
+If a tab is older than that, or the file is missing for another reason, the
+page reloads itself once and carries on with the new build. If it still
+fails after the reload, it shows the error page.
+
+The volume holds nothing else and needs no backup. Deleting it is safe:
+
+```bash
+dc rm --stop --force proxy
+docker volume rm soloclefgo_site_assets
+dc up -d proxy
+```
+
+Tabs that were open then reload once when they next load code.
+
+### Live updates
+
+Each open tab, and the phone app while it is in front, holds one connection
+to the API at `/api/v1/events`. The API sends a short notice there whenever
+something the account can see changes, and the page reads what it shows
+again. An update ends these connections; each tab reconnects within a few
+seconds and reads its screen again, so nothing is missed. A tab that was
+asleep or offline does the same when it comes back.
+
+The connections need nothing from you beyond the proxy settings in
+[Install](/docs/self-hosting#4-put-https-in-front). The API and the worker must
+use the same Valkey, as the Compose file sets up.
+
+### Updating from a version with zero-cache
+
+Versions before live updates moved into the API ran a `zero-cache` service,
+with Postgres started at `wal_level=logical`. The update removes both, and
+the order matters: Postgres does not start without `wal_level=logical` while
+zero-cache's replication slot exists, and the migration that removes the
+slot must run while Postgres still has it.
+
+```bash
+git pull
+dc build
+docker stop soloclefgo-zero-cache-1
+dc run --rm --no-deps migrate
+dc up -d --build --remove-orphans
+docker volume rm soloclefgo_zero_data
+```
+
+`dc run --no-deps` migrates against the Postgres that is running, without
+recreating it. The `up` then recreates Postgres with its default settings,
+starts everything else and removes the zero-cache container. Delete the line
+`SOLOCLEF_GO_ZERO_SYNC_WORKERS` from `docker/.env.go`; nothing reads it.
+
+## Phone apps already installed
+
+A phone keeps the version of the app it installed until its owner updates
+it, and an app update sent over the air reaches it only when the app next
+starts. So a server update must keep answering every version, and every
+update of it, still in use. <BrandName />'s tests hold each server change to the
+phone app still installed from the App Store, and fail before a change that
+would break it is released.
+
+The one installed version the tests hold the server to is the iPhone app
+1.1.0 (App Store build 4) on its update of 15 November 2026. Every older
+version and update, and the Android preview, is no longer supported.
+
+To see which versions and updates phones still use:
+
+```bash
+dc exec api soloclef-api app-versions
+```
+
+It lists the newest version the App Store offers and, for each platform, app
+version and update, how many phones were seen in the last 30 days. Phones
+report what they run each time the app starts, if notifications are allowed.
+A phone listed with no version runs an old update that is no longer
+supported.
+
+Support for a version or update is removed once a newer one has been
+published and no phone has reported the old one for 30 days.
 
 ## What to back up
 
