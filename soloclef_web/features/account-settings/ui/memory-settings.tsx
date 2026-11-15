@@ -4,12 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
-	fetchMemoryEditorDocument,
-	getMemoryLimitState,
-	resetMemory,
-	saveMemoryMarkdown,
-} from "@/components/editor-panel/memory";
-import {
 	AlertDialog,
 	AlertDialogAction,
 	AlertDialogCancel,
@@ -25,6 +19,12 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
+import {
+	fetchMemoryEditorDocument,
+	getMemoryLimitState,
+	resetMemory,
+	saveMemoryMarkdown,
+} from "@/features/account-settings/lib/memory";
 import { cacheKeys } from "@/lib/query-client/cache-keys";
 import { queryClient } from "@/lib/query-client/client";
 import { cn } from "@/lib/utils";
@@ -32,7 +32,9 @@ import { cn } from "@/lib/utils";
 /**
  * What the assistant remembers about the person between chats, as the
  * Markdown it keeps. The assistant writes to it during chats; here the
- * person reads it, corrects it, or empties it.
+ * person reads it, corrects it, adds to it in any form, or empties it. The
+ * box sends exactly what was typed and shows what the server stored, which
+ * files loose text under "## Notes".
  */
 export function MemorySettings() {
 	const memory = useQuery({
@@ -101,8 +103,9 @@ export function MemorySettings() {
 		<div className="space-y-4">
 			<p className="text-sm text-muted-foreground">
 				The assistant notes lasting facts about you here (your field, how you like answers, what you
-				are working on) and reads them at the start of every chat. Correct anything that is wrong;
-				it is only ever used for your own chats.
+				are working on) and reads them at the start of every chat. Correct anything that is wrong or
+				add your own; it is only ever used for your own chats. Write in any form: text that is not
+				under a ## heading is kept under ## Notes.
 			</p>
 			<div className="space-y-2">
 				<Label htmlFor="memory-markdown">Memory</Label>

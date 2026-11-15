@@ -18,12 +18,19 @@ import (
 // The kinds of source the chat's tools register. The ref of each is exactly
 // what goes after "citation:" in the marker, so adding a kind is adding a
 // constant here and nothing else: there is no per-kind formatting to forget.
+// (The two kinds with no address make their ref with MailSource and
+// AppSource, labelled.go, which is still only the ref.)
 const (
 	// Chunk is a passage of one of the user's own documents; its ref is the
 	// chunk's id, which the web app resolves through /documents/by-chunk.
 	Chunk = "kb_chunk"
 	// Web is a page or a paper; its ref is the address.
 	Web = "web_result"
+	// Mail is a message in the asker's own mailbox and App a result from
+	// one of their connected apps (MCP servers). Neither has an address a
+	// reader could open, so each ref carries its own label (labelled.go).
+	Mail = "mail_message"
+	App  = "app_result"
 )
 
 // Lookup resolves a label's number to its source. citation.Registry.Lookup

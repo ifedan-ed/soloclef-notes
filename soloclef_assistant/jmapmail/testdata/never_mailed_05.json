@@ -1,0 +1,30 @@
+{
+  "status": 200,
+  "body": {
+    "methodResponses": [
+      [
+        "Email/get",
+        {
+          "accountId": "c",
+          "state": "sam",
+          "list": [
+            {
+              "id": "eaaaaab",
+              "to": [
+                {
+                  "name": null,
+                  "email": "ben@example.test"
+                }
+              ],
+              "cc": null,
+              "bcc": null
+            }
+          ],
+          "notFound": []
+        },
+        "g"
+      ]
+    ],
+    "sessionState": "e8a8b15b"
+  }
+}

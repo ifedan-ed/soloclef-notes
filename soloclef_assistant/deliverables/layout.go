@@ -14,14 +14,16 @@ import (
 // each run of text is set in, with what it sits on. The placement rules
 // (layout_rules.go) hold these against the words LibreOffice actually drew.
 //
-// Why from the deck's own XML and not from a picture of it: a model's
-// program writes the deck through python-pptx, so every box, size and colour
-// is written down exactly; reading them back is exact, repeatable and costs
-// microseconds, where a model looking at a picture is none of the three.
-// This is the way PedsHub Tools holds its own themes (tools-go
-// internal/pptxcheck), extended to decks whose code nobody here wrote: so
-// placeholders inherit from their layout and master, colours come from the
-// theme, and shapes can sit inside groups.
+// Why from the deck's own XML and not from a picture of it: every box, size
+// and colour of a deck is written down exactly in it; reading them back is
+// exact, repeatable and costs microseconds, where a model looking at a
+// picture is none of the three. This is the way PedsHub Tools holds its own
+// themes (tools-go internal/pptxcheck). It reads any deck, not only the
+// ones soloclef_studio/deckrender draws (a deck a model's program built,
+// which is what these rules were first written for: placeholders inherit
+// from their layout and master, colours come from the theme, and shapes can
+// sit inside groups), so the rules stay an independent check of the
+// renderer rather than its own opinion of itself.
 
 // emuPerPoint converts the deck's English Metric Units to points.
 const emuPerPoint = 12700

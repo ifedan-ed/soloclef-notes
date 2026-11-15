@@ -85,7 +85,7 @@ func (r Routes) createNotebook(x *exchange) {
 	// Only a default title lets the notebook name itself later, and the icon
 	// follows the title: both sources are "auto" or both are "user".
 	source := "user"
-	if isDefaultTitle(requested.Title) {
+	if IsDefaultTitle(requested.Title) {
 		source = "auto"
 	}
 	row, err := New(r.Database).InsertNotebook(x.ctx.Context(), InsertNotebookParams{

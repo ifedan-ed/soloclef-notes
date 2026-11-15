@@ -10,7 +10,6 @@ export function robotsRules(brand: Brand = BRAND): MetadataRoute.Robots {
 				allow: "/",
 				disallow: [
 					"/dashboard/",
-					"/desktop/",
 					"/auth/",
 					"/api/",
 					"/public/",

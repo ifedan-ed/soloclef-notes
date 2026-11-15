@@ -4,7 +4,7 @@
 #   scripts/e2e-stack-go.sh up       build what is missing, start, seed the e2e user
 #   scripts/e2e-stack-go.sh rebuild [service...]
 #                                    rebuild every image from this checkout (or only
-#                                    the ones named: api, frontend, ...), then up
+#                                    the ones named: api, proxy, ...), then up
 #   scripts/e2e-stack-go.sh down     stop; delete containers, volumes, networks, secrets
 #   scripts/e2e-stack-go.sh purge    down, and delete the images it built too
 #   scripts/e2e-stack-go.sh status   docker compose ps
@@ -16,16 +16,59 @@
 # docker/docker-compose.e2e-web-go.yml laid over it, under the compose
 # project "soloclefgo-e2e", published only on 127.0.0.1:3945. It never
 # touches a deployment's project (soloclefgo), its volumes or its settings.
+#
+# Two stacks side by side (two branches tested at once on one host) each take
+# a project and a port of their own:
+#
+#   E2E_STACK_PROJECT=soloclefgo-e2e-mine E2E_WEB_PORT=3961 scripts/e2e-stack-go.sh up
+#   E2E_WEB_PORT=3961 pnpm test:e2e            # playwright.config.ts reads the same port
+#
+# Both must be given together, and to every command of that stack (down
+# included), or the command would act on the default stack instead. Each
+# checkout runs one stack at a time: the secrets the script makes live in
+# the checkout (docker/e2e-web-go/.generated), and `down` deletes them.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
-# The project is this script's to name and nobody else's to change: the
-# settings file writes the stack's own addresses with this name in them.
-PROJECT="soloclefgo-e2e"
-SETTINGS="$REPO/docker/e2e-web-go/settings.env"
+# The project and the port the committed settings file is written for. Its
+# addresses carry both (the stand-ins' container names start with the
+# project), so another stack gets a copy of it with both replaced
+# (settings_file).
+DEFAULT_PROJECT="soloclefgo-e2e"
+DEFAULT_PORT="3945"
+PROJECT="${E2E_STACK_PROJECT:-$DEFAULT_PROJECT}"
+PORT="${E2E_WEB_PORT:-$DEFAULT_PORT}"
+# Half of a pair would name one stack's containers and publish on another's
+# port, or the reverse; both are refused rather than half-applied.
+is_default_project=$([[ "$PROJECT" == "$DEFAULT_PROJECT" ]] && echo yes || echo no)
+is_default_port=$([[ "$PORT" == "$DEFAULT_PORT" ]] && echo yes || echo no)
+if [[ "$is_default_project" != "$is_default_port" ]]; then
+	echo "give E2E_STACK_PROJECT and E2E_WEB_PORT together, or neither" >&2
+	exit 1
+fi
+[[ "$PROJECT" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || { echo "E2E_STACK_PROJECT must be a compose project name" >&2; exit 1; }
+[[ "$PORT" =~ ^[0-9]+$ ]] || { echo "E2E_WEB_PORT must be a port number" >&2; exit 1; }
+COMMITTED_SETTINGS="$REPO/docker/e2e-web-go/settings.env"
 # Everything made here and deleted by `down`: nothing in it is committed.
 GENERATED="$REPO/docker/e2e-web-go/.generated"
+
+# The settings this stack runs with: the committed file for the default
+# stack, else a copy of it under GENERATED with the project and the port
+# replaced. The copy is written on every run, so a change to the committed
+# file always reaches it.
+settings_file() {
+	if [[ "$PROJECT" == "$DEFAULT_PROJECT" ]]; then
+		printf '%s' "$COMMITTED_SETTINGS"
+		return
+	fi
+	local copy="$GENERATED/settings-$PROJECT.env"
+	mkdir -p "$GENERATED"
+	sed -e "s/$DEFAULT_PROJECT-/$PROJECT-/g" -e "s/:$DEFAULT_PORT\b/:$PORT/g" \
+		"$COMMITTED_SETTINGS" >"$copy"
+	printf '%s' "$copy"
+}
+SETTINGS="$(settings_file)"
 
 # One setting, read from the one file that says it (no default here: a
 # second copy of a value is a value that can disagree).
@@ -42,7 +85,7 @@ PASSWORD="${PLAYWRIGHT_TEST_PASSWORD:-E2eTestPassword123!}"
 # The overlay gives the API these same words (SOLOCLEF_API_E2E_SEED_SECRET).
 MINT_SECRET="e2e-mint-secret-not-for-production"
 # Every image the two files build, in the order they are built.
-BUILT=(migrate parse-service indexer worker api mcp frontend)
+BUILT=(migrate parse-service indexer worker api mcp proxy)
 
 compose() {
 	docker compose -p "$PROJECT" --env-file "$SETTINGS" \
@@ -144,6 +187,9 @@ seed_user() {
 case "${1:-}" in
 	up | rebuild)
 		make_generated
+		# make_generated starts GENERATED afresh on a new stack, settings
+		# copy included: write it again.
+		SETTINGS="$(settings_file)"
 		# The model proxy's network is the Go stack's one external network:
 		# it joins it and never makes it. Here it is this script's, internal
 		# (no route out), and holds only the stand-in.

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-/** What the server answers when a public link is created (chat or output). */
+/** What the server answers when an output's public link is created or renewed. */
 export const createdLinkSchema = z.object({
 	snapshot_id: z.number(),
 	share_token: z.string(),

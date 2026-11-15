@@ -167,15 +167,30 @@ func itemOf(row ListViewRow) item {
 	return out
 }
 
+// page is one page of the list.
+type page struct {
+	Items      []item `json:"items"`
+	Total      int64  `json:"total"`
+	HasMore    bool   `json:"has_more"`
+	NextOffset *int   `json:"next_offset"`
+}
+
+// emptyPage is the answer for a view that matches nothing.
+var emptyPage = page{Items: []item{}}
+
 func (r Routes) list(x *exchange) {
 	asked, ok := x.view(true)
 	if !ok {
 		return
 	}
-	ctx, q, now := x.ctx.Context(), New(r.Pool), r.now()
+	if asked.none {
+		x.send(emptyPage)
+		return
+	}
+	ctx, q := x.ctx.Context(), New(r.Pool)
 	// One row more than the page, to know whether another page follows.
 	rows, err := q.ListView(ctx, ListViewParams{
-		UserID: x.userID, Now: now, Types: asked.typesArgument(), SourceKey: asked.sourceKey, SourceValue: asked.sourceValue,
+		UserID: x.userID, Types: asked.typesArgument(), SourceKey: asked.sourceKey, SourceValue: asked.sourceValue,
 		UnreadOnly: asked.unreadOnly, ErrorsOnly: asked.errorsOnly, SearchPattern: asked.searchPattern, Before: asked.before,
 		PageOffset: int32(asked.offset), PageSize: int32(asked.limit + 1),
 	})
@@ -190,7 +205,7 @@ func (r Routes) list(x *exchange) {
 	case asked.offset > 0:
 		// A page past the end carries no row to read the total from.
 		total, err = q.CountView(ctx, CountViewParams{
-			UserID: x.userID, Now: now, Types: asked.typesArgument(), SourceKey: asked.sourceKey, SourceValue: asked.sourceValue,
+			UserID: x.userID, Types: asked.typesArgument(), SourceKey: asked.sourceKey, SourceValue: asked.sourceValue,
 			UnreadOnly: asked.unreadOnly, ErrorsOnly: asked.errorsOnly, SearchPattern: asked.searchPattern, Before: asked.before,
 		})
 		if err != nil {
@@ -202,12 +217,7 @@ func (r Routes) list(x *exchange) {
 	if more {
 		rows = rows[:asked.limit]
 	}
-	answer := struct {
-		Items      []item `json:"items"`
-		Total      int64  `json:"total"`
-		HasMore    bool   `json:"has_more"`
-		NextOffset *int   `json:"next_offset"`
-	}{Items: make([]item, 0, len(rows)), Total: total, HasMore: more}
+	answer := page{Items: make([]item, 0, len(rows)), Total: total, HasMore: more}
 	for _, row := range rows {
 		answer.Items = append(answer.Items, itemOf(row))
 	}
@@ -223,13 +233,17 @@ func (r Routes) clear(x *exchange) {
 	if !ok {
 		return
 	}
-	deleted, err := New(r.Pool).ClearView(x.ctx.Context(), ClearViewParams{
-		UserID: x.userID, Now: r.now(), Types: asked.typesArgument(), SourceKey: asked.sourceKey, SourceValue: asked.sourceValue,
-		UnreadOnly: asked.unreadOnly, ErrorsOnly: asked.errorsOnly, SearchPattern: asked.searchPattern,
-	})
-	if err != nil {
-		x.fail("could not clear the inbox", err)
-		return
+	var deleted int64
+	if !asked.none {
+		var err error
+		deleted, err = New(r.Pool).ClearView(x.ctx.Context(), ClearViewParams{
+			UserID: x.userID, Types: asked.typesArgument(), SourceKey: asked.sourceKey, SourceValue: asked.sourceValue,
+			UnreadOnly: asked.unreadOnly, ErrorsOnly: asked.errorsOnly, SearchPattern: asked.searchPattern,
+		})
+		if err != nil {
+			x.fail("could not clear the inbox", err)
+			return
+		}
 	}
 	x.send(struct {
 		Success bool   `json:"success"`
@@ -250,8 +264,8 @@ func (r Routes) remove(x *exchange) {
 	}
 	ctx, q := x.ctx.Context(), New(r.Pool)
 	// The clear's statement, narrowed to one row: the same rule about a
-	// running job and the same care for an announcement's read count.
-	deleted, err := q.ClearView(ctx, ClearViewParams{UserID: x.userID, Now: r.now(), Types: []string{}, OnlyID: id})
+	// running job.
+	deleted, err := q.ClearView(ctx, ClearViewParams{UserID: x.userID, Types: []string{}, OnlyID: id})
 	if err != nil {
 		x.fail("could not delete the notification", err)
 		return
@@ -312,7 +326,7 @@ type unread struct {
 func (x *exchange) counts(onlyType string) (UnreadCountsRow, bool) {
 	now := x.routes.now()
 	row, err := New(x.routes.Pool).UnreadCounts(x.ctx.Context(), UnreadCountsParams{
-		StatusTypes: statusTypes, RecentAfter: now.Add(-recentWindow), UserID: x.userID, OnlyType: onlyType, Now: now,
+		StatusTypes: statusTypes, RecentAfter: now.Add(-recentWindow), UserID: x.userID, OnlyType: onlyType,
 	})
 	if err != nil {
 		x.fail("could not count the unread notifications", err)
@@ -325,9 +339,17 @@ func (r Routes) unreadCount(x *exchange) {
 	address := x.ctx.URL()
 	query := address.Query()
 	// The two filters of the view that a count takes; the rest are a page's.
-	asked, failures := readView(map[string][]string{"type": query["type"], "category": query["category"]}, false)
-	if len(failures) > 0 {
+	if _, failures := readView(map[string][]string{"type": query["type"], "category": query["category"]}, false); len(failures) > 0 {
 		r.Errors.WriteValidation(x.response, x.requestID, failures)
+		return
+	}
+	// The retired announcements tab (installed phone builds) has nothing.
+	// readView accepts the tab for every route that reads a view, so the
+	// count must answer it as empty rather than count every row; it goes
+	// with the tab.
+	// installed-builds: notifications-announcements-tab
+	if query.Get("category") == retiredAnnouncementsCategory {
+		x.send(unread{})
 		return
 	}
 	onlyType := query.Get("type")
@@ -335,15 +357,11 @@ func (r Routes) unreadCount(x *exchange) {
 	if !ok {
 		return
 	}
+	// The tab counts only its own types; the whole inbox also counts a row
+	// of a type no tab lists (one an older version wrote).
 	answer := unread{row.AllTotal, row.AllRecent}
-	switch category := query.Get("category"); {
-	case len(asked.types) == 1 && asked.types[0] == "\x00none":
-		// A type asked for inside a tab that does not hold it.
-		answer = unread{}
-	case category == "status":
+	if query.Get("category") == statusCategory {
 		answer = unread{row.StatusTotal, row.StatusRecent}
-	case category == "announcements":
-		answer = unread{row.AnnouncementsTotal, row.AnnouncementsRecent}
 	}
 	x.send(answer)
 }
@@ -353,10 +371,16 @@ func (r Routes) unreadBatch(x *exchange) {
 	if !ok {
 		return
 	}
+	// Announcements are gone, but the phone builds 1.0.0 and 1.1.0 already in
+	// the App Store add `announcements.total_unread` to the badge without a
+	// guard and crash on the tab screen when it is missing (2026-11-13). The
+	// field stays, always zero, until no installed build reads it; builds
+	// from the app's go-api line onwards read `status` only.
+	// installed-builds: notifications-announcements-count
 	x.send(struct {
 		Status        unread `json:"status"`
 		Announcements unread `json:"announcements"`
-	}{unread{row.StatusTotal, row.StatusRecent}, unread{row.AnnouncementsTotal, row.AnnouncementsRecent}})
+	}{unread{row.StatusTotal, row.StatusRecent}, unread{}})
 }
 
 func (r Routes) sourceTypes(x *exchange) {

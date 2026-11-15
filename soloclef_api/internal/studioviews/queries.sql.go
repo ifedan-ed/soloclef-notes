@@ -10,7 +10,7 @@ import (
 )
 
 const linkedOutputs = `-- name: LinkedOutputs :many
-SELECT o.id, COALESCE(p.status::text, j.status::text, '')::text AS run_status
+SELECT o.id, COALESCE(p.status::text, j.status::text, CASE WHEN o.artifact_id IS NOT NULL THEN 'ready' END, '')::text AS run_status
 FROM notebook_outputs o
 LEFT JOIN podcast_runs p ON p.id = o.podcast_id AND p.user_id = o.user_id
 LEFT JOIN deliverable_jobs j ON j.id = o.deliverable_job_id AND j.user_id = o.user_id
@@ -32,6 +32,7 @@ type LinkedOutputsRow struct {
 // The outputs suggestions point at, of this notebook, each with the state
 // of the run making it (” when the run is gone). An id that is not listed
 // is an output the person deleted from the Studio.
+// An output a chat made with no run is its artifact, which is ready.
 func (q *Queries) LinkedOutputs(ctx context.Context, arg LinkedOutputsParams) ([]LinkedOutputsRow, error) {
 	rows, err := q.db.Query(ctx, linkedOutputs, arg.NotebookID, arg.UserID, arg.OutputIds)
 	if err != nil {
@@ -87,7 +88,7 @@ SELECT o.id, o.kind, o.title, o.options, o.source_document_ids,
 FROM notebook_outputs o
 LEFT JOIN podcast_runs p ON p.id = o.podcast_id AND p.user_id = o.user_id AND p.status = 'ready'
 LEFT JOIN deliverable_jobs j ON j.id = o.deliverable_job_id AND j.user_id = o.user_id AND j.status = 'ready'
-JOIN artifacts a ON a.id = COALESCE(p.artifact_id, j.artifact_id) AND a.user_id = o.user_id
+JOIN artifacts a ON a.id = COALESCE(p.artifact_id, j.artifact_id, o.artifact_id) AND a.user_id = o.user_id
 JOIN documents d ON d.id = a.document_id AND d.user_id = a.user_id
 WHERE o.id = $1 AND o.notebook_id = $2 AND o.user_id = $3
 `
@@ -120,6 +121,7 @@ type ReadyOutputRow struct {
 // nothing to view yet. `primary_type` is the media type of the artifact's
 // main file (” when it has none), which is how an interactive report is
 // told from a written one.
+// Or the artifact a notebook's chat made, which has no run to be ready.
 func (q *Queries) ReadyOutput(ctx context.Context, arg ReadyOutputParams) (ReadyOutputRow, error) {
 	row := q.db.QueryRow(ctx, readyOutput, arg.OutputID, arg.NotebookID, arg.UserID)
 	var i ReadyOutputRow

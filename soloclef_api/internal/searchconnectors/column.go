@@ -417,3 +417,18 @@ func (f *fields) close() []byte {
 func joinList(items [][]byte) []byte {
 	return append(append([]byte{'['}, bytes.Join(items, []byte{','})...), ']')
 }
+
+func isHexDigit(character byte) bool {
+	return (character >= '0' && character <= '9') ||
+		(character >= 'a' && character <= 'f') || (character >= 'A' && character <= 'F')
+}
+
+func hexValue(character byte) byte {
+	switch {
+	case character >= 'a':
+		return character - 'a' + 10
+	case character >= 'A':
+		return character - 'A' + 10
+	}
+	return character - '0'
+}

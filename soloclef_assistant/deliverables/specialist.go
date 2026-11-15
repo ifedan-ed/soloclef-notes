@@ -24,30 +24,34 @@
 //   - Podcasts: generate_podcast opens a podcast at its brief gate with a
 //     brief proposed; the page's podcast card takes it from there
 //     (podcast.go). Nothing is drafted or queued until the person approves.
-//   - Reports (PDF), Word documents, slide decks, workbooks and interactive
-//     pages: built by code the model runs in the thread's sandbox, checked
-//     structurally here, rendered there by LibreOffice and poppler, looked
-//     at by a model that can see, and saved only as the bytes that passed
-//     (documents.go, verify.go, structure.go).
+//   - Slide decks: the model writes the deck's content as structured data
+//     (soloclef_studio/deckspec), the one argument of save_artifact; it is
+//     drawn here (soloclef_studio/deckrender) in a fixed theme with every
+//     text sized to its box, and LibreOffice in the sandbox draws its
+//     preview, on which the layout rules run as a check (slidedeck.go).
+//   - Reports (PDF), Word documents, workbooks and interactive pages: built
+//     by code the model runs in the thread's sandbox, checked structurally
+//     here, rendered there by LibreOffice and poppler, measured, and saved
+//     only as the bytes that passed (documents.go, verify.go, structure.go).
+//   - Videos: queued (video.go) for the worker, which draws the deck the
+//     model writes with its narration and animates it (internal/videojob).
+//   - Infographics: the model writes a poster's content as structured data
+//     (soloclef_studio/posterrender), with figures as draw_figure specs; it
+//     is checked, the person picks a style and an orientation, and it is
+//     drawn here as an SVG and a PNG by trusted code (infographic.go). No
+//     picture model is called anywhere in this package.
 //
 // The kinds are one table (kinds, below). The instructions tool, the
 // specialist's own prompt, the delegate's description and the text the main
 // agent's prompt is given (ArtifactsPrompt) are all written from it, so no
 // prompt can offer a kind this package cannot make.
 //
-// # What the other kinds need
+// # What is not made
 //
-// Every other kind is produced by something this tier does not have yet,
-// and each is refused by name rather than attempted badly:
-//
-//   - Slides with narration and video: a queued render job (Remotion in the
-//     sandbox, speech for the narration) that the worker tier runs; this
-//     side needs the enqueue tool and its card.
-//   - Image and infographic: the image model through the model proxy, and
-//     for an infographic the style question, which is a tool.AskUser pause.
-//   - A plain Markdown document: the path a mind map takes (a document and
-//     no file) under the format "markdown", and a decision about what such
-//     a document may contain.
+// A plain Markdown document is refused by name rather than attempted
+// badly (unavailable, below): it would be the path a mind map takes (a
+// document and no file) under the format "markdown", and needs a decision
+// about what such a document may contain.
 //
 // # What this does better than the specialist it replaces
 //
@@ -83,6 +87,8 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_agent/checkpoint"
 	"git.danvics.com/danvics/soloclef/soloclef_agent/model"
 	"git.danvics.com/danvics/soloclef/soloclef_agent/tool"
+
+	"git.danvics.com/danvics/soloclef/soloclef_studio/deckspec"
 )
 
 // The names the model and the page know.
@@ -113,6 +119,15 @@ type kind struct {
 // kindPodcast is the one kind that is not a saved format.
 const kindPodcast = "podcast"
 
+// FormatInfographic is an infographic poster (infographic.go). The string
+// is the artifacts table's and the viewer registry's.
+const FormatInfographic = "infographic"
+
+// finishers names the tool that finishes a kind which is not saved with
+// save_artifact. Every other kind in the kinds table is one of
+// save_artifact's formats; the package's tests hold the two to each other.
+var finishers = map[string]string{kindPodcast: PodcastTool, kindVideo: VideoTool}
+
 // kinds is every kind that can be made, in the order prompts list them.
 // This table is the only place a kind is declared: adding one here without
 // its tool, or a tool without its row, fails the package's tests.
@@ -121,14 +136,14 @@ var kinds = []kind{
 	{FormatQuiz, "a quiz", "a scored multiple-choice test; not a survey, a poll, a form or a personality test", quizInstructions},
 	{FormatMindMap, "a mind map", "a topic laid out as a hierarchy of concepts; not a flowchart, a sequence diagram or a free-form drawing", mindMapInstructions},
 	{kindPodcast, "a podcast", "an audio episode discussing the material", podcastInstructions},
-	{FormatInfographic, "an infographic", "the material as one designed image with headings, labels and figures: a visual explainer, a data story, a process poster; not a plain picture", infographicInstructions},
-	{kindImage, "an image", "one standalone picture or illustration; not an infographic and not a chart of data", imageInstructions},
-	// The five built by code in the sandbox (documents.go). Their
+	{FormatInfographic, "an infographic", "the material as one poster with headings, key numbers, short points and charts or diagrams: a visual explainer, a data story, a process poster", infographicInstructions},
+	// The four built by code in the sandbox (documents.go). Their
 	// instructions are the skills in the sandbox image, read from it when
 	// asked for, so they always describe the libraries that image has.
 	{FormatPDF, "a PDF report", "a typeset document to read or print: a report, a summary, a handout, a letter, a CV", ""},
 	{FormatDOCX, "a Word document", "an editable document the user will open in Word; only when they ask for Word or a .docx", ""},
-	{FormatPPTX, "a slide deck", "presentation slides as a PowerPoint file; not a narrated video", ""},
+	// A deck is drawn here from content the model writes (slidedeck.go).
+	{FormatPPTX, "a slide deck", "presentation slides as a PowerPoint file; not a narrated video", slideDeckInstructions},
 	{FormatXLSX, "a spreadsheet", "tabular data, calculations or a tracker as an Excel workbook", ""},
 	{FormatHTML, "an interactive page", "a small self-contained interactive tool: a calculator, a simulator, a widget, a dashboard", ""},
 	{kindVideo, "a video", "narrated slides rendered as a video file: an explainer video, a narrated presentation; not a slide deck", videoInstructions},
@@ -210,7 +225,7 @@ func ArtifactsPrompt() string { return artifactsPrompt }
 
 var artifactsPrompt = `The ` + DelegateName + ` tool makes things the user can open and keep: ` + kindLabels() + `. When the user asks for one of these, hand the task to it. It makes nothing else: for anything that is none of these, say plainly that it cannot be made, and do not hand the task over.
 It cannot see this conversation or the user's documents: first gather the material (search the documents), then give it a complete task with the kind, the subject, how many items if the user said, and that material copied in.
-Afterwards tell the user in a sentence what was made; the page shows the artifact itself, so never write a link to it. For a podcast say only that it is set up: its card in the chat shows the proposed language, voices and length for the user to confirm, and tracks everything after that, so do not describe its status. For a video say only that it is being generated: its card shows the progress and then the video, which takes several minutes, and the user can keep chatting. For an infographic the user is first asked in the chat to pick a visual style; if they close that question, nothing is made.`
+Afterwards tell the user in a sentence what was made; the page shows the artifact itself, so never write a link to it. For a podcast say only that it is set up: its card in the chat shows the proposed language, voices and length for the user to confirm, and tracks everything after that, so do not describe its status. For a video say only that it is being generated: its card shows the progress and then the video, which takes several minutes, and the user can keep chatting. For an infographic the user is first asked in the chat to pick a style and a page shape; if they close that question, nothing is made.`
 
 const flashcardInstructions = `Flashcards.
 
@@ -293,12 +308,10 @@ type Specialist struct {
 	// of the kinds every prompt offers, and a deployment with no speech
 	// service still answers through it, with the sentence saying so.
 	Podcasts PodcastOpener
-	// Images draws an image and an infographic; Reader reads an infographic
-	// back to check its text. Both are required. A deployment with no such
-	// model says so with NoImageModel and NoImageReader, and the person is
-	// told in a sentence.
-	Images ImageModel
-	Reader ImageReader
+	// Posters makes an infographic's PNG (posterrender.Rasteriser).
+	// Required: an infographic is one of the kinds every prompt offers, and
+	// it is drawn by code on every deployment.
+	Posters PosterRasteriser
 	// Videos queues a video's render job. Required.
 	Videos VideoQueuer
 	// Workshop is where a report, a deck, a workbook or an interactive
@@ -310,6 +323,14 @@ type Specialist struct {
 	// wherever there is a sandbox, and unused where there is not.
 	Verified *Verifications
 	Limits   Limits
+	// SandboxWait is how a run waits when its account has no sandbox free
+	// (sandboxwait.go). The zero value, a chat turn's, does not wait; a
+	// run nobody watches sets it on its own copy of the specialist.
+	SandboxWait SandboxWait
+	// Failures, when set, collects the failures of a run nobody watches,
+	// which its runner closes the job with instead of the model's answer
+	// (runfailures.go). A chat's specialist leaves it nil.
+	Failures *Failures
 }
 
 // Check reports what is missing. Called once at start-up.
@@ -321,10 +342,8 @@ func (s Specialist) Check() error {
 		return errors.New("deliverables: Store is not set")
 	case s.Podcasts == nil:
 		return errors.New("deliverables: Podcasts is not set")
-	case s.Images == nil:
-		return errors.New("deliverables: Images is not set")
-	case s.Reader == nil:
-		return errors.New("deliverables: Reader is not set")
+	case s.Posters == nil:
+		return errors.New("deliverables: Posters is not set")
 	case s.Videos == nil:
 		return errors.New("deliverables: Videos is not set")
 	case s.Workshop == nil:
@@ -335,12 +354,6 @@ func (s Specialist) Check() error {
 		return fmt.Errorf("deliverables: Limits.Timeout must be positive, got %s", s.Limits.Timeout)
 	}
 	if err := s.Podcasts.Check(); err != nil {
-		return err
-	}
-	if err := s.Images.Check(); err != nil {
-		return err
-	}
-	if err := s.Reader.Check(); err != nil {
 		return err
 	}
 	if err := s.Videos.Check(); err != nil {
@@ -364,7 +377,7 @@ func (s Specialist) Delegate(owner Owner) (agent.Delegate, error) {
 	nested, err := agent.New(agent.Config{
 		Model:  s.Model,
 		System: systemPrompt,
-		Tools: []tool.Tool{s.instructionsTool(owner), s.saveTool(owner), s.podcastTool(owner), s.imageTool(owner), s.videoTool(owner),
+		Tools: []tool.Tool{s.instructionsTool(owner), s.saveTool(owner), s.podcastTool(owner), s.videoTool(owner),
 			s.executeTool(owner), s.readFileTool(owner), s.verifyTool(owner)},
 		// One at a time: the procedure is a sequence, and two saves side
 		// by side would be two artifacts.
@@ -391,7 +404,7 @@ func (s Specialist) instructionsTool(owner Owner) tool.Tool {
 				return "", fmt.Errorf("the arguments are not readable: %w", err)
 			}
 			found, name, known := kindNamed(args.Kind)
-			if _, built := documentFormats[name]; known && built {
+			if format, built := documentFormats[name]; known && built && !format.drawn {
 				return s.documentInstructions(ctx, owner, name)
 			}
 			if known {
@@ -410,14 +423,16 @@ func (s Specialist) instructionsTool(owner Owner) tool.Tool {
 // field per format for the content. Which content field goes with which
 // format is checked when the tool runs, because a schema that said so
 // (oneOf over three shapes) is one several providers refuse.
-const saveParameters = `{"type":"object","properties":{` +
+var saveParameters = `{"type":"object","properties":{` +
 	`"format":{"type":"string","enum":["flashcards","quiz","mindmap","infographic","pdf","docx","pptx","xlsx","html"]},` +
 	`"title":{"type":"string","description":"The artifact's title, one line, up to 200 characters."},` +
 	`"cards":{"type":"array","description":"For flashcards only.","items":{"type":"object","properties":{"front_text":{"type":"string"},"back_text":{"type":"string"},"hint_text":{"type":"string"}},"required":["front_text","back_text"],"additionalProperties":false}},` +
 	`"questions":{"type":"array","description":"For a quiz only.","items":{"type":"object","properties":{"question_text":{"type":"string"},"options":{"type":"array","items":{"type":"string"}},"correct_option_index":{"type":"integer","description":"The place of the right option, counted from 0."},"explanation_text":{"type":"string"},"option_rationales":{"type":"array","items":{"type":"string"}}},"required":["question_text","options","correct_option_index","explanation_text","option_rationales"],"additionalProperties":false}},` +
-	`"markdown":{"type":"string","description":"For a mind map: one # heading, then a nested bullet list. For an infographic: the plan, a # title, ## sections and short bullets."}` +
-	`,"path":{"type":"string","description":"For pdf, docx, pptx, xlsx and html only: the file in the sandbox, as it was passed to verify_artifact."}` +
-	`,"markdown_representation":{"type":"string","description":"For pdf, docx, pptx, xlsx and html only: the artifact's substantive content as Markdown, which is what search and screen readers get. The text itself: no shell runs on these arguments, so $(cat file) or a file path is refused."}` +
+	`"markdown":{"type":"string","description":"For a mind map only: one # heading, then a nested bullet list."}` +
+	`,"poster":{"type":"object","description":"For an infographic only: the poster's content, as its instructions say."}` +
+	`,"deck":` + deckSchema() +
+	`,"path":{"type":"string","description":"For pdf, docx, xlsx and html only: the file in the sandbox, as it was passed to verify_artifact."}` +
+	`,"markdown_representation":{"type":"string","description":"For pdf, docx, xlsx and html only: the artifact's substantive content as Markdown, which is what search and screen readers get. The text itself: no shell runs on these arguments, so $(cat file) or a file path is refused."}` +
 	`},"required":["format","title"],"additionalProperties":false}`
 
 // saveArguments is what save_artifact is called with. The three content
@@ -433,10 +448,25 @@ type saveArguments struct {
 	// the file there, and its content as Markdown.
 	Path           *string `json:"path"`
 	Representation *string `json:"markdown_representation"`
+	// Deck is a slide deck's content (deckspec), read by saveSlideDeck.
+	Deck json.RawMessage `json:"deck"`
+	// Poster is an infographic's content (posterrender), read by
+	// infographic.
+	Poster json.RawMessage `json:"poster"`
+}
+
+// deckSchema is the deck field's schema: deckspec's, described as the
+// pptx format's content.
+func deckSchema() string {
+	var schema map[string]any
+	_ = json.Unmarshal(deckspec.Schema(false), &schema)
+	schema["description"] = "For a slide deck (pptx) only: the deck's content, drawn by the application."
+	out, _ := json.Marshal(schema)
+	return string(out)
 }
 
 // contentField is the one content field a format is saved from.
-var contentField = map[string]string{FormatFlashcards: "cards", FormatQuiz: "questions", FormatMindMap: "markdown", FormatInfographic: "markdown"}
+var contentField = map[string]string{FormatFlashcards: "cards", FormatQuiz: "questions", FormatMindMap: "markdown", FormatInfographic: "poster", FormatPPTX: "deck"}
 
 // misplaced names the content fields passed that do not belong to the
 // format. A quiz passed with cards as well is a model that has mixed two
@@ -447,7 +477,7 @@ func (a saveArguments) misplaced() []string {
 	for _, field := range []struct {
 		name   string
 		passed bool
-	}{{"cards", a.Cards != nil}, {"questions", a.Questions != nil}, {"markdown", a.Markdown != nil}} {
+	}{{"cards", a.Cards != nil}, {"questions", a.Questions != nil}, {"markdown", a.Markdown != nil}, {"poster", a.Poster != nil}} {
 		if field.passed && field.name != contentField[a.Format] {
 			extra = append(extra, field.name)
 		}
@@ -456,9 +486,14 @@ func (a saveArguments) misplaced() []string {
 }
 
 func (s Specialist) saveTool(owner Owner) tool.Tool {
+	// The person's answer to an infographic's question, for the rest of
+	// this turn: a poster the layout refuses is corrected and saved again
+	// without asking them twice. The tool is built per turn (Delegate), so
+	// nothing outlives it.
+	var chosen infographicChoice
 	return tool.Tool{
 		Name:        SaveTool,
-		Description: "Save the finished artifact so the user can open it. Pass format, title, and the one content field of that format: cards for flashcards, questions for a quiz, markdown for a mind map. For a file built in the sandbox (pdf, docx, pptx, xlsx, html) pass format, title, path and markdown_representation instead, after verify_artifact has passed that path. It answers what was saved, or every problem to fix.",
+		Description: "Save the finished artifact so the user can open it. Pass format, title, and the one content field of that format: cards for flashcards, questions for a quiz, markdown for a mind map, poster for an infographic, deck for a slide deck (pptx). For a file built in the sandbox (pdf, docx, xlsx, html) pass format, title, path and markdown_representation instead, after verify_artifact has passed that path. It answers what was saved, or every problem to fix.",
 		Parameters:  json.RawMessage(saveParameters),
 		// Saving creates a study aid in the user's own account at their
 		// request; it sends nothing anywhere and is undone by deleting the
@@ -474,6 +509,16 @@ func (s Specialist) saveTool(owner Owner) tool.Tool {
 			if err := decoder.Decode(&args); err != nil {
 				return "", fmt.Errorf("the arguments do not fit the schema: %w", err)
 			}
+			if args.Format == FormatPPTX {
+				// A deck: drawn from its content, not saved from a file.
+				return s.saveSlideDeck(ctx, owner, call.ID, args)
+			}
+			if args.Deck != nil {
+				return "", fmt.Errorf("format %q is not saved from a deck; remove deck", args.Format)
+			}
+			if args.Poster != nil && args.Format != FormatInfographic {
+				return "", fmt.Errorf("format %q is not saved from a poster; remove poster", args.Format)
+			}
 			if _, built := documentFormats[args.Format]; built {
 				// A file built in the sandbox: saved from the bytes that
 				// verify_artifact passed, not from these arguments.
@@ -486,24 +531,23 @@ func (s Specialist) saveTool(owner Owner) tool.Tool {
 			if !saved {
 				switch found, name, _ := kindNamed(args.Format); {
 				case finishers[name] != "":
-					// A kind with a tool of its own: a podcast, an image,
-					// a video.
+					// A kind with a tool of its own: a podcast, a video.
 					return "", errors.New(found.label + " is not saved with " + SaveTool + "; call " + finishers[name])
 				case unavailable[name] != "":
 					return "", errors.New(unavailable[name] + " Tell the requester so and make nothing.")
 				}
-				return "", fmt.Errorf("format %q cannot be saved; the formats that can are flashcards, quiz and mindmap", args.Format)
+				return "", fmt.Errorf("format %q cannot be saved; the kinds that can be made are %s", args.Format, kindNames())
 			}
 			if extra := args.misplaced(); len(extra) > 0 {
 				return "", fmt.Errorf("format %q is saved from %s alone; remove %s", args.Format, field, strings.Join(extra, " and "))
 			}
 
 			if args.Format == FormatInfographic {
-				// An infographic is drawn, checked and saved by its own
+				// An infographic is checked, drawn and saved by its own
 				// procedure, which pauses to ask the person for a style
-				// (infographic.go). Its answer and its errors are already
-				// worded for the model.
-				return s.infographic(ctx, owner, call, args.Title, args.Markdown)
+				// and an orientation (infographic.go). Its answer and its
+				// errors are already worded for the model.
+				return s.infographic(ctx, owner, call, args.Title, args.Poster, &chosen)
 			}
 			var result Saved
 			var err error
@@ -535,6 +579,7 @@ func (s Specialist) saveTool(owner Owner) tool.Tool {
 					return "", ctx.Err()
 				}
 				s.Saver.Logger.ErrorContext(ctx, "an artifact could not be saved", "error", err.Error(), "user_id", owner.UserID, "format", args.Format)
+				s.Failures.note(FailureStorage, err)
 				// The cause can name tables and paths; the model gets a
 				// sentence it can pass on.
 				return "", errors.New("the artifact could not be saved because of a storage error; it was not saved")

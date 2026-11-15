@@ -2,9 +2,11 @@ package agentrules
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
 
@@ -14,248 +16,147 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/pythonjson"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/requestbody"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/requestcontext"
-	"git.danvics.com/danvics/soloclef/soloclef_api/internal/requestnumber"
 )
 
-// Routes are the four routes over one Store.
-//
-// The two that read a body (the create and the update) are buffered by the
-// tier's body reader before the route runs: BodyRoutes names them.
-type Routes struct {
-	Store     Store
-	Available Availability
-	Errors    errorenvelope.Writer
-	Logger    *slog.Logger
+// Marks is what the routes need of the database; Store in a deployment.
+type Marks interface {
+	Tools(ctx context.Context, userID string) ([]Tool, error)
+	Mark(ctx context.Context, userID string, mark Mark) error
+	Unmark(ctx context.Context, userID string, mark Mark) error
 }
 
-// routes is the table the registration and the tier's lists are made from,
-// so the two cannot name different routes.
-var routes = []struct {
-	id, method, path, summary string
-	body                      bool
-	serve                     func(Routes, *request)
-}{
-	{"read-agent-permission-rules", http.MethodGet, RulesPath, "The caller's agent permission rules", false, Routes.list},
-	{"create-agent-permission-rule", http.MethodPost, RulesPath, "Write an agent permission rule", true, Routes.create},
-	{"update-agent-permission-rule", http.MethodPatch, RulePath, "Change one agent permission rule", true, Routes.update},
-	{"delete-agent-permission-rule", http.MethodDelete, RulePath, "Remove one agent permission rule", false, Routes.remove},
+// Routes are the two routes over the marks.
+type Routes struct {
+	Marks  Marks
+	Errors errorenvelope.Writer
+	Logger *slog.Logger
 }
 
 // Register mounts the routes.
 func (r Routes) Register(api huma.API) {
-	for _, entry := range routes {
-		serve, what := entry.serve, entry.summary
-		huma.Register(api, huma.Operation{
-			OperationID: entry.id, Method: entry.method, Path: entry.path, Summary: entry.summary, Tags: []string{"agent-permissions"},
-		}, func(context.Context, *struct{}) (*huma.StreamResponse, error) {
-			return &huma.StreamResponse{Body: func(ctx huma.Context) {
-				serve(r, &request{
-					ctx: ctx, routes: r, response: humawriter.New(ctx),
-					id: requestcontext.ID(ctx.Context()), what: what,
-				})
-			}}, nil
-		})
+	stream := func(serve func(huma.Context)) *huma.StreamResponse { return &huma.StreamResponse{Body: serve} }
+	huma.Register(api, huma.Operation{
+		OperationID: "read-agent-tools", Method: http.MethodGet, Path: ToolsPath, Tags: []string{"agent-permissions"},
+		Summary: "Every tool the assistant can use, and whether it asks first",
+	}, func(context.Context, *struct{}) (*huma.StreamResponse, error) { return stream(r.list), nil })
+	huma.Register(api, huma.Operation{
+		OperationID: "set-agent-tool-ask-first", Method: http.MethodPut, Path: AskFirstPath, Tags: []string{"agent-permissions"},
+		Summary:     "Make the assistant ask before one tool, or stop asking",
+		Description: `The body is {"tool": name, "connector_id": a connected app's connection or null, "ask_first": true or false}.`,
+	}, func(context.Context, *struct{}) (*huma.StreamResponse, error) { return stream(r.set), nil })
+}
+
+// call is one request's common parts.
+type call struct {
+	ctx       huma.Context
+	response  http.ResponseWriter
+	requestID string
+	userID    string
+}
+
+// begin answers a request with no caller, which is the wiring gone wrong
+// and never an unauthenticated read, and, where person is true, one that is
+// not a person in a session. ok is false when it has answered.
+func (r Routes) begin(ctx huma.Context, person bool) (call, bool) {
+	c := call{ctx: ctx, response: humawriter.New(ctx), requestID: requestcontext.ID(ctx.Context())}
+	caller, authenticated := principal.FromContext(ctx.Context())
+	if !authenticated || caller.UserID == "" {
+		r.failed(c, "the route ran without an authenticated caller", nil)
+		return c, false
 	}
-}
-
-// AllRoutes is the "METHOD path" of every route, for the tier's lists of
-// what it serves.
-func AllRoutes() []string {
-	out := make([]string, len(routes))
-	for i, entry := range routes {
-		out[i] = entry.method + " " + entry.path
+	if person && !caller.IsSession() {
+		r.Errors.Write(c.response, http.StatusForbidden, sessionRequired, c.requestID)
+		return c, false
 	}
-	return out
+	c.userID = caller.UserID
+	return c, true
 }
 
-// BodyRoutes is the "METHOD path" of every route that reads a body, for the
-// tier's body reader.
-func BodyRoutes() []string {
-	var out []string
-	for _, entry := range routes {
-		if entry.body {
-			out = append(out, entry.method+" "+entry.path)
-		}
-	}
-	return out
-}
-
-// request is one request being answered.
-type request struct {
-	ctx      huma.Context
-	routes   Routes
-	response http.ResponseWriter
-	id       string
-	// what is the route's own summary, for the log.
-	what string
-}
-
-// refuse answers with a status and a sentence.
-func (q *request) refuse(status int, message string) {
-	q.routes.Errors.Write(q.response, status, message, q.id)
-}
-
-// invalid answers a request that cannot be read as asked.
-func (q *request) invalid(failures []errorenvelope.Failure) {
-	q.routes.Errors.WriteValidation(q.response, q.id, failures)
-}
-
-// fail logs what went wrong and answers the tier's sanitised 500.
-func (q *request) fail(reason string, cause error) {
-	attributes := []slog.Attr{slog.String("request_id", q.id), slog.String("reason", reason), slog.String("route", q.what)}
+func (r Routes) failed(c call, reason string, cause error) {
+	attributes := []slog.Attr{slog.String("request_id", c.requestID), slog.String("reason", reason)}
 	if cause != nil {
 		attributes = append(attributes, slog.String("error", cause.Error()))
 	}
-	q.routes.Logger.LogAttrs(q.ctx.Context(), slog.LevelError, "an agent permission rule route failed", attributes...)
-	q.refuse(http.StatusInternalServerError, errorenvelope.GenericServerMessage)
+	r.Logger.LogAttrs(c.ctx.Context(), slog.LevelError, "an agent permission route failed", attributes...)
+	r.Errors.Write(c.response, http.StatusInternalServerError, errorenvelope.GenericServerMessage, c.requestID)
 }
 
-// caller is who is asking, once the route may answer at all: the feature is
-// switched on. It answers the request itself otherwise.
-//
-// The routes are mounted behind the tier's authentication, so there is
-// always a caller; a 500, and never an unauthenticated read of somebody's
-// rules, if the wiring is ever wrong. The account is this principal's and
-// is taken from nowhere else.
-func (q *request) caller() (string, bool) {
-	caller, authenticated := principal.FromContext(q.ctx.Context())
-	if !authenticated || caller.UserID == "" {
-		q.fail("the route ran without an authenticated caller", nil)
-		return "", false
+func (r Routes) list(ctx huma.Context) {
+	c, ok := r.begin(ctx, false)
+	if !ok {
+		return
 	}
-	if !q.routes.Available.Serves() {
-		q.refuse(http.StatusServiceUnavailable, flagOff)
-		return "", false
+	tools, err := r.Marks.Tools(ctx.Context(), c.userID)
+	if err != nil {
+		r.failed(c, "could not read the tools", err)
+		return
 	}
-	return caller.UserID, true
+	body, err := json.Marshal(tools)
+	if err != nil {
+		r.failed(c, "could not render the tools", err)
+		return
+	}
+	pythonjson.Send(c.response, http.StatusOK, body)
 }
 
-// ruleID reads the path's rule id. One that is not a whole number is the
-// tier's usual 422; one no rule can have is 0, which names nothing.
-func (q *request) ruleID() (id int64, failures []errorenvelope.Failure) {
-	id, failure, rangeErr := requestnumber.Parse(q.ctx.Param("rule_id"), "path", "rule_id")
+func (r Routes) set(ctx huma.Context) {
+	c, ok := r.begin(ctx, true)
+	if !ok {
+		return
+	}
+	mark, askFirst, valid := r.readBody(c)
+	if !valid {
+		return
+	}
+	var err error
+	if askFirst {
+		err = r.Marks.Mark(ctx.Context(), c.userID, mark)
+	} else {
+		err = r.Marks.Unmark(ctx.Context(), c.userID, mark)
+	}
+	switch {
+	case errors.Is(err, errToolAbsent):
+		r.Errors.Write(c.response, http.StatusNotFound, toolAbsent, c.requestID)
+	case err != nil:
+		r.failed(c, "could not change the mark", err)
+	default:
+		pythonjson.SendNoContent(c.response)
+	}
+}
+
+// readBody reads {"tool", "connector_id", "ask_first"}, answering a body
+// that does not validate. A connection id no connection can have (below 1,
+// or past the column) names no tool, which is the same "not found" as a tool
+// that is not the caller's; so does a name with U+0000, which no tool has
+// and no text column can hold.
+func (r Routes) readBody(c call) (mark Mark, askFirst, valid bool) {
+	body, failure, err := requestbody.Decode(c.ctx.Header("Content-Type"), requestbody.Buffered(c.ctx.Context()))
+	if err != nil {
+		r.failed(c, "a body reached the route that was never buffered", err)
+		return Mark{}, false, false
+	}
 	if failure != nil {
-		return 0, []errorenvelope.Failure{*failure}
+		r.Errors.WriteValidation(c.response, c.requestID, []errorenvelope.Failure{*failure})
+		return Mark{}, false, false
 	}
-	if rangeErr != nil || id < 1 {
-		return 0, nil
+	model := requestbody.NewModel(body)
+	mark.Tool = model.Text("tool", 1, maxToolName)
+	connector := model.OptionalNumber("connector_id")
+	askFirst = model.RequiredTruth("ask_first")
+	if !model.Valid() {
+		r.Errors.WriteValidation(c.response, c.requestID, model.Failures())
+		return Mark{}, false, false
 	}
-	return id, nil
-}
-
-// send writes a rule or a list of them.
-func (q *request) send(status int, value any) {
-	body, err := pythonjson.Marshal(value)
-	if err != nil {
-		q.fail("could not render the answer", err)
-		return
+	if strings.ContainsRune(mark.Tool, 0) {
+		r.Errors.Write(c.response, http.StatusNotFound, toolAbsent, c.requestID)
+		return Mark{}, false, false
 	}
-	pythonjson.Send(q.response, status, body)
-}
-
-func (r Routes) list(q *request) {
-	userID, ok := q.caller()
-	if !ok {
-		return
+	if connector.Value != nil {
+		if connector.OutOfRange || *connector.Value < 1 {
+			r.Errors.Write(c.response, http.StatusNotFound, toolAbsent, c.requestID)
+			return Mark{}, false, false
+		}
+		mark.ConnectorID = *connector.Value
 	}
-	rules, err := r.Store.Rules(q.ctx.Context(), userID)
-	if err != nil {
-		q.fail("could not read the rules", err)
-		return
-	}
-	q.send(http.StatusOK, BuildList(rules))
-}
-
-func (r Routes) create(q *request) {
-	// The body is checked before the flag and before anything is read, so
-	// a request that could never be served is told why whatever the
-	// deployment's setting.
-	requested, failures, threadOutOfRange, decodeErr := ReadRequest(
-		q.ctx.Header("Content-Type"), requestbody.Buffered(q.ctx.Context()))
-	if decodeErr != nil {
-		q.fail("the body could not be read", decodeErr)
-		return
-	}
-	if len(failures) > 0 {
-		q.invalid(failures)
-		return
-	}
-	userID, ok := q.caller()
-	if !ok {
-		return
-	}
-	permission, wellFormed := StoredPermission(requested.Permission)
-	if !wellFormed {
-		q.refuse(http.StatusBadRequest, permissionMalformed)
-		return
-	}
-	if threadOutOfRange || (requested.ThreadID != nil && *requested.ThreadID < 1) {
-		// A number no thread has names no thread of the caller's.
-		q.refuse(http.StatusNotFound, threadAbsent)
-		return
-	}
-	created, err := r.Store.Create(q.ctx.Context(), userID, requested, permission, StoredPattern(requested.Pattern))
-	switch {
-	case errors.Is(err, ErrNoThread):
-		q.refuse(http.StatusNotFound, threadAbsent)
-	case errors.Is(err, ErrDuplicate):
-		q.refuse(http.StatusConflict, duplicateOnCreate)
-	case err != nil:
-		q.fail("could not write the rule", err)
-	default:
-		q.send(http.StatusCreated, Build(created))
-	}
-}
-
-func (r Routes) update(q *request) {
-	ruleID, failures := q.ruleID()
-	changes, bodyFailures, decodeErr := ReadChanges(
-		q.ctx.Header("Content-Type"), requestbody.Buffered(q.ctx.Context()))
-	if decodeErr != nil {
-		q.fail("the body could not be read", decodeErr)
-		return
-	}
-	if failures = append(failures, bodyFailures...); len(failures) > 0 {
-		q.invalid(failures)
-		return
-	}
-	userID, ok := q.caller()
-	if !ok {
-		return
-	}
-	// A body that mentions nothing still runs the statement: it sets each
-	// column to itself, and its answer is the row, or that the caller has
-	// no such rule.
-	updated, found, err := r.Store.Update(q.ctx.Context(), userID, ruleID, changes)
-	switch {
-	case errors.Is(err, ErrDuplicate):
-		q.refuse(http.StatusConflict, duplicateOnUpdate)
-	case err != nil:
-		q.fail("could not update the rule", err)
-	case !found:
-		q.refuse(http.StatusNotFound, ruleAbsent)
-	default:
-		q.send(http.StatusOK, Build(updated))
-	}
-}
-
-func (r Routes) remove(q *request) {
-	ruleID, failures := q.ruleID()
-	if len(failures) > 0 {
-		q.invalid(failures)
-		return
-	}
-	userID, ok := q.caller()
-	if !ok {
-		return
-	}
-	removed, err := r.Store.Delete(q.ctx.Context(), userID, ruleID)
-	switch {
-	case err != nil:
-		q.fail("could not delete the rule", err)
-	case !removed:
-		q.refuse(http.StatusNotFound, ruleAbsent)
-	default:
-		pythonjson.SendNoContent(q.response)
-	}
+	return mark, askFirst, true
 }

@@ -49,9 +49,6 @@ var routes = []route{
 	{"threads-delete", http.MethodDelete, ThreadPath, "Delete a thread and everything saved for it", false, Routes.remove},
 	{"threads-messages", http.MethodGet, MessagesPath, "A page of a thread's messages", false, Routes.messages},
 	{"threads-append", http.MethodPost, MessagesPath, "Add a message to a thread", true, Routes.appendMessage},
-	{"threads-share", http.MethodPost, LinksPath, "Make a public link to a thread", true, Routes.share},
-	{"threads-links", http.MethodGet, LinksPath, "A thread's public links", false, Routes.links},
-	{"threads-unshare", http.MethodDelete, LinkPath, "Take down one of a thread's public links", false, Routes.unshare},
 	{"agent-tools", http.MethodGet, ToolsPath, "The tools the composer's tool picker lists", false, Routes.tools},
 	{"notebook-threads", http.MethodGet, NotebookThreadsPath, "A notebook's chats", false, Routes.notebookThreads},
 	{"notebook-threads-start", http.MethodPost, NotebookThreadsPath, "Start a chat in a notebook", false, Routes.startNotebookThread},
@@ -365,8 +362,14 @@ func (r Routes) appendMessage(ctx huma.Context) {
 
 func (r Routes) tools(ctx huma.Context) {
 	answer := r.answerer(ctx, "the tool list could not be read")
-	if _, signedIn := answer.signedIn(); !signedIn {
+	caller, signedIn := answer.signedIn()
+	if !signedIn {
 		return
 	}
-	answer.send(http.StatusOK, r.Service.Tools)
+	listed, err := r.Service.Tools(ctx.Context(), caller.UserID)
+	if err != nil {
+		answer.fail("the tool list could not be read", err)
+		return
+	}
+	answer.send(http.StatusOK, listed)
 }

@@ -27,8 +27,9 @@ import (
 
 // The bug this milestone starts with. A notebook chat's search is confined
 // to the notebook's enabled sources by the server, whatever the request
-// says, and it has no way out to the web.
-func TestANotebookChatSearchesItsSourcesAndNothingElse(t *testing.T) {
+// says. It has no way out to the web; the scholarly indexes are its one
+// way to papers its sources lack, which add_sources then brings in.
+func TestANotebookChatSearchesItsSourcesAndPapersButNotTheWeb(t *testing.T) {
 	script := modeltest.NewScript(
 		modeltest.Reply{Calls: call("s1", "search_knowledge_base", `{"query":"mitosis"}`)},
 		modeltest.Reply{Text: "ok"},
@@ -53,7 +54,11 @@ func TestANotebookChatSearchesItsSourcesAndNothingElse(t *testing.T) {
 	for _, spec := range first.Tools {
 		tools = append(tools, spec.Name)
 	}
-	if got := strings.Join(tools, " "); got != "search_knowledge_base update_memory deliverables" {
+	// The web stays out whatever the scope says (Exa and Tavily are
+	// connected here); the scholarly indexes are in with nothing picked
+	// (since 2026-11-14), and so is the person's own connected app (since
+	// 2026-11-13), the sources still first.
+	if got := strings.Join(tools, " "); got != "search_knowledge_base pubmed_search arxiv_search preprint_search update_memory write_note draw_figure deliverables" {
 		t.Fatalf("a notebook chat was offered: %s", got)
 	}
 	// The search was confined to the notebook's document, and the vector
@@ -84,7 +89,7 @@ func TestANotebookChatSearchesItsSourcesAndNothingElse(t *testing.T) {
 	for _, spec := range picked.Requests()[0].Tools {
 		tools = append(tools, spec.Name)
 	}
-	if got := strings.Join(tools, " "); got != "search_knowledge_base pubmed_search update_memory deliverables" {
+	if got := strings.Join(tools, " "); got != "search_knowledge_base pubmed_search update_memory draw_figure deliverables" {
 		t.Errorf("a notebook chat with PubMed picked was offered: %s", got)
 	}
 }
@@ -493,6 +498,7 @@ func TestWhatAskingAgainRefuses(t *testing.T) {
 		modeltest.Reply{Calls: call("w1", "write_note", `{}`)},
 	)
 	a := newApp(t, script, []tool.Tool{notes(tool.Ask, &ran)})
+	a.rows.mark(ada, "write_note")
 	if got := a.call(ada, http.MethodPost, regeneratePath, `{}`); got.status != 400 {
 		t.Errorf("a thread with no question: %d %s", got.status, got.raw)
 	}
@@ -602,6 +608,7 @@ func TestAStepThatWaitedIsFinishedUnderItsSavedIdentity(t *testing.T) {
 	a := newApp(t, script, []tool.Tool{notes(tool.Ask, &ran)}, func(_ *Service, sc *scripted) {
 		sc.activities = map[string]Activity{"write_note": assembly.ConnectedActivity("Notes")}
 	})
+	a.rows.mark(ada, "write_note")
 	page := readAll(t, first(a.ask(ada, turnBody)))
 	steps, clock := page.steps()
 	if len(steps) != 1 || steps[0]["status"] != "awaiting_approval" || steps[0]["title"] != "Approval needed: Using Notes" || clock["status"] != "paused" {
@@ -821,14 +828,14 @@ func TestAFailedSummaryStillAnswers(t *testing.T) {
 // ---- Connected apps -------------------------------------------------------
 
 // An account's connected apps are offered in the default, documents-only
-// scope, asking first; "always allow" is kept where the app's trust is kept;
-// and what the turn opened is given back when it ends.
+// scope; a tool marked "ask first" asks, by its connection; "always allow"
+// takes that mark off; and what the turn opened is given back when it ends.
 func TestConnectedAppsAreOfferedInTheDocumentsScopeAndAskFirst(t *testing.T) {
 	var ran atomic.Int64
 	closed := 0
 	set := appSet{
 		tools: []tool.Tool{notes(tool.Ask, &ran), {Name: "search_knowledge_base", Parameters: objectSchema, Approval: tool.Ask, Run: func(context.Context, tool.Call) (string, error) { return "", nil }}},
-		apps:  map[string]string{"write_note": "Notes", "search_knowledge_base": "Impostor"}, trusted: map[string]bool{}, closed: &closed,
+		apps:  map[string]string{"write_note": "Notes", "search_knowledge_base": "Impostor"}, closed: &closed,
 	}
 	script := modeltest.NewScript(
 		modeltest.Reply{Calls: call("w1", "write_note", `{"text":"hi"}`)},
@@ -840,6 +847,10 @@ func TestConnectedAppsAreOfferedInTheDocumentsScopeAndAskFirst(t *testing.T) {
 		assembly.Connected = someApps{set}
 		s.Assembler = assembly
 	})
+	// Marked by the app's connection; a mark on the chat's own tool of the
+	// same name says nothing about the app's.
+	appTool := MarkedTool{Connector: appConnection, Name: "write_note"}
+	a.rows.askFirst[markKey(ada, appTool)] = true
 	frames, _ := a.ask(ada, turnBody)
 	page := readAll(t, frames)
 	if len(page.interrupts) != 1 || ran.Load() != 0 {
@@ -851,7 +862,7 @@ func TestConnectedAppsAreOfferedInTheDocumentsScopeAndAskFirst(t *testing.T) {
 	}
 	// One search_knowledge_base: the chat's own, not the app's of the
 	// same name.
-	if got := strings.Join(offered, " "); got != "search_knowledge_base update_memory write_note deliverables" {
+	if got := strings.Join(offered, " "); got != "search_knowledge_base update_memory write_note draw_figure deliverables" {
 		t.Fatalf("offered: %s", got)
 	}
 	if steps, _ := page.steps(); len(steps) != 1 || steps[0]["title"] != "Approval needed: Using Notes" {
@@ -860,16 +871,16 @@ func TestConnectedAppsAreOfferedInTheDocumentsScopeAndAskFirst(t *testing.T) {
 	if closed != 1 {
 		t.Fatalf("the paused turn's connections were given back %d times", closed)
 	}
-	// "Always allow" goes to the app's own trust, and the second call of
-	// the resumed turn runs on it without asking.
+	// "Always allow" takes the app tool's mark off, and the second call of
+	// the resumed turn runs without asking.
 	response := a.request(ada, http.MethodPost, resumePath, `{"decisions":[{"type":"approve_always","tool_call_id":"w1"}]}`)
 	resumed, _ := readFrames(t, response.Body)
 	response.Body.Close()
 	if len(find(resumed, "data-interrupt-request")) != 0 || ran.Load() != 2 {
 		t.Fatalf("after always-allow: %s, ran %d", kinds(resumed), ran.Load())
 	}
-	if !set.trusted["write_note"] || len(a.rows.trust) != 0 {
-		t.Errorf("trust was kept in %v and %v: a connected app's belongs on its connection", set.trusted, a.rows.trust)
+	if asks, _ := a.rows.AsksFirst(context.Background(), ada, appTool); asks || len(a.rows.askFirst) != 0 {
+		t.Errorf("the marks afterwards: %v", a.rows.askFirst)
 	}
 	if closed != 2 {
 		t.Errorf("connections were given back %d times over two stretches", closed)

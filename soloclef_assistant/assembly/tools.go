@@ -16,9 +16,12 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/academic"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/accountfiles"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/accountvision"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/addsources"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/documents"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/drivetools"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/imapmail"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/mailattachments"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/maildrafts"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/mailsignin"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/mailtools"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/mcptools"
@@ -28,6 +31,7 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/websearch"
 	"git.danvics.com/danvics/soloclef/soloclef_connectors/drivegrant"
 	"git.danvics.com/danvics/soloclef/soloclef_connectors/nextcloud"
+	"git.danvics.com/danvics/soloclef/soloclef_connectors/sealedsecret"
 	"git.danvics.com/danvics/soloclef/soloclef_ingest/fileread"
 	"git.danvics.com/danvics/soloclef/soloclef_ingest/vision"
 )
@@ -74,6 +78,10 @@ const (
 	connectedAppRetry       = 30 * time.Second
 	connectedAppAccounts    = 2000
 	connectedAppResultBytes = 64 << 10
+	// One request to an OAuth server's authorization server (renewing a
+	// token, discovering, registering, revoking) has ten seconds: a turn
+	// waits on a renewal before its first call to that server.
+	connectedAppTokenRenewal = 10 * time.Second
 
 	// Mail. One conversation with a mail server (sign in, search or read,
 	// sign out) has twenty seconds, the time a mailbox's test has always
@@ -108,6 +116,11 @@ const (
 // ConnectedAppConnectTimeout is how long one connection to a connected
 // app's server may take to open.
 const ConnectedAppConnectTimeout = connectedAppConnect
+
+// ConnectedAppOAuthTimeout is how long one request to a connected app's
+// authorization server may take: the settings routes that start and finish
+// a sign-in use the time a turn's renewal does.
+const ConnectedAppOAuthTimeout = connectedAppTokenRenewal
 
 // connectedAppSiteHosts is where a site-wide connected app may be reached
 // while the administrators have saved no list of their own. It is the list
@@ -211,6 +224,13 @@ type ToolDeps struct {
 	// model, for a picture a file tool reads (ownmodels.Connections, the
 	// one the turn's chat model is opened with).
 	Own ownmodels.VisionOpener
+	// DraftNotifier is told when the chat leaves a mail draft waiting for
+	// its owner's confirmation (maildrafts.Notifier): the hook a
+	// notification is raised from. maildrafts.NoNotifications raises none.
+	DraftNotifier maildrafts.Notifier
+	// FileStore is the process's file store (*filestore.Stores), which a
+	// mail draft's attached documents and Studio outputs are read from.
+	FileStore mailattachments.Stores
 }
 
 // Tools are the tools of a turn that every tier builds the same way.
@@ -241,8 +261,8 @@ type Tools struct {
 // opened and is called once, at shutdown.
 func NewTools(settings ToolSettings, deps ToolDeps) (Tools, func(), error) {
 	switch {
-	case deps.Pool == nil || deps.HTTP == nil || deps.Logger == nil || deps.Own == nil:
-		return Tools{}, nil, errors.New("assembly: the pool, the HTTP client, the logger and the own model connections are all required")
+	case deps.Pool == nil || deps.HTTP == nil || deps.Logger == nil || deps.Own == nil || deps.DraftNotifier == nil || deps.FileStore == nil:
+		return Tools{}, nil, errors.New("assembly: the pool, the HTTP client, the logger, the own model connections, the draft notifier and the file store are all required")
 	case strings.TrimSpace(settings.ValkeyURL) == "" || settings.Brand == "":
 		return Tools{}, nil, errors.New("assembly: the Valkey address and the brand are required")
 	case settings.SecretKey == "":
@@ -308,17 +328,26 @@ func NewTools(settings ToolSettings, deps ToolDeps) (Tools, func(), error) {
 	if err != nil {
 		return Tools{}, nil, err
 	}
+	// A connected app's secrets are opened as a connection is made, and an
+	// OAuth server's access token renewed there through the same guard.
+	serverSecrets, err := sealedsecret.New(settings.SecretKey, sealedsecret.MCPServerSecret)
+	if err != nil {
+		generations.Close()
+		return Tools{}, nil, err
+	}
+	guard := mcptools.PublicInternet{Resolve: mcptools.SystemResolve, ConnectTimeout: connectedAppConnect}
 	connected, err := mcptools.NewSource(mcptools.Settings{
 		Rows: mcptools.Postgres{Pool: deps.Pool}, Generations: generations,
-		Network: mcptools.PublicInternet{Resolve: mcptools.SystemResolve, ConnectTimeout: connectedAppConnect},
-		Logger:  deps.Logger, Now: time.Now, ClientName: settings.Brand,
+		Network: guard, Seal: serverSecrets,
+		OAuth:  mcptools.OAuth{Network: guard, Timeout: connectedAppTokenRenewal, ClientName: settings.Brand},
+		Logger: deps.Logger, Now: time.Now, ClientName: settings.Brand,
 		SiteHostsWhenUnset: connectedAppSiteHosts,
 		// Every name the chat may offer of its own, so that a connected
 		// app's tool of the same name is given a name of its own instead.
 		ReservedNames: append([]string{
 			documents.ToolName, websearch.Exa.ToolName(), websearch.Tavily.ToolName(),
 			academic.PubMedTool, academic.ArxivTool, academic.PreprintTool,
-			pageTool.Name, MemoryToolName, KnowledgeBaseName,
+			pageTool.Name, MemoryToolName, KnowledgeBaseName, addsources.ToolName,
 		}, slices.Concat(mailtools.Names(), drivetools.Names(), nextcloudtools.Names(), settings.ReservedNames)...),
 		Limits: mcptools.Limits{
 			ToolsPerServer: connectedAppTools, Discovery: connectedAppDiscovery, Call: connectedAppCall,
@@ -366,14 +395,37 @@ func NewTools(settings ToolSettings, deps ToolDeps) (Tools, func(), error) {
 	if err := reader.Check(); err != nil {
 		return fail(err)
 	}
-	mail := &mailtools.Tools{Rows: mailRows, Mail: reader, SignIn: signIn, Files: files, SearchTimeout: mailSearch, Logger: deps.Logger}
+	// The account's JMAP mailboxes (Stalwart), reached only at public
+	// addresses of the server a person named, and the send guard the one
+	// tool that writes (draft_email) stores its drafts with.
+	jmap, err := NewJMAPMail(deps.Pool, settings.SecretKey, deps.Logger)
+	if err != nil {
+		return fail(err)
+	}
+	draftFiles, err := NewDraftFiles(deps.Pool, deps.FileStore, jmap)
+	if err != nil {
+		return fail(err)
+	}
+	drafts, err := NewDraftGuard(deps.Pool, jmap, draftFiles, deps.DraftNotifier, deps.Logger)
+	if err != nil {
+		return fail(err)
+	}
+	mail := &mailtools.Tools{Rows: mailRows, Mail: reader, SignIn: signIn, JMAP: jmap, Drafts: drafts, Files: files,
+		Attachments: draftFiles, SearchTimeout: mailSearch, Logger: deps.Logger}
 	if err := mail.Check(); err != nil {
+		return fail(err)
+	}
+
+	// The account's Exa and Tavily keys, sealed by the API tier when they
+	// were connected, opened here for a search.
+	webKeys, err := sealedsecret.New(settings.SecretKey, sealedsecret.WebSearchKey)
+	if err != nil {
 		return fail(err)
 	}
 
 	tools := Tools{
 		Documents: searcher, Academic: sources, Pages: pages, PageTool: pageTool,
-		Web:       websearch.Search{Keys: websearch.StoredKeys{Pool: deps.Pool}, HTTP: deps.HTTP},
+		Web:       websearch.Search{Keys: websearch.StoredKeys{Pool: deps.Pool, Seal: webKeys}, HTTP: deps.HTTP},
 		Connected: connectedApps{connected},
 		Mail:      mail,
 		Files:     files,
@@ -433,15 +485,10 @@ func (c connectedApps) ForTurn(ctx context.Context, userID string) (ConnectedToo
 
 type connectedSet struct{ *mcptools.Set }
 
-// Trust remembers "always allow" on the app's connection. A connection
-// removed or switched off while the turn waited has no list left to write
-// to: the approval still holds for the turn it was given in (the loop keeps
-// that), so this is not treated as a failure of the approval.
-func (c connectedSet) Trust(ctx context.Context, name string) error {
-	if err := c.Set.Trust(ctx, name); err != nil && !errors.Is(err, mcptools.ErrGone) {
-		return err
-	}
-	return nil
+// Marked is the app's tool by its connection and the server's own name.
+func (c connectedSet) Marked(name string) (MarkedTool, bool) {
+	info, mine := c.Lookup(name)
+	return MarkedTool{Connector: info.ConnectorID, Name: info.Tool}, mine
 }
 
 func (c connectedSet) App(name string) (string, bool) {

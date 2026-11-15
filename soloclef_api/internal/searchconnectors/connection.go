@@ -95,7 +95,7 @@ func shownConfig(connection Connection) (*pythonjson.Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	return publicConfig(connection.Type, config)
+	return publicConfig(connection, config)
 }
 
 // renderConnection is one connection as the list, the read by id and the
@@ -151,34 +151,6 @@ func numberOrNull(number *int64) any {
 	return *number
 }
 
-// The three fields MCPConnectorRead.from_connector keeps of a server's
-// stored settings, in the order it asks for them.
-var serverFields = []string{"url", "headers", "transport"}
-
-// shownServer is MCPConnectorRead.from_connector(
-// SearchSourceConnectorRead.model_validate(connector)), up to the model it
-// builds: everything that can fail inside the route's `try`.
-//
-// It validates the row exactly as the generic read does and then shows much
-// less of it: of the whole config only `server_config`, and of that only the
-// three fields above, each dropped when it is None, "", [] or {} -- and then
-// masked.
-func shownServer(connection Connection) (*pythonjson.Object, error) {
-	config, err := validated(connection)
-	if err != nil {
-		return nil, err
-	}
-	kept, err := keptServerFields(config.GetOrNil("server_config"))
-	if err != nil {
-		return nil, err
-	}
-	masked, err := maskServerConfig(kept)
-	if err != nil {
-		return nil, err
-	}
-	return masked, nil
-}
-
 // renderServer is that model as pydantic-core serialises it, which is the
 // one step that happens after the route has returned. The outermost keys of
 // `server_config` are the three field names, so writeMapping's rule for a
@@ -212,78 +184,4 @@ func renderServer(connection Connection, masked *pythonjson.Object) ([]byte, err
 		}
 	}
 	return body.close(), nil
-}
-
-// keptServerFields is the dict comprehension in from_connector:
-//
-//	stored = config.get("server_config") or {}
-//	{key: stored[key] for key in ("url", "headers", "transport")
-//	 if key in stored and stored[key] not in (None, "", [], {})}
-//
-// It is written for an object and Python runs it on whatever is there. A
-// falsy value is the empty object. For a truthy one, `key in stored` is a
-// question every container answers its own way, and `stored[key]` then fails
-// for all of them but an object:
-//
-//   - a list holding the text "url" answers true and cannot be indexed by it;
-//   - a str is asked whether it *contains* "url", and cannot either;
-//   - a number or `true` cannot be asked at all.
-//
-// So a list or a str that mentions none of the three field names is an empty
-// server_config and a 200, and one that mentions any is a 500.
-func keptServerFields(stored any) (*pythonjson.Object, error) {
-	kept := pythonjson.NewObject()
-	if !truthy(stored) {
-		return kept, nil
-	}
-	switch held := stored.(type) {
-	case *pythonjson.Object:
-		for _, field := range serverFields {
-			value, present := held.Get(field)
-			if present && !isEmptyServerField(value) {
-				kept.Set(field, value)
-			}
-		}
-		return kept, nil
-	case []any:
-		for _, item := range held {
-			if text, isText := item.(string); isText && isServerField(text) {
-				return nil, errNotAnObject
-			}
-		}
-		return kept, nil
-	case string:
-		for _, field := range serverFields {
-			if containsText(held, field) {
-				return nil, errNotAnObject
-			}
-		}
-		return kept, nil
-	}
-	return nil, errNotAnObject
-}
-
-func isServerField(text string) bool {
-	for _, field := range serverFields {
-		if text == field {
-			return true
-		}
-	}
-	return false
-}
-
-// isEmptyServerField is `value in (None, "", [], {})`, which is equality with
-// each: a zero or a false is none of the four and is kept.
-func isEmptyServerField(value any) bool {
-	switch held := value.(type) {
-	case nil:
-		return true
-	case string:
-		return held == ""
-	case []any:
-		return len(held) == 0
-	case *pythonjson.Object:
-		return held.Len() == 0
-	}
-	return false
 }

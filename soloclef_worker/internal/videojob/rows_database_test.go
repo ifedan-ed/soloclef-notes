@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"git.danvics.com/danvics/soloclef/soloclef_celery/celery"
+	"git.danvics.com/danvics/soloclef/soloclef_notify/notify"
 	"git.danvics.com/danvics/soloclef/soloclef_studio/artifactsave"
 
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/testdatabase"
@@ -135,11 +136,11 @@ func TestAnAttemptsWritesStopWhenItMovesOn(t *testing.T) {
 	// release changes nothing.
 	testdatabase.Exec(t, pool, `UPDATE deliverable_jobs SET status = 'queued', attempt_count = 2, celery_task_id = $2 WHERE id = $1`,
 		job.ID, fmt.Sprintf("deliverable-job:%d:attempt:2", job.ID))
-	if err := store.Release(ctx, job); err != nil {
+	if _, err := store.Release(ctx, job, rules); err != nil {
 		t.Fatal(err)
 	}
 	next, _ := store.Claim(ctx, job.ID, fmt.Sprintf("deliverable-job:%d:attempt:2", job.ID), rules)
-	if next.Outcome != claimRun || next.Job.sandboxName() != fmt.Sprintf("deliverable-job-%d-attempt-2", job.ID) {
+	if next.Outcome != claimRun || next.Job.Attempt != 2 {
 		t.Fatalf("the retry: %+v", next)
 	}
 	if err := store.Fail(ctx, job, codeRender, "the old attempt"); err != nil {
@@ -148,11 +149,31 @@ func TestAnAttemptsWritesStopWhenItMovesOn(t *testing.T) {
 	if status, _, _, _ := row(t, pool, job.ID); status != "running" {
 		t.Errorf("the old attempt's failure was written over the retry: %s", status)
 	}
-	if err := store.Release(ctx, next.Job); err != nil {
-		t.Fatal(err)
+	if released, err := store.Release(ctx, next.Job, rules); err != nil || !released {
+		t.Fatalf("released: %v, %v", released, err)
 	}
 	if status, phase, _, _ := row(t, pool, job.ID); status != "queued" || phase != "" {
 		t.Errorf("released: %s/%s", status, phase)
+	}
+
+	// A release counts as a restart, and the claim that takes the message
+	// next carries the count. Once the attempt has been restarted as often
+	// as it may, the next release fails it as interrupted.
+	for restart := 1; restart <= rules.MaxTakeovers; restart++ {
+		taken, err := store.Claim(ctx, job.ID, next.Job.TaskID, rules)
+		if err != nil || taken.Outcome != claimRun || taken.Job.Takeovers != restart {
+			t.Fatalf("restart %d: %+v, %v", restart, taken, err)
+		}
+		released, err := store.Release(ctx, taken.Job, rules)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := restart < rules.MaxTakeovers; released != want {
+			t.Fatalf("restart %d released = %v, want %v", restart, released, want)
+		}
+	}
+	if status, _, code, _ := row(t, pool, job.ID); status != "failed" || code != codeInterrupted {
+		t.Errorf("an attempt stopped on every run it may have: %s/%s", status, code)
 	}
 }
 
@@ -238,12 +259,13 @@ func TestACancelDuringTheRenderIsNotOverwrittenInTheDatabase(t *testing.T) {
 	ctx := context.Background()
 	job, _ := queuedVideo(t, pool, owner)
 
-	r := newRig(t, draftReply("One.", "Two."))
+	r := newRig(t, deckReply(firstSlide, secondSlide))
 	r.job.Rows = Store{Pool: pool}
 	r.job.Log = slog.New(slog.NewTextHandler(io.Discard, nil))
 	rendering := make(chan struct{})
-	r.box.render = func(ctx context.Context) {
-		close(rendering)
+	var once sync.Once
+	r.raster.render = func(ctx context.Context) {
+		once.Do(func() { close(rendering) })
 		<-ctx.Done()
 	}
 	go func() {
@@ -274,7 +296,7 @@ func TestAVideoIsSavedInTheDatabase(t *testing.T) {
 	owner := testdatabase.Account(t, pool)
 	ctx := context.Background()
 	job, thread := queuedVideo(t, pool, owner)
-	r := newRig(t, draftReply("One.", "Two."))
+	r := newRig(t, deckReply(firstSlide, secondSlide))
 	r.job.Rows = Store{Pool: pool}
 	if err := r.job.Run(ctx, &celery.Message{Task: Task, ID: job.TaskID, Kwargs: map[string]any{"job_id": float64(job.ID)}}); err != nil {
 		t.Fatal(err)
@@ -298,7 +320,7 @@ func TestAVideoIsSavedInTheDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 	if format != "video" || threadID == nil || *threadID != thread || role != "primary" || mime != "video/mp4" ||
-		!strings.HasPrefix(key, fmt.Sprintf("artifacts/%s/%d/primary/", owner, *artifact)) || size != int64(len("an mp4 of the scenes")) ||
+		!strings.HasPrefix(key, fmt.Sprintf("artifacts/%s/%d/primary/", owner, *artifact)) || size < 1000 ||
 		docPath != "/documents/The heart.md" || slides != 2 {
 		t.Errorf("saved %s %v %s %s %s %d %s %d", format, threadID, role, mime, key, size, docPath, slides)
 	}
@@ -313,8 +335,9 @@ func TestASwitchedOffRenderRefusesAtOnce(t *testing.T) {
 	queued, _ := queuedVideo(t, pool, owner)
 	cancelled, _ := queuedVideo(t, pool, owner)
 	testdatabase.Exec(t, pool, `UPDATE deliverable_jobs SET status = 'cancelled' WHERE id = $1`, cancelled.ID)
+	notified := &recordingNotifier{}
 	for _, id := range []int64{queued.ID, cancelled.ID} {
-		if err := (Refusal{Pool: pool}).Run(ctx, &celery.Message{Task: Task, Kwargs: map[string]any{"job_id": float64(id)}}); err != nil {
+		if err := (Refusal{Pool: pool, Notifier: notified}).Run(ctx, &celery.Message{Task: Task, Kwargs: map[string]any{"job_id": float64(id)}}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -323,5 +346,9 @@ func TestASwitchedOffRenderRefusesAtOnce(t *testing.T) {
 	}
 	if status, _, _, _ := row(t, pool, cancelled.ID); status != "cancelled" {
 		t.Errorf("cancelled became %s", status)
+	}
+	// Only the video that was refused is reported, as failed.
+	if got := notified.reported(); len(got) != 1 || got[0] != (notify.StudioRun{UserID: owner, JobID: queued.ID, Failed: true}) {
+		t.Errorf("notified %+v", got)
 	}
 }

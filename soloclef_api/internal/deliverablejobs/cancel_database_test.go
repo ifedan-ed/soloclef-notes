@@ -26,11 +26,11 @@ func TestAJobIsStoppedByItsOwnerAlone(t *testing.T) {
 	pool := testpostgres.Open(t, databaseVariable)
 	const alice, bob = testpostgres.Alice, testpostgres.Bob
 	testpostgres.Exec(t, pool, `
-INSERT INTO deliverable_jobs (id, user_id, kind, title, tool_call_id, status) VALUES
- (1, '`+alice+`', 'report', 'Queued', 'a', 'queued'),
- (2, '`+alice+`', 'report', 'Running', 'b', 'running'),
- (3, '`+alice+`', 'report', 'Done', 'c', 'ready'),
- (4, '`+bob+`',   'report', 'His', 'd', 'queued');`)
+INSERT INTO deliverable_jobs (id, user_id, kind, title, tool_call_id, status, request) VALUES
+ (1, '`+alice+`', 'artifact', 'Queued', 'a', 'queued', '{"kind":"quiz","task":"her sources"}'),
+ (2, '`+alice+`', 'artifact', 'Running', 'b', 'running', '{"kind":"quiz","task":"her sources"}'),
+ (3, '`+alice+`', 'report', 'Done', 'c', 'ready', '{}'),
+ (4, '`+bob+`',   'artifact', 'His', 'd', 'queued', '{"kind":"quiz","task":"his sources"}');`)
 	api := humago.New(http.NewServeMux(), huma.DefaultConfig("test", "0"))
 	CancelRoute{Database: pool, Errors: errorenvelope.Writer{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Now: func() time.Time { return time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC) }}.Register(api)
@@ -60,7 +60,16 @@ INSERT INTO deliverable_jobs (id, user_id, kind, title, tool_call_id, status) VA
 		}
 	}
 	var stillQueued int
-	if err := pool.QueryRow(context.Background(), `SELECT count(*) FROM deliverable_jobs WHERE id = 4 AND status = 'queued'`).Scan(&stillQueued); err != nil || stillQueued != 1 {
+	if err := pool.QueryRow(context.Background(), `SELECT count(*) FROM deliverable_jobs WHERE id = 4 AND status = 'queued' AND request ? 'task'`).Scan(&stillQueued); err != nil || stillQueued != 1 {
 		t.Error("her requests changed his job")
+	}
+	// The job cancelled outright no longer holds the person's text; the one
+	// asked to stop keeps it until its run ends, and the rest of a request
+	// stays.
+	for id, want := range map[int]string{1: `{"kind": "quiz"}`, 2: `{"kind": "quiz", "task": "her sources"}`} {
+		var request string
+		if err := pool.QueryRow(context.Background(), `SELECT request::text FROM deliverable_jobs WHERE id = $1`, id).Scan(&request); err != nil || request != want {
+			t.Errorf("job %d's request after the cancel: %s, %v; want %s", id, request, err, want)
+		}
 	}
 }

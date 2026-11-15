@@ -17,7 +17,8 @@ SELECT o.id, o.kind, o.title, o.options, o.source_document_ids,
 FROM notebook_outputs o
 LEFT JOIN podcast_runs p ON p.id = o.podcast_id AND p.user_id = o.user_id AND p.status = 'ready'
 LEFT JOIN deliverable_jobs j ON j.id = o.deliverable_job_id AND j.user_id = o.user_id AND j.status = 'ready'
-JOIN artifacts a ON a.id = COALESCE(p.artifact_id, j.artifact_id) AND a.user_id = o.user_id
+-- Or the artifact a notebook's chat made, which has no run to be ready.
+JOIN artifacts a ON a.id = COALESCE(p.artifact_id, j.artifact_id, o.artifact_id) AND a.user_id = o.user_id
 JOIN documents d ON d.id = a.document_id AND d.user_id = a.user_id
 WHERE o.id = sqlc.arg(output_id) AND o.notebook_id = sqlc.arg(notebook_id) AND o.user_id = sqlc.arg(user_id);
 
@@ -32,7 +33,8 @@ ORDER BY title, id;
 -- The outputs suggestions point at, of this notebook, each with the state
 -- of the run making it ('' when the run is gone). An id that is not listed
 -- is an output the person deleted from the Studio.
-SELECT o.id, COALESCE(p.status::text, j.status::text, '')::text AS run_status
+-- An output a chat made with no run is its artifact, which is ready.
+SELECT o.id, COALESCE(p.status::text, j.status::text, CASE WHEN o.artifact_id IS NOT NULL THEN 'ready' END, '')::text AS run_status
 FROM notebook_outputs o
 LEFT JOIN podcast_runs p ON p.id = o.podcast_id AND p.user_id = o.user_id
 LEFT JOIN deliverable_jobs j ON j.id = o.deliverable_job_id AND j.user_id = o.user_id

@@ -43,6 +43,12 @@ export const getConnectorIcon = (connectorType: EnumConnectorName | string, clas
 					}}
 				/>
 			);
+		// The native web search connectors (features/web-search-connect):
+		// not rows of the connector table, so plain names rather than enum members.
+		case "EXA_WEB_SEARCH":
+			return <Image src="/connectors/exa.svg" alt="Exa" {...imgProps} />;
+		case "TAVILY_WEB_SEARCH":
+			return <Image src="/connectors/tavily.svg" alt="Tavily" {...imgProps} />;
 		// Document types and search modes that share this icon set
 		case "CRAWLED_URL":
 			return <Globe {...iconProps} />;

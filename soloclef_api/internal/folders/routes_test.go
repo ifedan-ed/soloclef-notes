@@ -109,7 +109,6 @@ func newSite(t *testing.T, w world) *site {
 	RenameRoute{Folders: w, Errors: envelope, Logger: logger, Now: s.clock.now}.Register(api)
 	MoveRoute{Folders: w, Errors: envelope, Logger: logger, Now: s.clock.now}.Register(api)
 	ReorderRoute{Folders: w, Errors: envelope, Logger: logger, Now: s.clock.now}.Register(api)
-	WatchRoute{Folders: w, Errors: envelope, Logger: logger, Now: s.clock.now}.Register(api)
 	DeleteRoute{Folders: w, Queue: s.queue, Errors: envelope, Logger: logger}.Register(api)
 	DocumentMoveRoute{Folders: w, Arrivals: s.told, Errors: envelope, Logger: logger, Now: s.clock.now}.Register(api)
 	BulkMoveRoute{Folders: w, Arrivals: s.told, Errors: envelope, Logger: logger, Now: s.clock.now}.Register(api)
@@ -256,7 +255,8 @@ func routeCases(t *testing.T, newWorld func(*testing.T) world) {
 		if clinic.CreatedAt != clinic.UpdatedAt || !strings.HasPrefix(clinic.CreatedAt, "2026-03-04T05:06:08") {
 			t.Errorf("created_at %q and updated_at %q should be the one reading of the clock", clinic.CreatedAt, clinic.UpdatedAt)
 		}
-		// The keys a client reads, in order, and no owner among them.
+		// The keys a client reads, in order, and no owner among them: the
+		// owner's key is there for installed bundles, and always null.
 		var keys []string
 		decoder := json.NewDecoder(strings.NewReader(string(made.raw)))
 		decoder.Token()
@@ -266,8 +266,11 @@ func routeCases(t *testing.T, newWorld func(*testing.T) world) {
 			var skipped json.RawMessage
 			decoder.Decode(&skipped)
 		}
-		if want := []string{"id", "name", "position", "parent_id", "created_at", "updated_at", "metadata"}; !reflect.DeepEqual(keys, want) {
+		if want := []string{"id", "name", "position", "parent_id", "created_by_id", "created_at", "updated_at", "metadata"}; !reflect.DeepEqual(keys, want) {
 			t.Errorf("a folder's keys are %v, want %v", keys, want)
+		}
+		if !strings.Contains(string(made.raw), `"created_by_id":null`) {
+			t.Errorf("a folder names its owner: %s", made.raw)
 		}
 
 		wards := s.create(owner, "Wards", &clinic.ID)
@@ -436,34 +439,6 @@ func routeCases(t *testing.T, newWorld func(*testing.T) world) {
 		s.ask(owner, http.MethodPut, folderPathOf(third.ID, "/reorder"), `{"before_position": 3}`).expect(t, "a position that is not text", 422, "")
 	})
 
-	t.Run("a watched folder stops being watched, and only its flag changes", func(t *testing.T) {
-		s := newSite(t, newWorld(t))
-		owner := s.world.account(t)
-		watched := s.create(owner, "Synced", nil)
-		plain := s.create(owner, "Plain", nil)
-		s.world.setMetadata(t, watched.ID, `{"watched": true, "parser": "local", "ratio": 0.25}`)
-		s.world.setMetadata(t, plain.ID, `{"colour": "green"}`)
-
-		s.ask(owner, http.MethodPatch, folderPathOf(watched.ID, "/watched"), "").expect(t, "a watched folder", 200, WatchUpdated)
-		after := s.ask(owner, http.MethodGet, folderPathOf(watched.ID, ""), "").folder(t)
-		if want := map[string]any{"watched": false, "parser": "local", "ratio": 0.25}; !reflect.DeepEqual(after.Metadata, want) {
-			t.Errorf("metadata is %v, want %v", after.Metadata, want)
-		}
-		if after.UpdatedAt == watched.UpdatedAt {
-			t.Error("turning the flag off did not move updated_at")
-		}
-		// Asking again, or of a folder never watched, writes nothing.
-		s.ask(owner, http.MethodPatch, folderPathOf(watched.ID, "/watched"), "").expect(t, "asked twice", 200, WatchUpdated)
-		if again := s.ask(owner, http.MethodGet, folderPathOf(watched.ID, ""), "").folder(t); !reflect.DeepEqual(again, after) {
-			t.Errorf("asking twice changed %+v to %+v", after, again)
-		}
-		s.ask(owner, http.MethodPatch, folderPathOf(plain.ID, "/watched"), "").expect(t, "a folder never watched", 200, WatchUpdated)
-		untouched := s.ask(owner, http.MethodGet, folderPathOf(plain.ID, ""), "").folder(t)
-		if want := map[string]any{"colour": "green"}; !reflect.DeepEqual(untouched.Metadata, want) || untouched.UpdatedAt != plain.UpdatedAt {
-			t.Errorf("a folder never watched was changed: %+v", untouched)
-		}
-	})
-
 	t.Run("metadata that is not an object is answered as none", func(t *testing.T) {
 		s := newSite(t, newWorld(t))
 		owner := s.world.account(t)
@@ -628,7 +603,7 @@ func routeCases(t *testing.T, newWorld func(*testing.T) world) {
 		a, b := s.world.account(t), s.world.account(t)
 		clinic := s.create(a, "Clinic", nil)
 		wards := s.create(a, "Wards", &clinic.ID)
-		s.world.setMetadata(t, clinic.ID, `{"watched": true}`)
+		s.world.setMetadata(t, clinic.ID, `{"colour": "green"}`)
 		filed := s.world.addDocument(t, a, &clinic.ID, "ready")
 		loose := s.world.addDocument(t, a, nil, "ready")
 		own := s.create(b, "Mine", nil)
@@ -644,7 +619,6 @@ func routeCases(t *testing.T, newWorld func(*testing.T) world) {
 			{http.MethodPut, "/move", `{"new_parent_id": null}`},
 			{http.MethodPut, "/move", fmt.Sprintf(`{"new_parent_id": %d}`, own.ID)},
 			{http.MethodPut, "/reorder", `{}`},
-			{http.MethodPatch, "/watched", ""},
 			{http.MethodDelete, "", ""},
 		} {
 			for _, folder := range []int64{clinic.ID, wards.ID} {

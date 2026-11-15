@@ -258,7 +258,7 @@ export function PlateEditor({
 					// `citation` inline-void element has no markdown serialize
 					// rule, so emitting changes here would overwrite
 					// `lastMarkdownRef.current` (and downstream copy-to-clipboard
-					// state in EditorPanelContent) with a tree that loses every
+					// state in the viewer) with a tree that loses every
 					// citation token. `enableCitations` is only ever set in
 					// read-only paths, so user input cannot reach this branch
 					// in practice — the guard exists for the initial Plate

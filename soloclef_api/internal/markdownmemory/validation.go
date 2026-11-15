@@ -42,7 +42,8 @@ func tooLong(content string) (string, bool) {
 // cannot hold is refused whatever its length, because the document stores the
 // render of what it parsed and content it parses nothing out of renders to the
 // empty string. An empty submission is still a deliberate clear, and legacy
-// bullets still parse.
+// bullets still parse. Only the assistant's save (Save) runs it: a person's
+// loose text is filed under Notes instead (SaveWrittenByPerson).
 func headingless(content string) (string, bool) {
 	stripped := pythonStrip(content)
 	if stripped == "" {

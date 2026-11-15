@@ -4,86 +4,81 @@ description: Sign in, make a notebook, add a source and ask a question
 icon: Compass
 ---
 
+<BrandName /> is a notebook for study and research. You put your material into a
+notebook, ask questions about it, and turn it into things you can learn
+from. Every answer shows the passage it came from.
+
+- Sources: upload files, pick them from Google Drive or Nextcloud, or search
+  PubMed, arXiv, medRxiv, bioRxiv and the web and add what you find.
+- Chat: each notebook has a chat that answers from its sources, with
+  numbered citations you can open.
+- Studio: reports, slide decks, data tables, mind maps, infographics,
+  flashcards, quizzes, audio overviews and video overviews, made from your
+  sources.
+- Notes: keep answers, write your own, and let a notebook read them.
+- Automations: tasks the assistant runs on a schedule, such as a weekly
+  digest, saved as a note or emailed to you.
+- Email: let the assistant read your mailboxes, and draft messages you send
+  yourself.
+
+Everything you add is private to your account.
+
 ## 1. Sign in
 
-Sign in with the email and password of your account. If you forget the
-password, use **Forgot Password?** on the sign-in page. Sign-ups are closed
-for now: if you don't have an account yet, choose **Request access**.
+Open your server's address and sign in with your email and password, or with
+the single sign-on button if the server has one. If you don't have an
+account yet, choose Sign Up when the server offers it, or Request access when
+it does not.
 
-{/* The button's name, its provider and whom it makes accounts for are this
-server's own settings (components/docs/single-sign-on.tsx). */}
-<SsoOnly>
+Forgot Password? emails you a link to choose a new password. More on signing
+in is in [Account and security](/docs/account-and-security).
 
-Above the password form, the sign-in page also offers **<SsoButtonLabel />**,
-the site owner's single sign-on. It works only for people the owner
-has allowed to use it; anyone else is refused on the single sign-on page and
-signs in with their password. It signs you in to the account with the same
-email address, if that account's address is confirmed: an account made with
-this site's sign-up form isn't, so the page says "Account not confirmed";
-sign in to it with its password, or ask the site owner. <SsoAccountsFor accounts="domains">If your address ends in <SsoDomains /> and you have no account
-yet, the first sign-in makes one for you; to also
-sign in with a password or in the mobile app, set one with **Forgot
-Password?**. For any other address with no account, the page says "No
-account for this address".</SsoAccountsFor><SsoAccountsFor accounts="anyone">If you have no account
-yet, the first sign-in makes one for you; to also
-sign in with a password or in the mobile app, set one with **Forgot
-Password?**.</SsoAccountsFor><SsoAccountsFor accounts="nobody">If you have no account, the page says
-"No account for this address".</SsoAccountsFor> It allows 30 attempts a minute from one network,
-and each sign-in counts as two.
-
-</SsoOnly>
-
-**Forgot Password?** emails you a link to choose a new password. The link
-works once and expires in 30 minutes, and one address is sent at most 3 links
-an hour. A new password needs at least 8 characters, and setting it signs out
-your other browsers and devices within 24 hours. After 5 sign-in attempts in
-a minute, the page asks you to wait a minute.
-
-## Getting around
+## 2. Find your way around
 
 The narrow bar on the left, the rail, holds everything:
 
-- **Home** at the top: your notebooks.
-- **Notes** below it: all your notes (see [Notes](/docs/notes#the-notes-page)).
-- The **bell** near the bottom: [Notifications](/docs/notifications).
-- Your **avatar** at the bottom opens the menu: Settings (see
-  [Settings and sharing](/docs/account-and-sharing#settings)), **Connect your agent** (see
-  [Connect your agent](/docs/connect-your-agent)), **Notifications**, theme,
-  language, **Learn more** (this documentation) and **Logout**.
+- Home, at the top: your notebooks.
+- Notes: all your notes.
+- The bell: your [notifications](/docs/notifications).
+- Your avatar, at the bottom: Settings, Connect your agent, Notifications,
+  the theme, the language, Learn more for these docs, and Logout.
 
-On a phone, the menu button at the top left opens the same things as a sheet.
+On a phone, the menu button at the top left opens the same things.
 
-Everything you add is your account's own: nobody else sees it unless you
-share it with a public link.
+## 3. Make a notebook
 
-## 2. Create a notebook
+On the home page, choose New notebook. It opens straight away. You don't
+have to name it: it names itself after its first source or your first
+question. You can rename it at any time by editing its title.
 
-On the home page, choose **Create notebook**. It opens straight away as an
-untitled notebook. You don't have to name it: an untitled notebook names
-itself after its first source or your first question. You can rename it at any time by
-editing the title, and change its emoji from the header.
+![A notebook: sources on the left, the chat in the middle, Studio on the right](/docs/screens/notebook.png)
 
-## 3. Add a source
+## 4. Add a source
 
-Choose **Add sources**, or drop files anywhere on the notebook. You can:
+Choose Add sources, or drop files onto the notebook. You can upload files,
+pick documents already in your library, pick files from Google Drive or
+Nextcloud once connected, or search for new sources in the box at the top of
+the Sources panel.
 
-- upload files from your computer,
-- pick documents already in your library,
-- pick files from Google Drive or Nextcloud (once it is connected),
-- paste a link to a web page with **Read a web page**, or
-- type a query in **Search the web for new sources** and import results.
+Each source is read in the background and shows its progress until it is
+ready. See [Notebooks and sources](/docs/notebooks-and-sources).
 
-Each source is read and indexed in the background. It shows as "Still being
-indexed" until it is ready. See [Notebooks and sources](/docs/notebooks-and-sources).
+## 5. Ask
 
-## 4. Ask
+Once a source is ready, the chat suggests a few questions. Pick one or type
+your own. The answer comes from your sources, with numbered citations. Click
+a number to see the exact passage. See
+[Chat and citations](/docs/chat-and-citations).
 
-Once a source is ready, the chat offers suggested questions. Pick one or type
-your own. Answers come from your sources, with numbered citations you can
-click to see the passage. See [Chat and citations](/docs/chat-and-citations).
+## 6. Make something
 
-## 5. Make something
+In Studio, on the right, pick an output, such as an audio overview, a mind
+map or a quiz, and choose Generate. It takes a few minutes and appears in
+the Studio list when ready. See [Studio](/docs/studio).
 
-In **Studio**, pick an output: an audio overview, a mind map, a quiz and so
-on. It takes a few minutes and appears in the Studio list when ready. See
-[Studio](/docs/studio).
+## Next
+
+- Connect your mail, Drive or other services: [Connectors](/docs/connections).
+- Use your notebooks from your phone: [Phone app](/docs/mobile-app).
+- Work with your notebooks from Claude, ChatGPT or a coding agent:
+  [Connect your agent](/docs/connect-your-agent).

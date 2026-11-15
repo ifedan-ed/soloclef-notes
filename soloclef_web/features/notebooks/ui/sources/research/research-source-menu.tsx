@@ -14,6 +14,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { connectableSource, connectLinkFor } from "../../../lib/research-connect-link";
 import {
 	canTick,
 	MAX_RESEARCH_SOURCES,
@@ -29,9 +30,11 @@ import {
 	type PageReader,
 	READ_PAGE_ID,
 	type ResearchBoxSource,
+	type SourceUnavailableReason,
 	type UnavailableSources,
 	WEB_GROUP_MENU_IDS,
 } from "../../../model/research-sources";
+import { ConnectSourceItem } from "./connect-source-item";
 import { ResultSourceIcon } from "./result-source-icon";
 import { SourceCheckboxItem } from "./source-checkbox-item";
 import { useResearchSourceName } from "./use-research-source-name";
@@ -48,7 +51,7 @@ function SourceRow({
 	pageReader,
 }: {
 	id: ResearchBoxSource;
-	reason?: string;
+	reason?: SourceUnavailableReason;
 	pageReader: PageReader;
 }) {
 	const t = useTranslations("notebook_research");
@@ -60,7 +63,15 @@ function SourceRow({
 				<ResultSourceIcon source={id} className="size-4" />
 			</span>
 			<span className="truncate">{sourceName(id)}</span>
-			{reason ? (
+			{connectableSource(id, reason) ? (
+				<span className="ml-auto flex shrink-0 items-center gap-1 pl-2 text-[11px]">
+					<span className="text-muted-foreground">{t("unavailable_not_connected")}</span>
+					<span aria-hidden className="text-muted-foreground">
+						·
+					</span>
+					<span className="font-medium text-primary">{t("unavailable_connect")}</span>
+				</span>
+			) : reason ? (
 				<span className="ml-auto pl-2 text-[11px] text-muted-foreground">
 					{t(`unavailable_${reason}`)}
 				</span>
@@ -122,12 +133,30 @@ export function ResearchSourceMenu({
 }) {
 	const t = useTranslations("notebook_research");
 	const sourceName = useResearchSourceName();
-	const anyUnavailable = Object.keys(unavailable).length > 0;
+	// The hint is about connecting a key, so it shows only when a key is missing.
+	const anyNotConnected = Object.values(unavailable).includes("not_connected");
 	const searched = searchedSources(picks);
 	const label = t("source_label", {
 		source: searched.length > 1 ? searched.map(sourceName).join(", ") : sourceName(picks.source),
 	});
 	const reasonFor = (id: ResearchBoxSource) => (id === READ_PAGE_ID ? undefined : unavailable[id]);
+
+	// A source with no key connected is a link to connecting it: a plain
+	// menu item, because a disabled radio or checkbox item swallows the
+	// click, and picking it would pick a source that cannot be searched.
+	const connectRow = (id: ResearchBoxSource) => {
+		const provider = connectableSource(id, reasonFor(id));
+		if (!provider) return null;
+		return (
+			<ConnectSourceItem
+				key={id}
+				href={connectLinkFor(provider)}
+				label={`${sourceName(id)}: ${t("unavailable_not_connected")}. ${t("unavailable_connect")}`}
+			>
+				<SourceRow id={id} reason={reasonFor(id)} pageReader={pageReader} />
+			</ConnectSourceItem>
+		);
+	};
 
 	return (
 		<DropdownMenu>
@@ -169,6 +198,8 @@ export function ResearchSourceMenu({
 							</DropdownMenuLabel>
 							{group.ids.map((id: ResearchBoxSource) => {
 								const reason = reasonFor(id);
+								const connect = connectRow(id);
+								if (connect) return connect;
 								if (id === READ_PAGE_ID) {
 									// Reads one link, so it is picked on its own.
 									return (
@@ -211,6 +242,8 @@ export function ResearchSourceMenu({
 								</DropdownMenuLabel>
 								{group.ids.map((id: ResearchBoxSource) => {
 									const reason = reasonFor(id);
+									const connect = connectRow(id);
+									if (connect) return connect;
 									return (
 										<DropdownMenuRadioItem key={id} value={id} disabled={Boolean(reason)}>
 											<SourceRow id={id} reason={reason} pageReader={pageReader} />
@@ -221,7 +254,7 @@ export function ResearchSourceMenu({
 						))}
 					</DropdownMenuRadioGroup>
 				)}
-				{anyUnavailable ? (
+				{anyNotConnected ? (
 					<p className="px-2 pt-1 pb-1.5 text-[11px] leading-snug text-muted-foreground">
 						{t("unavailable_hint")}
 					</p>

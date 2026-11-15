@@ -6,15 +6,16 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"os"
 	"strconv"
 	"time"
 
 	"git.danvics.com/danvics/soloclef/soloclef_studio/artifactsave"
 )
 
-// deliver keeps the verified video: the MP4 streamed out of the sandbox
-// into the file store, each scene's narration beside it, then the artifact's
-// rows and the job's "ready" in one transaction.
+// deliver keeps the verified video: the MP4 streamed into the file store,
+// each slide's narration beside it, then the artifact's rows and the job's
+// "ready" in one transaction.
 //
 // The files are stored before the transaction, under the artifact's
 // reserved id, so the transaction does not stay open for the length of a
@@ -22,7 +23,7 @@ import (
 // are removed. The Python worker saved and committed the artifact and then,
 // in a second step, marked the job ready, so a cancel between the two left
 // a video in the account whose card said cancelled.
-func (j *Job) deliver(ctx context.Context, log *slog.Logger, job Claimed, box Sandbox, output string, video Authored, voices []voiced, checked verified) error {
+func (j *Job) deliver(ctx context.Context, log *slog.Logger, job Claimed, output string, video Authored, voices []voiced, shots []shot, checked verified) error {
 	artifactID, err := j.Rows.ReserveArtifactID(ctx)
 	if err != nil {
 		return fail(codeGeneration, fmt.Errorf("could not reserve the artifact's id: %w", err))
@@ -44,9 +45,9 @@ func (j *Job) deliver(ctx context.Context, log *slog.Logger, job Claimed, box Sa
 		}
 	}()
 
-	stream, err := box.OpenFile(ctx, output)
+	stream, err := os.Open(output)
 	if err != nil {
-		return fail(codeGeneration, fmt.Errorf("could not read the video out of the sandbox: %w", err))
+		return fail(codeGeneration, fmt.Errorf("could not read the video back: %w", err))
 	}
 	key := prefix + "/primary/" + randomName() + ".mp4"
 	put, err := j.Files.PutStream(ctx, key, stream, "video/mp4")
@@ -55,8 +56,7 @@ func (j *Job) deliver(ctx context.Context, log *slog.Logger, job Claimed, box Sa
 		return fail(codeGeneration, fmt.Errorf("could not store the video: %w", err))
 	}
 	stored = append(stored, key)
-	// The bytes stored are the bytes verified, or nothing is kept. This is
-	// what the Python tier's signed receipt in the sandbox was for.
+	// The bytes stored are the bytes verified, or nothing is kept.
 	if put.SHA256 != checked.SHA256 {
 		return fail(codeVerification, fmt.Errorf("the stored video (sha256 %s) is not the one that was verified (%s)", put.SHA256, checked.SHA256))
 	}
@@ -65,18 +65,18 @@ func (j *Job) deliver(ctx context.Context, log *slog.Logger, job Claimed, box Sa
 	for _, voice := range voices {
 		slideKey := prefix + "/slides/slide-" + strconv.Itoa(voice.Number) + "-" + randomName() + ".mp3"
 		if err := j.Files.Put(ctx, slideKey, voice.MP3, "audio/mpeg"); err != nil {
-			return fail(codeGeneration, fmt.Errorf("could not store scene %d's narration: %w", voice.Number, err))
+			return fail(codeGeneration, fmt.Errorf("could not store slide %d's narration: %w", voice.Number, err))
 		}
 		stored = append(stored, slideKey)
 		audio = append(audio, slideAudio{Number: voice.Number, Key: slideKey})
 	}
-	meta, err := metadata(video, voices, audio, j.Files.Name(), checked.Seconds)
+	meta, err := metadata(video, voices, shots, audio, j.Files.Name(), checked.Seconds)
 	if err != nil {
 		return fail(codeGeneration, err)
 	}
 	created, delivered, err := j.Rows.Deliver(ctx, job, artifactsave.Rows{
 		ID: artifactID, UserID: job.UserID, ToolCallID: job.ToolCallID, Title: job.Title, Format: "video",
-		Markdown: markdown(job.Title, video), Metadata: meta,
+		Markdown: markdown(video), Metadata: meta,
 		Primary: artifactsave.StoredFile{Backend: j.Files.Name(), Key: key, Filename: videoFilename(job.Title, job.ID),
 			MimeType: "video/mp4", Size: put.Size, SHA256: put.SHA256},
 	})

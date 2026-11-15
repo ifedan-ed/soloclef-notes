@@ -7,7 +7,6 @@ import type {
 	ConnectionUpdateRequest,
 	EndpointModelPreviewRequest,
 	ModelPreviewRead,
-	ModelPreviewRequest,
 	ModelRead,
 	ModelsBulkUpdateRequest,
 	ModelTestPreviewRequest,
@@ -128,7 +127,7 @@ export const discoverConnectionModelsMutationAtom = atomWithMutation(() => {
 export const previewConnectionModelsMutationAtom = atomWithMutation(() => {
 	return {
 		mutationKey: ["model-connections", "discover-preview"],
-		mutationFn: (request: ModelPreviewRequest | EndpointModelPreviewRequest) =>
+		mutationFn: (request: EndpointModelPreviewRequest) =>
 			modelConnectionsApiService.previewModels(request),
 		onSuccess: (_models: ModelPreviewRead[]) => {},
 		// No toast: the connect dialog shows the server's sentence beside the

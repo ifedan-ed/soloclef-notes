@@ -1,41 +1,12 @@
 "use client";
 
-import { createContext, useContext } from "react";
+import { BUILD_TIME_DEPLOYMENT_MODE } from "@/lib/env-config";
 
-export type DeploymentMode = "self-hosted" | "cloud" | string;
-
-export interface RuntimeConfigValue {
-	deploymentMode: DeploymentMode;
-	/** Sign-in through Authentik (OIDC) offered beside the password form. */
-	oidcEnabled: boolean;
-	/** The words on that button (OIDC_BUTTON_LABEL). */
-	oidcButtonLabel: string;
-}
-
-const RuntimeConfigContext = createContext<RuntimeConfigValue | null>(null);
-
-export function RuntimeConfigProvider({
-	value,
-	children,
-}: {
-	value: RuntimeConfigValue;
-	children: React.ReactNode;
-}) {
-	return <RuntimeConfigContext.Provider value={value}>{children}</RuntimeConfigContext.Provider>;
-}
-
-export function useRuntimeConfig() {
-	const context = useContext(RuntimeConfigContext);
-	if (!context) {
-		throw new Error("useRuntimeConfig must be used within RuntimeConfigProvider");
-	}
-	return context;
-}
-
+/**
+ * Whether this is a self-hosted deployment. It is the build's
+ * NEXT_PUBLIC_DEPLOYMENT_MODE: the static site has no server to read a
+ * runtime DEPLOYMENT_MODE from, and every Soloclef server is self-hosted.
+ */
 export function useIsSelfHosted() {
-	return useRuntimeConfig().deploymentMode === "self-hosted";
-}
-
-export function useIsCloud() {
-	return useRuntimeConfig().deploymentMode === "cloud";
+	return BUILD_TIME_DEPLOYMENT_MODE === "self-hosted";
 }

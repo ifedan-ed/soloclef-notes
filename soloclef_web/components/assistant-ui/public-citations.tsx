@@ -11,13 +11,15 @@ export interface PublicCitationTarget {
 	open: () => void;
 }
 
-type Resolve = (number: number) => PublicCitationTarget | null;
+type Resolve = (key: number) => PublicCitationTarget | null;
 
 const PublicCitationsContext = createContext<Resolve | null>(null);
 
 /**
- * On a public page citations are numbered by the server and resolve here, to
- * the notebook's own sources; nothing is fetched with a session.
+ * On a public page the server rewrites each marker to a number of its own
+ * ("[citation:7]"), which resolves here to the notebook's sources; nothing is
+ * fetched with a session. That number is a key, not what the chip shows: the
+ * chip shows the citation's number within its answer, as everywhere else.
  */
 export const PublicCitationsProvider: FC<{ resolve: Resolve; children: ReactNode }> = ({
 	resolve,
@@ -28,10 +30,11 @@ export function usePublicCitations(): Resolve | null {
 	return useContext(PublicCitationsContext);
 }
 
-export const PublicCitation: FC<{ number: number; target: PublicCitationTarget | null }> = ({
-	number,
-	target,
-}) => {
+export const PublicCitation: FC<{
+	/** The citation's number within its answer; null outside any numbering. */
+	number: number | null;
+	target: PublicCitationTarget | null;
+}> = ({ number, target }) => {
 	const pill =
 		"ml-0.5 inline-flex h-5 min-w-5 items-center justify-center gap-0.5 rounded-md bg-popover px-1.5 text-[11px] font-medium text-popover-foreground/80 align-baseline";
 	if (!target) {
@@ -52,7 +55,7 @@ export const PublicCitation: FC<{ number: number; target: PublicCitationTarget |
 					aria-label={target.label}
 					data-testid="public-citation"
 				>
-					{number}
+					{number ?? <FileText className="size-3" aria-hidden />}
 				</button>
 			</TooltipTrigger>
 			<TooltipContent>{target.label}</TooltipContent>

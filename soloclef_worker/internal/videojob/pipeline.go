@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
-	"strings"
+	"os"
+	"path/filepath"
 
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/llm"
 )
@@ -28,23 +29,7 @@ func (j *Job) make(ctx context.Context, log *slog.Logger, job Claimed, measured 
 	limit := request.limitSeconds()
 	beat := func(phase string, progress int) error { return j.beat(ctx, log, job, phase, progress) }
 
-	if err := beat("preparing", 5); err != nil {
-		return err
-	}
-	stop := measured.start("sandbox")
-	box, err := j.Sandboxes.ForJob(ctx, job.UserID, job.sandboxName())
-	if err != nil {
-		return fail(codeRender, fmt.Errorf("could not get the video's sandbox: %w", err))
-	}
-	h := harness{box: box, workdir: "/workspace/" + job.sandboxName(), config: j.Config,
-		short: j.Config.Sandbox.CommandTimeout, long: j.Config.RenderTimeout, renders: j.gate()}
-	output := h.workdir + ".mp4"
-	if err := h.prepare(ctx); err != nil {
-		return fail(codeRender, err)
-	}
-	stop()
-
-	if err := beat("authoring", 10); err != nil {
+	if err := beat("authoring", 5); err != nil {
 		return err
 	}
 	name, err := j.Models.StudioModel(ctx, job.UserID)
@@ -56,7 +41,7 @@ func (j *Job) make(ctx context.Context, log *slog.Logger, job Claimed, measured 
 		return fail(codeGeneration, err)
 	}
 	w := author{model: writer, timeout: j.Timing.CallTimeout}
-	stop = measured.start("authoring")
+	stop := measured.start("authoring")
 	video, err := w.write(ctx, job.Title, request)
 	if err != nil {
 		return fail(codeGeneration, err)
@@ -69,7 +54,7 @@ func (j *Job) make(ctx context.Context, log *slog.Logger, job Claimed, measured 
 	if err := beat("narrating", 25); err != nil {
 		return err
 	}
-	n := narrator{voicer: j.Voicer, measure: j.Audio, voice: j.Config.Voice,
+	n := narrator{voicer: j.Voicer, audio: j.Audio, voice: j.Config.Voice,
 		instructions: j.Config.NarrationInstructions, concurrency: j.Timing.NarrationConcurrency}
 	stop = measured.start("narration")
 	voices, total, err := n.narrate(ctx, video)
@@ -78,7 +63,7 @@ func (j *Job) make(ctx context.Context, log *slog.Logger, job Claimed, measured 
 	}
 	if total > float64(limit) {
 		// Measured overrun: one rewrite of the narration, one more voicing.
-		words := countWords(video.transcripts())
+		words := countWords(video.spoken())
 		target := overrunWords(words, total, limit)
 		video, err = w.shorten(ctx, video, map[string]any{
 			"reason": "synthesized narration is too long", "measured_seconds": math.Round(total*10) / 10,
@@ -88,7 +73,7 @@ func (j *Job) make(ctx context.Context, log *slog.Logger, job Claimed, measured 
 		if err != nil {
 			return fail(codeGeneration, err)
 		}
-		if err := beat("narrating", 30); err != nil {
+		if err := beat("narrating", 35); err != nil {
 			return err
 		}
 		if voices, total, err = n.narrate(ctx, video); err != nil {
@@ -98,112 +83,39 @@ func (j *Job) make(ctx context.Context, log *slog.Logger, job Claimed, measured 
 			return fail(codeDuration, fmt.Errorf("the narration runs %.1fs, over the %d-second limit, after it was shortened", total, limit))
 		}
 	}
-	if err := h.writeNarration(ctx, voices); err != nil {
-		return fail(codeRender, err)
-	}
 	stop()
 
-	// One budget of repairs for every kind of finding. The Python worker
-	// allowed one repair before the render and the rest after, and a
-	// repair after a failed check that then failed the build ended the job
-	// with repairs still in hand.
-	repairs := 0
-	repair := func(findings string) error {
-		if err := beat("repairing", min(93, 55+10*repairs)); err != nil {
-			return err
-		}
-		done := measured.start("repair")
-		defer done()
-		repaired, err := w.repair(ctx, video, findings)
-		if err != nil {
-			return fail(codeGeneration, err)
-		}
-		video = repaired
-		repairs++
-		return nil
+	if err := beat("rendering", 50); err != nil {
+		return err
 	}
-	var checked verified
-	numbers := make([]int, 0, len(video.Scenes))
-	for _, scene := range video.Scenes {
-		numbers = append(numbers, scene.Number)
+	shots, err := plan(video, voices)
+	if err != nil {
+		return fail(codeRender, err)
 	}
-	for {
-		if err := beat("preflighting", min(60, 40+8*repairs)); err != nil {
-			return err
-		}
-		props, err := h.writeProps(ctx, video)
-		if err != nil {
-			return fail(codeRender, err)
-		}
-		stop = measured.start("preflight")
-		issue, err := h.preflight(ctx, props)
-		stop()
-		if err != nil {
-			return fail(codeRender, fmt.Errorf("could not build the scenes: %w", err))
-		}
-		if issue == "" {
-			if err := beat("reviewing", min(62, 50+6*repairs)); err != nil {
-				return err
-			}
-			// The stills step renders each scene's last frame and checks
-			// its layout (layout.go); a scene that does not render is an
-			// issue of its own.
-			stop = measured.start("stills")
-			issue, err = h.stills(ctx, props)
-			if err == nil && issue == "" {
-				var findings []string
-				findings, err = readLayout(ctx, box, h.stillsDir(), numbers)
-				issue = strings.Join(findings, "; ")
-			}
-			stop()
-			if err != nil {
-				return fail(codeRender, fmt.Errorf("could not check the scenes' layout: %w", err))
-			}
-		}
-		if issue != "" {
-			if repairs >= j.Timing.RepairCycles {
-				return fail(codeRender, fmt.Errorf("the scenes still failed their checks after %d repairs: %s", repairs, tail(issue, 1000)))
-			}
-			if err := repair(issue); err != nil {
-				return err
-			}
-			continue
-		}
+	dir, err := os.MkdirTemp("", "soloclef-video-*")
+	if err != nil {
+		return fail(codeRender, err)
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+	output := filepath.Join(dir, "video.mp4")
+	if err := j.render(ctx, measured, video, voices, shots, dir, output); err != nil {
+		return err
+	}
 
-		if err := beat("rendering", min(90, 65+10*repairs)); err != nil {
-			return err
-		}
-		stop = measured.start("render")
-		expected := 0.0
-		if j.Config.Mode == ModeStills {
-			var grid timeline
-			grid, err = h.assembleFromStills(ctx, props, voices, output)
-			expected, _ = grid.seconds().Float64()
-		} else {
-			err = h.renderFrames(ctx, props, output)
-		}
-		stop()
-		if err != nil {
-			return fail(codeRender, err)
-		}
-		if err := beat("verifying", min(94, 85+3*repairs)); err != nil {
-			return err
-		}
-		stop = measured.start("verify")
-		checked, err = verifyVideo(ctx, box, output, expected, frameSamples(voices), h.short)
-		stop()
-		if err != nil {
-			return fail(codeRender, err)
-		}
-		if len(checked.Findings) == 0 {
-			break
-		}
-		if repairs >= j.Timing.RepairCycles {
-			return fail(codeVerification, fmt.Errorf("the video failed verification after %d repairs: %s", repairs, strings.Join(checked.Findings, "; ")))
-		}
-		if err := repair(strings.Join(checked.Findings, "; ")); err != nil {
-			return err
-		}
+	if err := beat("verifying", 90); err != nil {
+		return err
+	}
+	stop = measured.start("verify")
+	expected := float64(totalFrames(shots)) / fps
+	checked, err := verifyVideo(ctx, mediaTools{ffmpeg: ffmpegProgram, ffprobe: ffprobeProgram}, output, expected, frameSamples(shots))
+	stop()
+	if err != nil {
+		return fail(codeRender, err)
+	}
+	if len(checked.Findings) > 0 {
+		// Nothing a model wrote can make a drawn video fail these: a
+		// finding is a fault in the drawing or the join, said as it is.
+		return fail(codeVerification, fmt.Errorf("the video failed verification: %v", checked.Findings))
 	}
 
 	if err := beat("saving", 95); err != nil {
@@ -211,7 +123,40 @@ func (j *Job) make(ctx context.Context, log *slog.Logger, job Claimed, measured 
 	}
 	stop = measured.start("save")
 	defer stop()
-	return j.deliver(ctx, log, job, box, output, video, voices, checked)
+	return j.deliver(ctx, log, job, output, video, voices, shots, checked)
+}
+
+// render draws the film's frames and joins them with the narration, within
+// one of this worker's render slots and the render's time limit.
+func (j *Job) render(ctx context.Context, measured *stages, video Authored, voices []voiced, shots []shot, dir, output string) error {
+	select {
+	case j.gate() <- struct{}{}:
+		defer func() { <-j.gate() }()
+	case <-ctx.Done():
+		return context.Cause(ctx)
+	}
+	bounded, cancel := context.WithTimeout(ctx, j.Config.RenderTimeout)
+	defer cancel()
+	film := cuts(video, shots)
+	stop := measured.start("frames")
+	pictures, err := draw(bounded, j.Raster, j.Config.FrameWorkers, dir, video, shots, film)
+	stop()
+	if err != nil {
+		if ctx.Err() != nil {
+			return context.Cause(ctx)
+		}
+		return fail(codeRender, fmt.Errorf("drawing the frames: %w", err))
+	}
+	stop = measured.start("encode")
+	err = join(bounded, ffmpegProgram, dir, j.Config.FrameWorkers, film, pictures, shots, voices, output)
+	stop()
+	if err != nil {
+		if ctx.Err() != nil {
+			return context.Cause(ctx)
+		}
+		return fail(codeRender, err)
+	}
+	return nil
 }
 
 // fitWords shortens a draft that is over its word budget before anything
@@ -221,11 +166,11 @@ func (j *Job) make(ctx context.Context, log *slog.Logger, job Claimed, measured 
 func (j *Job) fitWords(ctx context.Context, log *slog.Logger, w author, video Authored, limit int, beat func(string, int) error) (Authored, error) {
 	budget := narrationWordBudget(limit)
 	for attempt := 0; attempt < draftShortenings; attempt++ {
-		words := countWords(video.transcripts())
+		words := countWords(video.spoken())
 		if words <= budget {
 			break
 		}
-		if err := beat("authoring", 15+5*attempt); err != nil {
+		if err := beat("authoring", 12+5*attempt); err != nil {
 			return Authored{}, err
 		}
 		shorter, err := w.shorten(ctx, video, map[string]any{

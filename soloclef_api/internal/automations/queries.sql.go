@@ -526,6 +526,45 @@ func (q *Queries) ListTriggers(ctx context.Context, arg ListTriggersParams) ([]L
 	return items, nil
 }
 
+const lockDraft = `-- name: LockDraft :one
+SELECT status FROM automation_drafts
+WHERE id = $1 AND user_id = $2
+FOR UPDATE
+`
+
+type LockDraftParams struct {
+	ID     string
+	UserID string
+}
+
+// The chat draft a create names, as its owner's, locked until the
+// transaction that creates the automation ends: two presses of Create on
+// one draft queue here, and the second finds it already created.
+func (q *Queries) LockDraft(ctx context.Context, arg LockDraftParams) (string, error) {
+	row := q.db.QueryRow(ctx, lockDraft, arg.ID, arg.UserID)
+	var status string
+	err := row.Scan(&status)
+	return status, err
+}
+
+const markDraftCreated = `-- name: MarkDraftCreated :exec
+UPDATE automation_drafts
+SET status = 'created', automation_id = $1, updated_at = now()
+WHERE id = $2 AND user_id = $3
+`
+
+type MarkDraftCreatedParams struct {
+	AutomationID *int64
+	ID           string
+	UserID       string
+}
+
+// The draft became this automation, in the transaction that saved it.
+func (q *Queries) MarkDraftCreated(ctx context.Context, arg MarkDraftCreatedParams) error {
+	_, err := q.db.Exec(ctx, markDraftCreated, arg.AutomationID, arg.ID, arg.UserID)
+	return err
+}
+
 const ownedConnections = `-- name: OwnedConnections :many
 SELECT id FROM search_source_connectors
 WHERE user_id = $1 AND id = ANY($2::bigint[])

@@ -6,7 +6,7 @@
 //	PATCH  /api/v1/notifications/{notification_id}/read  mark one read
 //	DELETE /api/v1/notifications/{notification_id}       delete one
 //	GET    /api/v1/notifications/unread-count            unread, in all or in one tab or type
-//	GET    /api/v1/notifications/unread-counts-batch     unread per tab
+//	GET    /api/v1/notifications/unread-counts-batch     unread in the Status tab
 //	GET    /api/v1/notifications/source-types            what the Status tab can filter by
 //
 // A view is the caller's rows narrowed by the filters a tab sends (view.go).
@@ -16,25 +16,22 @@
 // # What it does better than the Python
 //
 //   - **A page and its total are one statement**, where there were two.
-//   - **Deleting and keeping the announcement's read count are one
-//     statement.** The Python deleted, then updated the count per
-//     announcement; here neither can happen without the other.
 //   - **A filter that is not understood is refused by the list too.** The
 //     Python list ignored an unknown `source_type` or `filter` and showed the
 //     whole inbox under a heading that said otherwise; only its clear refused.
 //   - **A search for "100%" finds "100%".** The pattern characters of ILIKE
 //     are escaped; they used to be passed through as wildcards.
-//   - **One row with a malformed expiry does not fail the inbox.** The cast
-//     is made only on text that reads as a timestamp.
 //   - **Marking one read is one guarded statement** that locks the row, and
 //     the list has a tie-break (id) so two rows of one instant keep their
 //     order from page to page.
 //   - **The unread counts for a tab are one pass**, and the source types one
 //     statement in a stated order.
 //
-// The tabs are the two this version of the product has: status and
-// announcements. Comment mentions and credit warnings went with workspaces
-// and billing, and their names are refused rather than answered with zero.
+// The one tab this version of the product has is status, which also holds
+// Studio outputs, automation runs and mail drafts. Comment mentions and
+// credit warnings went with workspaces and billing, and the administrator's
+// announcements were removed (2026-11-13); their names are refused rather
+// than answered with zero.
 package notifications
 
 import (
@@ -84,26 +81,20 @@ const (
 	recentWindow = 14 * 24 * time.Hour
 )
 
-const announcementType = "site_announcement"
+// statusTypes are the Status tab's types: a connection's and a document's
+// progress, what soloclef_notify/notify writes when something a person
+// started ends (a Studio output, an automation run, a mail draft waiting),
+// and its "Soloclef 1.2.0 is out" for an iPhone on an older app.
+var statusTypes = []string{"connector_indexing", "connector_deletion", "document_processing", "studio_output", "automation_run", "mail_draft", "app_update"}
 
-// statusTypes are the Status tab's types.
-var statusTypes = []string{"connector_indexing", "connector_deletion", "document_processing"}
+// statusCategory is the one tab, named by the clients' `category` filter.
+// It lists the status types; a row of a type no tab lists (one an older
+// version wrote) is only in the whole inbox. Any other name is refused, so
+// a client that asks for a removed tab is told rather than shown the
+// Status tab under its heading.
+const statusCategory = "status"
 
-// categories maps a tab to the types it lists.
-var categories = map[string][]string{
-	"status":        statusTypes,
-	"announcements": {announcementType},
-}
-
-// knownType reports whether a type is one the inbox holds.
-func knownType(name string) bool {
-	if name == announcementType {
-		return true
-	}
-	for _, known := range statusTypes {
-		if name == known {
-			return true
-		}
-	}
-	return false
-}
+// retiredAnnouncementsCategory is the Inbox tab the App Store builds 1.0.0
+// and 1.1.0 still ask for; it is always empty (view.go, routes.go).
+// installed-builds: notifications-announcements-tab
+const retiredAnnouncementsCategory = "announcements"

@@ -1,23 +1,28 @@
 import {
 	AlarmClock,
+	BookOpen,
+	BookPlus,
 	Brain,
+	ChartColumn,
 	FileCheck2,
 	FileEdit,
 	FilePlus,
 	FileText,
 	FileX,
-	Film,
 	FolderOpen,
 	FolderPlus,
 	FolderSearch,
 	FolderTree,
 	FolderX,
+	Globe,
 	ImageIcon,
 	ListTodo,
 	type LucideIcon,
+	Mail,
 	Move,
 	Podcast,
 	ScanLine,
+	Search,
 	SearchCheck,
 	Wrench,
 } from "lucide-react";
@@ -32,7 +37,8 @@ import {
 const TOOL_ICONS: Record<string, LucideIcon> = {
 	// Generators
 	generate_podcast: Podcast,
-	generate_video_presentation: Film,
+	draw_figure: ChartColumn,
+	// Only in chats saved before figures replaced images.
 	generate_image: ImageIcon,
 	display_image: ImageIcon,
 	// Web / search
@@ -66,9 +72,31 @@ const TOOL_ICONS: Record<string, LucideIcon> = {
 	move_folder: Move,
 	delete_folder: FolderX,
 	write_todos: ListTodo,
-	// Google Drive
+	// The chat's own searches
+	search_knowledge_base: BookOpen,
+	add_sources: BookPlus,
+	exa_web_search: Globe,
+	tavily_web_search: Globe,
+	pubmed_search: Search,
+	arxiv_search: Search,
+	preprint_search: Search,
+	// Mail
+	list_email_accounts: Mail,
+	list_email_folders: FolderTree,
+	search_emails: Mail,
+	read_email: Mail,
+	read_email_thread: Mail,
+	draft_email: FileEdit,
+	// Google Drive and Nextcloud
+	search_google_drive: FolderSearch,
+	read_google_drive_file: FileText,
 	create_google_drive_file: FilePlus,
+	trash_google_drive_file: FileX,
 	delete_google_drive_file: FileX,
+	search_nextcloud_files: FolderSearch,
+	read_nextcloud_file: FileText,
+	create_nextcloud_file: FilePlus,
+	trash_nextcloud_file: FileX,
 	// Misc
 	get_connected_accounts: SearchCheck,
 	execute: Wrench,
@@ -121,7 +149,8 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
 	delete_folder: "Delete folder",
 	// Generators
 	generate_podcast: "Generate podcast",
-	generate_video_presentation: "Generate video presentation",
+	draw_figure: "Draw figure",
+	// Only in chats saved before figures replaced images.
 	generate_image: "Generate image",
 	display_image: "Show image",
 	// Web / search
@@ -131,9 +160,32 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
 	create_automation: "Create automation",
 	// Memory
 	update_memory: "Update memory",
-	// Google Drive
-	create_google_drive_file: "Create Google Drive file",
+	// The chat's own searches (soloclef_assistant: documents, websearch, academic)
+	search_knowledge_base: "Search your sources",
+	add_sources: "Add sources",
+	exa_web_search: "Search the web with Exa",
+	tavily_web_search: "Search the web with Tavily",
+	pubmed_search: "Search PubMed",
+	arxiv_search: "Search arXiv",
+	preprint_search: "Search bioRxiv and medRxiv",
+	// Mail (soloclef_assistant/mailtools)
+	list_email_accounts: "List your mailboxes",
+	list_email_folders: "List mail folders",
+	search_emails: "Search your email",
+	read_email: "Read an email",
+	read_email_thread: "Read a conversation",
+	draft_email: "Draft an email",
+	// Google Drive (soloclef_assistant/drivetools)
+	search_google_drive: "Search Google Drive",
+	read_google_drive_file: "Read a Drive file",
+	create_google_drive_file: "Create a Drive file",
+	trash_google_drive_file: "Move a Drive file to the bin",
 	delete_google_drive_file: "Delete Google Drive file",
+	// Nextcloud (soloclef_assistant/nextcloudtools)
+	search_nextcloud_files: "Search Nextcloud",
+	read_nextcloud_file: "Read a Nextcloud file",
+	create_nextcloud_file: "Create a Nextcloud file",
+	trash_nextcloud_file: "Move a Nextcloud file to the bin",
 	// Misc
 	get_connected_accounts: "Discover connected accounts",
 	execute: "Run command",

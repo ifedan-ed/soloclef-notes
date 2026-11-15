@@ -49,38 +49,6 @@ type Message struct {
 	Usage        *Usage
 }
 
-// NewLink is a public link to write.
-type NewLink struct {
-	ThreadID int64
-	// UserID is the thread's owner, and so the link's.
-	UserID     string
-	Token      string
-	Hash       string
-	Data       []byte
-	MessageIDs []int64
-	ExpiresAt  *time.Time
-}
-
-// Link is a public link as written or found.
-type Link struct {
-	ID        int64
-	Token     string
-	ExpiresAt *time.Time
-	// IsNew is false when the thread already had a link to this content.
-	IsNew bool
-	// CreatedAt and Messages are set by the list.
-	CreatedAt time.Time
-	Messages  int64
-}
-
-// Podcast is a finished podcast as a public link embeds it.
-type Podcast struct {
-	ID         int64
-	Title      string
-	Transcript []byte
-	ArtifactID *int64
-}
-
 // Store is the package's database.
 //
 // It is a struct over the pool and not an interface with a stand-in:
@@ -242,80 +210,4 @@ func (s Store) Append(ctx context.Context, userID string, threadID int64, role s
 		}
 		return Message{ID: row.ID, ThreadID: row.ThreadID, Role: row.Role, Content: row.Content, CreatedAt: row.CreatedAt, AuthorID: row.AuthorID, TurnID: row.TurnID}, nil
 	})
-}
-
-// AccountName is an account's display name: nil if it has none, and found
-// false if the account is gone.
-func (s Store) AccountName(ctx context.Context, userID string) (name *string, found bool, err error) {
-	name, err = New(s.Pool).AccountName(ctx, userID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, false, nil
-	}
-	return name, err == nil, err
-}
-
-// ReadyPodcasts is the finished podcasts among ids that are the account's
-// own, by id.
-func (s Store) ReadyPodcasts(ctx context.Context, userID string, ids []int64) (map[int64]Podcast, error) {
-	out := map[int64]Podcast{}
-	if len(ids) == 0 {
-		return out, nil
-	}
-	rows, err := New(s.Pool).ReadyPodcasts(ctx, ReadyPodcastsParams{PodcastIds: ids, UserID: userID})
-	if err != nil {
-		return nil, err
-	}
-	for _, row := range rows {
-		out[row.ID] = Podcast{ID: row.ID, Title: row.Title, Transcript: row.PodcastTranscript, ArtifactID: row.ArtifactID}
-	}
-	return out, nil
-}
-
-// OwnedArtifacts is the ids among ids that are the account's own artifacts,
-// ascending.
-func (s Store) OwnedArtifacts(ctx context.Context, userID string, ids []int64) ([]int64, error) {
-	if len(ids) == 0 {
-		return []int64{}, nil
-	}
-	return New(s.Pool).OwnedArtifacts(ctx, OwnedArtifactsParams{ArtifactIds: ids, UserID: userID})
-}
-
-// SaveLink writes a public link, or finds the thread's live link to the
-// same content and gives it the new expiry.
-func (s Store) SaveLink(ctx context.Context, link NewLink) (Link, error) {
-	return database.Write(ctx, s.Pool, func(ctx context.Context, tx pgx.Tx, _ *database.Effects) (Link, error) {
-		queries := New(tx)
-		if err := queries.DeleteExpiredLink(ctx, DeleteExpiredLinkParams{ThreadID: &link.ThreadID, UserID: link.UserID, ContentHash: link.Hash}); err != nil {
-			return Link{}, err
-		}
-		row, err := queries.UpsertLink(ctx, UpsertLinkParams{
-			ThreadID: link.ThreadID, UserID: link.UserID, ExpiresAt: link.ExpiresAt, ShareToken: link.Token,
-			ContentHash: link.Hash, SnapshotData: link.Data, MessageIds: link.MessageIDs,
-		})
-		if err != nil {
-			return Link{}, err
-		}
-		return Link{ID: row.ID, Token: row.ShareToken, ExpiresAt: row.ExpiresAt, IsNew: row.IsNew}, nil
-	})
-}
-
-// Links is the live links of the account's thread, newest first.
-func (s Store) Links(ctx context.Context, userID string, threadID int64) ([]Link, error) {
-	rows, err := New(s.Pool).ThreadLinks(ctx, ThreadLinksParams{ThreadID: &threadID, UserID: userID})
-	if err != nil {
-		return nil, err
-	}
-	out := make([]Link, len(rows))
-	for i, row := range rows {
-		out[i] = Link{ID: row.ID, Token: row.ShareToken, CreatedAt: row.CreatedAt, Messages: row.MessageCount}
-	}
-	return out, nil
-}
-
-// DeleteLink takes down one link of the account's thread, and reports
-// whether there was one: false for a link that is not there, is of another
-// thread, or is another account's.
-func (s Store) DeleteLink(ctx context.Context, userID string, threadID, linkID int64) (bool, error) {
-	deleted, err := New(s.Pool).DeleteLink(ctx, DeleteLinkParams{LinkID: linkID, ThreadID: &threadID, UserID: userID})
-	return deleted > 0, err
 }

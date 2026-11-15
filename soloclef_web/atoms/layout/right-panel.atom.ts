@@ -39,7 +39,6 @@ const rightPanelCookieStorage = {
 export type RightPanelTab =
 	| "none"
 	| "artifact"
-	| "editor"
 	| "hitl-edit"
 	| "citation"
 	| "artifacts"

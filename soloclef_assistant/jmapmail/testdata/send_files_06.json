@@ -1,0 +1,52 @@
+{
+  "status": 200,
+  "body": {
+    "methodResponses": [
+      [
+        "Email/set",
+        {
+          "accountId": "c",
+          "oldState": "n",
+          "newState": "sai",
+          "created": {
+            "draft": {
+              "id": "eaaaaab",
+              "threadId": "b",
+              "blobId": "cbygbas7ugqpwlvh7kjeqjcdtfouxilewpdnnbg0eiqe7ye00trvqaqaae",
+              "size": 897
+            }
+          }
+        },
+        "e"
+      ],
+      [
+        "EmailSubmission/set",
+        {
+          "accountId": "c",
+          "newState": "sae",
+          "created": {
+            "send": {
+              "id": "b",
+              "sendAt": "2026-11-13T02:02:26Z",
+              "undoStatus": "pending"
+            }
+          }
+        },
+        "s"
+      ],
+      [
+        "Email/set",
+        {
+          "accountId": "c",
+          "oldState": "sai",
+          "newState": "sam",
+          "updated": {
+            "eaaaaab": null
+          }
+        },
+        "s"
+      ]
+    ],
+    "sessionState": "e8a8b15b"
+  }
+}

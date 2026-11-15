@@ -9,11 +9,17 @@
 //
 // goose is pinned to a release that asks for the pgx the other modules
 // already build with, so requiring this module moves nobody's driver.
+//
+// soloclef_connectors is required for one coded migration (00012), which
+// seals the MCP and web search credentials that were stored in the clear
+// with the very format the services open (sealedsecret, mcpserver). It
+// requires nothing outside the standard library.
 module git.danvics.com/danvics/soloclef/soloclef_schema
 
 go 1.24.4
 
 require (
+	git.danvics.com/danvics/soloclef/soloclef_connectors v0.0.0
 	github.com/jackc/pgx/v5 v5.7.1
 	github.com/pressly/goose/v3 v3.24.1
 )
@@ -29,3 +35,7 @@ require (
 	golang.org/x/sync v0.10.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
 )
+
+// From this checkout, for the reason every tier takes it from there: the
+// migration must seal in the format this checkout's services open.
+replace git.danvics.com/danvics/soloclef/soloclef_connectors => ../soloclef_connectors

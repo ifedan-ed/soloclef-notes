@@ -2,7 +2,6 @@ package uploads
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -106,13 +105,6 @@ func (p PostgresRows) RecordFolder(ctx context.Context, batch FolderBatch) (Fold
 			if err != nil {
 				return FolderRecorded{}, err
 			}
-			watched, err := json.Marshal(map[string]any{"watched": true, "folder_path": batch.FolderName, "parser": batch.Parser})
-			if err != nil {
-				return FolderRecorded{}, err
-			}
-			if err := queries.MarkFolderWatched(ctx, MarkFolderWatchedParams{ID: id, UserID: batch.UserID, Metadata: watched}); err != nil {
-				return FolderRecorded{}, err
-			}
 			root = id
 		}
 
@@ -155,9 +147,8 @@ func (p PostgresRows) RecordFolder(ctx context.Context, batch FolderBatch) (Fold
 // folderFileMetadata is a folder file's `document_metadata`.
 //
 // The first four keys are the ones the document list shows for a folder
-// file. `mtime` and `raw_file_hash` are what a folder sync's "which files
-// changed" check reads: the time this file was last taken (seconds, as a
-// number) and the SHA-256 of its bytes. The last three are the ones every upload carries.
+// file. `mtime` and `raw_file_hash` are the time this file was last taken
+// (seconds, as a number) and the SHA-256 of its bytes. The last three are the ones every upload carries.
 func folderFileMetadata(folderName string, file FolderFile, now time.Time) map[string]any {
 	return map[string]any{
 		"folder_name":    folderName,

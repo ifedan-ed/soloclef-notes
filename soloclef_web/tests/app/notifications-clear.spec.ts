@@ -6,7 +6,7 @@ import { expect, test, uniqueName } from "./fixtures";
  * Notifications: Delete from an item's menu, and Clear all on a tab after
  * asking, with the delete reaching another open tab through Zero. A running
  * job's item has no Delete and Clear all leaves it. The ⋯ menu shows on a
- * touch screen at any width. The tabs are All, Announcements and Unread.
+ * touch screen at any width. The tabs are All and Unread.
  *
  * Every test of the run signs in as the same account, so each test tags its
  * rows' titles with a run-unique tag and only ever asserts on its own rows.
@@ -78,23 +78,15 @@ async function openNotifications(page: Page, isPhone: boolean) {
 const tab = (page: Page, label: string) =>
 	panel(page).getByRole("button", { name: new RegExp(`^${label}\\b`) });
 
-/** This test's rows: two status items (one read) and an announcement, all tagged. */
+/** This test's rows: two status items, one of them read, both tagged. */
 function rows(tag: string) {
 	const titles = {
 		ward: `Ward notes are ready ${tag}`,
 		discharge: `Discharge letter is ready ${tag}`,
-		podcasts: `Podcasts up to 30 minutes ${tag}`,
 	};
 	const seeds: Seed[] = [
 		{ type: "document_processing", title: titles.ward, minutes_ago: 1 },
 		{ type: "document_processing", title: titles.discharge, read: true, minutes_ago: 2 },
-		{
-			type: "site_announcement",
-			title: titles.podcasts,
-			message: "Try a **long** one.",
-			metadata: { announcement_id: 0 },
-			minutes_ago: 3,
-		},
 	];
 	return { titles, seeds };
 }
@@ -139,13 +131,11 @@ test("Delete from an item's menu, also gone from another open tab", async ({
 	await expect(panel(page).getByText(titles.discharge)).toBeVisible();
 	// The other tab drops it with no reload: Zero carried the delete.
 	await expect(panel(other).getByText(titles.ward)).toHaveCount(0);
-	await expect
-		.poll(() => serverTitles(request, token, tag))
-		.toEqual([titles.discharge, titles.podcasts].sort());
+	await expect.poll(() => serverTitles(request, token, tag)).toEqual([titles.discharge]);
 	await other.close();
 });
 
-test("Clear all on a tab asks first and clears only that tab", async ({
+test("Clear all on Unread asks first and leaves the read items", async ({
 	page,
 	context,
 	request,
@@ -157,18 +147,20 @@ test("Clear all on a tab asks first and clears only that tab", async ({
 	const { titles, seeds } = rows(tag);
 	await seed(request, seeds);
 	await openNotifications(page, isPhone);
-	await expect(panel(page).getByText(titles.podcasts)).toBeVisible();
+	await expect(panel(page).getByText(titles.ward)).toBeVisible();
 
 	const other = await context.newPage();
 	await openNotifications(other, isPhone);
-	await expect(panel(other).getByText(titles.podcasts)).toBeVisible();
+	await expect(panel(other).getByText(titles.ward)).toBeVisible();
 
-	// There is no Mentions tab: comments, and so mentions, are gone.
+	// Only All and Unread: comments (so mentions) and announcements are gone.
 	await expect(tab(page, "Mentions")).toHaveCount(0);
+	await expect(tab(page, "Announcements")).toHaveCount(0);
 
-	await tab(page, "Announcements").click();
+	await tab(page, "Unread").click();
+	await expect(panel(page).getByText(titles.discharge)).toHaveCount(0);
 	await panel(page).getByRole("button", { name: "Clear all" }).click();
-	const ask = panel(page).getByRole("group", { name: "Clear all announcements?" });
+	const ask = panel(page).getByRole("group", { name: "Clear all unread notifications?" });
 	await expect(ask).toBeVisible();
 	if (SHOTS)
 		await page.screenshot({
@@ -177,34 +169,21 @@ test("Clear all on a tab asks first and clears only that tab", async ({
 
 	// Cancel leaves everything.
 	await ask.getByRole("button", { name: "Cancel" }).click();
-	await expect(panel(page).getByText(titles.podcasts)).toBeVisible();
+	await expect(panel(page).getByText(titles.ward)).toBeVisible();
 
 	await panel(page).getByRole("button", { name: "Clear all" }).click();
-	await panel(page)
-		.getByRole("group", { name: "Clear all announcements?" })
-		.getByRole("button", { name: "Clear all" })
-		.click();
-	await expect(panel(page).getByText(titles.podcasts)).toHaveCount(0);
+	await ask.getByRole("button", { name: "Clear all" }).click();
+	await expect(panel(page).getByText(titles.ward)).toHaveCount(0);
 
+	// The read item stays, here and in the other tab, which Zero told of the delete.
 	await tab(page, "All").click();
-	await expect(panel(page).getByText(titles.ward)).toBeVisible();
 	await expect(panel(page).getByText(titles.discharge)).toBeVisible();
-	await expect(panel(other).getByText(titles.podcasts)).toHaveCount(0);
+	await expect(panel(other).getByText(titles.ward)).toHaveCount(0);
+	await expect(panel(other).getByText(titles.discharge)).toBeVisible();
 	if (SHOTS)
 		await page.screenshot({
-			path: `${SHOTS}/web-${isPhone ? "phone" : "desktop"}-03-after-clear-announcements.png`,
+			path: `${SHOTS}/web-${isPhone ? "phone" : "desktop"}-03-after-clear-unread.png`,
 		});
-
-	// Unread clears only the unread ones: the read status row stays.
-	await tab(page, "Unread").click();
-	await panel(page).getByRole("button", { name: "Clear all" }).click();
-	await panel(page)
-		.getByRole("group", { name: "Clear all unread notifications?" })
-		.getByRole("button", { name: "Clear all" })
-		.click();
-	await expect(panel(page).getByText(titles.ward)).toHaveCount(0);
-	await tab(page, "All").click();
-	await expect(panel(page).getByText(titles.discharge)).toBeVisible();
 
 	await expect.poll(() => serverTitles(request, token, tag)).toEqual([titles.discharge]);
 	await other.close();

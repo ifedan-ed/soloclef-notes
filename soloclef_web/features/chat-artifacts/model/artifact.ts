@@ -1,5 +1,5 @@
 /** Transient tool-result categories used only to reconcile legacy media IDs. */
-export type ArtifactToolKind = "file" | "podcast" | "video" | "image";
+export type ArtifactToolKind = "file" | "podcast" | "image";
 
 /** A successful message artifact, optionally enriched from the persisted thread list. */
 export interface ChatArtifact {
@@ -21,7 +21,6 @@ export interface ChatArtifact {
 export const ARTIFACT_TOOL_KINDS: Record<string, ArtifactToolKind> = {
 	save_artifact: "file",
 	generate_podcast: "podcast",
-	generate_video_presentation: "video",
 	generate_image: "image",
 	display_image: "image",
 };

@@ -24,8 +24,7 @@ import (
 )
 
 // FolderRoute serves POST /api/v1/documents/folder-upload: a folder a
-// person picked, or one the desktop app keeps in step, sent as its files
-// and each file's path inside the folder.
+// person picked, sent as its files and each file's path inside the folder.
 //
 // It is the upload route with a place for each file. The form's fields
 // come first (folder_name, relative_paths, and optionally
@@ -105,7 +104,7 @@ type skippedFile struct {
 }
 
 // folderAnswer is the response body. The first four fields are the ones the
-// web and desktop apps read; the rest say what became of each file.
+// web app reads; the rest say what became of each file.
 type folderAnswer struct {
 	Message      string `json:"message"`
 	Status       string `json:"status"`

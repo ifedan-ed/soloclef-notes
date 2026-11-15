@@ -37,7 +37,7 @@ func (r rowRemover) Remove(ctx context.Context, documentID int64) error {
 
 type noRevocation struct{}
 
-func (noRevocation) Revoke(context.Context, int64, string, []byte) {}
+func (noRevocation) Revoke(context.Context, string, int64, string, []byte) {}
 
 // The isolation test: every route of the package over the real statements,
 // with two accounts. Account B can neither see nor change anything of
@@ -54,11 +54,11 @@ INSERT INTO search_source_connectors (id, user_id, name, connector_type, is_inde
  (1, '`+alice+`', 'Drive',  'GOOGLE_DRIVE_CONNECTOR', true,
      '{"refresh_token": "fake-alice-grant", "selected_folders": ["Reports"]}'),
  (2, '`+alice+`', 'tools',  'MCP_CONNECTOR', false,
-     '{"server_config": {"url": "https://mcp.example.test/mcp", "headers": {"Authorization": "Bearer fake-alice-key-0123456789"}}, "trusted_tools": ["search"]}'),
+     '{"server_config": `+sealedServerJSON(t, alice, "https://mcp.example.test/mcp", "fake-alice-key-0123456789")+`}'),
  (3, '`+alice+`', 'alpha',  'WEBCRAWLER_CONNECTOR', false, '{"INITIAL_URLS": "https://example.test", "FIRECRAWL_API_KEY": "fake-alice-crawl"}'),
  (4, '`+alice+`', 'Alpha',  'NEXTCLOUD_CONNECTOR', false, '{"app_password": "fake-alice-password"}'),
  (5, '`+bob+`',   'His tools', 'MCP_CONNECTOR', false,
-     '{"server_config": {"url": "https://his.example.test/mcp"}, "trusted_tools": []}');
+     '{"server_config": `+sealedServerJSON(t, bob, "https://his.example.test/mcp", "")+`}');
 INSERT INTO documents (id, user_id, title, document_type, content, content_hash, connector_id) VALUES
  (10, '`+alice+`', 'From the Drive', 'FILE', 'text', 'hash-10', 1),
  (11, '`+alice+`', 'Also from it',   'FILE', 'text', 'hash-11', 1);`)
@@ -73,9 +73,7 @@ INSERT INTO documents (id, user_id, title, document_type, content, content_hash,
 	ServersRoute{Rows: store, Errors: envelope, Logger: logger}.Register(api)
 	ServerRoute{Rows: store, Errors: envelope, Logger: logger}.Register(api)
 	EnabledRoute{Changes: store, Tools: tools, Errors: envelope, Logger: logger}.Register(api)
-	ServerDeleteRoute{Changes: store, Tools: tools, Errors: envelope, Logger: logger}.Register(api)
-	TrustRoute{Changes: store, Tools: tools, Errors: envelope, Logger: logger}.Register(api)
-	TrustRoute{Remove: true, Changes: store, Tools: tools, Errors: envelope, Logger: logger}.Register(api)
+	ServerDeleteRoute{Changes: store, Revocation: noRevocation{}, Tools: tools, Errors: envelope, Logger: logger}.Register(api)
 	ConnectionDeleteRoute{Connections: store, Removals: store, Documents: rowRemover{pool}, Revocation: noRevocation{},
 		Tools: tools, Analytics: routeanalytics.Capture{Sink: &events{}}, Errors: envelope, Logger: logger}.Register(api)
 
@@ -85,7 +83,7 @@ INSERT INTO documents (id, user_id, title, document_type, content, content_hash,
 			principal.Principal{UserID: caller, Method: principal.MethodSession})))
 	})
 	bodies := requestbody.Middleware{
-		Covers: requestbody.CoveringRoutes("POST "+TrustPath, "POST "+UntrustPath, "PUT "+EnabledPath),
+		Covers: requestbody.CoveringRoutes("PUT " + EnabledPath),
 	}
 	handler := requestcontext.Middleware(logger, bodies.Wrap(withCaller))
 	as := func(userID, method, path, body string) (int, string) {
@@ -187,8 +185,6 @@ SELECT coalesce((SELECT string_agg(id::text || ':' || enabled::text || ':' || co
 			{http.MethodGet, "/api/v1/connectors/mcp/2", "", serverAbsent},
 			{http.MethodPut, "/api/v1/search-source-connectors/1/enabled", `{"enabled": false}`, connectorAbsent},
 			{http.MethodPut, "/api/v1/search-source-connectors/2/enabled", `{"enabled": false}`, connectorAbsent},
-			{http.MethodPost, "/api/v1/connectors/mcp/2/trust-tool", `{"tool_name": "summarise"}`, serverAbsent},
-			{http.MethodPost, "/api/v1/connectors/mcp/2/untrust-tool", `{"tool_name": "search"}`, serverAbsent},
 			{http.MethodDelete, "/api/v1/connectors/mcp/2", "", serverAbsent},
 			{http.MethodDelete, "/api/v1/search-source-connectors/1", "", connectorAbsent},
 			{http.MethodDelete, "/api/v1/search-source-connectors/2", "", connectorAbsent},
@@ -237,26 +233,9 @@ SELECT coalesce((SELECT string_agg(id::text || ':' || enabled::text || ':' || co
 			t.Errorf("the read does not carry the switch: %s", read)
 		}
 
-		status, trusted := as(alice, http.MethodPost, "/api/v1/connectors/mcp/2/trust-tool", `{"tool_name": "summarise"}`)
-		if status != http.StatusOK || !strings.Contains(trusted, `"trusted_tools":["search","summarise"]`) {
-			t.Fatalf("the trust answered %d %s", status, trusted)
-		}
-		// Only the one key was written: the address and the key are as they were.
-		var config string
-		if err := pool.QueryRow(ctx, `SELECT config::text FROM search_source_connectors WHERE id = 2`).Scan(&config); err != nil {
-			t.Fatal(err)
-		}
-		if !strings.Contains(config, "Bearer fake-alice-key-0123456789") || !strings.Contains(config, "https://mcp.example.test/mcp") ||
-			!strings.Contains(config, `"trusted_tools": ["search", "summarise"]`) {
-			t.Errorf("the config is now %s", config)
-		}
-		status, untrusted := as(alice, http.MethodPost, "/api/v1/connectors/mcp/2/untrust-tool", `{"tool_name": "search"}`)
-		if status != http.StatusOK || !strings.Contains(untrusted, `"trusted_tools":["summarise"]`) {
-			t.Errorf("the untrust answered %d %s", status, untrusted)
-		}
-		// The switch and the two edits each moved her counter, and only hers.
-		if len(tools.accounts) != 3 {
-			t.Errorf("the counter was moved for %v, want hers three times", tools.accounts)
+		// The switch moved her counter, and only hers.
+		if len(tools.accounts) != 1 {
+			t.Errorf("the counter was moved for %v, want hers once", tools.accounts)
 		}
 		for _, account := range tools.accounts {
 			if account != alice {

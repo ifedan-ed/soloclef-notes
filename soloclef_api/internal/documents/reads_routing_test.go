@@ -9,15 +9,15 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/folders"
 )
 
-// The four reads sit beside every pattern under /api/v1/documents this tier
+// The three reads sit beside every pattern under /api/v1/documents this tier
 // serves. A pair net/http refuses is a process that does not start
 // (routing_test.go shows one), so all of them are registered here, on one
 // mux, where a refusal is a failed test instead.
 //
-// None of the four can be mistaken for a document id on the Python tier
+// None of the three can be mistaken for a document id on the Python tier
 // either: each is declared before `/documents/{document_id}` in
 // documents_routes.py, and Starlette takes the first route that matches.
-func TestTheFourReadsShareAMuxWithEveryDocumentRouteServed(t *testing.T) {
+func TestTheThreeReadsShareAMuxWithEveryDocumentRouteServed(t *testing.T) {
 	mux := http.NewServeMux()
 	nothing := func(http.ResponseWriter, *http.Request) {}
 	for _, pattern := range []string{
@@ -30,17 +30,15 @@ func TestTheFourReadsShareAMuxWithEveryDocumentRouteServed(t *testing.T) {
 		http.MethodPost + " " + RestorePath,
 		http.MethodGet + " " + StatusPath,
 		http.MethodGet + " " + TypeCountsPath,
-		http.MethodGet + " " + WatchedFoldersPath,
 		http.MethodGet + " " + TitlesPath,
 	} {
 		mux.HandleFunc(pattern, nothing)
 	}
 
 	for target, want := range map[string]string{
-		"GET /api/v1/documents/status":          http.MethodGet + " " + StatusPath,
-		"GET /api/v1/documents/type-counts":     http.MethodGet + " " + TypeCountsPath,
-		"GET /api/v1/documents/watched-folders": http.MethodGet + " " + WatchedFoldersPath,
-		"GET /api/v1/documents/search/titles":   http.MethodGet + " " + TitlesPath,
+		"GET /api/v1/documents/status":        http.MethodGet + " " + StatusPath,
+		"GET /api/v1/documents/type-counts":   http.MethodGet + " " + TypeCountsPath,
+		"GET /api/v1/documents/search/titles": http.MethodGet + " " + TitlesPath,
 		// A longer path under one of the three single words is the older routes',
 		// with the word as a document id -- as it is on the Python tier.
 		"GET /api/v1/documents/status/chunks":   http.MethodGet + " " + ChunksPath,

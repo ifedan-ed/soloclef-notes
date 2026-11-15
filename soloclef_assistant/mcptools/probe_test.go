@@ -3,6 +3,7 @@ package mcptools
 import (
 	"context"
 	"errors"
+	"git.danvics.com/danvics/soloclef/soloclef_connectors/mcpserver"
 	"net/http"
 	"net/netip"
 	"testing"
@@ -21,7 +22,7 @@ func TestProbeListsAServersTools(t *testing.T) {
 	if err := probe.Check(); err != nil {
 		t.Fatal(err)
 	}
-	tools, err := probe.Tools(context.Background(), server.URL, map[string]string{"x-api-key": "fake-key"}, nil)
+	tools, err := probe.Tools(context.Background(), server.URL, mcpserver.StreamableHTTP, map[string]string{"x-api-key": "fake-key"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +43,7 @@ func TestProbeListsAServersTools(t *testing.T) {
 
 	// A wrong key is an error, and nothing more is said of it here.
 	server.status.Store(http.StatusUnauthorized)
-	if _, err := probe.Tools(context.Background(), server.URL, nil, nil); !errors.Is(err, errUnauthorized) {
+	if _, err := probe.Tools(context.Background(), server.URL, mcpserver.StreamableHTTP, nil, nil); !errors.Is(err, errUnauthorized) {
 		t.Errorf("a 401 was reported as %v", err)
 	}
 
@@ -52,7 +53,7 @@ func TestProbeListsAServersTools(t *testing.T) {
 		ClientName: "probe-under-test", Timeout: time.Second, MostTools: 4}
 	before := server.requests.Load()
 	var refused *Refusal
-	if _, err := guarded.Tools(context.Background(), server.URL, nil, []string{"127.0.0.1"}); !errors.As(err, &refused) {
+	if _, err := guarded.Tools(context.Background(), server.URL, mcpserver.StreamableHTTP, nil, []string{"127.0.0.1"}); !errors.As(err, &refused) {
 		t.Errorf("a loopback address was not refused: %v", err)
 	}
 	if server.requests.Load() != before {

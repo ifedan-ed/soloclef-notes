@@ -126,3 +126,32 @@ SET status = jsonb_build_object('state', 'failed', 'reason', sqlc.arg(reason)::t
     updated_at = sqlc.arg(now)::timestamptz
 WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id)
   AND status ->> 'stage' = 'reading';
+
+-- name: EnabledSource :one
+-- Whether the document is already a ticked source of the notebook.
+SELECT EXISTS (
+    SELECT 1 FROM notebook_sources
+    WHERE notebook_id = sqlc.arg(notebook_id) AND user_id = sqlc.arg(user_id)
+      AND document_id = sqlc.narg(document_id) AND enabled
+);
+
+-- name: ImportedDocument :one
+-- A document an import linked, as its answer names it.
+SELECT title, COALESCE(status ->> 'state', '')::text AS state
+FROM documents WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id);
+
+-- name: AddressesTheUserWrote :many
+-- Of the addresses named, those the account's user wrote in a message of
+-- this conversation, as text they typed or pasted (a message's text parts;
+-- not the titles of what they mentioned, which come from the documents).
+-- The thread is read under its owner, so another account's thread answers
+-- nothing. What a chat's add_sources call may keep of a page's address
+-- (chat_pages.go): its query and fragment only when the person wrote it so.
+SELECT address::text FROM unnest(sqlc.arg(addresses)::text[]) AS address
+WHERE EXISTS (
+    SELECT 1 FROM new_chat_messages AS m
+    JOIN new_chat_threads AS t ON t.id = m.thread_id AND t.user_id = sqlc.arg(user_id)
+    CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(m.content) = 'array' THEN m.content ELSE '[]'::jsonb END) AS part
+    WHERE m.thread_id = sqlc.arg(thread_id) AND m.role = 'USER'
+      AND part ->> 'type' = 'text' AND strpos(part ->> 'text', address) > 0
+);

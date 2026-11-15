@@ -38,12 +38,17 @@ func readTitle(raw []byte) (title, error) {
 
 func askTitle(t *testing.T, stub *proxystub.Server) (title, error) {
 	t.Helper()
+	return askTitleFixing(t, stub, 1)
+}
+
+func askTitleFixing(t *testing.T, stub *proxystub.Server, fixes int) (title, error) {
+	t.Helper()
 	proxy := proxyFor(stub)
 	client, err := proxy.Client("deepseek-v4.1-flash", true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return AskJSON(context.Background(), client, proxy.CallTimeout,
+	return AskJSON(context.Background(), client, proxy.CallTimeout, fixes,
 		[]model.Message{{Role: model.RoleSystem, Content: "Name it."}, {Role: model.RoleUser, Content: "material"}}, readTitle)
 }
 
@@ -107,6 +112,53 @@ func TestTwoRefusedRepliesAreAFailureNotALoop(t *testing.T) {
 	}
 }
 
+// With more rounds, each correction is asked with the whole exchange so
+// far: the model sees both its earlier replies and both lists of
+// problems, so a later fix does not undo an earlier one.
+func TestEveryRoundOfCorrectionKeepsTheEarlierOnes(t *testing.T) {
+	stub := proxystub.Start()
+	defer stub.Close()
+	replies := []string{`{"title": ""}`, `no JSON at all`, `{"title": "Asthma in Children"}`}
+	stub.Chat = func(proxystub.ChatRequest) (string, int) {
+		reply := replies[0]
+		replies = replies[1:]
+		return reply, http.StatusOK
+	}
+	got, err := askTitleFixing(t, stub, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Title != "Asthma in Children" {
+		t.Fatalf("title %q", got.Title)
+	}
+	chats := stub.Chats()
+	if len(chats) != 3 {
+		t.Fatalf("%d calls, want 3", len(chats))
+	}
+	var third strings.Builder
+	for _, m := range chats[2].Messages {
+		third.WriteString(m.Role + ": " + m.Content + "\n")
+	}
+	for _, want := range []string{"title: must not be empty", "no JSON object was found", `assistant: {"title": ""}`, "assistant: no JSON at all"} {
+		if !strings.Contains(third.String(), want) {
+			t.Errorf("the second correction does not carry %q: %s", want, third.String())
+		}
+	}
+}
+
+func TestTheRoundsAreSaidWhenTheyRunOut(t *testing.T) {
+	stub := proxystub.Start()
+	defer stub.Close()
+	stub.Chat = func(proxystub.ChatRequest) (string, int) { return "no idea", http.StatusOK }
+	_, err := askTitleFixing(t, stub, 2)
+	if !errors.Is(err, ErrUnusable) || !strings.Contains(err.Error(), "after 2 corrections") {
+		t.Fatalf("got %v", err)
+	}
+	if calls := len(stub.Chats()); calls != 3 {
+		t.Fatalf("%d calls, want exactly 3", calls)
+	}
+}
+
 // A provider failure is the platform failing: it is returned, and no
 // correction is sent.
 func TestAProviderRefusalIsNotCorrected(t *testing.T) {
@@ -129,7 +181,7 @@ func TestOnlyAKnownFamilyIsSentTheThinkingSwitch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := AskJSON(context.Background(), client, time.Second, []model.Message{{Role: model.RoleUser, Content: "x"}}, readTitle); err != nil {
+	if _, err := AskJSON(context.Background(), client, time.Second, 1, []model.Message{{Role: model.RoleUser, Content: "x"}}, readTitle); err != nil {
 		t.Fatal(err)
 	}
 	if thinking := stub.Chats()[0].Thinking; thinking != nil {

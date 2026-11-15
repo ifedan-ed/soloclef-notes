@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -49,7 +50,7 @@ func (a *Agent) waiting(ctx context.Context, thread string, st *State) ([]Approv
 		c := &st.Batch[i]
 		switch c.Status {
 		case CallAwaitingApproval:
-			out = append(out, Approval{CallID: c.ID, Tool: c.Name, Args: c.Args, AllowAlways: a.tools[c.Name] != nil && a.tools[c.Name].Approval == tool.Ask})
+			out = append(out, Approval{CallID: c.ID, Tool: c.Name, Args: c.Args, AllowAlways: a.allowsAlways(c)})
 		case CallAwaitingAnswer:
 			out = append(out, Approval{CallID: c.ID, Tool: c.Name, Args: c.Args, Question: c.Question})
 		case CallDelegated:
@@ -104,4 +105,27 @@ func (a *Agent) Edit(ctx context.Context, thread string, fn func(*State) error) 
 		return fmt.Errorf("agent: save thread %q: %w", thread, err)
 	}
 	return nil
+}
+
+// allowsAlways says whether an "always allow" answer to the call would be
+// honoured. Never for a call its tool's MustAsk picked out: that call asks
+// whatever anyone chose, so "stop asking" would be a promise the next call
+// breaks. Otherwise always under the person's own policy (AskFirst), where
+// it means "stop asking", and only for a tool.Ask tool without it, the one
+// kind trust may waive.
+func (a *Agent) allowsAlways(c *Call) bool {
+	tl := a.tools[c.Name]
+	if tl != nil && mustAsk(tl, c) {
+		return false
+	}
+	if a.cfg.AskFirst != nil {
+		return true
+	}
+	return tl != nil && tl.Approval == tool.Ask
+}
+
+// mustAsk reports whether the tool picks this call out as one a person
+// must approve (tool.Tool.MustAsk).
+func mustAsk(tl *tool.Tool, c *Call) bool {
+	return tl.MustAsk != nil && tl.MustAsk(json.RawMessage(c.Args))
 }

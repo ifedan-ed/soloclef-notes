@@ -1,113 +1,127 @@
 # Soloclef Notes
 
-A self-hosted, NotebookLM-style notebook app. You put your material in a
-notebook (PDFs, Office files, web pages, papers, notes), ask questions and get
-answers that cite the passage they came from, and turn the sources into
-reports, slide decks, podcasts, videos, quizzes and more. Every server is built
-from this code and knows nothing about any other: its address, sign-in, models
-and storage are its own settings.
+Soloclef is a self-hosted research notebook. Add your material to a notebook,
+ask questions and get answers that cite the exact passage they came from, then
+turn your sources into reports, slide decks, podcasts, videos, flashcards and
+quizzes. It runs on your own server, with your own models, and comes with a web
+app, an iPhone app and an MCP server for AI agents.
 
-The server is written in Go, with one Python service for reading PDF and
-Office files. The web app is Next.js. There is an MCP server for agents and an
-Expo phone app.
+## Features
 
-## What it does
+**Notebooks and sources**
+- Upload PDF, Word, PowerPoint, EPUB, text, Markdown, CSV and HTML files, and
+  pictures (described by a vision model if you ask).
+- Import from Google Drive, Nextcloud and web pages. A link to a PDF is stored
+  and read like an upload.
+- Search PubMed, arXiv, medRxiv/bioRxiv, Exa and Tavily and add results as
+  sources. Fast research returns snippets; deep research also reads the top
+  pages and open full texts.
+- A notebook's chat searches PubMed, arXiv and bioRxiv/medRxiv when its
+  sources don't answer, and adds papers and pages for you, by PubMed id, DOI,
+  arXiv id or link, with open full texts where they exist. Papers are added
+  at once; a web page waits for your approval.
+- Files are read locally with pymupdf4llm by default, or with Datalab,
+  LlamaParse or Unstructured if you add a key.
 
-| Feature | What it is |
-|---|---|
-| Notebooks and sources | Upload PDF, Word, PowerPoint and EPUB files (read on the server), text, Markdown, CSV and HTML; pictures, described by a vision model when the upload asks for it. Import from Google Drive and Nextcloud, from web pages, and from PubMed, arXiv, medRxiv/bioRxiv and Google Scholar searches. A link to a PDF (from Read a web page, a research import or the chat) becomes a stored source parsed like an upload, with the source's chosen parser (pymupdf4llm by default); arXiv papers are read from their PDF. |
-| Parsers | Local (pymupdf4llm, the file stays on the server) by default; Datalab, LlamaParse and Unstructured clients for a deployment that adds a key. A file is read by the parser chosen for it and no other. |
-| Chat with citations | One chat per notebook, answering from the sources you tick, with numbered citations that open the passage. @-mention a source, choose the model, set instructions, approve or refuse an action the assistant wants to take. |
-| Search | Two rankings fused into one: vectors in Qdrant and keywords in Postgres, over a notebook's sources and notes, for the chat and for the search box. |
-| Studio | Reports (PDF, Word, web page), slide decks, workbooks, mind maps, infographics, flashcards, quizzes, data tables, audio overviews (two-voice podcasts) and video overviews. Documents and videos are built in a sandbox; podcasts by the worker. |
-| Notes | Save an answer as a note, write your own, and turn a note into a source. |
-| Automations | Tasks the assistant runs on a schedule or on an event, with the chat's own tools; results saved as notes and optionally emailed. |
-| Email | Connect a mailbox (IMAP, or Microsoft with its own sign-in) so the assistant can search and read mail and attachments, read-only and live: mail is never copied in. |
-| Sharing | Read-only public links to a chat, a Studio output or a whole notebook. |
-| Agents (MCP) | An MCP server (streamable HTTP at `/mcp`, or stdio from the binary) so Claude, ChatGPT, Cursor and other agents can search and read your notebooks and notes, with an API key or the agent's own sign-in. |
-| Sign-in | Email and password, optional single sign-on (any OpenID Connect provider), password reset by email. Sign-ups are one switch. A sign-in ends at once on logout, a device sign-out, sign-out everywhere, or a password reset or change: each access token names its sign-in, the API checks that it is still live on every request, and zero-cache rechecks open connections every 60 seconds. |
-| Live updates | The web app follows the database through zero-cache, so a document that finishes indexing or an output that finishes rendering appears without a reload. |
+**Chat**
+- Answers come from the sources you tick, with numbered citations; click one to
+  open the passage.
+- The chat can also read your connected mail, Google Drive, Nextcloud and MCP
+  servers when you ask about them. Each connection has its own switch.
+- The chat draws charts and diagrams in its answers when they help: bar, line
+  and clinical charts, flowcharts, timelines, comparison tables and concept
+  maps, in light and dark.
+- Copy an answer with its formatting, or download it as Markdown, with a list
+  of sources at the end.
+- What the chat makes in a notebook is listed in that notebook's Studio.
+- Every tool runs without asking unless you mark it "Ask first" in Settings,
+  except adding a web page to a notebook, which always asks.
+- The assistant keeps a memory of you that you can read and edit.
 
-## Architecture
+**Studio**
+- Reports (PDF, Word, web page), slide decks, spreadsheets, mind maps,
+  infographics, flashcards, quizzes, data tables, two-voice audio overviews and
+  narrated video overviews.
+- Infographics are posters drawn by the application: key numbers, short
+  sections, and charts or diagrams where they show something, in one of six
+  looks and three page shapes, kept as PNG and SVG.
+- Slide decks are drawn in designed themes from the model's content: titles,
+  bullets, columns, comparisons, quotes, timelines, diagrams and bar charts,
+  with speaker notes and cited sources. They open in PowerPoint with every
+  shape editable.
+- Video overviews are narrated decks, each part animated as the narration
+  reaches it. Every part has its own passage, voiced on its own, so a point
+  comes in when its words begin, not at a guessed moment.
+- Slide text is sized to its place and never below a readable size. When it
+  does not fit, the slide is laid out another way first: figures two to a
+  row or one to a row, a timeline's events above and below its line, a
+  diagram's stages on two rows. A web address wider than the slide is broken
+  after a slash or a hyphen.
+- Decks and documents are checked against layout rules (text in its box,
+  nothing overlapping, readable size and contrast) before they are saved.
+- Start several outputs at once: one that needs a sandbox while all of yours
+  are busy waits for one, in turn, instead of failing.
+- A failed output says why in plain words in your inbox.
 
-Everything runs from one Compose file, `docker/docker-compose.go.yml`, under
-the project `soloclefgo`. One port is published (Caddy's); every other service
-is reachable only on the stack's own networks.
+**Notes and automations**
+- Save answers as notes or write your own, in a notebook or on their own.
+- Automations run a task on a schedule or on an event, with the chat's tools,
+  and save or email the result.
+- Describe an automation in a notebook's chat. The assistant asks about
+  anything missing, says what an automation can't do, and drafts it on a card
+  you can edit. Nothing is saved until you press Create.
 
-| Service | Built from | What it does |
-|---|---|---|
-| `proxy` | `caddy:2-alpine` + `docker/proxy-go` | The one door. `/api/v1`, `/auth` and `/users` go to the API, `/zero` to zero-cache, `/mcp` to the MCP server, everything else to the web app. Plain HTTP: TLS is the front proxy's. |
-| `frontend` | `soloclef_web` | The Next.js web app. |
-| `api` | `soloclef_api` | The HTTP API, the chat and its agent, sign-in, uploads, Studio requests. Also the admin commands (`soloclef-api set-password`, `set-admin`). |
-| `indexer` | `soloclef_worker` (`cmd/indexer`) | Makes a document searchable: fetches the file from MinIO, has it parsed, chunks it, embeds the chunks through LiteLLM and writes them to Postgres and Qdrant. |
-| `worker` | `soloclef_worker` (`cmd/worker`) | Background jobs: podcasts, videos, automation runs, Drive sync, a notebook's name, folder and account removal. |
-| `parse-service` | `soloclef_parse_service` | PDF, DOCX, PPTX and EPUB to Markdown with pymupdf4llm. The one Python service (below). |
-| `mcp` | `soloclef_mcp_go` | The MCP server. Holds no data; it calls the API over REST with the caller's credential. |
-| `migrate` | `soloclef_schema` | Applies the SQL migrations (goose) and exits. The only thing that changes the schema; the API, indexer and worker refuse to start against a database at another version. |
-| `zero-cache` | `rocicorp/zero` | The web app's live sync, following Postgres by logical replication. |
-| `postgres` | `pgvector/pgvector:pg17` | Accounts, notebooks, documents, chunks and their keyword index, jobs. |
-| `valkey` | `valkey/valkey` | The job queues (the Celery wire protocol, spoken by Go on both ends), rate-limit counters, the event stream and chat-turn leases. |
-| `qdrant` | `qdrant/qdrant` | The vector store the indexer writes and the chat searches. |
-| `minio`, `minio-init` | `minio/minio` | The file store: every uploaded and generated file is an object in one bucket. `minio-init` makes the bucket once. |
-| `opensandbox`, `sandbox-image` | `opensandbox/server` + `docker/sandbox` | Only with a sandbox switch on. Runs the code a model writes to build a report, deck or video in a container of its own (Python document libraries, LibreOffice, Remotion), never in the API's or the worker's process. |
+**Mail**
+- Connect IMAP, Microsoft 365 or a Stalwart (JMAP) mailbox. The assistant can
+  search and read mail and attachments, and write drafts.
+- Nothing is sent until you press Send on the draft, which shows exactly what
+  will go out. Unusual messages (many recipients, new recipients, large
+  attachments, many sends in an hour) need an extra confirmation. Drafts from
+  automations wait on a Drafts page.
 
-Outside the stack: a LiteLLM proxy on a Docker network of its own
-(`SOLOCLEF_GO_MODEL_NETWORK`). Every model call goes through it: chat, the short
-jobs, embeddings, vision, image generation and speech. No service calls a model
-provider directly, and nothing runs a model locally.
+**Sharing and notifications**
+- Share a finished Studio output (mind map, report, deck, flashcards, quiz,
+  audio, video, infographic, data table) with a read-only public link that
+  expires or that you revoke. Chats and notebooks stay private.
+- An inbox, and push notifications on iPhone and Android when an output is
+  ready, an import fails, an automation finishes or a draft is waiting. Each
+  kind can be switched off, with quiet hours.
 
-### Go modules
+**Accounts**
+- Email and password, optional single sign-on through any OpenID Connect
+  provider, and password reset by email. Sign-ups can be switched off.
+- Signing out, a password change or "sign out everywhere" ends sessions
+  immediately. The phone stays signed in while you use it and signs out after
+  180 days unused.
+- Change your password, see every signed-in device and sign any one out, or
+  sign out everywhere, on the website and in the phone app.
+- Bring your own models: connect any OpenAI-compatible API with your own key,
+  alongside the models the server provides.
 
-Each is its own module; the services require their siblings with relative
-`replace` directives, so everything is built from this checkout. The module
-path is `git.danvics.com/danvics/soloclef/<directory>`.
+**For agents**
+- An MCP server (Streamable HTTP at `/mcp`, or stdio) lets Claude, ChatGPT,
+  Cursor and other agents search and read your notebooks and notes, with an API
+  key or OAuth.
+- Add your own MCP servers (Streamable HTTP or SSE, with API key, bearer token
+  or OAuth sign-in). Their secrets are encrypted at rest.
 
-| Module | What it is |
-|---|---|
-| `soloclef_api` | The API service (`cmd/api`) and its routes, one package per feature under `internal/`. |
-| `soloclef_worker` | The worker (`cmd/worker`) and the indexer (`cmd/indexer`). |
-| `soloclef_mcp_go` | The MCP server. |
-| `soloclef_schema` | The SQL migrations, the `migrate` command and the start-up version check. |
-| `soloclef_agent` | The tool-calling loop the chat runs on: streaming events, approvals, checkpoints, nested agents. |
-| `soloclef_assistant` | The chat's tools (document search, web and academic sources, the page reader, mail, Drive, Nextcloud, MCP servers) and how a turn's agent is assembled. |
-| `soloclef_automations` | What an automation definition may say, when a schedule fires, how an event matches a trigger. |
-| `soloclef_celery` | The Celery wire protocol the API and the worker share on Valkey. |
-| `soloclef_chunker` | Where a chunk begins and ends: chonkie's Rust core and HuggingFace `tokenizers` through cgo (`chonkie/rust`), and the table-aware chunker. |
-| `soloclef_ingest` | Parsing: the parser registry, the client for the parse service, the hosted parsers, and the text, CSV and HTML readers. |
-| `soloclef_connectors` | Stored credentials and the Google Drive grant. |
-| `soloclef_filestore` | The file store (S3/MinIO, or local disk). |
-| `soloclef_mail` | Mail transports: MIME, SMTP, smtp2go. |
-| `soloclef_studio` | The sandbox client and how a Studio output is saved. |
+## How it fits together
 
-### The one Python service
+![The Soloclef stack](docs/images/stack.svg)
 
-`soloclef_parse_service` wraps pymupdf4llm behind one HTTP endpoint. MuPDF's
-layout analysis (headings, reading order across columns, real pipe tables) has
-no Go equivalent, so this one step stays in Python. It imports nothing from
-the rest of the application, publishes no port, and is called only by the Go
-services on the stack's network. pymupdf4llm is pinned exactly, and MuPDF is
-AGPL. The hosted parsers' clients are Go (`soloclef_ingest`).
+## Deploy
 
-Other Python in the tree is not part of the running site: the stand-in servers
-of the browser test stack (`docker/e2e-web-go`) and the document libraries
-inside the sandbox image.
-
-## Quick start
-
-You need Docker Engine 24+ with Compose v2, about 25 GB of disk (the sandbox
-image alone is about 13 GB), and a LiteLLM proxy on a Docker network of its
-own with a chat model, an embedding model (the indexer is built for BGE-M3)
-and, for audio overviews, a speech model.
+Soloclef runs with Docker Compose. You need Docker Engine 24+ with Compose v2,
+about 25 GB of disk, and a [LiteLLM](https://github.com/BerriAI/litellm) proxy
+with a chat model, an embedding model (BGE-M3) and, for audio, a speech model.
 
 ```bash
 git clone <this repository> soloclef && cd soloclef
 cp docker/.env.go.example docker/.env.go
 ```
 
-Edit `docker/.env.go`. Every line is required and every value is an example:
-replace each one that names a host, a model, a network or a limit. Then make
-the secret files, one per secret, in the directory `SOLOCLEF_GO_SECRETS_DIR`
-names (relative to `docker/`):
+Edit `docker/.env.go`; every setting is described there. Then create the
+secret files:
 
 ```bash
 mkdir -m 700 docker/secrets-go && cd docker/secrets-go
@@ -116,20 +130,19 @@ openssl rand -hex 32 > session_secret
 printf '%s\n' "your LiteLLM key" > litellm_key
 printf '%s\n' "soloclef" > s3_access_key
 openssl rand -hex 24 > s3_secret_key
-openssl rand -hex 32 > sandbox_api_key   # only with a sandbox switch on
+openssl rand -hex 32 > sandbox_api_key   # only if Studio sandboxes are on
 chmod 0444 * && cd ../..
 ```
 
-Build and start:
+Start it:
 
 ```bash
 docker compose -p soloclefgo --env-file docker/.env.go \
   -f docker/docker-compose.go.yml up -d --build
 ```
 
-The site answers on `SOLOCLEF_GO_SITE_PUBLISH`; put your HTTPS proxy in front
-of it. Sign-ups are off in the example, so make the first account with the
-API's own command (the password is read from standard input):
+Put your HTTPS proxy in front of `SOLOCLEF_GO_SITE_PUBLISH`, then create the
+first account:
 
 ```bash
 dc() { docker compose -p soloclefgo --env-file docker/.env.go -f docker/docker-compose.go.yml "$@"; }
@@ -137,36 +150,34 @@ printf '%s\n' "your password" | dc exec -T api soloclef-api set-password you@exa
 dc exec api soloclef-api set-admin you@example.com true
 ```
 
-To update: pull, then run the same `up -d --build`. The `migrate` service
-brings the database to the new schema before the other services start.
+To update, pull and run the same `up -d --build`; migrations run first.
+An update can run at any time. It waits for work in progress before
+restarting a service: up to 5 minutes for the API (Studio outputs and chat
+answers, with the site still answering meanwhile) and up to 15 minutes for
+the worker (videos, audio overviews, automations), and not at all when
+nothing is running. A Studio output still running after that is made again
+by the new version and shows as still being made
+([details](docs/operations.md#what-an-update-does-to-work-in-progress)).
+Phone apps already installed keep working across updates: every request the
+installed App Store versions and their over-the-air updates make is tested
+against the server and a real database before a change is released, and
+`soloclef-api app-versions` shows which versions and updates phones still
+use.
 
-## Configuration
+Tabs left open across an update keep working: the `site_assets` volume keeps
+the web app's code files of each earlier build for 14 days after it was
+replaced, for the 20 most recent builds at most. Deleting the volume is safe;
+open tabs then reload once.
 
-- `docker/.env.go.example`: every setting, with what it means. Compose stops
-  and names the setting if one is missing; there are no hidden defaults.
-- `docker/docker-compose.go.yml`: the stack itself, with the reason for each
-  service's shape written beside it.
-- `docs/self-hosting.md` and `docs/guide/settings-reference.md`: the
-  self-hosting guide and the settings grouped by purpose (sign-in, email,
-  connections, parsing, embeddings and search, Studio). The same guide is in
-  the web app at `/docs/self-hosting`.
-- The optional secrets (single sign-on, Google Drive, Microsoft mail, an SMTP
-  password) are mounted by a Compose override file of your own; the comment
-  beside each setting in `docker/docker-compose.go.yml` names the secret.
+## Documentation
 
-## Development
+The full guide is in [`docs/`](docs/) and on the documentation site: every
+feature, how to use it, and how to set up single sign-on, email, Google Drive,
+Microsoft and Stalwart mail, push notifications and Studio.
 
-| What | Command |
-|---|---|
-| A Go module | `cd soloclef_<name> && gofmt -l . && go vet ./... && go test ./...` (Go 1.25; modules that import the chunker need its Rust library first: `cargo build --release --manifest-path soloclef_chunker/chonkie/rust/Cargo.toml`) |
-| The parse service | `cd soloclef_parse_service && uv sync && uv run pytest` |
-| Web unit tests | `cd soloclef_web && pnpm install && pnpm test:unit` |
-| Web end-to-end | `cd soloclef_web && pnpm test:e2e:stack:up && pnpm test:e2e` (a throwaway copy of the Go stack with stand-in models, on 127.0.0.1:3945; `soloclef_web/tests/README.md`) |
-
-CI is in `.forgejo/workflows/`: one job per Go module, and the web unit tests.
 
 ## Licence
 
-Soloclef Notes began as a fork of [SurfSense](https://github.com/MODSetter/SurfSense)
-and has since been rewritten. It is under the Apache License 2.0 (see
-[`LICENSE`](LICENSE)). The parse service depends on MuPDF, which is AGPL.
+Apache License 2.0 (see [`LICENSE`](LICENSE)). Soloclef started as a fork of
+[SurfSense](https://github.com/MODSetter/SurfSense). The parse service uses
+MuPDF, which is AGPL.

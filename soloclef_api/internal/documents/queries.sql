@@ -141,7 +141,7 @@ WHERE id = sqlc.arg(id)
        OR NOT content_needs_reindexing);
 
 -- ---------------------------------------------------------------------------
--- The four reads about all of the caller's documents. Each ends on an ORDER
+-- The three reads about all of the caller's documents. Each ends on an ORDER
 -- BY that is total, so two requests for one page read the same rows.
 
 -- name: StatusOfDocuments :many
@@ -167,18 +167,6 @@ FROM documents
 WHERE documents.user_id = sqlc.arg(user_id)::uuid
 GROUP BY documents.document_type
 ORDER BY documents.document_type;
-
--- name: WatchedFoldersOfOwner :many
--- The caller's top-level folders marked as watched, in id order. `->>` reads
--- the value as text, so a folder whose metadata says "watched": "true" is
--- found as well as one that says true.
-SELECT id, name, position, parent_id, created_at, updated_at, metadata
-FROM folders
-WHERE user_id = sqlc.arg(user_id)::uuid
-  AND parent_id IS NULL
-  AND metadata IS NOT NULL
-  AND (metadata ->> 'watched') = 'true'
-ORDER BY id;
 
 -- name: RecentTitlesOfOwner :many
 -- The title search for a title of fewer than two characters: the caller's

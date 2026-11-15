@@ -63,7 +63,7 @@ func TestAPodcastEndToEnd(t *testing.T) {
 	job := &Job{
 		Rows:   f.store,
 		Models: llm.Writers{Choices: llm.Choices{Pool: f.pool, Default: "deployment-model"}, Proxy: proxy},
-		Voicer: voicer, Audio: tools, Indexer: indexer,
+		Voicer: voicer, Audio: tools, Indexer: indexer, Notifier: &recordingNotifier{},
 		Config: Config{CallTimeout: 10 * time.Second, Speech: service, Instructions: "Warm and clear.",
 			Concurrency: 8, WorkDirectory: t.TempDir(), StatusInterval: time.Second},
 		Log: log,

@@ -14,16 +14,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { PendingInterruptState } from "../approval";
 import { usePendingInterrupt } from "../approval";
-import type { StructuredQuestionAnswer, StructuredQuestionResponse } from "../types";
 import {
+	firstQuestionProblem,
+	initialStructuredAnswers,
 	PREVIEW_ASSETS,
 	parseStructuredQuestion,
+	questionProblem,
+	type StructuredAnswers,
 	type StructuredQuestionData,
+	structuredQuestionAnswer,
+	structuredQuestionCancel,
 } from "./structured-question-contract";
-
-export function isStructuredQuestionInterrupt(interrupt: PendingInterruptState): boolean {
-	return parseStructuredQuestion(interrupt.interruptData) !== null;
-}
 
 function StructuredQuestionCard({
 	pending,
@@ -35,15 +36,7 @@ function StructuredQuestionCard({
 	const context = usePendingInterrupt();
 	const cardRef = useRef<HTMLElement>(null);
 	const optionsRef = useRef<HTMLDivElement>(null);
-	const [answers, setAnswers] = useState<Record<string, string[] | string>>(() =>
-		Object.fromEntries(
-			data.questions.map((question) => {
-				if (question.input_type === "free_text") return [question.id, ""];
-				const initial = question.options.find((option) => option.id === "auto");
-				return [question.id, initial ? [initial.id] : []];
-			})
-		)
-	);
+	const [answers, setAnswers] = useState<StructuredAnswers>(() => initialStructuredAnswers(data));
 	const [error, setError] = useState("");
 	const [submitted, setSubmitted] = useState(false);
 	const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
@@ -112,50 +105,41 @@ function StructuredQuestionCard({
 	}, [activeQuestion.id]);
 
 	const validateQuestion = (question: StructuredQuestionData["questions"][number]) => {
-		const answer = answers[question.id];
-		const count = Array.isArray(answer) ? answer.length : String(answer ?? "").trim().length;
-		if (question.required && count === 0) {
-			setError(`Answer “${question.prompt}” before continuing.`);
-			return false;
-		}
-		if (
-			Array.isArray(answer) &&
-			(answer.length < question.minimum_selections || answer.length > question.maximum_selections)
-		) {
-			setError(`Choose the requested number of options for “${question.prompt}”.`);
-			return false;
-		}
-		setError("");
-		return true;
+		const problem = questionProblem(question, answers[question.id]);
+		setError(problem ?? "");
+		return problem === null;
 	};
 
 	const submit = (cancelled: boolean) => {
-		if (!context || submitted || (!cancelled && !validateQuestion(activeQuestion))) return;
-		const response: StructuredQuestionResponse = cancelled
-			? {
-					type: "cancel",
-					preset_id: data.origin.preset_id,
-					preset_version: data.origin.preset_version,
-					tool_call_id: pending.interruptId,
-				}
-			: {
-					type: "respond",
-					preset_id: data.origin.preset_id,
-					preset_version: data.origin.preset_version,
-					tool_call_id: pending.interruptId,
-					answers: data.questions.map<StructuredQuestionAnswer>((question) => {
-						const answer = answers[question.id];
-						return question.input_type === "free_text"
-							? { question_id: question.id, text: String(answer ?? "").trim() }
-							: {
-									question_id: question.id,
-									option_ids: Array.isArray(answer) ? answer : [],
-								};
-					}),
-				};
+		if (!context || submitted) return;
+		if (!cancelled) {
+			// Every answer is checked, not only the one on screen, and the card
+			// turns to the first that is missing: Enter on an earlier question
+			// used to send the later ones unanswered.
+			const problem = firstQuestionProblem(data, answers);
+			if (problem) {
+				setActiveQuestionIndex(problem.index);
+				setError(problem.message);
+				return;
+			}
+		}
+		const response = cancelled
+			? structuredQuestionCancel(data, pending.interruptId)
+			: structuredQuestionAnswer(data, answers, pending.interruptId);
 		setError("");
 		setSubmitted(true);
 		context.onSubmit(pending.interruptId, [response]);
+	};
+
+	/** The main button and Enter: on to the next question, or send on the last. */
+	const advance = () => {
+		if (isLastQuestion) {
+			submit(false);
+			return;
+		}
+		if (validateQuestion(activeQuestion)) {
+			setActiveQuestionIndex((current) => current + 1);
+		}
 	};
 
 	const handlePanelKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
@@ -222,7 +206,7 @@ function StructuredQuestionCard({
 			!(event.target instanceof HTMLButtonElement)
 		) {
 			event.preventDefault();
-			submit(false);
+			advance();
 			return;
 		}
 		if (event.key !== "Tab") return;
@@ -346,12 +330,14 @@ function StructuredQuestionCard({
 												{String.fromCharCode(65 + optionIndex)}
 											</span>
 											{option.preview_asset ? (
+												// The style previews are square posters; a square
+												// thumbnail shows the whole of one, uncropped.
 												<Image
 													src={PREVIEW_ASSETS[option.preview_asset]}
 													alt=""
-													width={58}
+													width={32}
 													height={32}
-													className="h-8 w-[3.625rem] shrink-0 rounded object-cover"
+													className="size-8 shrink-0 rounded object-cover"
 												/>
 											) : null}
 											<span className="min-w-0 flex-1">
@@ -416,15 +402,7 @@ function StructuredQuestionCard({
 						size="sm"
 						className="gap-1.5 rounded-lg"
 						disabled={submitted}
-						onClick={() => {
-							if (isLastQuestion) {
-								submit(false);
-								return;
-							}
-							if (validateQuestion(activeQuestion)) {
-								setActiveQuestionIndex((current) => current + 1);
-							}
-						}}
+						onClick={advance}
 					>
 						{submitted ? "Continuing…" : isLastQuestion ? "Continue" : "Next"}
 						{isLastQuestion ? (

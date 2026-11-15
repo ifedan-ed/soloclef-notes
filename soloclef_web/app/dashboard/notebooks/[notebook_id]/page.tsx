@@ -1,9 +1,12 @@
-"use client";
+import { STATIC_PLACEHOLDER } from "@/lib/routing/dynamic-segments";
+import { NotebookRoute } from "./notebook-route";
 
-import { useParams } from "next/navigation";
-import { NotebookWorkspace } from "@/features/notebooks/ui/workspace/notebook-workspace";
+// One file for every notebook: it is written once, for the placeholder, and
+// Caddy serves it at every /dashboard/notebooks/<id> (lib/routing/dynamic-segments).
+export function generateStaticParams() {
+	return [{ notebook_id: STATIC_PLACEHOLDER }];
+}
 
 export default function NotebookPage() {
-	const params = useParams();
-	return <NotebookWorkspace notebookId={Number(params.notebook_id)} />;
+	return <NotebookRoute />;
 }

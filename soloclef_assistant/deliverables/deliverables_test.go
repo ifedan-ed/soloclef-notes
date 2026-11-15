@@ -131,11 +131,10 @@ type ledger struct {
 	indexErr error
 	// studio is where the specialist's podcasts are opened.
 	studio studio
-	// painter, proofreader and desk are the image model, the model that
-	// reads an image back, and the video queue (media_test.go).
-	painter     painter
-	proofreader proofreader
-	desk        desk
+	// easel and desk are the posters' rasteriser and the video queue
+	// (media_test.go).
+	easel easel
+	desk  desk
 	// shed is the sandbox the built documents are made in
 	// (documents_test.go).
 	shed shed
@@ -197,7 +196,7 @@ func specialist(t testing.TB, m model.Model, l *ledger) (Specialist, *filestore.
 	s := Specialist{
 		Model: m, Store: checkpoint.NewMemory(), Limits: Limits{MaxSteps: 8, Timeout: time.Minute},
 		Podcasts: &l.studio,
-		Images:   &l.painter, Reader: &l.proofreader, Videos: &l.desk,
+		Posters:  &l.easel, Videos: &l.desk,
 		Workshop: &l.shed, Verified: NewVerifications(),
 		Saver: Saver{
 			Rows: l, Files: local, NewID: func() string { return "0123456789abcdef0123456789abcdef" },
@@ -341,10 +340,11 @@ func TestTheOtherKindsAreRefusedByName(t *testing.T) {
 	for args, says := range map[string]string{
 		`{"format":"markdown","title":"T"}`:                                              "Plain documents cannot be made",
 		`{"format":"podcast","title":"T"}`:                                               "a podcast is not saved with save_artifact; call generate_podcast",
-		`{"format":"image","title":"T"}`:                                                 "an image is not saved with save_artifact; call generate_image",
+		`{"format":"image","title":"T"}`:                                                 `format "image" cannot be saved`,
 		`{"format":"Video","title":"T"}`:                                                 "a video is not saved with save_artifact; call enqueue_deliverable_job",
-		`{"format":"infographic","title":"T"}`:                                           "the infographic was not made: markdown is missing",
-		`{"format":"infographic","title":"T","cards":[],"markdown":"# x"}`:               `format "infographic" is saved from markdown alone; remove cards`,
+		`{"format":"infographic","title":"T"}`:                                           "the infographic was not made: poster is missing",
+		`{"format":"infographic","title":"T","cards":[],"poster":{}}`:                    `format "infographic" is saved from poster alone; remove cards`,
+		`{"format":"mindmap","title":"T","poster":{}}`:                                   `format "mindmap" is not saved from a poster; remove poster`,
 		`{"format":"sonnet","title":"T"}`:                                                `format "sonnet" cannot be saved`,
 		`{"format":"quiz","title":"T","cards":[]}`:                                       `format "quiz" is saved from questions alone; remove cards`,
 		`{"format":"flashcards","title":"T","cards":[],"markdown":"# x","questions":[]}`: `remove questions and markdown`,
@@ -400,13 +400,10 @@ func TestTheSpecialistRefusesToStartUnconfigured(t *testing.T) {
 	}
 	s.Podcasts = &studio{}
 	for missing, unset := range map[string]func(*Specialist){
-		"Images is not set": func(s *Specialist) { s.Images = nil },
-		"Reader is not set": func(s *Specialist) { s.Reader = nil },
-		"Videos is not set": func(s *Specialist) { s.Videos = nil },
+		"Posters is not set": func(s *Specialist) { s.Posters = nil },
+		"Videos is not set":  func(s *Specialist) { s.Videos = nil },
 		// A real client or queue that is half set up is refused as well.
-		"ProxyImages.BaseURL is not set":     func(s *Specialist) { s.Images = ProxyImages{} },
-		"VisionImageReader.Sight is not set": func(s *Specialist) { s.Reader = VisionImageReader{} },
-		"Videos.Rows is not set":             func(s *Specialist) { s.Videos = Videos{} },
+		"Videos.Rows is not set": func(s *Specialist) { s.Videos = Videos{} },
 	} {
 		broken := s
 		unset(&broken)

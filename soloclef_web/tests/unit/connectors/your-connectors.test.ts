@@ -49,9 +49,10 @@ const listedMcp = connector({
 	name: "My tools",
 	config: {
 		server_config: {
-			name: "My tools",
 			url: "https://mcp.example.com",
-			headers: { Authorization: "Bearer ****" },
+			transport: "streamable-http",
+			auth: { type: "bearer", token: "••••" },
+			headers: {},
 		},
 	},
 });

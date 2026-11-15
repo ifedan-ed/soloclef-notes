@@ -35,7 +35,6 @@ import {
 	uploadDocumentRequest,
 	uploadDocumentResponse,
 } from "@/contracts/types/document.types";
-import { folderListResponse } from "@/contracts/types/folder.types";
 import { ValidationError } from "../error";
 import { baseApiService } from "./base-api.service";
 import { uploadFormData } from "./upload-form";
@@ -354,15 +353,6 @@ class DocumentsApiService {
 		return baseApiService.post(`/api/v1/documents/${documentId}/versions/${versionNumber}/restore`);
 	};
 
-	folderMtimeCheck = async (body: {
-		folder_name: string;
-		files: { relative_path: string; mtime: number }[];
-	}): Promise<{ files_to_upload: string[] }> => {
-		return baseApiService.post(`/api/v1/documents/folder-mtime-check`, undefined, {
-			body,
-		}) as unknown as { files_to_upload: string[] };
-	};
-
 	folderUploadFiles = async (
 		files: File[],
 		metadata: {
@@ -407,31 +397,6 @@ class DocumentsApiService {
 		} finally {
 			clearTimeout(timeoutId);
 		}
-	};
-
-	folderNotifyUnlinked = async (body: {
-		folder_name: string;
-		root_folder_id: number | null;
-		relative_paths: string[];
-	}): Promise<{ deleted_count: number }> => {
-		return baseApiService.post(`/api/v1/documents/folder-unlink`, undefined, {
-			body,
-		}) as unknown as { deleted_count: number };
-	};
-
-	folderSyncFinalize = async (body: {
-		folder_name: string;
-		root_folder_id: number | null;
-		all_relative_paths: string[];
-	}): Promise<{ deleted_count: number }> => {
-		return baseApiService.post(`/api/v1/documents/folder-sync-finalize`, undefined, {
-			body,
-		}) as unknown as { deleted_count: number };
-	};
-
-	/** The account's top folders that the desktop app keeps in step with a local folder. */
-	getWatchedFolders = async () => {
-		return baseApiService.get(`/api/v1/documents/watched-folders`, folderListResponse);
 	};
 
 	/**

@@ -36,6 +36,7 @@ const FAILURE_MESSAGES: Record<string, string> = {
 	generation_failed: "The video could not be generated. Please try again.",
 	render_failed: "The video could not be rendered. Please try again.",
 	verification_failed: "The rendered video did not pass verification. Please try again.",
+	interrupted: "The server restarted while it was being made. Please try again.",
 	cancelled: "The video was cancelled.",
 };
 

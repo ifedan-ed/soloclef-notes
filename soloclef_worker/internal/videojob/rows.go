@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -42,12 +41,6 @@ type Claimed struct {
 	// Takeovers is how many times this attempt has been taken over from a
 	// worker that stopped answering.
 	Takeovers int
-}
-
-// sandboxName is the attempt's sandbox: one per attempt, so a retry starts
-// in a clean one and a takeover finds the dead worker's to remove.
-func (c Claimed) sandboxName() string {
-	return "deliverable-job-" + strconv.FormatInt(c.ID, 10) + "-attempt-" + strconv.Itoa(c.Attempt)
 }
 
 // What a claim found to do.
@@ -108,8 +101,11 @@ type Rows interface {
 	Cancelled(ctx context.Context, job Claimed) error
 	// Release gives a running attempt back to the queue, for a worker that
 	// is stopping: the message goes back too, and whoever takes it next
-	// claims the attempt as if it were new.
-	Release(ctx context.Context, job Claimed) error
+	// claims the attempt as if it were new. It counts as one of the
+	// attempt's restarts, with the takeovers of a dead worker's attempt
+	// (ClaimRules.MaxTakeovers): an attempt already restarted that often is
+	// failed as interrupted instead, and Release reports false.
+	Release(ctx context.Context, job Claimed, rules ClaimRules) (bool, error)
 	// ReserveArtifactID is an id for the artifact, taken before its files
 	// are stored so that their keys can name it.
 	ReserveArtifactID(ctx context.Context) (int64, error)
@@ -126,8 +122,12 @@ type Store struct {
 	Pool *pgxpool.Pool
 }
 
-// takeoversKey is where an attempt's takeover count rides in the row's
-// checkpoint column.
+// takeoversKey is where an attempt's restart count rides in the row's
+// checkpoint column: the takeovers of a dead worker's attempt and the
+// releases of a stopping worker, together, because either way the video is
+// made again from the start and one attempt must not be made endlessly. The
+// key keeps its first name so rows written before releases were counted
+// are read the same.
 const takeoversKey = "orphan_takeovers"
 
 func (s Store) Claim(ctx context.Context, jobID int64, taskID string, rules ClaimRules) (Claim, error) {
@@ -266,15 +266,28 @@ func (s Store) Cancelled(ctx context.Context, job Claimed) error {
 	return err
 }
 
-func (s Store) Release(ctx context.Context, job Claimed) error {
+func (s Store) Release(ctx context.Context, job Claimed, rules ClaimRules) (bool, error) {
+	if job.Takeovers >= rules.MaxTakeovers {
+		_, err := s.Pool.Exec(ctx, `
+			UPDATE deliverable_jobs
+			SET status = 'failed', phase = 'failed', failure_code = $4, internal_error = $5,
+			    heartbeat_at = now(), finished_at = now(), updated_at = now()
+			WHERE id = $1 AND user_id = $2::uuid AND celery_task_id = $3 AND status = 'running' AND artifact_id IS NULL`,
+			job.ID, job.UserID, job.TaskID, codeInterrupted,
+			fmt.Sprintf("the worker making this video stopped on each of its %d runs; it is not put back again", job.Takeovers+1))
+		return false, err
+	}
+	// The count rides with the attempt (a retry empties the checkpoint), so
+	// the claim that takes the message next reads it as this run left it.
 	_, err := s.Pool.Exec(ctx, `
 		UPDATE deliverable_jobs
 		SET status = 'queued', phase = NULL, progress = 0, claimed_at = NULL, heartbeat_at = NULL,
 		    internal_error = 'the worker stopped while making this video; it was put back on the queue',
+		    checkpoint = jsonb_set(checkpoint, '{`+takeoversKey+`}', to_jsonb($4::int)),
 		    updated_at = now()
 		WHERE id = $1 AND user_id = $2::uuid AND celery_task_id = $3 AND status = 'running' AND artifact_id IS NULL`,
-		job.ID, job.UserID, job.TaskID)
-	return err
+		job.ID, job.UserID, job.TaskID, job.Takeovers+1)
+	return err == nil, err
 }
 
 func (s Store) ReserveArtifactID(ctx context.Context) (int64, error) {

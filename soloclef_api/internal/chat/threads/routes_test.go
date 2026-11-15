@@ -2,9 +2,7 @@ package threads
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 )
@@ -150,16 +148,10 @@ func TestListingAndSearchingThreads(t *testing.T) {
 // so it is asked of every route, with the body each would act on.
 func TestAnotherAccountsThreadIsNotFoundOnEveryRoute(t *testing.T) {
 	w := newWorld(t)
-	// A link of Ada's, so there is one to try to list and to take down.
-	link := w.call(ada, "POST", "/api/v1/threads/1/snapshots", `{}`)
-	if link.status != 200 {
-		t.Fatalf("seeding a link: %d %s", link.status, link.raw)
-	}
-	linkID := itoa(int64(link.body["snapshot_id"].(float64)))
 	w.saveCheckpoints("chat-1")
 	before := w.text(`SELECT md5(string_agg(t::text, '|' ORDER BY t.id)) FROM new_chat_threads t`) +
 		w.text(`SELECT md5(string_agg(m::text, '|' ORDER BY m.id)) FROM new_chat_messages m`) +
-		w.text(`SELECT md5(string_agg(s::text, '|' ORDER BY s.id)) FROM public_chat_snapshots s`) + w.checkpoints()
+		w.checkpoints()
 
 	for _, route := range []struct{ method, path, body, absent string }{
 		{"GET", "/api/v1/threads/1", "", threadAbsent},
@@ -167,11 +159,6 @@ func TestAnotherAccountsThreadIsNotFoundOnEveryRoute(t *testing.T) {
 		{"GET", "/api/v1/threads/1/messages", "", threadAbsent},
 		{"PUT", "/api/v1/threads/1", `{"title":"Mine now","archived":true}`, threadAbsent},
 		{"POST", "/api/v1/threads/1/messages", `{"role":"user","content":"planted"}`, threadAbsent},
-		{"POST", "/api/v1/threads/1/snapshots", `{}`, threadAbsent},
-		{"GET", "/api/v1/threads/1/snapshots", "", threadAbsent},
-		{"DELETE", "/api/v1/threads/1/snapshots/" + linkID, "", linkAbsent},
-		// Ada's link named under a thread the caller does own.
-		{"DELETE", "/api/v1/threads/3/snapshots/" + linkID, "", linkAbsent},
 		{"DELETE", "/api/v1/threads/1", "", threadAbsent},
 	} {
 		for _, stranger := range []string{ben, dee} {
@@ -186,9 +173,9 @@ func TestAnotherAccountsThreadIsNotFoundOnEveryRoute(t *testing.T) {
 	}
 	after := w.text(`SELECT md5(string_agg(t::text, '|' ORDER BY t.id)) FROM new_chat_threads t`) +
 		w.text(`SELECT md5(string_agg(m::text, '|' ORDER BY m.id)) FROM new_chat_messages m`) +
-		w.text(`SELECT md5(string_agg(s::text, '|' ORDER BY s.id)) FROM public_chat_snapshots s`) + w.checkpoints()
+		w.checkpoints()
 	if after != before {
-		t.Error("a refused request changed a thread, a message, a link or a saved conversation")
+		t.Error("a refused request changed a thread, a message or a saved conversation")
 	}
 	// And the owner still has all of it.
 	if got := w.call(ada, "GET", "/api/v1/threads/1/full", ""); got.status != 200 || got.body["title"] != "Cell Biology" || ids(got.body["messages"]) != "101 102 103" {
@@ -388,26 +375,28 @@ func TestTheStatementsRefuseAnotherAccountsThread(t *testing.T) {
 	if _, err := store.Append(ctx, ben, 1, "USER", []byte(`"x"`), nil); err == nil {
 		t.Error("Append wrote into another account's thread")
 	}
-	if _, err := store.SaveLink(ctx, NewLink{ThreadID: 1, UserID: ben, Token: "t", Hash: "h", Data: []byte(`{}`), MessageIDs: []int64{101}}); err == nil {
-		t.Error("SaveLink made a link to another account's thread")
-	}
-	if links, err := store.Links(ctx, ben, 1); len(links) != 0 || err != nil {
-		t.Errorf("Links: %d, %v", len(links), err)
-	}
 	if err := store.Delete(ctx, ben, 1); err != nil {
 		t.Errorf("Delete: %v", err)
 	}
-	if n := w.count(`SELECT (SELECT count(*) FROM new_chat_threads WHERE id = 1) + (SELECT count(*) FROM new_chat_messages WHERE thread_id = 1) + (SELECT count(*) FROM public_chat_snapshots)`); n != 4 {
-		t.Errorf("thread 1 and its messages count %d after Ben's statements, want 4 and no link", n)
+	if n := w.count(`SELECT (SELECT count(*) FROM new_chat_threads WHERE id = 1) + (SELECT count(*) FROM new_chat_messages WHERE thread_id = 1)`); n != 4 {
+		t.Errorf("thread 1 and its messages count %d after Ben's statements, want 4", n)
 	}
 }
 
 func TestTheToolList(t *testing.T) {
 	w := newWorld(t)
 	got := w.call(ben, "GET", "/api/v1/agent/tools", "")
-	want := `[{"name":"search_knowledge_base","description":"Search the documents","enabled_by_default":true},{"name":"generate_podcast","description":"Make a podcast","enabled_by_default":true}]`
+	want := `[{"name":"search_knowledge_base","description":"Search the documents","enabled_by_default":true},{"name":"generate_podcast","description":"Make a podcast","enabled_by_default":true},{"name":"search_emails","description":"Search your email","enabled_by_default":true,"group":"Mail","connector":"mail"}]`
 	if got.status != 200 || got.raw != want {
 		t.Errorf("the tool list: %d %s", got.status, got.raw)
+	}
+	// The list is the caller's: another account's has no mail tool.
+	if got := w.call(ada, "GET", "/api/v1/agent/tools", ""); got.status != 200 || strings.Contains(got.raw, "search_emails") {
+		t.Errorf("Ada's tool list: %d %s", got.status, got.raw)
+	}
+	// Connections that cannot be read are a 500, never a shorter list.
+	if got := w.call("broken", "GET", "/api/v1/agent/tools", ""); got.status != 500 {
+		t.Errorf("unreadable connections: %d %s", got.status, got.raw)
 	}
 	// With no caller the wiring is wrong, and that is a 500, not a list.
 	if got := w.call("", "GET", "/api/v1/agent/tools", ""); got.status != 500 {
@@ -434,7 +423,6 @@ func TestDeletingAThread(t *testing.T) {
 	// paused delegate leaves one), and thread 10's, whose name begins the
 	// same way.
 	w.saveCheckpoints("chat-1", "chat-1/call_abc", "chat-1/call_abc/call_def", "chat-10", "chat-2")
-	w.exec(`INSERT INTO public_chat_snapshots (thread_id, user_id, share_token, content_hash, snapshot_data, message_ids) VALUES (1, $1, 'tok', 'hash', '{}', '{101}')`, ada)
 
 	w.refusedWith("Ben deleting Ada's thread", w.call(ben, "DELETE", "/api/v1/threads/1", ""), 404, threadAbsent)
 	w.refusedWith("Dee deleting Ada's thread", w.call(dee, "DELETE", "/api/v1/threads/1", ""), 404, threadAbsent)
@@ -466,7 +454,7 @@ func TestDeletingAThread(t *testing.T) {
 	}
 	// Its rows, with what hangs off them, and its saved conversation with
 	// what is nested under it. Thread 10's and thread 2's are untouched.
-	if n := w.count(`SELECT (SELECT count(*) FROM new_chat_threads WHERE id = 1) + (SELECT count(*) FROM new_chat_messages WHERE thread_id = 1) + (SELECT count(*) FROM token_usage WHERE thread_id = 1) + (SELECT count(*) FROM public_chat_snapshots WHERE thread_id = 1)`); n != 0 {
+	if n := w.count(`SELECT (SELECT count(*) FROM new_chat_threads WHERE id = 1) + (SELECT count(*) FROM new_chat_messages WHERE thread_id = 1) + (SELECT count(*) FROM token_usage WHERE thread_id = 1)`); n != 0 {
 		t.Errorf("%d rows of thread 1 are left", n)
 	}
 	if got := w.checkpoints(); got != "chat-10 chat-2" {
@@ -547,266 +535,5 @@ func TestDeletingAThreadWhileItIsAnswering(t *testing.T) {
 	stuck.End()
 	if got := w.call(ada, "DELETE", "/api/v1/threads/10", ""); got.status != 200 {
 		t.Errorf("the retry: %d %s", got.status, got.raw)
-	}
-}
-
-// snapshotOf is a link's stored document.
-func (w *world) snapshotOf(linkID float64) map[string]any {
-	w.t.Helper()
-	var data map[string]any
-	if err := json.Unmarshal([]byte(w.text(`SELECT snapshot_data::text FROM public_chat_snapshots WHERE id = $1`, int64(linkID))), &data); err != nil {
-		w.t.Fatal(err)
-	}
-	return data
-}
-
-func TestSharingAThreadPublicly(t *testing.T) {
-	w := newWorld(t)
-	const path = "/api/v1/threads/1/snapshots"
-
-	// What the share dialog sends (features/public-sharing).
-	made := w.call(ada, "POST", path, `{"expires_in_days":7}`)
-	if made.status != 200 || made.body["is_new"] != true || made.body["expires_at"] != "2026-11-18T09:00:00Z" {
-		t.Fatalf("share: %d %s", made.status, made.raw)
-	}
-	token, _ := made.body["share_token"].(string)
-	if len(token) != 64 || made.body["public_url"] != "https://notes.example/public/"+token {
-		t.Errorf("the link: %s", made.raw)
-	}
-
-	// The copy: text without its source markers, no reasoning, no search
-	// call; an author's name and nothing else of them.
-	data := w.snapshotOf(made.body["snapshot_id"].(float64))
-	raw := plain(t, data["messages"])
-	want := `[{"author":{"avatar_url":null,"display_name":"Ada Lovelace"},"content":[{"text":"What is <mitosis> & why?","type":"text"}],"created_at":"2026-01-01T10:00:01+00:00","id":101,"role":"user"},` +
-		`{"author":null,"content":[{"text":"Four phases.","type":"text"}],"created_at":"2026-01-01T10:00:01+00:00","id":102,"role":"assistant"},` +
-		`{"author":{"avatar_url":null,"display_name":"Ada Lovelace"},"content":[{"text":"Thanks","type":"text"}],"created_at":"2026-01-01T10:05:00.250000+00:00","id":103,"role":"user"}]`
-	if raw != want {
-		t.Errorf("the copy's messages:\n got %s\nwant %s", raw, want)
-	}
-	author, _ := data["author"].(map[string]any)
-	if data["title"] != "Cell Biology" || data["snapshot_at"] != "2026-11-11T09:00:00+00:00" || author["display_name"] != "Ada Lovelace" ||
-		len(data["podcasts"].([]any)) != 0 || len(data["artifact_ids"].([]any)) != 0 {
-		t.Errorf("the copy: %v", data)
-	}
-	if got := w.text(`SELECT array_to_string(message_ids, ' ') || ' ' || user_id::text FROM public_chat_snapshots WHERE thread_id = 1`); got != "101 102 103 "+ada {
-		t.Errorf("the link's row: %s", got)
-	}
-
-	// Same content, same address; the newest choice of expiry applies.
-	again := w.call(ada, "POST", path, `{"expires_in_days":null}`)
-	if again.status != 200 || again.body["is_new"] != false || again.body["share_token"] != token || again.body["expires_at"] != nil ||
-		again.body["snapshot_id"] != made.body["snapshot_id"] {
-		t.Errorf("sharing it again: %s", again.raw)
-	}
-	// No body at all is seven days.
-	if plain := w.call(ada, "POST", path, ""); plain.status != 200 || plain.body["expires_at"] != "2026-11-18T09:00:00Z" || plain.body["share_token"] != token {
-		t.Errorf("sharing with no body: %d %s", plain.status, plain.raw)
-	}
-
-	// An expired link stays dead: the same content gets a new address.
-	w.exec(`UPDATE public_chat_snapshots SET expires_at = now() - interval '1 minute' WHERE thread_id = 1`)
-	reborn := w.call(ada, "POST", path, `{"expires_in_days":30}`)
-	if reborn.status != 200 || reborn.body["is_new"] != true || reborn.body["share_token"] == token || reborn.body["expires_at"] != "2026-12-11T09:00:00Z" {
-		t.Errorf("sharing after the link expired: %s", reborn.raw)
-	}
-	if n := w.count(`SELECT count(*) FROM public_chat_snapshots WHERE thread_id = 1`); n != 1 {
-		t.Errorf("%d links, want 1: the expired row should be gone", n)
-	}
-
-	// Changed content is a different page and a different address.
-	w.call(ada, "POST", "/api/v1/threads/1/messages", `{"role":"user","content":"One more"}`)
-	changed := w.call(ada, "POST", path, `{}`)
-	if changed.body["is_new"] != true || changed.body["share_token"] == reborn.body["share_token"] {
-		t.Errorf("sharing after a new message: %s", changed.raw)
-	}
-
-	// The list: live links, newest first, with their size.
-	w.exec(`UPDATE public_chat_snapshots SET created_at = '2026-11-10T08:00:00.5Z' WHERE id = $1`, int64(reborn.body["snapshot_id"].(float64)))
-	listed := w.call(ada, "GET", path, "")
-	links, _ := listed.body["snapshots"].([]any)
-	if listed.status != 200 || len(links) != 2 {
-		t.Fatalf("the list: %d %s", listed.status, listed.raw)
-	}
-	older := links[1].(map[string]any)
-	if older["id"] != reborn.body["snapshot_id"] || older["share_token"] != reborn.body["share_token"] || older["message_count"] != float64(3) ||
-		older["created_at"] != "2026-11-10T08:00:00.500000+00:00" || older["public_url"] != reborn.body["public_url"] ||
-		links[0].(map[string]any)["message_count"] != float64(4) {
-		t.Errorf("the listed links: %s", listed.raw)
-	}
-	// A dead link is not listed as if it opened something.
-	w.exec(`UPDATE public_chat_snapshots SET expires_at = now() - interval '1 minute' WHERE id = $1`, int64(reborn.body["snapshot_id"].(float64)))
-	if listed := w.call(ada, "GET", path, ""); len(listed.body["snapshots"].([]any)) != 1 {
-		t.Errorf("the list with an expired link: %s", listed.raw)
-	}
-
-	// A link is the conversation: nobody but its owner makes one or is
-	// told the ones there are.
-	w.refusedWith("Ben sharing Ada's thread", w.call(ben, "POST", path, `{}`), 404, threadAbsent)
-	w.refusedWith("Ben listing the links to Ada's thread", w.call(ben, "GET", path, ""), 404, threadAbsent)
-	w.refusedWith("an empty thread", w.call(ada, "POST", "/api/v1/threads/10/snapshots", `{}`), 400, emptyChat)
-	if got := w.call(ada, "POST", path, `{"expires_in_days":14}`); got.status != 422 {
-		t.Errorf("fourteen days: %d", got.status)
-	}
-	// An author with no name set is "User" to a stranger.
-	shared := w.call(ben, "POST", "/api/v1/threads/3/snapshots", `{}`)
-	if shared.status != 200 {
-		t.Fatalf("Ben sharing his own thread: %d %s", shared.status, shared.raw)
-	}
-	data = w.snapshotOf(shared.body["snapshot_id"].(float64))
-	first := data["messages"].([]any)[0].(map[string]any)["author"].(map[string]any)
-	owner, _ := data["author"].(map[string]any)
-	if first["display_name"] != "User" || owner["display_name"] != "User" {
-		t.Errorf("Ben's copy: author %v, message author %v", data["author"], first)
-	}
-}
-
-func TestAPublicCopyServesOnlyItsOwnAccountsPodcastsAndArtifacts(t *testing.T) {
-	w := newWorld(t)
-	// A finished podcast and an artifact of each of two accounts, and one
-	// of Ada's podcasts that is still being made.
-	w.exec(`
-INSERT INTO documents (id, title, document_type, content, content_hash, user_id) VALUES
-  (12, 'Deck', 'FILE', 'x', 'h12', '` + ada + `'),
-  (13, 'Episode', 'FILE', 'x', 'h13', '` + ada + `'),
-  (90, 'Theirs', 'FILE', 'x', 'h90', '` + dee + `');
-INSERT INTO artifacts (id, document_id, user_id, format) VALUES
-  (500, 12, '` + ada + `', 'flashcards'), (501, 13, '` + ada + `', 'audio'), (900, 90, '` + dee + `', 'audio');
-INSERT INTO podcast_runs (id, title, status, podcast_transcript, artifact_id, user_id) VALUES
-  (40, 'Ours', 'ready', '[{"speaker": 0, "dialog": "Hello"}]', 501, '` + ada + `'),
-  (41, 'Still drafting', 'drafting', NULL, NULL, '` + ada + `'),
-  (80, 'Theirs', 'ready', '[{"speaker": 0, "dialog": "Their secret"}]', 900, '` + dee + `');
-`)
-	// The cards are written through the append route, which is how a
-	// client could try to name another account's podcast or artifact.
-	card := func(tool, call, result string) string {
-		return `{"role":"assistant","content":[{"type":"tool-call","toolCallId":"` + call + `","toolName":"` + tool + `","args":{},"result":` + result + `}]}`
-	}
-	for _, body := range []string{
-		card("generate_podcast", "p1", `{"status":"awaiting_brief","podcast_id":40,"title":"Ours"}`),
-		card("generate_podcast", "p2", `{"status":"awaiting_brief","podcast_id":41,"title":"Still drafting"}`),
-		card("generate_podcast", "p3", `{"status":"awaiting_brief","podcast_id":80,"title":"Theirs"}`),
-		card("save_artifact", "a1", `{"artifact_id":500,"storage_key":"ws/7/deck.json"}`),
-		card("save_artifact", "a2", `{"artifact_id":900}`),
-		card("save_artifact", "a3", `{"artifact_id":"500"}`),
-	} {
-		if got := w.call(ada, "POST", "/api/v1/threads/10/messages", body); got.status != 200 {
-			t.Fatalf("seeding a card: %d %s", got.status, got.raw)
-		}
-	}
-	made := w.call(ada, "POST", "/api/v1/threads/10/snapshots", `{}`)
-	if made.status != 200 {
-		t.Fatalf("share: %d %s", made.status, made.raw)
-	}
-	data := w.snapshotOf(made.body["snapshot_id"].(float64))
-
-	// Only Ada's own finished podcast is embedded.
-	podcasts, _ := json.Marshal(data["podcasts"])
-	if string(podcasts) != `[{"artifact_id":501,"original_id":40,"title":"Ours","transcript":[{"dialog":"Hello","speaker":0}]}]` {
-		t.Errorf("embedded podcasts: %s", podcasts)
-	}
-	// What the link may serve: the account's own artifacts the cards
-	// name, and its podcast's audio. Never 900.
-	served, _ := json.Marshal(data["artifact_ids"])
-	if string(served) != `[500,501]` {
-		t.Errorf("artifacts the link serves: %s", served)
-	}
-	results := map[string]map[string]any{}
-	for _, message := range data["messages"].([]any) {
-		for _, part := range message.(map[string]any)["content"].([]any) {
-			results[part.(map[string]any)["toolCallId"].(string)] = part.(map[string]any)["result"].(map[string]any)
-		}
-	}
-	// The finished podcast's card says so and can play; the other two are
-	// as they were saved.
-	if ours := results["p1"]; ours["status"] != "ready" || ours["artifact_id"] != float64(501) {
-		t.Errorf("our podcast's card: %v", ours)
-	}
-	if results["p2"]["status"] != "awaiting_brief" || results["p3"]["status"] != "awaiting_brief" || results["p3"]["artifact_id"] != nil {
-		t.Errorf("the other podcasts' cards: %v / %v", results["p2"], results["p3"])
-	}
-	// Where a file is stored never leaves.
-	if _, leaked := results["a1"]["storage_key"]; leaked {
-		t.Errorf("a storage key in a public copy: %v", results["a1"])
-	}
-	if strings.Contains(w.text(`SELECT snapshot_data::text FROM public_chat_snapshots WHERE id = $1`, int64(made.body["snapshot_id"].(float64))), "Their secret") {
-		t.Error("another account's transcript is in the public copy")
-	}
-
-	// The podcast that was drafting finishes: the page is different now,
-	// so sharing again gives a new address with it embedded.
-	w.exec(`UPDATE podcast_runs SET status = 'ready', podcast_transcript = '[]' WHERE id = 41`)
-	later := w.call(ada, "POST", "/api/v1/threads/10/snapshots", `{}`)
-	if later.body["is_new"] != true {
-		t.Errorf("sharing after a podcast finished: %s", later.raw)
-	}
-	if got := len(w.snapshotOf(later.body["snapshot_id"].(float64))["podcasts"].([]any)); got != 2 {
-		t.Errorf("%d podcasts embedded after the second finished, want 2", got)
-	}
-}
-
-func TestSharingTwiceAtOnceGivesOneLink(t *testing.T) {
-	w := newWorld(t)
-	const sharers = 12
-	tokens := make([]string, sharers)
-	fresh := make([]bool, sharers)
-	var wg sync.WaitGroup
-	for i := range sharers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			got := w.call(ada, "POST", "/api/v1/threads/1/snapshots", `{}`)
-			if got.status != 200 {
-				t.Errorf("sharer %d: %d %s", i, got.status, got.raw)
-				return
-			}
-			tokens[i], _ = got.body["share_token"].(string)
-			fresh[i], _ = got.body["is_new"].(bool)
-		}()
-	}
-	wg.Wait()
-	made := 0
-	for i := range sharers {
-		if tokens[i] != tokens[0] {
-			t.Errorf("sharer %d got another address", i)
-		}
-		if fresh[i] {
-			made++
-		}
-	}
-	if made != 1 || w.count(`SELECT count(*) FROM public_chat_snapshots WHERE thread_id = 1`) != 1 {
-		t.Errorf("%d sharers were told the link was new, and there are %d rows; want 1 and 1", made, w.count(`SELECT count(*) FROM public_chat_snapshots WHERE thread_id = 1`))
-	}
-}
-
-func TestTakingALinkDown(t *testing.T) {
-	w := newWorld(t)
-	bens := w.call(ben, "POST", "/api/v1/threads/3/snapshots", `{}`)
-	adas := w.call(ada, "POST", "/api/v1/threads/1/snapshots", `{}`)
-	if bens.status != 200 || adas.status != 200 {
-		t.Fatalf("seeding links: %s / %s", bens.raw, adas.raw)
-	}
-	link := func(a answered) string { return itoa(int64(a.body["snapshot_id"].(float64))) }
-
-	// A link is named by its thread and its id together, and is its
-	// owner's alone to take down.
-	w.refusedWith("a link under another thread's path", w.call(ada, "DELETE", "/api/v1/threads/2/snapshots/"+link(adas), ""), 404, linkAbsent)
-	w.refusedWith("a link that is not there", w.call(ada, "DELETE", "/api/v1/threads/1/snapshots/999999", ""), 404, linkAbsent)
-	w.refusedWith("Dee taking down Ada's link", w.call(dee, "DELETE", "/api/v1/threads/1/snapshots/"+link(adas), ""), 404, linkAbsent)
-	w.refusedWith("Ben taking down Ada's link", w.call(ben, "DELETE", "/api/v1/threads/1/snapshots/"+link(adas), ""), 404, linkAbsent)
-	w.refusedWith("Ada taking down Ben's link", w.call(ada, "DELETE", "/api/v1/threads/3/snapshots/"+link(bens), ""), 404, linkAbsent)
-	w.refusedWith("Ada naming Ben's link under her own thread", w.call(ada, "DELETE", "/api/v1/threads/1/snapshots/"+link(bens), ""), 404, linkAbsent)
-	if n := w.count(`SELECT count(*) FROM public_chat_snapshots`); n != 2 {
-		t.Fatalf("a refused request took a link down: %d left", n)
-	}
-	if got := w.call(ben, "DELETE", "/api/v1/threads/3/snapshots/"+link(bens), ""); got.status != 200 || got.raw != `{"message":"Snapshot deleted successfully"}` {
-		t.Errorf("Ben taking down his own link: %d %s", got.status, got.raw)
-	}
-	if got := w.call(ada, "DELETE", "/api/v1/threads/1/snapshots/"+link(adas), ""); got.status != 200 {
-		t.Errorf("Ada taking down her own link: %d %s", got.status, got.raw)
-	}
-	w.refusedWith("taking it down again", w.call(ada, "DELETE", "/api/v1/threads/1/snapshots/"+link(adas), ""), 404, linkAbsent)
-	if n := w.count(`SELECT count(*) FROM public_chat_snapshots`); n != 0 {
-		t.Errorf("%d links left, want 0", n)
 	}
 }

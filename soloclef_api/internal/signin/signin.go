@@ -16,6 +16,8 @@
 //	GET    /auth/devices             where the account is signed in (devices.go)
 //	DELETE /auth/devices/{id}        sign one of them out
 //	POST   /auth/jwt/logout-all      sign every one of them out
+//	GET    /auth/password            whether the account has a password (password_change.go)
+//	POST   /auth/change-password     a signed-in person's new password
 //
 // Single sign-on is a package of its own (internal/oidcsignin). It ends by
 // calling StartWebSession here, so there is one place that makes a session
@@ -64,6 +66,14 @@
 //     transaction**, not in a second session after the first committed.
 //   - **The lifetimes are constants with names** (lifetimes.go), not five
 //     settings with defaults; nothing about them differs by deployment.
+//   - **A phone stays signed in while it is used.** Each refresh starts its
+//     180 days again and nothing caps it from the sign-in; only half a year
+//     unused ends it (lifetimes.go), where the Python tier gave it a fixed
+//     term.
+//   - **A password is changed where the person is signed in**
+//     (password_change.go): with the current password, or for an account
+//     single sign-on made, from a sign-in the provider proved in the last ten
+//     minutes. Every other sign-in ends; this one stays.
 //   - **Ending a sign-in ends its access tokens at once.** Signing out, a
 //     device signed out from the list, signing out everywhere, a reset or
 //     `set-password`, and a replayed refresh token all end the family, and
@@ -96,7 +106,7 @@ const (
 // refresh token it carries, not by an access token (which has usually just
 // expired).
 func Public() []string {
-	return append(PasswordAttempts(),
+	return append(publicPasswordAttempts(),
 		http.MethodPost+" "+RefreshPath,
 		http.MethodPost+" "+RevokePath,
 	)
@@ -124,7 +134,22 @@ func BrowserSessionWrites() []string {
 // general rate of a thousand requests a minute, a sign-up form being used
 // to fill the accounts table, and the reset form being used to fill
 // somebody's inbox; there is no captcha and no second counter beside it.
+//
+// One of them is behind the gate (SignedInPasswordAttempts): the password
+// change, which checks the current password and so must be no faster a way
+// to guess it than the sign-in form.
 func PasswordAttempts() []string {
+	return append(publicPasswordAttempts(), SignedInPasswordAttempts()...)
+}
+
+// SignedInPasswordAttempts is the password routes that need a session: the
+// ones cmd/api limits on the gated side of its front door.
+func SignedInPasswordAttempts() []string {
+	return []string{http.MethodPost + " " + ChangePasswordPath}
+}
+
+// publicPasswordAttempts is the password routes nobody is signed in for.
+func publicPasswordAttempts() []string {
 	return []string{
 		http.MethodPost + " " + PasswordPath,
 		http.MethodPost + " " + PhonePath,
@@ -144,6 +169,9 @@ func Served() []string {
 		http.MethodGet+" "+DevicesPath,
 		http.MethodDelete+" "+DevicePath,
 		http.MethodPost+" "+LogoutAllPath,
+		// A signed-in person's new password (password_change.go).
+		http.MethodGet+" "+PasswordStatePath,
+		http.MethodPost+" "+ChangePasswordPath,
 	)
 }
 

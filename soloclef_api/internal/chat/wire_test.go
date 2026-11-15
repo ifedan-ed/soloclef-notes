@@ -18,6 +18,10 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humago"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/academic"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/addsources"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/maildrafts"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/pagereader"
 	"git.danvics.com/danvics/soloclef/soloclef_celery/produce"
 	filestore "git.danvics.com/danvics/soloclef/soloclef_filestore"
 
@@ -30,6 +34,8 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/requestbody"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/requestcontext"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/voices"
+	"git.danvics.com/danvics/soloclef/soloclef_connectors/mcpserver"
+	"git.danvics.com/danvics/soloclef/soloclef_connectors/sealedsecret"
 	"git.danvics.com/danvics/soloclef/soloclef_ingest/parse"
 )
 
@@ -217,6 +223,10 @@ func TestTheChatAsAServerRunsIt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	stores, err := filestore.NewStores(local)
+	if err != nil {
+		t.Fatal(err)
+	}
 	lifetime, shutdown := context.WithCancel(ctx)
 	defer shutdown()
 	settings := complete()
@@ -227,6 +237,11 @@ func TestTheChatAsAServerRunsIt(t *testing.T) {
 	started := time.Now()
 	service, release, err := NewService(ctx, settings, Deps{Pool: pool, Files: local, Queue: queue, HTTP: &http.Client{}, Voices: noVoices{}, Logger: logger, Lifetime: lifetime,
 		Parsers: parserchoicetest.Registry(t, parse.Local),
+		// No draft is made here; the two are what a draft would need.
+		DraftNotifier: maildrafts.NoNotifications{}, FileStore: stores,
+		// add_sources over a stand-in import: this test builds the chat,
+		// it adds no source.
+		Sources: func(*pagereader.Reader, *academic.Sources) (addsources.Adder, error) { return &adding{}, nil },
 		KnowledgeBase: knowledgebase.Changes{
 			Pool: pool, Logger: logger,
 			Indexing: indexqueue.Indexing{Queue: queue, Marker: indexqueue.PostgresMarker{Pool: pool}, Logger: logger},
@@ -246,9 +261,23 @@ func TestTheChatAsAServerRunsIt(t *testing.T) {
 	// The seed's connected apps are given saved tool lists, so that no
 	// turn of this test asks a server on the internet for one: an app with
 	// one tool, and one with none.
-	if _, err := pool.Exec(ctx, `
-UPDATE search_source_connectors SET config = '{"server_config": {"transport": "streamable-http", "url": "https://mcp.browserbase.com/mcp", "headers": {"x-api-key": "fake-key"}}, "cached_tools": {"tools": [{"name": "lookup", "description": "Look a thing up.", "input_schema": {"type": "object"}}]}}' WHERE id = 1;
-UPDATE search_source_connectors SET config = config || '{"cached_tools": {"tools": []}}'::jsonb WHERE id IN (2, 3);`); err != nil {
+	// The app's settings are stored sealed for Ada under the settings'
+	// secret, as the API stores them.
+	serverSeal, err := sealedsecret.New("fake-secret-key", sealedsecret.MCPServerSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored, err := mcpserver.Build(serverSeal, ada, mcpserver.Settings{Address: "https://mcp.browserbase.com/mcp",
+		Transport: mcpserver.StreamableHTTP, Auth: mcpserver.Auth{Kind: mcpserver.AuthHeader, HeaderName: "x-api-key", Secret: "fake-key"}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app, _ := json.Marshal(map[string]any{"server_config": stored,
+		"cached_tools": map[string]any{"tools": []any{map[string]any{"name": "lookup", "description": "Look a thing up.", "input_schema": map[string]any{"type": "object"}}}}})
+	if _, err := pool.Exec(ctx, `UPDATE search_source_connectors SET config = $1::jsonb WHERE id = 1`, string(app)); err != nil {
+		t.Fatalf("seeding the connected apps: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE search_source_connectors SET config = config || '{"cached_tools": {"tools": []}}'::jsonb WHERE id IN (2, 3)`); err != nil {
 		t.Fatalf("seeding the connected apps: %v", err)
 	}
 

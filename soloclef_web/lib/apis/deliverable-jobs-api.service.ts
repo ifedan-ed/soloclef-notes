@@ -18,16 +18,16 @@ export const deliverableJobResponse = z.object({
 export const deliverableJobActionPath = (jobId: number, action: "cancel" | "retry") =>
 	`/api/v1/deliverable-jobs/${jobId}/${action}`;
 
-export const deliverableJobActionRequestOptions = (isDesktopClient: boolean) => ({
-	sameOrigin: !isDesktopClient,
-});
+// Cancel and retry go to the page's own origin, where the session cookie
+// lives; the proxy there hands them to the API.
+export const deliverableJobActionRequestOptions = { sameOrigin: true } as const;
 
 class DeliverableJobsApiService {
 	private postAction(jobId: number, action: "cancel" | "retry") {
 		return baseApiService.post(
 			deliverableJobActionPath(jobId, action),
 			deliverableJobResponse,
-			deliverableJobActionRequestOptions(baseApiService.isDesktopClient)
+			deliverableJobActionRequestOptions
 		);
 	}
 

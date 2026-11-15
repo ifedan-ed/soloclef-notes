@@ -11,9 +11,14 @@
 }
 
 :80 {
-	reverse_proxy /__e2e__/* {$SOLOCLEF_STACK}-api-1:8080
-	reverse_proxy /__nextcloud__/* {$SOLOCLEF_STACK}-nextcloud-stub-1:8080
-	reverse_proxy /__google__/* {$SOLOCLEF_STACK}-google-stub-1:8080
+	# A `route` of its own, written before the deployment's: routes.caddy
+	# is one `route` that ends in the web app's files, so anything after it
+	# would never be reached. Two routes run in the order they are written.
+	route {
+		reverse_proxy /__e2e__/* {$SOLOCLEF_STACK}-api-1:8080
+		reverse_proxy /__nextcloud__/* {$SOLOCLEF_STACK}-nextcloud-stub-1:8080
+		reverse_proxy /__google__/* {$SOLOCLEF_STACK}-google-stub-1:8080
+	}
 
 	import /etc/caddy/routes.caddy
 }

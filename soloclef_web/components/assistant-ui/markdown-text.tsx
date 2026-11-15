@@ -8,7 +8,6 @@ import {
 	unstable_memoizeMarkdownComponents as memoizeMarkdownComponents,
 	useIsMarkdownCodeBlock,
 } from "@assistant-ui/react-markdown";
-import { useSetAtom } from "jotai";
 import { ExternalLinkIcon, FileIcon, Folder as FolderIcon } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useTheme } from "next-themes";
@@ -16,10 +15,10 @@ import { createContext, memo, type ReactNode, useCallback, useContext, useRef } 
 import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
-import { openEditorPanelAtom } from "@/atoms/editor/editor-panel.atom";
 import { ImagePreview, ImageRoot, ImageZoom } from "@/components/assistant-ui/image";
 import { MentionChip } from "@/components/assistant-ui/mention-chip";
 import "katex/dist/katex.min.css";
+import { useCitationLabels } from "@/components/citations/citation-numbers-context";
 import { processChildrenWithCitations } from "@/components/citations/citation-renderer";
 import {
 	Table,
@@ -29,9 +28,9 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { useElectronAPI } from "@/hooks/use-platform";
 import { getVirtualPathDisplay } from "@/lib/chat/virtual-path-display";
 import { type CitationUrlMap, preprocessCitationMarkdown } from "@/lib/citations/citation-parser";
+import { normalizeAnswerMarkdown } from "@/lib/markdown/answer-markdown";
 import { tryGetHostname } from "@/lib/url";
 import { cn } from "@/lib/utils";
 
@@ -53,14 +52,23 @@ type CitationUrlMapRef = { current: CitationUrlMap };
 const EMPTY_URL_MAP: CitationUrlMap = new Map();
 const CitationUrlMapContext = createContext<CitationUrlMapRef>({ current: EMPTY_URL_MAP });
 
-function useCitationUrlMap(): CitationUrlMap {
-	return useContext(CitationUrlMapContext).current;
+/**
+ * Children with their citations drawn as chips. While the answer streams,
+ * the bare "[3]" labels the model writes are chips too
+ * (components/citations/citation-numbers-context.tsx), so a citation looks
+ * and is numbered the same before and after the answer is saved.
+ */
+function useCitations(): (children: ReactNode) => ReactNode {
+	const urlMap = useContext(CitationUrlMapContext).current;
+	const labels = useCitationLabels();
+	return (children) => processChildrenWithCitations(children, urlMap, labels);
 }
 
 /**
  * Preprocess raw markdown before it reaches the remark/rehype pipeline.
  * - Replaces URL-based citations with safe placeholders (prevents GFM autolinks)
- * - Normalises LaTeX delimiters to dollar-sign syntax for remark-math
+ * - Normalises the rest (sandbox links, LaTeX delimiters, headings) as the
+ *   copy does (lib/markdown/answer-markdown.ts)
  */
 function preprocessMarkdown(content: string, urlMapRef: CitationUrlMapRef): string {
 	// Replace URL-based citations with safe placeholders BEFORE markdown parsing.
@@ -71,45 +79,7 @@ function preprocessMarkdown(content: string, urlMapRef: CitationUrlMapRef): stri
 	urlMapRef.current = urlMap;
 	content = rewritten;
 
-	// A model that has just written a file sometimes offers it as
-	// [Download ...](sandbox:/workspace/thing.json). That path is inside the
-	// throwaway container the deliverable was built in, destroyed when the job
-	// ended. Worse, react-markdown strips schemes it does not know BEFORE the
-	// link component can see them, so the anchor arrives with href="" — and a
-	// click on an empty href reloads the current page, which is exactly what
-	// was reported. Take the link apart here, before parsing, and leave the
-	// words. The artifact card above the message is the real download.
-	content = content.replace(/\[([^\]]*)\]\(\s*sandbox:[^)]*\)/gi, (_, label) => label);
-
-	// All math forms are normalised to $$...$$ so we can disable single-dollar
-	// inline math in remark-math (otherwise currency like "$3,120.00 and $0.00"
-	// gets parsed as a LaTeX expression).
-	// 1. Block math: \[...\] → $$...$$
-	content = content.replace(/\\\[([\s\S]*?)\\\]/g, (_, inner) => `$$${inner}$$`);
-	// 2. Inline math: \(...\) → $$...$$
-	content = content.replace(/\\\(([\s\S]*?)\\\)/g, (_, inner) => `$$${inner}$$`);
-	// 3. Block: \begin{equation}...\end{equation} → $$...$$
-	content = content.replace(
-		/\\begin\{equation\}([\s\S]*?)\\end\{equation\}/g,
-		(_, inner) => `$$${inner}$$`
-	);
-	// 4. Block: \begin{displaymath}...\end{displaymath} → $$...$$
-	content = content.replace(
-		/\\begin\{displaymath\}([\s\S]*?)\\end\{displaymath\}/g,
-		(_, inner) => `$$${inner}$$`
-	);
-	// 5. Inline: \begin{math}...\end{math} → $$...$$
-	content = content.replace(
-		/\\begin\{math\}([\s\S]*?)\\end\{math\}/g,
-		(_, inner) => `$$${inner}$$`
-	);
-	// 6. Strip backtick wrapping around math: `$$...$$` → $$...$$ and `$...$` → $...$
-	content = content.replace(/`(\${1,2})((?:(?!\1).)+)\1`/g, "$1$2$1");
-
-	// Ensure markdown headings (## ...) always start on their own line.
-	content = content.replace(/([^\n])(#{1,6}\s)/g, "$1\n\n$2");
-
-	return content;
+	return normalizeAnswerMarkdown(content);
 }
 
 const MarkdownTextImpl = () => {
@@ -138,46 +108,8 @@ const MarkdownTextImpl = () => {
 
 export const MarkdownText = memo(MarkdownTextImpl);
 
-// Canonical local-file virtual paths are mount-prefixed: /<mount>/<relative/path>
+// A file path the chat writes is mount-prefixed: /<mount>/<relative/path>.
 const LOCAL_FILE_PATH_REGEX = /^\/[a-z0-9_-]+\/[^\s`]+(?:\/[^\s`]+)*$/;
-
-type AgentFilesystemMount = {
-	mount: string;
-	rootPath: string;
-};
-
-function normalizeLocalVirtualPathForEditor(
-	candidatePath: string,
-	mounts: AgentFilesystemMount[]
-): string {
-	const normalizedCandidate = candidatePath.trim().replace(/\\/g, "/").replace(/\/+/g, "/");
-	if (!normalizedCandidate) {
-		return candidatePath;
-	}
-	const defaultMount = mounts[0]?.mount;
-	if (!defaultMount) {
-		return normalizedCandidate.startsWith("/")
-			? normalizedCandidate
-			: `/${normalizedCandidate.replace(/^\/+/, "")}`;
-	}
-
-	const mountNames = new Set(mounts.map((entry) => entry.mount));
-	if (normalizedCandidate.startsWith("/")) {
-		const relative = normalizedCandidate.replace(/^\/+/, "");
-		const [firstSegment] = relative.split("/", 1);
-		if (mountNames.has(firstSegment)) {
-			return `/${relative}`;
-		}
-		return `/${defaultMount}/${relative}`;
-	}
-
-	const relative = normalizedCandidate.replace(/^\/+/, "");
-	const [firstSegment] = relative.split("/", 1);
-	if (mountNames.has(firstSegment)) {
-		return `/${relative}`;
-	}
-	return `/${defaultMount}/${relative}`;
-}
 
 function isVirtualFilePathToken(value: string): boolean {
 	if (!LOCAL_FILE_PATH_REGEX.test(value) || value.startsWith("//")) {
@@ -199,55 +131,20 @@ function isStandaloneDocumentsPathText(node: ReactNode): string | null {
 	return value;
 }
 
+// FilePathLink shows a /documents/... path the answer names as a chip. It
+// opens nothing: the chat cites passages rather than giving documents file
+// paths, so no route turns a path back into a document. The chip only keeps
+// the path readable instead of a raw code span.
 function FilePathLink({ path, className }: { path: string; className?: string }) {
-	const openEditorPanel = useSetAtom(openEditorPanelAtom);
-	const electronAPI = useElectronAPI();
-
 	const { displayName, isFolder } = getVirtualPathDisplay(path);
 	const icon = isFolder ? <FolderIcon className="size-3.5" /> : <FileIcon className="size-3.5" />;
-
-	const handleClick = useCallback(
-		(event: React.MouseEvent<HTMLButtonElement>) => {
-			event.preventDefault();
-			event.stopPropagation();
-			void (async () => {
-				if (electronAPI) {
-					let resolvedLocalPath = path;
-					if (electronAPI.getAgentFilesystemMounts) {
-						try {
-							const mounts =
-								(await electronAPI.getAgentFilesystemMounts()) as AgentFilesystemMount[];
-							resolvedLocalPath = normalizeLocalVirtualPathForEditor(path, mounts);
-						} catch {
-							// Fall back to the raw path if mount lookup fails.
-						}
-					}
-					openEditorPanel({
-						kind: "local_file",
-						localFilePath: resolvedLocalPath,
-						title: resolvedLocalPath.split("/").pop() || resolvedLocalPath,
-					});
-					return;
-				}
-
-				// In the browser a path opens nothing: the chat no longer gives
-				// documents filesystem paths (it cites passages), so there is
-				// no route that turns one back into a document.
-			})();
-		},
-		[electronAPI, openEditorPanel, path]
-	);
-
-	// Folders cannot open in a file panel — keep them as visual chips.
-	const onClick = isFolder || !electronAPI ? undefined : handleClick;
 
 	return (
 		<MentionChip
 			icon={icon}
 			label={displayName || path}
 			tooltip={path}
-			onClick={onClick}
-			ariaLabel={isFolder ? `Folder ${displayName}` : `Open ${displayName}`}
+			ariaLabel={isFolder ? `Folder ${displayName}` : displayName}
 			className={className}
 		/>
 	);
@@ -294,7 +191,7 @@ function MarkdownImage({ src, alt }: { src?: string; alt?: string }) {
 
 const defaultComponents = memoizeMarkdownComponents({
 	h1: function H1({ className, children, ...props }) {
-		const urlMap = useCitationUrlMap();
+		const cite = useCitations();
 		return (
 			<h1
 				className={cn(
@@ -303,12 +200,12 @@ const defaultComponents = memoizeMarkdownComponents({
 				)}
 				{...props}
 			>
-				{processChildrenWithCitations(children, urlMap)}
+				{cite(children)}
 			</h1>
 		);
 	},
 	h2: function H2({ className, children, ...props }) {
-		const urlMap = useCitationUrlMap();
+		const cite = useCitations();
 		return (
 			<h2
 				className={cn(
@@ -317,12 +214,12 @@ const defaultComponents = memoizeMarkdownComponents({
 				)}
 				{...props}
 			>
-				{processChildrenWithCitations(children, urlMap)}
+				{cite(children)}
 			</h2>
 		);
 	},
 	h3: function H3({ className, children, ...props }) {
-		const urlMap = useCitationUrlMap();
+		const cite = useCitations();
 		return (
 			<h3
 				className={cn(
@@ -331,12 +228,12 @@ const defaultComponents = memoizeMarkdownComponents({
 				)}
 				{...props}
 			>
-				{processChildrenWithCitations(children, urlMap)}
+				{cite(children)}
 			</h3>
 		);
 	},
 	h4: function H4({ className, children, ...props }) {
-		const urlMap = useCitationUrlMap();
+		const cite = useCitations();
 		return (
 			<h4
 				className={cn(
@@ -345,44 +242,40 @@ const defaultComponents = memoizeMarkdownComponents({
 				)}
 				{...props}
 			>
-				{processChildrenWithCitations(children, urlMap)}
+				{cite(children)}
 			</h4>
 		);
 	},
 	h5: function H5({ className, children, ...props }) {
-		const urlMap = useCitationUrlMap();
+		const cite = useCitations();
 		return (
 			<h5
 				className={cn("aui-md-h5 my-4 font-semibold text-lg first:mt-0 last:mb-0", className)}
 				{...props}
 			>
-				{processChildrenWithCitations(children, urlMap)}
+				{cite(children)}
 			</h5>
 		);
 	},
 	h6: function H6({ className, children, ...props }) {
-		const urlMap = useCitationUrlMap();
+		const cite = useCitations();
 		return (
 			<h6 className={cn("aui-md-h6 my-4 font-semibold first:mt-0 last:mb-0", className)} {...props}>
-				{processChildrenWithCitations(children, urlMap)}
+				{cite(children)}
 			</h6>
 		);
 	},
 	p: function P({ className, children, ...props }) {
-		const urlMap = useCitationUrlMap();
+		const cite = useCitations();
 		const standalonePath = isStandaloneDocumentsPathText(children);
 		return (
 			<p className={cn("aui-md-p mt-5 mb-5 leading-7 first:mt-0 last:mb-0", className)} {...props}>
-				{standalonePath ? (
-					<FilePathLink path={standalonePath} />
-				) : (
-					processChildrenWithCitations(children, urlMap)
-				)}
+				{standalonePath ? <FilePathLink path={standalonePath} /> : cite(children)}
 			</p>
 		);
 	},
 	a: function A({ className, children, href, ...props }) {
-		const urlMap = useCitationUrlMap();
+		const cite = useCitations();
 		// A model that has just written a file sometimes offers it as
 		// [Download ...](sandbox:/workspace/thing.json). That path lives in the
 		// throwaway container the deliverable was built in, which is destroyed
@@ -398,7 +291,7 @@ const defaultComponents = memoizeMarkdownComponents({
 					className={cn("aui-md-a font-medium text-muted-foreground", className)}
 					title="Use the Download button on the artifact above"
 				>
-					{processChildrenWithCitations(children, urlMap)}
+					{cite(children)}
 				</span>
 			);
 		}
@@ -408,15 +301,15 @@ const defaultComponents = memoizeMarkdownComponents({
 				href={href}
 				{...props}
 			>
-				{processChildrenWithCitations(children, urlMap)}
+				{cite(children)}
 			</a>
 		);
 	},
 	blockquote: function Blockquote({ className, children, ...props }) {
-		const urlMap = useCitationUrlMap();
+		const cite = useCitations();
 		return (
 			<blockquote className={cn("aui-md-blockquote border-l-2 pl-6 italic", className)} {...props}>
-				{processChildrenWithCitations(children, urlMap)}
+				{cite(children)}
 			</blockquote>
 		);
 	},
@@ -427,10 +320,10 @@ const defaultComponents = memoizeMarkdownComponents({
 		<ol className={cn("aui-md-ol my-5 ml-6 list-decimal [&>li]:mt-2", className)} {...props} />
 	),
 	li: function Li({ className, children, ...props }) {
-		const urlMap = useCitationUrlMap();
+		const cite = useCitations();
 		return (
 			<li className={cn("aui-md-li", className)} {...props}>
-				{processChildrenWithCitations(children, urlMap)}
+				{cite(children)}
 			</li>
 		);
 	},
@@ -449,7 +342,7 @@ const defaultComponents = memoizeMarkdownComponents({
 		<TableBody className={cn("aui-md-tbody", className)} {...props} />
 	),
 	th: function Th({ className, children, ...props }) {
-		const urlMap = useCitationUrlMap();
+		const cite = useCitations();
 		return (
 			<TableHead
 				className={cn(
@@ -458,12 +351,12 @@ const defaultComponents = memoizeMarkdownComponents({
 				)}
 				{...props}
 			>
-				{processChildrenWithCitations(children, urlMap)}
+				{cite(children)}
 			</TableHead>
 		);
 	},
 	td: function Td({ className, children, ...props }) {
-		const urlMap = useCitationUrlMap();
+		const cite = useCitations();
 		return (
 			<TableCell
 				className={cn(
@@ -472,7 +365,7 @@ const defaultComponents = memoizeMarkdownComponents({
 				)}
 				{...props}
 			>
-				{processChildrenWithCitations(children, urlMap)}
+				{cite(children)}
 			</TableCell>
 		);
 	},
@@ -484,12 +377,12 @@ const defaultComponents = memoizeMarkdownComponents({
 	code: function Code({ className, children, ...props }) {
 		const isCodeBlock = useIsMarkdownCodeBlock();
 		const { resolvedTheme } = useTheme();
-		const electronAPI = useElectronAPI();
 		const language = /language-(\w+)/.exec(className || "")?.[1] ?? "text";
 		const codeString = String(children).replace(/\n$/, "");
-		const isWebLocalFileCodeBlock =
+		// A fenced block holding nothing but one file path reads better as
+		// inline code than as a highlighted block with a copy button.
+		const isFilePathCodeBlock =
 			isCodeBlock &&
-			!electronAPI &&
 			isVirtualFilePathToken(codeString.trim()) &&
 			!codeString.trim().startsWith("//") &&
 			!codeString.includes("\n");
@@ -500,15 +393,10 @@ const defaultComponents = memoizeMarkdownComponents({
 			const isLikelyFolder =
 				inlineValue.endsWith("/") || !leafSegment || !leafSegment.includes(".");
 			const isLocalPath =
-				(isVirtualFilePathToken(inlineValue) &&
-					!inlineValue.startsWith("//") &&
-					!isLikelyFolder &&
-					!!electronAPI) ||
-				(isVirtualFilePathToken(inlineValue) &&
-					!inlineValue.startsWith("//") &&
-					!isLikelyFolder &&
-					!electronAPI &&
-					inlineValue.startsWith("/documents/"));
+				isVirtualFilePathToken(inlineValue) &&
+				!inlineValue.startsWith("//") &&
+				!isLikelyFolder &&
+				inlineValue.startsWith("/documents/");
 			if (isLocalPath) {
 				return <FilePathLink path={inlineValue} className="text-[0.9em]" />;
 			}
@@ -524,7 +412,7 @@ const defaultComponents = memoizeMarkdownComponents({
 				</code>
 			);
 		}
-		if (isWebLocalFileCodeBlock) {
+		if (isFilePathCodeBlock) {
 			return (
 				<code
 					className={cn(
@@ -547,18 +435,18 @@ const defaultComponents = memoizeMarkdownComponents({
 		);
 	},
 	strong: function Strong({ className, children, ...props }) {
-		const urlMap = useCitationUrlMap();
+		const cite = useCitations();
 		return (
 			<strong className={cn("aui-md-strong font-semibold", className)} {...props}>
-				{processChildrenWithCitations(children, urlMap)}
+				{cite(children)}
 			</strong>
 		);
 	},
 	em: function Em({ className, children, ...props }) {
-		const urlMap = useCitationUrlMap();
+		const cite = useCitations();
 		return (
 			<em className={cn("aui-md-em", className)} {...props}>
-				{processChildrenWithCitations(children, urlMap)}
+				{cite(children)}
 			</em>
 		);
 	},

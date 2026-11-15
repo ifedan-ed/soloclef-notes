@@ -112,26 +112,42 @@ LIMIT 1;
 UPDATE new_chat_threads SET title = sqlc.arg(title)
 WHERE id = sqlc.arg(thread_id) AND user_id = sqlc.arg(user_id);
 
--- name: ToolIsTrusted :one
--- Whether this account has said "always allow" for this tool. Asked at the
--- moment a call is decided, every time: a rule removed in settings stops
--- applying to the very next call.
+-- name: ChatToolAsksFirst :one
+-- Whether this account wants to be asked before one of the chat's own tools
+-- runs. Asked at the moment a call is decided, every time: a mark changed in
+-- settings applies to the very next call. The chat's tools and a connected
+-- app's are two statements rather than one with IS NOT DISTINCT FROM, which
+-- no index serves.
 SELECT EXISTS (
-    SELECT 1 FROM agent_permission_rules
+    SELECT 1 FROM agent_ask_first_tools
     WHERE user_id = sqlc.arg(user_id)
-      AND thread_id IS NULL
-      AND permission = sqlc.arg(tool)::text
-      AND pattern = '*'
-      AND action = 'allow'
+      AND connector_id IS NULL
+      AND tool = sqlc.arg(tool)::text
 );
 
--- name: TrustTool :exec
--- Remember "always allow". A second click writes nothing: the unique
--- constraint compares the NULL thread as equal to itself (NULLS NOT
--- DISTINCT), so the conflict is found.
-INSERT INTO agent_permission_rules (user_id, thread_id, permission, pattern, action)
-VALUES (sqlc.arg(user_id), NULL, sqlc.arg(tool)::text, '*', 'allow')
-ON CONFLICT ON CONSTRAINT uq_agent_permission_rules_scope DO NOTHING;
+-- name: AppToolAsksFirst :one
+-- The same for a connected app's tool, by its connection and the server's
+-- own name for it.
+SELECT EXISTS (
+    SELECT 1 FROM agent_ask_first_tools
+    WHERE user_id = sqlc.arg(user_id)
+      AND connector_id = sqlc.arg(connector_id)
+      AND tool = sqlc.arg(tool)::text
+);
+
+-- name: StopAskingChatTool :exec
+-- What "always allow" on an approval card means: the mark goes. A tool that
+-- has none writes nothing.
+DELETE FROM agent_ask_first_tools
+WHERE user_id = sqlc.arg(user_id)
+  AND connector_id IS NULL
+  AND tool = sqlc.arg(tool)::text;
+
+-- name: StopAskingAppTool :exec
+DELETE FROM agent_ask_first_tools
+WHERE user_id = sqlc.arg(user_id)
+  AND connector_id = sqlc.arg(connector_id)
+  AND tool = sqlc.arg(tool)::text;
 
 -- name: ChatModelOfAccount :one
 -- The model an account chose for chat, by the name the model proxy knows it
@@ -212,12 +228,6 @@ ORDER BY created_at, id;
 -- NULL by the foreign key: what was spent is still what was spent.
 DELETE FROM new_chat_messages
 WHERE thread_id = sqlc.arg(thread_id) AND id = ANY (sqlc.arg(message_ids)::bigint[]);
-
--- name: DeleteSnapshotsOfMessages :exec
--- A public snapshot that shows a message which no longer exists is removed
--- with it: a link must not go on showing an answer its thread has replaced.
-DELETE FROM public_chat_snapshots
-WHERE thread_id = sqlc.arg(thread_id) AND message_ids && sqlc.arg(message_ids)::bigint[];
 
 -- name: NotebookOfThread :one
 -- The notebook a thread belongs to, with what decides whether it still names

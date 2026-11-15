@@ -32,6 +32,30 @@ func (q *Queries) AnyDocumentReady(ctx context.Context, arg AnyDocumentReadyPara
 	return exists, err
 }
 
+const appToolAsksFirst = `-- name: AppToolAsksFirst :one
+SELECT EXISTS (
+    SELECT 1 FROM agent_ask_first_tools
+    WHERE user_id = $1
+      AND connector_id = $2
+      AND tool = $3::text
+)
+`
+
+type AppToolAsksFirstParams struct {
+	UserID      string
+	ConnectorID *int64
+	Tool        string
+}
+
+// The same for a connected app's tool, by its connection and the server's
+// own name for it.
+func (q *Queries) AppToolAsksFirst(ctx context.Context, arg AppToolAsksFirstParams) (bool, error) {
+	row := q.db.QueryRow(ctx, appToolAsksFirst, arg.UserID, arg.ConnectorID, arg.Tool)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const assistantMessageCount = `-- name: AssistantMessageCount :one
 SELECT count(*) FROM new_chat_messages
 WHERE thread_id = $1 AND role = 'ASSISTANT'
@@ -56,6 +80,32 @@ func (q *Queries) ChatModelOfAccount(ctx context.Context, userID string) (string
 	var model string
 	err := row.Scan(&model)
 	return model, err
+}
+
+const chatToolAsksFirst = `-- name: ChatToolAsksFirst :one
+SELECT EXISTS (
+    SELECT 1 FROM agent_ask_first_tools
+    WHERE user_id = $1
+      AND connector_id IS NULL
+      AND tool = $2::text
+)
+`
+
+type ChatToolAsksFirstParams struct {
+	UserID string
+	Tool   string
+}
+
+// Whether this account wants to be asked before one of the chat's own tools
+// runs. Asked at the moment a call is decided, every time: a mark changed in
+// settings applies to the very next call. The chat's tools and a connected
+// app's are two statements rather than one with IS NOT DISTINCT FROM, which
+// no index serves.
+func (q *Queries) ChatToolAsksFirst(ctx context.Context, arg ChatToolAsksFirstParams) (bool, error) {
+	row := q.db.QueryRow(ctx, chatToolAsksFirst, arg.UserID, arg.Tool)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const chooseChatModel = `-- name: ChooseChatModel :exec
@@ -100,23 +150,6 @@ type DeleteMessagesParams struct {
 // NULL by the foreign key: what was spent is still what was spent.
 func (q *Queries) DeleteMessages(ctx context.Context, arg DeleteMessagesParams) error {
 	_, err := q.db.Exec(ctx, deleteMessages, arg.ThreadID, arg.MessageIds)
-	return err
-}
-
-const deleteSnapshotsOfMessages = `-- name: DeleteSnapshotsOfMessages :exec
-DELETE FROM public_chat_snapshots
-WHERE thread_id = $1 AND message_ids && $2::bigint[]
-`
-
-type DeleteSnapshotsOfMessagesParams struct {
-	ThreadID   *int64
-	MessageIds []int64
-}
-
-// A public snapshot that shows a message which no longer exists is removed
-// with it: a link must not go on showing an answer its thread has replaced.
-func (q *Queries) DeleteSnapshotsOfMessages(ctx context.Context, arg DeleteSnapshotsOfMessagesParams) error {
-	_, err := q.db.Exec(ctx, deleteSnapshotsOfMessages, arg.ThreadID, arg.MessageIds)
 	return err
 }
 
@@ -641,6 +674,43 @@ func (q *Queries) SetThreadTitle(ctx context.Context, arg SetThreadTitleParams) 
 	return err
 }
 
+const stopAskingAppTool = `-- name: StopAskingAppTool :exec
+DELETE FROM agent_ask_first_tools
+WHERE user_id = $1
+  AND connector_id = $2
+  AND tool = $3::text
+`
+
+type StopAskingAppToolParams struct {
+	UserID      string
+	ConnectorID *int64
+	Tool        string
+}
+
+func (q *Queries) StopAskingAppTool(ctx context.Context, arg StopAskingAppToolParams) error {
+	_, err := q.db.Exec(ctx, stopAskingAppTool, arg.UserID, arg.ConnectorID, arg.Tool)
+	return err
+}
+
+const stopAskingChatTool = `-- name: StopAskingChatTool :exec
+DELETE FROM agent_ask_first_tools
+WHERE user_id = $1
+  AND connector_id IS NULL
+  AND tool = $2::text
+`
+
+type StopAskingChatToolParams struct {
+	UserID string
+	Tool   string
+}
+
+// What "always allow" on an approval card means: the mark goes. A tool that
+// has none writes nothing.
+func (q *Queries) StopAskingChatTool(ctx context.Context, arg StopAskingChatToolParams) error {
+	_, err := q.db.Exec(ctx, stopAskingChatTool, arg.UserID, arg.Tool)
+	return err
+}
+
 const storeMessageContent = `-- name: StoreMessageContent :execrows
 UPDATE new_chat_messages SET content = $1 WHERE id = $2
 `
@@ -690,32 +760,6 @@ func (q *Queries) ThreadForTurn(ctx context.Context, arg ThreadForTurnParams) (i
 	return id, err
 }
 
-const toolIsTrusted = `-- name: ToolIsTrusted :one
-SELECT EXISTS (
-    SELECT 1 FROM agent_permission_rules
-    WHERE user_id = $1
-      AND thread_id IS NULL
-      AND permission = $2::text
-      AND pattern = '*'
-      AND action = 'allow'
-)
-`
-
-type ToolIsTrustedParams struct {
-	UserID string
-	Tool   string
-}
-
-// Whether this account has said "always allow" for this tool. Asked at the
-// moment a call is decided, every time: a rule removed in settings stops
-// applying to the very next call.
-func (q *Queries) ToolIsTrusted(ctx context.Context, arg ToolIsTrustedParams) (bool, error) {
-	row := q.db.QueryRow(ctx, toolIsTrusted, arg.UserID, arg.Tool)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
-}
-
 const touchNotebook = `-- name: TouchNotebook :exec
 UPDATE notebooks SET updated_at = now()
 WHERE id = $1 AND user_id = $2
@@ -745,25 +789,6 @@ type TouchThreadParams struct {
 // A thread with a new question sorts to the top of the list.
 func (q *Queries) TouchThread(ctx context.Context, arg TouchThreadParams) error {
 	_, err := q.db.Exec(ctx, touchThread, arg.ThreadID, arg.UserID)
-	return err
-}
-
-const trustTool = `-- name: TrustTool :exec
-INSERT INTO agent_permission_rules (user_id, thread_id, permission, pattern, action)
-VALUES ($1, NULL, $2::text, '*', 'allow')
-ON CONFLICT ON CONSTRAINT uq_agent_permission_rules_scope DO NOTHING
-`
-
-type TrustToolParams struct {
-	UserID string
-	Tool   string
-}
-
-// Remember "always allow". A second click writes nothing: the unique
-// constraint compares the NULL thread as equal to itself (NULLS NOT
-// DISTINCT), so the conflict is found.
-func (q *Queries) TrustTool(ctx context.Context, arg TrustToolParams) error {
-	_, err := q.db.Exec(ctx, trustTool, arg.UserID, arg.Tool)
 	return err
 }
 

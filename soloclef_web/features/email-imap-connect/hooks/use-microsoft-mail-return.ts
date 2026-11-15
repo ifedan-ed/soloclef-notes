@@ -1,9 +1,10 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
+import { replaceAddressQuery } from "@/lib/routing/replace-query";
 import { MICROSOFT_MAIL_PARAM, microsoftMailOutcome } from "../lib/microsoft-mail-outcome";
 
 /**
@@ -13,8 +14,6 @@ import { MICROSOFT_MAIL_PARAM, microsoftMailOutcome } from "../lib/microsoft-mai
 export function useMicrosoftMailReturn(onReturn: () => void) {
 	const t = useTranslations("email_imap_connect");
 	const params = useSearchParams();
-	const router = useRouter();
-	const pathname = usePathname();
 	const outcome = params.get(MICROSOFT_MAIL_PARAM);
 	const handled = useRef<string | null>(null);
 
@@ -28,6 +27,6 @@ export function useMicrosoftMailReturn(onReturn: () => void) {
 		const next = new URLSearchParams(params.toString());
 		next.delete(MICROSOFT_MAIL_PARAM);
 		const query = next.toString();
-		router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
-	}, [outcome, params, pathname, router, t, onReturn]);
+		replaceAddressQuery(query);
+	}, [outcome, params, t, onReturn]);
 }

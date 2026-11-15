@@ -1,19 +1,23 @@
-// What the Studio's makers share across tiers: the client for the sandbox
-// that builds and renders a deliverable (sandbox), and the rows an artifact
-// is saved as (artifactsave).
+// What the Studio's makers share across tiers: how a slide deck's content
+// is written and checked (deckspec) and drawn as a deck and as a video's
+// frames (deckrender), the client for the sandbox the documents built by
+// code are made in (sandbox), and the rows an artifact is saved as
+// (artifactsave).
 //
 // A module of its own because two tiers make deliverables and `internal`
-// cannot cross a module: the API's chat builds documents in the sandbox and
-// saves them, and the worker renders a video in the sandbox and saves it. A
-// second copy of either would be a second idea of whose sandbox is whose,
-// or of what an artifact's rows are.
+// cannot cross a module: the API's chat draws decks and builds documents
+// and saves them, and the worker draws, animates and saves a video. A
+// second copy of any of these would be a second idea of what a deck is,
+// whose sandbox is whose, or what an artifact's rows are.
 module git.danvics.com/danvics/soloclef/soloclef_studio
 
 go 1.24.4
 
 require (
 	git.danvics.com/danvics/soloclef/soloclef_filestore v0.0.0
+	github.com/ifedan-ed/figures-go v0.4.1
 	github.com/jackc/pgx/v5 v5.7.1
+	golang.org/x/image v0.34.0
 )
 
 require (

@@ -4,14 +4,14 @@ import { ChevronRight } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useMemo, useState, useSyncExternalStore } from "react";
 import { PodcastPlayer } from "@/components/tool-ui/podcast/player";
-import type { PublicSharedOutput } from "@/contracts/types/public-chat.types";
-import { artifactDownloadFilename } from "@/features/artifacts/lib/artifact-selectors";
+import { artifactDownloads } from "@/features/artifacts/lib/artifact-selectors";
 import {
 	ArtifactRenderer,
 	resolveArtifactPresentation,
 } from "@/features/artifacts/rendering/artifact-renderer";
-import { ArtifactDownloadButton } from "@/features/artifacts/ui/artifact-download-button";
+import { ArtifactDownloads } from "@/features/artifacts/ui/artifact-downloads";
 import { ReportBody } from "@/features/notebooks/ui/report/report-viewer";
+import type { PublicSharedOutput } from "../model/public-output";
 import { sharedOutputManifest, sharedOutputViewer } from "../model/shared-output";
 import { SharedNotice } from "./shared-notice";
 
@@ -50,7 +50,7 @@ export function PublicOutputView({
 	output: PublicSharedOutput;
 	expiresAt: string | null | undefined;
 }) {
-	const t = useTranslations("publicSharing.live");
+	const t = useTranslations("publicSharing");
 	const tKinds = useTranslations("notebooks.kinds");
 	const kindKey = `${output.kind}.label`;
 	const kindLabel = tKinds.has(kindKey) ? tKinds(kindKey) : output.format;
@@ -81,9 +81,8 @@ export function PublicOutputView({
 				</p>
 				<div ref={setControls} className="flex shrink-0 items-center gap-1 empty:hidden" />
 				{download ? (
-					<ArtifactDownloadButton
-						path={download.content_url}
-						filename={artifactDownloadFilename(manifest, output.artifact_id)}
+					<ArtifactDownloads
+						downloads={artifactDownloads(manifest, output.artifact_id, download.content_url)}
 						className="size-8 shrink-0 rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
 					/>
 				) : null}
@@ -111,7 +110,7 @@ export function PublicOutputView({
 						<PodcastPlayer
 							artifactId={output.artifact_id}
 							title={output.title}
-							transcriptMarkdown={output.markdown}
+							shared={{ token: shareToken, transcriptMarkdown: output.markdown }}
 						/>
 					</div>
 				) : (

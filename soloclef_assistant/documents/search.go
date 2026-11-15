@@ -63,6 +63,52 @@ type Scope struct {
 	Limited bool
 	// Limit is the documents a limited search may read.
 	Limit []int64
+	// Joined is what the turn added to its notebook's sources since Limit
+	// was read (the add_sources tool), searched as part of the limit. A
+	// turn reads its limit once, when it is built; without this a paper
+	// the chat added would stay unsearchable until the next message, and
+	// the model would be told "no matches" about a source it had just
+	// added. Nil adds nothing.
+	Joined *Joined
+}
+
+// Joined is the documents one turn added to its notebook's sources. It is
+// written by the tool that adds them and read by the search, which may run
+// beside it, hence the lock.
+type Joined struct {
+	mu  sync.Mutex
+	ids []int64
+}
+
+// Add records documents that are now sources of the turn's notebook. On a
+// nil Joined it records nothing: a caller with no search to tell.
+func (j *Joined) Add(ids ...int64) {
+	if j == nil {
+		return
+	}
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	j.ids = append(j.ids, ids...)
+}
+
+// IDs is every document added so far.
+func (j *Joined) IDs() []int64 {
+	if j == nil {
+		return nil
+	}
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	return append([]int64(nil), j.ids...)
+}
+
+// limit is the limited search's documents: those read with the turn, and
+// those the turn has added since.
+func (s Scope) limit() []int64 {
+	joined := s.Joined.IDs()
+	if len(joined) == 0 {
+		return s.Limit
+	}
+	return append(append([]int64(nil), s.Limit...), joined...)
 }
 
 func (s Scope) mentions() bool { return len(s.DocumentIDs) > 0 || len(s.FolderIDs) > 0 }
@@ -231,7 +277,8 @@ func (s *Searcher) SearchScoped(ctx context.Context, userID, query string, scope
 	// document at all is answered without asking either.
 	var documentIDs, pointIDs []int64
 	if scope.confined() {
-		if scope.Limited && len(scope.Limit) == 0 {
+		limit := scope.limit()
+		if scope.Limited && len(limit) == 0 {
 			return nil, NoSources, nil
 		}
 		documentIDs = append(documentIDs, scope.DocumentIDs...)
@@ -249,11 +296,11 @@ func (s *Searcher) SearchScoped(ctx context.Context, userID, query string, scope
 				// said to: the search this replaces fell back to the whole
 				// notebook, answering about documents the person did not
 				// point at as if it had searched the ones they did.
-				if documentIDs = within(documentIDs, scope.Limit); len(documentIDs) == 0 {
+				if documentIDs = within(documentIDs, limit); len(documentIDs) == 0 {
 					return nil, OutsideLimit, nil
 				}
 			} else {
-				documentIDs = append(documentIDs, scope.Limit...)
+				documentIDs = append(documentIDs, limit...)
 			}
 		}
 		if len(documentIDs) == 0 {

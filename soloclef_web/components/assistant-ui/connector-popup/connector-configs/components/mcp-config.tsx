@@ -1,282 +1,122 @@
 "use client";
 
-import { CheckCircle2, ChevronDown, ChevronUp, Loader2, Server, XCircle } from "lucide-react";
-import type { FC } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { XCircle } from "lucide-react";
+import Link from "next/link";
+import { type FC, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { EnumConnectorName } from "@/contracts/enums/connector";
-import type { MCPServerConfig } from "@/contracts/types/mcp.types";
-import { mcpAddressRule, mcpServerOrigin } from "@/lib/mcp/server-origin";
+import { Spinner } from "@/components/ui/spinner";
+import { useMcpPolicy } from "@/features/mcp-server-form/hooks/use-mcp-policy";
+import { useStartOAuth } from "@/features/mcp-server-form/hooks/use-start-oauth";
+import { serverFormFromAnswer } from "@/features/mcp-server-form/model/server-form-state";
 import {
-	type MCPConnectionTestResult,
-	parseMCPConfig,
-	testMCPConnection,
-} from "../../utils/mcp-config-validator";
+	McpServerForm,
+	type ServerSubmission,
+} from "@/features/mcp-server-form/ui/mcp-server-form";
+import { connectorsApiService } from "@/lib/apis/connectors-api.service";
+import { settingsPath } from "@/lib/dashboard-paths";
+import { mcpAddressRule, mcpServerOrigin } from "@/lib/mcp/server-origin";
+import { queryClient } from "@/lib/query-client/client";
 import type { ConnectorConfigProps } from "../index";
+import { refreshConnectorAfterChange } from "../views/editable-connector";
 
-interface MCPConfigProps extends ConnectorConfigProps {
-	onNameChange?: (name: string) => void;
-}
-
-export const MCPConfig: FC<MCPConfigProps> = ({ connector, onConfigChange, onNameChange }) => {
-	const [name, setName] = useState<string>("");
-	const [configJson, setConfigJson] = useState("");
-	const [jsonError, setJsonError] = useState<string | null>(null);
-	const [isTesting, setIsTesting] = useState(false);
-	const [showDetails, setShowDetails] = useState(false);
-	const [testResult, setTestResult] = useState<MCPConnectionTestResult | null>(null);
-	const initializedRef = useRef(false);
-
-	// Check if this is a valid MCP connector
-	const isValidConnector = connector.connector_type === EnumConnectorName.MCP_CONNECTOR;
+/**
+ * A saved MCP server's edit view: the same form it was added with, filled
+ * from the server's masked answer, saved with its own button. Which of its
+ * tools ask first is chosen with every other tool's, under Settings, Agent
+ * permissions, and the note below says so.
+ */
+export const MCPConfig: FC<ConnectorConfigProps> = ({ connector }) => {
+	const policy = useMcpPolicy();
+	const { start, starting } = useStartOAuth();
+	const [saving, setSaving] = useState(false);
+	// The form starts from the answer the view opened with; the sign-in
+	// state below is read from the latest answer, so it follows a save.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: the form is filled once per server
+	const opened = useMemo(
+		() => serverFormFromAnswer(connector.name, connector.config?.server_config),
+		[connector.id]
+	);
+	const latest = serverFormFromAnswer(connector.name, connector.config?.server_config);
 	// The rule this row is saved under: its own origin, not the editor's role.
 	const addressRule = mcpAddressRule(mcpServerOrigin(connector.config) === "site");
 
-	// Initialize form from connector config (only on mount)
-	// We intentionally only read connector.name and connector.config on initial mount
-	// to preserve user edits during the session
-	useEffect(() => {
-		if (!isValidConnector || initializedRef.current) return;
-		initializedRef.current = true;
-
-		if (connector.name) {
-			setName(connector.name);
-		}
-
-		const serverConfig = connector.config?.server_config as MCPServerConfig | undefined;
-		if (serverConfig) {
-			// Remote servers only. Header values arrive masked ("••••" + last four);
-			// saving them unchanged keeps the stored keys.
-			const configObj = {
-				url: serverConfig.url || "",
-				headers: serverConfig.headers || {},
-				transport: serverConfig.transport || "streamable-http",
-			};
-			setConfigJson(JSON.stringify(configObj, null, 2));
-		}
-	}, [isValidConnector, connector.name, connector.config?.server_config]);
-
-	const handleNameChange = useCallback(
-		(value: string) => {
-			setName(value);
-			if (onNameChange) {
-				onNameChange(value);
-			}
-		},
-		[onNameChange]
-	);
-
-	const parseConfig = useCallback(() => {
-		const result = parseMCPConfig(configJson);
-		if (result.error) {
-			setJsonError(result.error);
-		} else {
-			setJsonError(null);
-		}
-		return result.config;
-	}, [configJson]);
-
-	const handleConfigChange = useCallback(
-		(value: string) => {
-			setConfigJson(value);
-			setJsonError(null);
-
-			// Use shared utility for validation and parsing (with caching)
-			const result = parseMCPConfig(value);
-
-			if (result.config && onConfigChange) {
-				// Valid config - update parent immediately
-				onConfigChange({ server_config: result.config });
-			}
-			// Ignore errors while typing - only show errors when user tests or saves
-		},
-		[onConfigChange]
-	);
-
-	const handleTestConnection = useCallback(async () => {
-		const serverConfig = parseConfig();
-		if (!serverConfig) {
-			setTestResult({
-				status: "error",
-				message: jsonError || "Invalid configuration",
-				tools: [],
-			});
-			return;
-		}
-
-		// Update parent with the config
-		if (onConfigChange) {
-			onConfigChange({ server_config: serverConfig });
-		}
-
-		setIsTesting(true);
-		setTestResult(null);
-
-		const result = await testMCPConnection(serverConfig, connector.id);
-		setTestResult(result);
-		setIsTesting(false);
-	}, [parseConfig, jsonError, onConfigChange, connector.id]);
-
-	// Validate that this is an MCP connector - must be after all hooks
-	if (!isValidConnector) {
-		console.error("MCPConfig received non-MCP connector:", connector.connector_type);
+	if (!opened) {
 		return (
 			<Alert className="border-red-500/50 bg-red-500/10">
-				<XCircle className="h-4 w-4 text-red-600" />
-				<AlertTitle>Invalid Connector Type</AlertTitle>
-				<AlertDescription>This component can only be used with MCP connectors.</AlertDescription>
+				<XCircle className="size-4 text-red-600" />
+				<AlertTitle>This server's settings cannot be read</AlertTitle>
+				<AlertDescription>Remove it and add it again.</AlertDescription>
 			</Alert>
 		);
 	}
 
+	const signIn = async () => {
+		const refusal = await start(connector.id);
+		if (refusal) toast.error(refusal);
+	};
+	const signedIn = Boolean(latest?.oauth?.authorized);
+
+	const submit = async ({ name, serverConfig }: ServerSubmission) => {
+		setSaving(true);
+		try {
+			await connectorsApiService.updateMCPConnector({
+				id: connector.id,
+				data: { name, server_config: serverConfig },
+			});
+			await refreshConnectorAfterChange(queryClient, connector.id);
+			// An OAuth server not yet signed in has nothing to call with: the
+			// save goes straight on to its sign-in.
+			if (serverConfig.auth.type === "oauth" && !signedIn) {
+				await signIn();
+				return;
+			}
+			toast.success(`${name} saved`);
+		} finally {
+			setSaving(false);
+		}
+	};
+
 	return (
-		<div className="space-y-6">
-			{/* Server Name */}
-			<div className="rounded-xl border border-border bg-slate-400/5 dark:bg-white/5 p-3 sm:p-6 space-y-3 sm:space-y-4">
-				<div className="space-y-2">
-					<Label htmlFor="name" className="text-xs sm:text-sm">
-						Server Name
-					</Label>
-					<Input
-						id="name"
-						value={name}
-						onChange={(e) => handleNameChange(e.target.value)}
-						placeholder="e.g., Exa web search"
-						className="border-slate-400/20 focus-visible:border-slate-400/40"
-						required
-					/>
-					<p className="text-[10px] sm:text-xs text-muted-foreground">
-						A friendly name to identify this connector.
-					</p>
-				</div>
-			</div>
-
-			{/* Server Configuration */}
-			<div className="space-y-4">
-				<h3 className="font-medium text-sm sm:text-base flex items-center gap-2">
-					<Server className="h-4 w-4" />
-					Server Configuration
-				</h3>
-
-				<div className="rounded-xl border border-border bg-slate-400/5 dark:bg-white/5 p-3 sm:p-6 space-y-4">
-					<div className="space-y-2">
-						<Label htmlFor="config">MCP Server Configuration (JSON)</Label>
-						<Textarea
-							id="config"
-							value={configJson}
-							onChange={(e) => handleConfigChange(e.target.value)}
-							onKeyDown={(e) => {
-								if (e.key === "Tab") {
-									e.preventDefault();
-									const target = e.target as HTMLTextAreaElement;
-									const start = target.selectionStart;
-									const end = target.selectionEnd;
-									const indent = "  "; // 2 spaces for JSON
-									const newValue =
-										configJson.substring(0, start) + indent + configJson.substring(end);
-									handleConfigChange(newValue);
-									// Set cursor position after the inserted tab
-									requestAnimationFrame(() => {
-										target.selectionStart = target.selectionEnd = start + indent.length;
-									});
-								}
-							}}
-							rows={16}
-							className={`font-mono text-xs ${jsonError ? "border-red-500" : ""}`}
-						/>
-						{jsonError && <p className="text-xs text-red-500">JSON Error: {jsonError}</p>}
-						<p className="text-[10px] sm:text-xs text-muted-foreground">
-							{`Remote servers only: url (https, ${addressRule}), headers, transport: "streamable-http". Keys show as •••• and are kept unless you replace them.`}
-						</p>
-					</div>
-
-					{/* Test Connection */}
-					<div className="pt-4">
-						<Button
-							type="button"
-							onClick={handleTestConnection}
-							disabled={isTesting}
-							variant="secondary"
-							className="w-full h-8 text-[13px] px-3 font-medium bg-white text-slate-700 hover:bg-accent hover:text-accent-foreground border-0 shadow-xs dark:bg-secondary dark:text-secondary-foreground"
-						>
-							{isTesting ? (
-								<>
-									<Loader2 className="h-3.5 w-3.5 animate-spin" />
-									Testing Connection...
-								</>
-							) : (
-								"Test Connection"
-							)}
-						</Button>
-					</div>
-
-					{/* Test Result */}
-					{testResult && (
-						<Alert
-							className={
-								testResult.status === "success"
-									? "border-green-500/50 bg-green-500/10"
-									: "border-red-500/50 bg-red-500/10"
-							}
-						>
-							{testResult.status === "success" ? (
-								<CheckCircle2 className="h-4 w-4 text-green-600" />
-							) : (
-								<XCircle className="h-4 w-4 text-red-600" />
-							)}
-							<div className="col-start-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
-								<AlertTitle className="text-sm">
-									{testResult.status === "success" ? "Connection Successful" : "Connection Failed"}
-								</AlertTitle>
-								{testResult.tools.length > 0 && (
-									<Button
-										type="button"
-										variant="ghost"
-										size="sm"
-										className="h-6 px-2 self-start sm:self-auto text-xs"
-										onClick={(e) => {
-											e.preventDefault();
-											e.stopPropagation();
-											setShowDetails((prev) => !prev);
-										}}
-									>
-										{showDetails ? (
-											<>
-												<ChevronUp className="h-3 w-3 mr-1" />
-												<span className="hidden sm:inline">Hide Details</span>
-												<span className="sm:hidden">Hide</span>
-											</>
-										) : (
-											<>
-												<ChevronDown className="h-3 w-3 mr-1" />
-												<span className="hidden sm:inline">Show Details</span>
-												<span className="sm:hidden">Show</span>
-											</>
-										)}
-									</Button>
-								)}
-							</div>
-							<AlertDescription className="text-xs mt-1">
-								{testResult.message}
-								{showDetails && testResult.tools.length > 0 && (
-									<div className="mt-3 pt-3 border-t border-green-500/20">
-										<p className="font-semibold mb-2">Available tools:</p>
-										<ul className="list-disc list-inside text-xs space-y-0.5">
-											{testResult.tools.map((tool) => (
-												<li key={tool.name}>{tool.name}</li>
-											))}
-										</ul>
-									</div>
-								)}
-							</AlertDescription>
-						</Alert>
-					)}
-				</div>
-			</div>
+		<div className="flex flex-col gap-6">
+			<McpServerForm
+				initial={opened.state}
+				connectorId={connector.id}
+				savedOAuth={latest?.oauth ?? null}
+				addressRule={addressRule}
+				oauthAvailable={Boolean(policy?.oauth_available)}
+				submitting={saving || starting}
+				submitLabel={
+					opened.state.auth === "oauth" && !signedIn ? "Save and sign in" : "Save changes"
+				}
+				oauthAction={
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						className="relative h-8"
+						disabled={starting}
+						onClick={() => void signIn()}
+					>
+						<span className={starting ? "opacity-0" : ""}>
+							{signedIn ? "Sign in again" : "Sign in"}
+						</span>
+						{starting && <Spinner size="xs" className="absolute" />}
+					</Button>
+				}
+				onSubmit={submit}
+			/>
+			{connector.id > 0 && (
+				<p className="text-xs text-muted-foreground">
+					This app&apos;s tools run without asking. To approve one each time, switch on Ask first
+					for it under{" "}
+					<Link href={settingsPath("agent-permissions")} className="underline underline-offset-2">
+						Agent permissions
+					</Link>
+					.
+				</p>
+			)}
 		</div>
 	);
 };

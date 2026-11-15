@@ -12,12 +12,13 @@
 //
 // # Asking
 //
-// Searching and reading ask first (tool.Ask): each sends the person's app
-// password to their Nextcloud, which is theirs to allow, per call or with
-// "always allow". Writing a file and binning one ask every time
-// (tool.AlwaysAsk): each changes the person's files with something the
-// model chose, and one approval says nothing about the next file. No trust
-// rule and no automation's setting waives that.
+// Searching and reading are declared tool.Ask: each sends the person's app
+// password to their Nextcloud. Writing a file and binning one are declared
+// tool.AlwaysAsk: each changes the person's files with something the model
+// chose, and one approval says nothing about the next file, so no
+// automation's setting lets an unattended run do either. In a chat the
+// person's own "ask first" marks decide every tool instead (assembly,
+// policy): each runs unless the person marked it.
 //
 // A write never replaces anything: a new file is refused by Nextcloud
 // itself when its name is taken (If-None-Match: *), and only a file, never

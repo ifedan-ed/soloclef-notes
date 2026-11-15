@@ -60,7 +60,7 @@ func newProvider(t *testing.T, status int) *provider {
 func revocation(t *testing.T, google *provider, nextcloud *nextcloud.Credentials) (*Revocation, *bytes.Buffer) {
 	t.Helper()
 	var log bytes.Buffer
-	r, err := New(secret, nextcloud, http.DefaultTransport, slog.New(slog.NewTextHandler(&log, nil)))
+	r, err := New(secret, nextcloud, &signOuts{}, http.DefaultTransport, slog.New(slog.NewTextHandler(&log, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func TestAGoogleGrantIsRevokedByItsRefreshToken(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			google := newProvider(t, http.StatusOK)
 			r, log := revocation(t, google, nil)
-			r.Revoke(context.Background(), 800, GoogleDrive, config(t, test.config))
+			r.Revoke(context.Background(), owner, 800, GoogleDrive, config(t, test.config))
 			if len(google.requests) != 1 || google.requests[0].method != http.MethodPost || google.requests[0].token != test.token {
 				t.Fatalf("Google was sent %+v, want one POST of the token", google.requests)
 			}
@@ -118,7 +118,7 @@ func TestWhatGoogleAnswersIsReadAsRevokedOrNot(t *testing.T) {
 	} {
 		google := newProvider(t, status)
 		r, log := revocation(t, google, nil)
-		r.Revoke(context.Background(), 800, GoogleDrive, config(t, map[string]any{"refresh_token": "1//refresh"}))
+		r.Revoke(context.Background(), owner, 800, GoogleDrive, config(t, map[string]any{"refresh_token": "1//refresh"}))
 		if !strings.Contains(log.String(), want) {
 			t.Errorf("status %d: logged %s, want %s", status, log, want)
 		}
@@ -134,7 +134,7 @@ func TestAGoogleTokenThatCannotBeOpenedIsNotSentAnywhere(t *testing.T) {
 		// Nothing stored at all.
 		{"account_email": "someone@example.com"},
 	} {
-		r.Revoke(context.Background(), 800, GoogleDrive, config(t, stored))
+		r.Revoke(context.Background(), owner, 800, GoogleDrive, config(t, stored))
 	}
 	if len(google.requests) != 0 {
 		t.Errorf("Google was sent %+v", google.requests)
@@ -151,7 +151,7 @@ func TestANextcloudAppPasswordIsDeletedAtTheDeploymentsServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, log := revocation(t, nil, &credentials)
-	r.Revoke(context.Background(), 802, Nextcloud, config(t, map[string]any{
+	r.Revoke(context.Background(), owner, 802, Nextcloud, config(t, map[string]any{
 		"server_url": cloud.server.URL, "username": "someone", "login_name": "someone@login",
 		"app_password": encrypted, "_token_encrypted": true,
 	}))
@@ -176,14 +176,14 @@ func TestANextcloudPasswordIsNeverSentElsewhere(t *testing.T) {
 	r, log := revocation(t, nil, &credentials)
 
 	// A row that names another server: nothing is sent at all.
-	r.Revoke(context.Background(), 802, Nextcloud, config(t, map[string]any{
+	r.Revoke(context.Background(), owner, 802, Nextcloud, config(t, map[string]any{
 		"server_url": elsewhere.server.URL, "username": "someone", "app_password": "in-the-clear"}))
 	if len(cloud.requests) != 0 || len(elsewhere.requests) != 0 {
 		t.Fatalf("a row for another server was acted on: %+v %+v", cloud.requests, elsewhere.requests)
 	}
 
 	// The deployment's server answering with a redirect: not followed.
-	r.Revoke(context.Background(), 802, Nextcloud, config(t, map[string]any{
+	r.Revoke(context.Background(), owner, 802, Nextcloud, config(t, map[string]any{
 		"server_url": cloud.server.URL, "username": "someone", "app_password": "in-the-clear"}))
 	if len(cloud.requests) != 1 || len(elsewhere.requests) != 0 {
 		t.Errorf("a redirect was followed: %+v %+v", cloud.requests, elsewhere.requests)
@@ -195,35 +195,66 @@ func TestANextcloudPasswordIsNeverSentElsewhere(t *testing.T) {
 
 func TestADeploymentWithNoNextcloudServerSaysSoAndSendsNothing(t *testing.T) {
 	r, log := revocation(t, nil, nil)
-	r.Revoke(context.Background(), 802, Nextcloud, config(t, map[string]any{
+	r.Revoke(context.Background(), owner, 802, Nextcloud, config(t, map[string]any{
 		"server_url": "https://cloud.example", "username": "someone", "app_password": "in-the-clear"}))
 	if !strings.Contains(log.String(), "names no Nextcloud server") {
 		t.Errorf("logged %s", log)
 	}
 }
 
-// An MCP server's key and a mailbox's password are the person's own to
-// retire; nothing is sent and nothing is logged.
+// signOuts stands in for the MCP sign-out and records whom it was asked
+// for.
+type signOuts struct {
+	owners  []string
+	outcome string
+}
+
+func (s *signOuts) RevokeServer(_ context.Context, ownerID string, _ []byte) string {
+	s.owners = append(s.owners, ownerID)
+	if s.outcome == "" {
+		return nothingStored
+	}
+	return s.outcome
+}
+
+// owner is the account the tests' connections belong to.
+const owner = "11111111-1111-4111-8111-111111111111"
+
+// A mailbox's password is the person's own to retire; nothing is sent and
+// nothing is logged. An MCP server is handed to the MCP sign-out with its
+// owner, and only a sign-in it actually held is logged.
 func TestOtherKindsOfConnectionAreLeftAlone(t *testing.T) {
 	google := newProvider(t, http.StatusOK)
 	r, log := revocation(t, google, nil)
 	for _, kind := range []string{"MCP_CONNECTOR", "EMAIL_IMAP_CONNECTOR", "WEBCRAWLER_CONNECTOR"} {
-		r.Revoke(context.Background(), 810, kind, config(t, map[string]any{"token": "something", "refresh_token": "something"}))
+		r.Revoke(context.Background(), owner, 810, kind, config(t, map[string]any{"token": "something", "refresh_token": "something"}))
 	}
 	if len(google.requests) != 0 || log.Len() != 0 {
 		t.Errorf("sent %+v, logged %s", google.requests, log)
+	}
+	mcp := r.MCP.(*signOuts)
+	if len(mcp.owners) != 1 || mcp.owners[0] != owner {
+		t.Errorf("the MCP sign-out was asked for %v", mcp.owners)
+	}
+	mcp.outcome = "revoked"
+	r.Revoke(context.Background(), owner, 811, "MCP_CONNECTOR", config(t, map[string]any{}))
+	if !strings.Contains(log.String(), "connector_id=811") || !strings.Contains(log.String(), "outcome=revoked") {
+		t.Errorf("a revoked sign-in was not logged: %s", log)
 	}
 }
 
 func TestNewRefusesAnIncompleteRevocation(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
-	if _, err := New("", nil, http.DefaultTransport, logger); err == nil {
+	if _, err := New("", nil, &signOuts{}, http.DefaultTransport, logger); err == nil {
 		t.Error("built with no secret key")
 	}
-	if _, err := New(secret, nil, nil, logger); err == nil {
+	if _, err := New(secret, nil, nil, http.DefaultTransport, logger); err == nil {
+		t.Error("built with no MCP sign-out")
+	}
+	if _, err := New(secret, nil, &signOuts{}, nil, logger); err == nil {
 		t.Error("built with no transport")
 	}
-	if _, err := New(secret, nil, http.DefaultTransport, nil); err == nil {
+	if _, err := New(secret, nil, &signOuts{}, http.DefaultTransport, nil); err == nil {
 		t.Error("built with no logger")
 	}
 }

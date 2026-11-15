@@ -1,5 +1,5 @@
-import { PublicChatSnapshotsManager } from "@/components/public-chat-snapshots/public-chat-snapshots-manager";
+import { PublicLinksManager } from "@/features/public-sharing/ui/public-links-manager";
 
-export default function Page() {
-	return <PublicChatSnapshotsManager />;
+export default function PublicLinksSettingsPage() {
+	return <PublicLinksManager />;
 }

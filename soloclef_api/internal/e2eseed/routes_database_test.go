@@ -22,6 +22,7 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/principal"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/studiooutputs"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/testpostgres"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/maildrafts"
 	filestore "git.danvics.com/danvics/soloclef/soloclef_filestore"
 	"git.danvics.com/danvics/soloclef/soloclef_mail/mailer"
 )
@@ -45,7 +46,9 @@ func TestTheSeedRoutesWriteWhatTheProductReads(t *testing.T) {
 INSERT INTO notebooks (id, user_id, title) VALUES (10, '`+alice+`', 'Tides'), (20, '`+bob+`', 'His');
 INSERT INTO documents (id, user_id, title, document_type, content, content_hash) VALUES (300, '`+alice+`', 'Source', 'FILE', '', 's');
 INSERT INTO notebook_sources (notebook_id, user_id, document_id) VALUES (10, '`+alice+`', 300);
-INSERT INTO notebook_public_links (id, notebook_id, user_id, share_token, expires_at) VALUES (5, 10, '`+alice+`', 'tok-notebook', NULL);`)
+INSERT INTO notebook_outputs (id, notebook_id, user_id, kind, title) VALUES (50, 10, '`+alice+`', 'mindmap', 'Tide map');
+INSERT INTO output_public_links (id, user_id, notebook_output_id, share_token, content_hash, snapshot_data, expires_at)
+VALUES (5, '`+alice+`', 50, 'tok-output', 'h5', '{}', NULL);`)
 
 	directory := t.TempDir()
 	files, err := filestore.OpenLocal(directory)
@@ -84,9 +87,9 @@ INSERT INTO notebook_public_links (id, notebook_id, user_id, share_token, expire
 		t.Helper()
 		return call(secret, method, path, body)
 	}
-	count := func(query string) (n int) {
+	count := func(query string, args ...any) (n int) {
 		t.Helper()
-		if err := pool.QueryRow(context.Background(), "SELECT count(*) FROM "+query).Scan(&n); err != nil {
+		if err := pool.QueryRow(context.Background(), "SELECT count(*) FROM "+query, args...).Scan(&n); err != nil {
 			t.Fatal(err)
 		}
 		return n
@@ -108,7 +111,7 @@ INSERT INTO notebook_public_links (id, notebook_id, user_id, share_token, expire
 	// written or handed out.
 	for _, pair := range Public() {
 		method, path, _ := strings.Cut(pair, " ")
-		path = strings.NewReplacer("{snapshot_id}", "1", "{link_id}", "5").Replace(path)
+		path = strings.NewReplacer("{snapshot_id}", "5").Replace(path)
 		for _, with := range []string{"", "wrong", secret + "x", secret[:len(secret)-1]} {
 			status, body := call(with, method, path, `{"email":"alice@example.test","notebook_id":10,"kind":"report"}`)
 			expect(pair+" with the secret "+with, status, body, http.StatusForbidden, "invalid e2e secret")
@@ -117,7 +120,7 @@ INSERT INTO notebook_public_links (id, notebook_id, user_id, share_token, expire
 			}
 		}
 	}
-	if count("notebook_outputs") != 0 || count("notifications") != 0 || count("notebook_public_links WHERE expires_at IS NOT NULL") != 0 {
+	if count("notebook_outputs") != 1 || count("notifications") != 0 || count("output_public_links WHERE expires_at IS NOT NULL") != 0 {
 		t.Fatal("a request without the secret wrote something")
 	}
 
@@ -139,9 +142,9 @@ INSERT INTO notebook_public_links (id, notebook_id, user_id, share_token, expire
 	}
 
 	// A link expired a second ago; one that is not there is said so.
-	status, body = seed("POST", "/__e2e__/public-links/notebook/5/expire", "")
-	expect("expiring her notebook link", status, body, 200, `"expired":5`)
-	if count("notebook_public_links WHERE id = 5 AND expires_at = '2026-11-12T08:59:59Z'") != 1 {
+	status, body = seed("POST", "/__e2e__/public-links/5/expire", "")
+	expect("expiring her output's link", status, body, 200, `"expired":5`)
+	if count("output_public_links WHERE id = 5 AND expires_at = '2026-11-12T08:59:59Z'") != 1 {
 		t.Error("the link's expiry is not a second ago")
 	}
 	status, body = seed("POST", "/__e2e__/public-links/99/expire", "")
@@ -229,9 +232,11 @@ INSERT INTO notebook_public_links (id, notebook_id, user_id, share_token, expire
 	expect("a running deck", status, body, 200, `"artifact_id":null`)
 	status, body = seed("POST", SeedOutputPath, `{"notebook_id":10,"kind":"audio","status":"failed","title":"Broke"}`)
 	expect("a failed podcast", status, body, 200, `"artifact_id":null`)
-	// The running job's heartbeat is ahead of the clock, so the studio's
-	// sweep of silent jobs leaves it running while a test looks at it.
-	if count("deliverable_jobs WHERE title = 'Still going' AND status = 'running' AND progress = 40 AND heartbeat_at > now()") != 1 ||
+	// The running job's heartbeat is a day ahead of the routes' clock, so the
+	// studio's sweep of silent jobs leaves it running while a test looks at
+	// it. Measured against that clock, not the database's: the test's clock
+	// is fixed, and a day after it is in the past on the database's.
+	if count("deliverable_jobs WHERE title = 'Still going' AND status = 'running' AND progress = 40 AND heartbeat_at = $1", now.Add(24*time.Hour)) != 1 ||
 		count("podcast_runs WHERE title = 'Broke' AND status = 'failed' AND error = 'E2E seeded failure' AND artifact_id IS NULL") != 1 {
 		t.Error("the running job or the failed podcast is not as seeded")
 	}
@@ -291,6 +296,27 @@ INSERT INTO notebook_outputs (id, notebook_id, user_id, kind, title, deliverable
 		  AND f.kind = 'ORIGINAL' AND f.mime_type = 'application/pdf' AND f.storage_key LIKE 'documents/`+alice+`/%/original/%.pdf'
 		  AND c.page_start = 2 AND c.page_end = 2 AND c.content = 'Asthma guideline: use a spacer with the inhaler.'`) != 1 {
 		t.Error("the seeded source is not a document with its original, a page-2 chunk and a place in the notebook")
+	}
+
+	// A waiting mail draft: the send guard's own store reads it back with
+	// the hash its message has, so the card's confirmation route issues a
+	// go-ahead for it as for a draft the assistant made.
+	status, body = seed("POST", SeedMailDraftPath, `{"email":"alice@example.test","subject":"Invoice 4411","body":"Paid today.","mailbox":"Work"}`)
+	expect("a mail draft", status, body, http.StatusCreated, `"draft_id":`)
+	var seeded struct {
+		DraftID string `json:"draft_id"`
+	}
+	if err := json.Unmarshal([]byte(body), &seeded); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := maildrafts.Store{Pool: pool}.Draft(context.Background(), alice, seeded.DraftID)
+	if err != nil || stored.Status != maildrafts.StatusPending || stored.Message.Subject != "Invoice 4411" ||
+		stored.StoredHash != stored.Message.ContentHash() {
+		t.Errorf("the seeded draft does not read back as the guard's own: %+v, %v", stored, err)
+	}
+	waiting, err := maildrafts.Store{Pool: pool}.Waiting(context.Background(), alice, now, 10)
+	if err != nil || len(waiting) != 1 || waiting[0].AccountLabel != "Work" {
+		t.Errorf("the seeded draft is not waiting: %+v, %v", waiting, err)
 	}
 }
 

@@ -4,7 +4,6 @@ import dynamic from "next/dynamic";
 import { useState } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useElectronAPI } from "@/hooks/use-platform";
 import { cn } from "@/lib/utils";
 import type { NavItem, User } from "../../types/layout.types";
 import { Header } from "../header";
@@ -29,11 +28,6 @@ const MobileDocumentViewerPanel = dynamic(
 		})),
 	{ ssr: false }
 );
-
-/** The macOS desktop app's draggable title bar (room for the window buttons). */
-function MacDesktopTitleBar() {
-	return <div className="h-9 shrink-0 bg-rail [app-region:drag] [-webkit-app-region:drag]" />;
-}
 
 interface LayoutShellProps {
 	/** Page links at the top of the rail (Home, Notes). */
@@ -70,8 +64,6 @@ export function LayoutShell({
 	focusMode = false,
 }: LayoutShellProps) {
 	const isMobile = useIsMobile();
-	const electronAPI = useElectronAPI();
-	const isMacDesktop = electronAPI?.versions.platform === "darwin";
 	const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
 	if (focusMode) {
@@ -132,14 +124,11 @@ export function LayoutShell({
 	return (
 		<TooltipProvider delayDuration={0}>
 			<div className={cn("flex h-dvh w-full flex-col overflow-hidden bg-rail", className)}>
-				{isMacDesktop ? <MacDesktopTitleBar /> : null}
 				<div
 					data-desktop-layout
 					className={cn("grid min-h-0 w-full flex-1 overflow-hidden pl-2", DESKTOP_LAYOUT_COLUMNS)}
 				>
-					<div
-						className={cn("hidden overflow-hidden bg-rail md:flex", !isMacDesktop && "border-r")}
-					>
+					<div className="hidden overflow-hidden border-r bg-rail md:flex">
 						<IconRail
 							navItems={navItems}
 							onNavItemClick={onNavItemClick}
@@ -153,7 +142,6 @@ export function LayoutShell({
 					</div>
 
 					<PagePanel
-						className={isMacDesktop ? "rounded-tl-xl border-l border-t" : undefined}
 						viewportClassName={pageViewportClassName}
 						contentClassName={pageContentClassName}
 					>

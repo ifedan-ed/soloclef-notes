@@ -25,20 +25,23 @@ WHERE id = sqlc.arg(user_id);
 -- name: InsertRefreshToken :exec
 -- created_at is the tier's clock, the one every expiry beside it is
 -- computed from: the devices list dates a device's last use by it.
+-- sso_proved_at is when single sign-on last proved the sign-in (NULL for a
+-- password sign-in); a refresh copies it forward with the rest.
 INSERT INTO refresh_tokens (
     user_id, token_hash, expires_at, family_id, absolute_expiry, kind,
-    device_label, signed_in_at, created_at
+    device_label, signed_in_at, sso_proved_at, created_at
 ) VALUES (
     sqlc.arg(user_id), sqlc.arg(token_hash), sqlc.arg(expires_at),
     sqlc.arg(family_id), sqlc.arg(absolute_expiry), sqlc.arg(kind),
-    sqlc.narg(device_label), sqlc.arg(signed_in_at), sqlc.arg(created_at)
+    sqlc.narg(device_label), sqlc.arg(signed_in_at), sqlc.narg(sso_proved_at),
+    sqlc.arg(created_at)
 );
 
 -- name: LockRefreshToken :one
 -- The token a refresh presents, locked for the rotation, so that two
 -- refreshes racing with one token cannot both mint a successor.
 SELECT id, user_id, expires_at, revoked_at, absolute_expiry, family_id,
-       kind, device_label, signed_in_at, created_at
+       kind, device_label, signed_in_at, sso_proved_at, created_at
 FROM refresh_tokens
 WHERE token_hash = sqlc.arg(token_hash)
 FOR UPDATE;
@@ -166,3 +169,61 @@ SELECT live.family_id::text AS family_id, live.kind, live.device_label,
        least(live.expires_at, coalesce(live.absolute_expiry, live.expires_at))::timestamptz AS expires_at
 FROM live JOIN span ON span.family_id = live.family_id
 ORDER BY span.last_used_at DESC, live.family_id;
+
+-- name: SessionSSOProof :one
+-- When single sign-on last proved the caller's own sign-in, read from its
+-- live token (the one row ix_refresh_tokens_live_family holds for it). No
+-- row: the sign-in is over. A NULL proof: it was a password sign-in, never
+-- confirmed through the provider.
+SELECT sso_proved_at
+FROM refresh_tokens
+WHERE user_id = sqlc.arg(user_id) AND family_id = sqlc.arg(family_id)::uuid
+  AND revoked_at IS NULL AND expires_at > sqlc.arg(now)
+ORDER BY created_at DESC, id DESC
+LIMIT 1;
+
+-- name: ProveSessionBySSO :execrows
+-- The phone app confirmed the person through single sign-on without a new
+-- sign-in (internal/oidcsignin, the app's confirm): its own live sign-in is
+-- stamped. It names the account beside the family, so a code proving one
+-- account can stamp no other's sign-in; 0 rows means the sign-in is over.
+UPDATE refresh_tokens SET sso_proved_at = sqlc.arg(proved_at)
+WHERE user_id = sqlc.arg(user_id) AND family_id = sqlc.arg(family_id)::uuid
+  AND revoked_at IS NULL AND expires_at > sqlc.arg(proved_at);
+
+-- name: ChangeAccountPassword :exec
+-- A signed-in person's new password (password_change.go). Unlike a reset it
+-- verifies nothing: no mail went to the address.
+UPDATE "user"
+SET hashed_password = sqlc.arg(hashed_password), updated_at = sqlc.arg(changed_at)
+WHERE id = sqlc.arg(user_id);
+
+-- name: EndOtherSignIns :one
+-- A new password from a signed-in person ends every sign-in of the account
+-- but the one that asked, and says how many it ended. Tokens a rotation spent
+-- are capped as EndEverySignIn says why; the count is of sign-ins, not rows.
+WITH ended AS (
+    UPDATE refresh_tokens
+    SET revoked_at = coalesce(revoked_at, sqlc.arg(ended_at)), expires_at = sqlc.arg(ended_at)
+    WHERE user_id = sqlc.arg(user_id) AND family_id <> sqlc.arg(kept_family_id)::uuid
+      AND (revoked_at IS NULL OR expires_at > sqlc.arg(ended_at))
+    RETURNING family_id
+)
+SELECT count(DISTINCT family_id)::bigint AS sign_ins FROM ended;
+
+-- name: ForgetOtherPushDevices :exec
+-- The phones registered under the sign-ins EndOtherSignIns ended stop getting
+-- pushes; so does one registered under no sign-in at all, which nothing ties
+-- to the device that asked. The asking device keeps its own.
+DELETE FROM push_devices
+WHERE user_id = sqlc.arg(user_id)
+  AND session_family_id IS DISTINCT FROM sqlc.arg(kept_family_id)::uuid;
+
+-- name: LogAccountEvent :exec
+-- One entry in the account's own activity log (the logs table the web's and
+-- the app's Activity log read), written in the transaction of the change it
+-- records, so the log never says a password changed that did not.
+INSERT INTO logs (user_id, level, status, message, source, log_metadata, created_at)
+VALUES (sqlc.arg(user_id), sqlc.arg(level)::loglevel, sqlc.arg(status)::logstatus,
+        sqlc.arg(message), sqlc.arg(source), sqlc.narg(log_metadata)::jsonb,
+        sqlc.arg(created_at));

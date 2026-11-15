@@ -4,8 +4,17 @@ SHELL ["/bin/bash", "-c"]
 
 USER root
 
+# fonts-crosextra-carlito and -caladea are the open, metric-compatible twins
+# of Calibri and Cambria. A slide deck is drawn by the API in those two
+# families, its text sized by measuring Carlito and Caladea
+# (soloclef_studio/deckrender); LibreOffice here substitutes them by name
+# when it draws the deck's preview, so the preview, and the layout rules
+# read from it, see exactly the line breaks the renderer measured. Without
+# them LibreOffice falls back to a wider face and every box overflows.
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        fonts-crosextra-caladea \
+        fonts-crosextra-carlito \
         fonts-dejavu-core \
         fonts-liberation \
         fonts-noto-cjk \
@@ -32,12 +41,11 @@ RUN set -euo pipefail \
         pandas \
         pypdf \
         python-docx \
-        python-pptx \
         reportlab \
         weasyprint \
         xlsxwriter \
     && python3 -c "import sys; assert sys.version_info[:2] == (3, 12), sys.version; assert sys.prefix.startswith('/opt/python/versions'), sys.prefix" \
-    && python3 -c "import docx, matplotlib, openpyxl, pandas, pypdf, pptx, reportlab, weasyprint, xlsxwriter"
+    && python3 -c "import docx, matplotlib, openpyxl, pandas, pypdf, reportlab, weasyprint, xlsxwriter"
 
 # A global npm install is not on node's resolution path from /workspace, so pin
 # the prefix and point NODE_PATH at it to make require('docx') work anywhere.
@@ -48,35 +56,12 @@ RUN set -euo pipefail \
     && npm install --global docx \
     && node -e "require('docx')"
 
-# ---- Remotion server-side render harness (Node 22 already in base) ----
-# Remotion uses its bundled ffmpeg for rendering. The system binaries support
-# later segment concat and structural/content probes without network access.
-RUN apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        libnss3 libdbus-1-3 libatk1.0-0 libgbm1 libasound2t64 libxrandr2 \
-        libxkbcommon0 libxfixes3 libxcomposite1 libxdamage1 \
-        libatk-bridge2.0-0 libpango-1.0-0 libcairo2 libcups2 \
-        ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
-
-ENV REMOTION_HOME=/opt/remotion \
-    REMOTION_BROWSER_EXECUTABLE=/opt/remotion/node_modules/.remotion/chrome-headless-shell/linux64/chrome-headless-shell-linux64/chrome-headless-shell
-COPY remotion/package*.json ${REMOTION_HOME}/
-RUN set -euo pipefail \
-    && cd ${REMOTION_HOME} \
-    && npm ci \
-    && npx remotion browser ensure \
-    && node -e "require('@remotion/renderer'); require('@remotion/bundler')"
-COPY remotion/ ${REMOTION_HOME}/
-RUN set -euo pipefail \
-    && cd ${REMOTION_HOME} \
-    && npx remotion bundle src/index.ts --out-dir bundle
-
-# ---- Baked fonts: the ONLY families scene code may use (offline) ----
-COPY remotion/fonts/ /usr/share/fonts/truetype/soloclef/
+# Every family a drawn deck names is installed above, so fontconfig's
+# cache is built once here rather than by the first LibreOffice run in each
+# sandbox; the check stops the build if one is missing.
 RUN set -euo pipefail \
     && fc-cache -f \
-    && for family in Inter Lora "JetBrains Mono"; do \
+    && for family in Carlito Caladea; do \
         fc-list : family | grep -Fqi "${family}"; \
     done
 

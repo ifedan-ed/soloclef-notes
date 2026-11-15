@@ -1,82 +1,80 @@
 package studiogenerate
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"image"
-	"image/png"
-	"strings"
+	"fmt"
 	"sync"
 	"testing"
 
-	"git.danvics.com/danvics/soloclef/soloclef_assistant/deliverables"
+	"git.danvics.com/danvics/soloclef/soloclef_studio/posterrender"
 )
 
-// painter is the image model of the harness's specialist: it records what
-// it was asked for and draws a plain page.
-type painter struct {
-	mu      sync.Mutex
-	sizes   []string
-	prompts []string
+// posters stands for resvg in the harness's specialist: it records each
+// poster it is asked to draw and answers a PNG signature.
+type posters struct {
+	mu    sync.Mutex
+	drawn []posterrender.Drawn
 }
 
-func (p *painter) Check() error { return nil }
-func (p *painter) Name() string { return "test-image-model" }
-func (p *painter) Generate(_ context.Context, prompt, size string) (deliverables.GeneratedImage, error) {
-	p.mu.Lock()
-	p.sizes, p.prompts = append(p.sizes, size), append(p.prompts, prompt)
-	p.mu.Unlock()
-	page := image.NewNRGBA(image.Rect(0, 0, 384, 256))
-	for i := 0; i < len(page.Pix); i += 4 {
-		page.Pix[i], page.Pix[i+1], page.Pix[i+2], page.Pix[i+3] = 20, 90, 160, 255
-	}
-	var out bytes.Buffer
-	if err := png.Encode(&out, page); err != nil {
-		return deliverables.GeneratedImage{}, err
-	}
-	return deliverables.GeneratedImage{Data: out.Bytes(), MimeType: "image/png", Extension: "png"}, nil
-}
-
-func (p *painter) asked() ([]string, []string) {
+func (p *posters) PNG(_ context.Context, d posterrender.Drawn) ([]byte, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return append([]string(nil), p.sizes...), append([]string(nil), p.prompts...)
+	p.drawn = append(p.drawn, d)
+	return []byte("\x89PNG\r\n\x1a\n"), nil
 }
 
-// infographicPlan is the plan the scripted specialist saves, as a JSON
-// string: a title and three sections, enough to be an infographic.
-var infographicPlan = func() string {
-	plan, _ := json.Marshal("# Tides\n\n## The moon\n- Pulls the sea\n\n## The sun\n- Pulls less\n\n## Spring tides\n- Both in line\n")
-	return string(plan)
+func (p *posters) asked() []posterrender.Drawn {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]posterrender.Drawn(nil), p.drawn...)
+}
+
+// infographicPoster is the poster the scripted specialist saves: three
+// sections, enough to be an infographic.
+var infographicPoster = func() string {
+	poster, _ := json.Marshal(map[string]any{"sections": []map[string]any{
+		{"heading": "The moon", "points": []string{"Pulls the sea"}},
+		{"heading": "The sun", "points": []string{"Pulls less"}},
+		{"heading": "Spring tides", "points": []string{"Both in line"}},
+	}})
+	return string(poster)
 }()
 
-// The orientation chosen in the dialog is the canvas the infographic is
-// drawn on: the image model is asked for that size, and the style the
-// dialog chose answers the run's style question beside it.
+// The orientation and the style chosen in the dialog are the poster's: it
+// is laid out on that canvas in that look, and saved with both.
 func TestAnInfographicIsDrawnInTheDialogsOrientation(t *testing.T) {
 	h := newHarness(t, false)
 
 	status, body := h.as(alice, "POST", generate, `{"kind":"infographic","style":"scientific","orientation":"portrait","request_id":"i1"}`)
 	expect(t, "her portrait infographic", status, body, 201, `"kind":"infographic"`, `"orientation":"portrait"`, `"style":"scientific"`)
 	h.until("the run finishes", "deliverable_jobs WHERE kind = 'artifact' AND status = 'ready' AND artifact_id IS NOT NULL")
-	sizes, prompts := h.painter.asked()
-	if len(sizes) != 1 || sizes[0] != "1024x1536" {
-		t.Fatalf("the image model was asked for %v", sizes)
-	}
-	if !strings.Contains(prompts[0], "Canvas: portrait") || !strings.Contains(prompts[0], "VISUAL STYLE") {
-		t.Errorf("the prompt does not describe the chosen canvas: %q", prompts[0])
+	drawn := h.posters.asked()
+	if len(drawn) != 1 || drawn[0].Orientation != "portrait" || drawn[0].Style != "scientific" || drawn[0].Width != 1024 || drawn[0].Height != 1536 {
+		t.Fatalf("the poster was drawn as %+v", drawn)
 	}
 	if h.count(`artifacts WHERE user_id = '`+alice+`' AND format = 'infographic'
 		AND metadata #>> '{generation,orientation}' = 'portrait' AND metadata #>> '{generation,requested_style_id}' = 'scientific'`) != 1 {
 		t.Error("the infographic should be saved with the orientation and style the dialog chose")
+	}
+	// The PNG is its file and the SVG its preview.
+	if h.count(`artifact_files WHERE role = 'primary' AND mime_type = 'image/png'`) != 1 || h.count(`artifact_files WHERE role = 'preview' AND mime_type = 'image/svg+xml'`) != 1 {
+		t.Error("the infographic should be saved as a PNG with its SVG beside it")
 	}
 
 	// No orientation sent is the dialog's default, landscape.
 	status, body = h.as(alice, "POST", generate, `{"kind":"infographic","request_id":"i2"}`)
 	expect(t, "her default infographic", status, body, 201, `"orientation":"landscape"`)
 	h.until("the second run finishes", "(SELECT 1 FROM deliverable_jobs WHERE kind = 'artifact' AND status = 'ready' HAVING count(*) = 2) AS finished")
-	if sizes, _ := h.painter.asked(); len(sizes) != 2 || sizes[1] != "1536x1024" {
-		t.Errorf("the default orientation asked for %v", sizes)
+	if drawn := h.posters.asked(); len(drawn) != 2 || drawn[1].Orientation != "landscape" {
+		t.Errorf("the default orientation drew %+v", drawn)
+	}
+
+	// A style only the installed phone builds still offer is made in auto.
+	status, body = h.as(alice, "POST", generate, `{"kind":"infographic","style":"kawaii","request_id":"i3"}`)
+	expect(t, "an installed build's retired style", status, body, 201, `"style":"auto"`)
+	h.until("the third run finishes", "(SELECT 1 FROM deliverable_jobs WHERE kind = 'artifact' AND status = 'ready' HAVING count(*) = 3) AS finished")
+	if drawn := h.posters.asked(); len(drawn) != 3 || drawn[2].Style != "sketch-note" {
+		t.Errorf("a retired style drew %s", fmt.Sprint(drawn[len(drawn)-1].Style))
 	}
 }

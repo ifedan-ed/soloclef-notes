@@ -12,22 +12,17 @@ import { useNotebooks } from "@/features/notebooks/hooks/use-notebook-queries";
 import type { BuilderTask, TaskScope } from "@/lib/automations/builder-schema";
 import { Field } from "./form-field";
 
+// Worded for a run nobody watches: it can search the web, but not read a
+// page in full (reading one asks first, and nobody is there to ask). The
+// chat's draft card (automation-draft-form.tsx) and the phone say the same.
 const SCOPES: { value: TaskScope; label: string; hint: string }[] = [
-	{
-		value: "documents",
-		label: "Your documents",
-		hint: "Reads your documents only.",
-	},
+	{ value: "documents", label: "Your documents", hint: "Searches your documents and notes." },
 	{
 		value: "all",
 		label: "Your documents and the web",
-		hint: "Can also search the web and read pages (Tavily, Exa, Browserbase).",
+		hint: "Also web search (Exa or Tavily, if connected), PubMed, arXiv and preprints.",
 	},
-	{
-		value: "web",
-		label: "The web only",
-		hint: "Searches the web and connected apps, not your documents.",
-	},
+	{ value: "web", label: "The web only", hint: "Web and research search, not your documents." },
 ];
 
 const ANY_NOTEBOOK = "any";

@@ -9,8 +9,8 @@ import type { SearchSourceConnector } from "@/contracts/types/connector.types";
 export const DEPRECATED_CONNECTOR_TYPES = new Set<string>([EnumConnectorName.WEBCRAWLER_CONNECTOR]);
 
 // Native connectors with their own connect flow (Nextcloud's Login Flow,
-// Email's own add-account form): rendered by their feature's card, listed
-// here for titles and search.
+// Email's own add-account form, Exa's and Tavily's key field): rendered by
+// their feature's card, listed here for titles and search.
 export const NATIVE_CONNECTORS = [
 	{
 		id: "nextcloud-connector",
@@ -23,6 +23,20 @@ export const NATIVE_CONNECTORS = [
 		title: "Email (IMAP)",
 		description: "Search and read your own mailboxes, read-only",
 		connectorType: EnumConnectorName.EMAIL_IMAP_CONNECTOR,
+	},
+	// Web search with the person's own key: one key each, no connector row
+	// (features/web-search-connect).
+	{
+		id: "exa-web-search",
+		title: "Exa",
+		description: "Search the web with your own Exa key",
+		connectorType: "EXA_WEB_SEARCH",
+	},
+	{
+		id: "tavily-web-search",
+		title: "Tavily",
+		description: "Search the web with your own Tavily key",
+		connectorType: "TAVILY_WEB_SEARCH",
 	},
 ] as const;
 

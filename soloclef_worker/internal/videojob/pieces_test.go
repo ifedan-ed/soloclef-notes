@@ -2,7 +2,7 @@ package videojob
 
 import (
 	"errors"
-	"fmt"
+	"math"
 	"strings"
 	"testing"
 
@@ -11,69 +11,86 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/speech"
 )
 
-// The layout report is read strictly: one entry per scene, numbered as the
-// props number them, or the check did not run.
-func TestTheLayoutReportIsReadStrictly(t *testing.T) {
-	report := `{"scenes":[{"slide_number":1,"findings":[]},{"slide_number":2,"findings":["  text \"x\" is 20 px; nothing may be under 30 px ",""]}]}`
-	findings, err := layoutFindings([]byte(report), []int{1, 2})
-	if err != nil || len(findings) != 1 || findings[0] != `scene 2: text "x" is 20 px; nothing may be under 30 px` {
-		t.Errorf("findings %q (%v)", findings, err)
-	}
-	long := `{"scenes":[{"slide_number":1,"findings":["` + strings.Repeat("a", 500) + `"]}]}`
-	if findings, err := layoutFindings([]byte(long), []int{1}); err != nil || len([]rune(findings[0])) != len("scene 1: ")+maxFindingRunes {
-		t.Errorf("a long finding was not cut: %d (%v)", len(findings), err)
-	}
-	for name, bad := range map[string]string{
-		"not json":      "Error: Chrome crashed",
-		"a scene short": `{"scenes":[{"slide_number":1,"findings":[]}]}`,
-		"misnumbered":   `{"scenes":[{"slide_number":1,"findings":[]},{"slide_number":3,"findings":[]}]}`,
-	} {
-		if _, err := layoutFindings([]byte(bad), []int{1, 2}); err == nil {
-			t.Errorf("%s was read as a report", name)
-		}
-	}
-}
-
-// A scene's frames are counted from the decimal the narration's length
-// prints as: 2.1 s at 30 fps is 63 frames, not 64 from a binary rounding.
-func TestTheTimelineIsExact(t *testing.T) {
-	for _, c := range []struct {
-		seconds float64
-		want    int
-	}{{2.1, 63}, {2.1000001, 64}, {0.2, 30}, {10, 300}, {4.016, 121}} {
-		if got, err := sceneFrames(c.seconds, 30, 30); err != nil || got != c.want {
-			t.Errorf("%v s = %d frames (%v), want %d", c.seconds, got, err, c.want)
-		}
-	}
-	grid, err := buildTimeline([]voiced{{Number: 1, Seconds: 2.1}, {Number: 2, Seconds: 10}}, 30, 30, entranceFrames(30))
+// A slide is held for its narration with the lead-in and the pause, on
+// whole frames, each part coming in a little before its passage's measured
+// start, however unevenly the passages ran; and only the moments in which
+// something moves are drawn.
+func TestTheFilmIsPlannedToTheNarration(t *testing.T) {
+	video, err := readDeck([]byte(deckJSON(firstSlide, secondSlide)))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if grid.totalFrames() != 363 || grid.Scenes[1].Start != 63 || grid.Scenes[0].Entrance != 63 || grid.Scenes[1].Entrance != 120 {
-		t.Errorf("grid %+v", grid)
+	// Measured, not even: a short opening, then a passage of figures said
+	// in words that ran long.
+	voices := []voiced{
+		{Number: 1, Seconds: 6, Starts: []float64{0, 1.1, 4.7}},
+		{Number: 2, Seconds: 4, Starts: []float64{0, 2.9, 3.2}},
 	}
-	if _, err := grid.withRendered(map[int]int{1: 63, 2: 121}); err == nil {
-		t.Error("an entrance longer than asked was accepted")
-	}
-	shorter, err := grid.withRendered(map[int]int{1: 62, 2: 120})
-	if err != nil || shorter.Scenes[0].stillFrames() != 1 || shorter.totalFrames() != 363 {
-		t.Errorf("a shorter entrance: %+v (%v)", shorter, err)
-	}
-	plan, err := planAssembly([]scenePart{{1, "/w/e1.mp4", "/w/s1.png", "/w/public/slide-1.mp3"}, {2, "/w/e2.mp4", "/w/s2.png", "/w/public/slide-2.mp3"}}, shorter, "/w", "/w.mp4")
+	shots, err := plan(video, voices)
 	if err != nil {
 		t.Fatal(err)
 	}
-	joined := fmt.Sprint(plan.Commands)
-	if len(plan.Commands) != 5 || !strings.Contains(joined, "-frames:v 1 ") || !strings.Contains(joined, "atrim=end_sample=100800") ||
-		!strings.Contains(joined, "atrim=end_sample=480000") || !strings.Contains(plan.Manifest, "hold-2.mp4") {
-		t.Errorf("plan %v\n%s", plan.Commands, plan.Manifest)
+	// 0.4 + 6 + 0.7 seconds is 213 frames; the second starts after it.
+	if shots[0].Frames != 213 || shots[1].Start != 213 || shots[1].Frames != 153 {
+		t.Errorf("shots %+v", shots)
 	}
-	if _, err := samplesPerFrame(7); err == nil {
-		t.Error("7 fps divides 48 kHz?")
+	// The heading at once; each part as its passage begins, a quarter
+	// second early.
+	for i, voice := range voices {
+		for k := range voice.Starts {
+			want := 0.0
+			if k > 0 {
+				want = leadIn + voice.Starts[k] - earlyBy
+			}
+			if d := shots[i].Starts[k] - want; d > 1e-9 || d < -1e-9 {
+				t.Errorf("slide %d step %d starts at %.3f, want %.3f", i+1, k, shots[i].Starts[k], want)
+			}
+		}
+	}
+	// A narration that does not have one passage per step is a fault
+	// here, said, not spread out.
+	if _, err := plan(video, []voiced{voices[0], {Number: 2, Seconds: 4, Starts: []float64{0}}}); err == nil ||
+		!strings.Contains(err.Error(), "slide 2 has 3 build steps and 1 voiced passages") {
+		t.Errorf("a slide short of passages: %v", err)
+	}
+	film := cuts(video, shots)
+	held, total := 0, 0
+	for _, c := range film {
+		total += c.Frames
+		if c.Frames > 1 {
+			held++
+		}
+	}
+	if total != totalFrames(shots) || len(film) > total/2 || held == 0 {
+		t.Errorf("%d pictures for %d frames, %d held", len(film), total, held)
+	}
+	// The second slide fades in over the first: its first frames say so.
+	for _, c := range film {
+		if c.Picture.Slide == 1 && c.Picture.At == 0 && c.Picture.Fade <= 0 {
+			t.Errorf("the second slide's first frame does not fade: %+v", c)
+		}
+	}
+	// Every slide ends still: its last picture is held to its end.
+	samples := frameSamples(shots)
+	if samples[0].At != 0.4+6 || samples[1].Slide != 2 {
+		t.Errorf("samples %+v", samples)
 	}
 }
 
-// The request column is read strictly: unknown fields, a revision, a missing
+// A passage starts after every passage before it and a gap after each:
+// the times audiofile.JoinSpaced lays them at.
+func TestPassagesStartAfterTheOnesBefore(t *testing.T) {
+	starts := passageStarts([]float64{1.5, 2.25, 0.8}, 0.2)
+	for k, want := range []float64{0, 1.7, 4.15} {
+		if math.Abs(starts[k]-want) > 1e-9 {
+			t.Errorf("passage %d starts at %.3f, want %.3f", k+1, starts[k], want)
+		}
+	}
+	if starts := passageStarts([]float64{3}, 0.2); len(starts) != 1 || starts[0] != 0 {
+		t.Errorf("one passage starts at %v", starts)
+	}
+}
+
 // thread and oversize text are refused; white space is normalised.
 func TestTheRequestIsReadStrictly(t *testing.T) {
 	request, err := readRequest([]byte(`{"version":1,"brief":"  The   heart\n","source_references":[" a  b "],"root_thread_id":3,"source_material":" text ","max_seconds":90}`))
@@ -99,25 +116,31 @@ func TestTheRequestIsReadStrictly(t *testing.T) {
 	}
 }
 
-// A draft is read under the names models use, given its numbers and
-// filenames, and held to the harness's twelve scenes.
-func TestADraftIsReadAndNumbered(t *testing.T) {
-	video, err := readDraft([]byte(`{"language":"en","scenes":[{"narration":"Hi.","onScreenMarkdown":"# A","tsx_module":"x"},{"transcript":"Bye.","on_screen_markdown":"B","code":"y","slide_number":9}]}`))
-	if err != nil || len(video.Scenes) != 2 || video.Scenes[1].Number != 2 || video.Scenes[1].Filename != "scene-02.tsx" || video.Scenes[0].Code != "x" {
-		t.Fatalf("draft %+v (%v)", video, err)
+// A deck is read, checked and laid out in one go, and what is wrong with
+// it is said in the words a model can act on.
+func TestADeckIsReadCheckedAndLaidOut(t *testing.T) {
+	video, err := readDeck([]byte(deckJSON(firstSlide, secondSlide)))
+	if err != nil || len(video.Scenes) != 2 || video.Deck.Theme != "classic" || video.spoken()[0] != strings.Join(firstSlide, " ") {
+		t.Fatalf("video %+v (%v)", video.Deck, err)
 	}
-	thirteen := `{"scenes":[` + strings.TrimSuffix(strings.Repeat(`{"transcript":"a","on_screen_markdown":"b","code":"c"},`, 13), ",") + `]}`
-	if _, err := readDraft([]byte(thirteen)); err == nil {
-		t.Error("thirteen scenes were accepted")
+	for name, test := range map[string]struct{ reply, says string }{
+		"no narration":    {strings.Replace(deckJSON(firstSlide, secondSlide), `"narration":["It beats all your life.","About seventy-two times a minute at rest.","Moving five litres every minute."]`, `"notes":"It beats."`, 1), "slide 2 (stats) has 0 narration passages and 3 parts"},
+		"a passage over":  {deckJSON(append(append([]string{}, firstSlide...), "And more."), secondSlide), "slide 1 (bullets) has 4 narration passages and 3 parts; give exactly 3 narration passages, one as it appears and then one for each of its 2 bullets"},
+		"a passage short": {deckJSON(firstSlide, secondSlide[:2]), "slide 2 (stats) has 2 narration passages and 3 parts; give exactly 3 narration passages, one as it appears and then one for each of its 2 figures"},
+		"sources":         {strings.Replace(deckJSON(firstSlide, secondSlide), `"theme":"classic"`, `"theme":"classic","sources":[{"title":"A book"}]`, 1), "a video's deck lists no sources"},
+	} {
+		if _, err := readDeck([]byte(test.reply)); err == nil || !strings.Contains(err.Error(), test.says) {
+			t.Errorf("%s: %v", name, err)
+		}
 	}
-	if _, err := readDraft([]byte(`{"scenes":[{"transcript":"a","code":"c"}]}`)); err == nil || !strings.Contains(err.Error(), "on_screen_markdown") {
-		t.Errorf("a scene without text: %v", err)
+	prompt := authorPrompt(90)
+	if !strings.Contains(prompt, "2 to 20 slides") || !strings.Contains(prompt, "under 194 words") || !strings.Contains(prompt, "narration is a list of passages") ||
+		!strings.Contains(prompt, "exactly one passage for the slide and one for each part") || !strings.Contains(prompt, "Write exactly one passage per part") {
+		t.Errorf("author prompt:\n%s", prompt)
 	}
-	if _, err := readRepair(2)([]byte(`{"scenes":[{"on_screen_markdown":"b","code":"c"}]}`)); err == nil {
-		t.Error("a repair that dropped a scene was accepted")
-	}
-	if !strings.Contains(authorPrompt(90), "1-12 scenes") || !strings.Contains(authorPrompt(90), "under 194 words") || !strings.Contains(authorPrompt(90), staggerImport) {
-		t.Errorf("author prompt:\n%s", authorPrompt(90))
+	// A shortened narration keeps each slide's passages.
+	if _, err := readShortened(video.Deck)([]byte(`{"slides":[{"narration":["One."]},{"narration":["Two.","Three.","Four."]}]}`)); err == nil || !strings.Contains(err.Error(), "slide 1 has 1 passages and needs 3") {
+		t.Errorf("a shortening that dropped passages: %v", err)
 	}
 }
 
@@ -154,15 +177,9 @@ func TestNames(t *testing.T) {
 			t.Errorf("%q = %q, want %q", title, got, want)
 		}
 	}
-	if got := slideTitle(Scene{Number: 3, Markdown: "Intro line\n\n## **Valves** ##\n"}); got != "Valves" {
-		t.Errorf("title %q", got)
-	}
-	if got := slideTitle(Scene{Number: 3, Markdown: "  \n"}); got != "Scene 3" {
-		t.Errorf("title %q", got)
-	}
 }
 
-// Every setting is required once the render is on, the voice must be the
+// Every setting is required once the video is on, the voice must be the
 // speech service's, and "off" must be said.
 func TestTheSettings(t *testing.T) {
 	service := speech.Service{Roster: speech.OpenAI, Model: "gpt-4o-mini-tts"}
@@ -172,26 +189,19 @@ func TestTheSettings(t *testing.T) {
 	if config, err := LoadConfig(func(name string) string { return map[string]string{Enabled: "false"}[name] }, service); err != nil || config.Enabled {
 		t.Errorf("off = %+v (%v)", config, err)
 	}
-	key := t.TempDir() + "/key"
-	if err := writeFile(key, "secret\n"); err != nil {
-		t.Fatal(err)
-	}
 	values := map[string]string{
-		Enabled: "true", SandboxStack: "examplestack", SandboxURL: "http://sandbox:8080", SandboxKeyFile: key, SandboxImage: "soloclef-sandbox-local:latest",
-		SandboxCPU: "6", SandboxMemory: "6Gi", SandboxIdleTTL: "15m", SandboxCommandTimeout: "5m", RenderTimeout: "45m",
-		RenderMode: "stills", RenderConcurrency: "6", FramesPerSegment: "1800", FrameTimeout: "7s", MaxRenders: "1",
+		Enabled: "true", Resvg: "/usr/local/bin/resvg", FrameWorkers: "6", RenderTimeout: "20m", MaxRenders: "1",
 		NarrationVoice: "openai:marin",
 	}
 	config, err := LoadConfig(func(name string) string { return values[name] }, service)
-	if err != nil || config.Sandbox.APIKey != "secret" || config.Sandbox.Stack != "examplestack" || config.Voice != "marin" || config.Mode != ModeStills || config.RenderTimeout.Minutes() != 45 {
+	if err != nil || config.Resvg != "/usr/local/bin/resvg" || config.FrameWorkers != 6 || config.Voice != "marin" || config.RenderTimeout.Minutes() != 20 {
 		t.Fatalf("config %+v (%v)", config, err)
 	}
 	values[NarrationVoice] = "kokoro:af_heart"
-	values[RenderMode] = "fast"
-	values[FrameTimeout] = "2s"
-	delete(values, SandboxStack)
+	values[FrameWorkers] = "none"
+	delete(values, Resvg)
 	_, err = LoadConfig(func(name string) string { return values[name] }, service)
-	for _, named := range []string{NarrationVoice, RenderMode, FrameTimeout, SandboxStack} {
+	for _, named := range []string{NarrationVoice, FrameWorkers, Resvg} {
 		if err == nil || !strings.Contains(err.Error(), named) {
 			t.Errorf("%s was not reported: %v", named, err)
 		}

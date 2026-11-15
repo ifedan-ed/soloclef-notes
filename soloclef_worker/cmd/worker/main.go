@@ -8,15 +8,18 @@
 // It runs no Python. Every job body that used to be a Python process (the
 // podcast, the notebook naming, the folder deletion, the account erasure)
 // is Go now, keyed by the account that owns the rows, and so is the video
-// (internal/videojob). The beat schedules nothing; the two periodic pieces
-// of work, republishing queued jobs whose message was lost
-// (internal/jobreconcile) and syncing the Google Drive connections that
-// are due (internal/drivesync), are each a message that schedules its own
-// successor.
+// (internal/videojob). The beat schedules nothing; the periodic pieces of
+// work, republishing queued jobs whose message was lost
+// (internal/jobreconcile), syncing the Google Drive connections that are
+// due (internal/drivesync) and telling iPhones on an older app about a new
+// App Store version (internal/appupdate), are each a message that schedules
+// its own successor.
 //
-// A restart is not a drain. In-flight work is given ShutdownGrace; a
-// podcast cut off by it goes back to its queue and carries on from the
-// lines already voiced.
+// A restart drains: in-flight work is given ShutdownGrace to finish (the
+// deployment sets it from the length of its videos), and work still running
+// at its end is cut off and gives its message back to the queue before the
+// process exits (internal/broker, HandBack): a video is made again by the
+// next worker, a podcast carries on from the lines already voiced.
 package main
 
 import (
@@ -36,6 +39,7 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_celery/routing"
 	"git.danvics.com/danvics/soloclef/soloclef_filestore"
 
+	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/appupdate"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/beat"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/broker"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/drivesync"
@@ -106,10 +110,10 @@ func run() error {
 
 	err = process.Together(ctx, services...)
 	if errors.Is(err, broker.ErrShutdownIncomplete) {
-		// The grace period ended with work still running. Each job's
-		// message keeps its claim and becomes visible again after the
-		// visibility window, so nothing is lost; it is still an error,
-		// because the work was cut off.
+		// The grace period ended with work still running. A job that gave
+		// its message back is on the queue again; one that could not keeps
+		// its claim and becomes visible after the visibility window, so
+		// nothing is lost. It is still an error, because work was cut off.
 		return err
 	}
 	if err != nil {
@@ -180,6 +184,13 @@ func consumption(ctx context.Context, rdb redis.UniversalClient) (*broker.Consum
 		if err := runner.driveTick.Seed(ctx); err != nil {
 			closeAll()
 			return nil, nothing, fmt.Errorf("starting the Google Drive schedule: %w", err)
+		}
+	}
+	// The App Store update check's first tick, on the same terms.
+	if runner.appUpdate != nil && slices.Contains(cfg.Queues, routing.Table{Default: settings.DefaultQueue}.QueueFor(appupdate.TickTask)) {
+		if err := runner.appUpdate.Seed(ctx); err != nil {
+			closeAll()
+			return nil, nothing, fmt.Errorf("starting the App Store update check: %w", err)
 		}
 	}
 	// The automation schedule's first tick, on the same terms, and the

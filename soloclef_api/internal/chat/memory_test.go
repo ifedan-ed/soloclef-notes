@@ -8,6 +8,7 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_agent/model/modeltest"
 
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/chat/memory"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/assembly"
 )
 
 // A turn can write the asker's memory, and only the asker's: the tool is
@@ -95,8 +96,8 @@ func TestAToolSwitchedOffIsNotOffered(t *testing.T) {
 		return strings.Join(offered, " ")
 	}
 	all := names()
-	for _, switchableTool := range pickerTools() {
-		if !switchableTool.EnabledByDefault || switchableTool.Description == "" {
+	for _, switchableTool := range assembly.SwitchableTools() {
+		if switchableTool.Description == "" {
 			t.Errorf("the composer's list has %+v", switchableTool)
 		}
 	}

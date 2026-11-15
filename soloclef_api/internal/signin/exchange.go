@@ -60,6 +60,8 @@ func (r Routes) Register(api huma.API) {
 	r.mount(api, http.MethodGet, DevicesPath, "signed-in-devices", "Every device the account is signed in on", r.devices)
 	r.mount(api, http.MethodDelete, DevicePath, "sign-out-device", "Sign one device out", r.signOutDevice)
 	r.mount(api, http.MethodPost, LogoutAllPath, "sign-out-everywhere", "Sign every device out", r.logoutAll)
+	r.mount(api, http.MethodGet, PasswordStatePath, "password-state", "Whether the account has a password", r.passwordState)
+	r.mount(api, http.MethodPost, ChangePasswordPath, "change-password", "Set a new password, signing every other device out", r.changePassword)
 }
 
 func (r Routes) now() time.Time {

@@ -61,7 +61,7 @@ func text(value string) *string { return &value }
 func TestAConnectionIsRenderedWithItsModels(t *testing.T) {
 	made := time.Date(2026, 11, 1, 10, 0, 0, 0, time.UTC)
 	rows := []ListedConnection{{
-		ID: 7, Provider: "openai", BaseURL: text("https://api.example.test/v1"), HasAPIKey: true,
+		ID: 7, Provider: "openai_compatible", BaseURL: text("https://api.example.test/v1"), HasAPIKey: true,
 		Extra: []byte(`{"region":"eu"}`), Scope: "user", UserID: text(testpostgres.Alice),
 		Enabled: true, CreatedAt: made,
 	}}
@@ -75,7 +75,7 @@ func TestAConnectionIsRenderedWithItsModels(t *testing.T) {
 			CapabilitiesOverride: []byte(`{}`), Catalog: []byte(`{}`), CreatedAt: made},
 	})
 
-	want := `[{"id":7,"provider":"openai","base_url":"https://api.example.test/v1","extra":{"region":"eu"},` +
+	want := `[{"id":7,"provider":"openai_compatible","base_url":"https://api.example.test/v1","extra":{"region":"eu"},` +
 		`"scope":"user","user_id":"` + testpostgres.Alice + `","enabled":true,"has_api_key":true,"header_names":[],` +
 		`"models":[{"id":70,"connection_id":7,"model_id":"gpt-example","display_name":"Example","source":"MANUAL",` +
 		`"supports_chat":true,"max_input_tokens":128000,"supports_image_input":null,"supports_tools":null,` +
@@ -86,16 +86,19 @@ func TestAConnectionIsRenderedWithItsModels(t *testing.T) {
 	}
 }
 
-// For Bedrock and Vertex the credential is not the API key: it sits in
-// extra.litellm_params or extra.kwargs. Both bags are left out whole, and only
-// at the top level, where they are the bags.
+// What `extra` holds that is a credential is never answered: the sealed
+// headers, and, on a row made before only OpenAI-compatible connections
+// were offered, a Bedrock or Vertex AI credential in litellm_params or
+// kwargs. Each is left out whole, and only at the top level, where it is
+// the key.
 func TestTheCredentialBagsOfExtraAreNeverAnswered(t *testing.T) {
 	body := render(t, []ListedConnection{{
 		ID: 1, Provider: "bedrock", Scope: "user",
 		Extra: []byte(`{"litellm_params":{"aws_secret_access_key":"fake-secret"},"kwargs":{"token":"fake-token"},` +
+			`"headers_sealed":"fake-sealed","header_names":["X-Org"],` +
 			`"region":"eu","nested":{"kwargs":"kept, it is not the bag"}}`),
 	}})
-	if strings.Contains(body, "fake-") || strings.Contains(body, "litellm_params") {
+	if strings.Contains(body, "fake-") || strings.Contains(body, "litellm_params") || strings.Contains(body, "headers_sealed") {
 		t.Fatalf("a credential bag was answered: %s", body)
 	}
 	if !strings.Contains(body, `"extra":{"region":"eu","nested":{"kwargs":"kept, it is not the bag"}}`) {
@@ -106,6 +109,74 @@ func TestTheCredentialBagsOfExtraAreNeverAnswered(t *testing.T) {
 		Extra: []byte(`{"kwargs":{"credentials":"fake-file"}}`)}})
 	if !strings.Contains(onlyBags, `"extra":{}`) {
 		t.Errorf("extra holding only a bag: %s", onlyBags)
+	}
+}
+
+// The provider list is the one provider there is, whole, so that a field
+// added, dropped or changed is seen: the web app draws its form from it.
+func TestTheProviderListIsTheOneProvider(t *testing.T) {
+	status, body := get(t, served(emptyLister{}, principal.Principal{UserID: testpostgres.Alice, Method: principal.MethodSession}), ProvidersPath)
+	want := `[{"provider":"openai_compatible","transport":"OPENAI_COMPATIBLE","discovery":"endpoint","default_base_url":null,` +
+		`"base_url_required":true,"auth_style":"bearer","local_only":false,"any_account":true}]`
+	if status != http.StatusOK || body != want {
+		t.Errorf("the provider list = %d\n got %s\nwant %s", status, body, want)
+	}
+}
+
+// A body is read as an OpenAI-compatible connection or refused, whichever
+// provider it names: there is no other kind (providers.go). Each case is
+// what readChange says of the provider and of `extra`.
+func TestABodyNamesTheOneProviderOrIsRefused(t *testing.T) {
+	for name, test := range map[string]struct {
+		body     string
+		creating bool
+		want     string // a failure's message, or "" for none
+	}{
+		"the one provider":            {`{"provider":"openai_compatible"}`, true, ""},
+		"OpenAI by its own name":      {`{"provider":"openai"}`, true, providerUnknown},
+		"Anthropic":                   {`{"provider":"anthropic"}`, true, providerUnknown},
+		"Bedrock":                     {`{"provider":"bedrock"}`, true, providerUnknown},
+		"Azure":                       {`{"provider":"azure"}`, true, providerUnknown},
+		"Vertex AI":                   {`{"provider":"vertex_ai"}`, true, providerUnknown},
+		"OpenRouter by its own name":  {`{"provider":"openrouter"}`, true, providerUnknown},
+		"Ollama by its own name":      {`{"provider":"ollama_chat"}`, true, providerUnknown},
+		"padded":                      {`{"provider":" openai_compatible "}`, true, ""},
+		"a change naming no provider": {`{"enabled":false}`, false, ""},
+		"a change to no provider":     {`{"provider":null}`, false, providerUnknown},
+		"a Bedrock credential bag":    {`{"provider":"openai_compatible","extra":{"litellm_params":{"aws_secret_access_key":"fake-s"}}}`, true, "litellm_params or kwargs"},
+		"a Vertex credential bag":     {`{"provider":"openai_compatible","extra":{"kwargs":{}}}`, true, "litellm_params or kwargs"},
+		"a bag further down is data":  {`{"provider":"openai_compatible","extra":{"notes":{"kwargs":1}}}`, true, ""},
+	} {
+		sent, failures := readBody([]byte(test.body))
+		if failures == nil {
+			_, failures = readChange(sent, test.creating)
+		}
+		var said []string
+		for _, failure := range failures {
+			said = append(said, failure.Message)
+		}
+		got := strings.Join(said, "; ")
+		if (test.want == "" && got != "") || (test.want != "" && !strings.Contains(got, test.want)) {
+			t.Errorf("%s: failures %q, want %q", name, got, test.want)
+		}
+	}
+}
+
+// An endpoint's error sentence is shown on the settings page, so the key
+// and the header values are struck out of it wherever the endpoint echoed
+// them, and a long one is cut.
+func TestWhatAnEndpointSaidIsShownWithoutTheCredentials(t *testing.T) {
+	for name, test := range map[string]struct {
+		raw, want string
+	}{
+		"the key echoed":    {`{"error":{"message":"Incorrect API key provided: fake-key.\n Check it."}}`, "Incorrect API key provided: [key]. Check it."},
+		"a header echoed":   {`{"error":{"message":"organisation fake-org is not yours"}}`, "organisation [header] is not yours"},
+		"not an error body": {`<html>bad gateway</html>`, ""},
+		"a long sentence":   {`{"error":{"message":"` + strings.Repeat("x", 1000) + `"}}`, strings.Repeat("x", maxMessage) + "…"},
+	} {
+		if got := saidBy([]byte(test.raw), "fake-key", "fake-org"); got != test.want {
+			t.Errorf("%s: %q, want %q", name, got, test.want)
+		}
 	}
 }
 

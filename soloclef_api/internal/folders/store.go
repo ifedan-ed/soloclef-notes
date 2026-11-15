@@ -133,12 +133,6 @@ func (s Store) Reposition(ctx context.Context, userID string, folderID int64, po
 	return err
 }
 
-func (s Store) ClearWatched(ctx context.Context, userID string, folderID int64, at time.Time) error {
-	_, err := New(s.Pool).ClearWatchedFlag(ctx, ClearWatchedFlagParams{
-		FolderID: folderID, UserID: userID, UpdatedAt: at})
-	return err
-}
-
 func (s Store) Documents(ctx context.Context, userID string, documentIDs []int64) ([]Document, error) {
 	rows, err := New(s.Pool).DocumentsOwned(ctx, DocumentsOwnedParams{UserID: userID, DocumentIds: documentIDs})
 	if err != nil {

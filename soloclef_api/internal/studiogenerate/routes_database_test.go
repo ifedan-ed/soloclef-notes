@@ -25,6 +25,8 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/principal"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/testpostgres"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/deliverables"
+	"git.danvics.com/danvics/soloclef/soloclef_celery/produce"
+	"git.danvics.com/danvics/soloclef/soloclef_notify/notify"
 )
 
 // databaseVariable names a throwaway Postgres. **Every account in it is
@@ -43,6 +45,9 @@ type scripted struct {
 	// block makes the first specialist call wait for its context to end:
 	// a run that is still going when the person stops it.
 	block bool
+	// hold, when set, makes each specialist call wait until it is closed
+	// (a long run that finishes) or its context ends (one cut off).
+	hold chan struct{}
 	// fail makes every call fail.
 	fail error
 	pool string
@@ -51,7 +56,7 @@ type scripted struct {
 func (s *scripted) Generate(ctx context.Context, request model.Request, _ func(model.Chunk)) (model.Response, error) {
 	s.mu.Lock()
 	s.requests = append(s.requests, request)
-	block, fail, pool := s.block, s.fail, s.pool
+	block, fail, pool, hold := s.block, s.fail, s.pool, s.hold
 	s.mu.Unlock()
 	if fail != nil {
 		return model.Response{}, fail
@@ -62,6 +67,13 @@ func (s *scripted) Generate(ctx context.Context, request model.Request, _ func(m
 	if block {
 		<-ctx.Done()
 		return model.Response{}, ctx.Err()
+	}
+	if hold != nil {
+		select {
+		case <-hold:
+		case <-ctx.Done():
+			return model.Response{}, ctx.Err()
+		}
 	}
 	results := 0
 	for _, message := range request.Messages {
@@ -81,7 +93,7 @@ func (s *scripted) Generate(ctx context.Context, request model.Request, _ func(m
 		case 0:
 			return call("c1", deliverables.InstructionsTool, `{"artifact_type":"infographic"}`)
 		case 1:
-			return call("c2", deliverables.SaveTool, `{"format":"infographic","title":"Tides","markdown":`+infographicPlan+`}`)
+			return call("c2", deliverables.SaveTool, `{"format":"infographic","title":"Tides","poster":`+infographicPoster+`}`)
 		}
 		return model.Response{Message: model.Message{Role: model.RoleAssistant, Content: "Made an infographic called Tides."}, FinishReason: "stop"}, nil
 	}
@@ -140,7 +152,7 @@ type harness struct {
 	model   *scripted
 	runner  *Runner
 	videos  *videos
-	painter *painter
+	posters *posters
 	opened  []deliverables.PodcastBrief
 	focuses []string
 	// languages is each opened podcast's asked language.
@@ -151,9 +163,130 @@ type harness struct {
 	// routes is the routes as mounted, for the seam other packages call
 	// them through (StartFromReport).
 	routes Routes
+	// pushes is every push the notification step asked for.
+	pushes *recordedPushes
+	// sandboxes is every sandbox the runner removed.
+	sandboxes *removedSandboxes
+	// runners is every runner started; the routes wake them all, as a job
+	// queued in one replica is visible to every other.
+	mu      sync.Mutex
+	runners []*Runner
+	// lifetime is the harness's own: every runner's contexts are derived
+	// from it, so h.stop ends them all.
+	lifetime context.Context
+	// What a runner is built from, for runnerWith. models is the scripted
+	// model's unless a test names others.
+	models     Models
+	specialist deliverables.Specialist
+	notifier   *notify.Notifier
+	quiet      *slog.Logger
 }
 
+// Wake is the routes' Waker: every runner is told.
+func (h *harness) Wake() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, runner := range h.runners {
+		runner.Wake()
+	}
+}
+
+// runnerWith starts a runner over the harness's database and specialist:
+// another process, as far as the jobs can tell. accepting and lifetime are
+// its two contexts (RunnerParts), derived from h.lifetime. It is waited for
+// when the test ends.
+func (h *harness) runnerWith(accepting, lifetime context.Context) *Runner {
+	h.t.Helper()
+	return h.runnerOfSize(accepting, lifetime, 2)
+}
+
+// runnerOfSize is runnerWith with a number of places of its own, for a test
+// of how the places are shared.
+func (h *harness) runnerOfSize(accepting, lifetime context.Context, places int) *Runner {
+	h.t.Helper()
+	runner, err := NewRunner(RunnerParts{
+		Pool: h.pool, Models: h.models, Specialist: h.specialist,
+		Notifier: h.notifier, Concurrent: places, Accepting: accepting, Lifetime: lifetime, Logger: h.quiet,
+	})
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	runner.beatEvery = 20 * time.Millisecond
+	runner.Run()
+	h.mu.Lock()
+	h.runners = append(h.runners, runner)
+	h.mu.Unlock()
+	h.t.Cleanup(runner.Wait)
+	// Registered after Wait, so it runs first: a test that did not end
+	// the runner's contexts has them ended here.
+	h.t.Cleanup(h.stop)
+	return runner
+}
+
+// removedSandboxes is the specialist's Workshop: the benches are those of
+// Inner (none, by default), and each Release is recorded with how many model
+// calls had been made by then, so a test can tell a sandbox given back
+// before an attempt from one given back after it.
+type removedSandboxes struct {
+	Inner deliverables.Workshop
+	calls func() int
+	mu    sync.Mutex
+	// releases is each release: its thread and the model calls before it.
+	releases []release
+}
+
+type release struct {
+	thread int64
+	calls  int
+}
+
+func (r *removedSandboxes) Check() error { return nil }
+func (r *removedSandboxes) Bench(ctx context.Context, owner deliverables.Owner, wait deliverables.SandboxWait) (deliverables.Bench, error) {
+	return r.Inner.Bench(ctx, owner, wait)
+}
+func (r *removedSandboxes) Release(_ context.Context, owner deliverables.Owner) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.releases = append(r.releases, release{owner.ThreadID, r.calls()})
+	return nil
+}
+
+func (r *removedSandboxes) released() []release {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]release(nil), r.releases...)
+}
+
+// recordedPushes is a notify.Publisher that keeps what it is given.
+type recordedPushes struct {
+	mu       sync.Mutex
+	messages []produce.Message
+}
+
+func (r *recordedPushes) Send(_ context.Context, message produce.Message) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.messages = append(r.messages, message)
+	return "id", nil
+}
+
+func (r *recordedPushes) count() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.messages)
+}
+
+// newHarness is the routes over a throwaway database with one runner: one
+// API process.
 func newHarness(t *testing.T, sandbox bool) *harness {
+	h := newBareHarness(t, sandbox)
+	h.runner = h.runnerWith(h.lifetime, h.lifetime)
+	return h
+}
+
+// newBareHarness is the routes with no runner yet: a test of restarts starts
+// its processes itself (runnerWith).
+func newBareHarness(t *testing.T, sandbox bool) *harness {
 	pool := testpostgres.Open(t, databaseVariable)
 	testpostgres.Exec(t, pool, `
 INSERT INTO notebooks (id, user_id, title) VALUES (10, '`+alice+`', 'Tides'), (20, '`+bob+`', 'His');
@@ -172,11 +305,13 @@ INSERT INTO notebook_sources (id, notebook_id, user_id, document_id, folder_id, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := &harness{t: t, pool: pool, model: &scripted{pool: `{"ideas":["moon's pull","sun's pull","spring tides","neap tides"],"examples":["explain it for sailors"]}`}, videos: &videos{pool: pool}, painter: &painter{}}
+	h := &harness{t: t, pool: pool, model: &scripted{pool: `{"ideas":["moon's pull","sun's pull","spring tides","neap tides"],"examples":["explain it for sailors"]}`}, videos: &videos{pool: pool}, posters: &posters{}}
+	h.models = models{h.model}
+	h.sandboxes = &removedSandboxes{Inner: deliverables.NoSandbox{}, calls: h.model.calls}
 	specialist := deliverables.Specialist{
 		Store: checkpoint.NewMemory(), Limits: deliverables.Limits{MaxSteps: 8, Timeout: time.Minute},
-		Images: h.painter, Reader: deliverables.NoImageReader{}, Videos: h.videos,
-		Workshop: deliverables.NoSandbox{}, Podcasts: noPodcasts{},
+		Posters: h.posters, Videos: h.videos,
+		Workshop: h.sandboxes, Verified: deliverables.NewVerifications(), Podcasts: noPodcasts{},
 		Saver: deliverables.Saver{
 			Rows: deliverables.Store{Pool: pool}, Files: local, Logger: quiet,
 			NewID: func() string { return "00000000000000000000000000000abc" },
@@ -184,18 +319,15 @@ INSERT INTO notebook_sources (id, notebook_id, user_id, document_id, folder_id, 
 		},
 	}
 	lifetime, stop := context.WithCancel(context.Background())
-	h.stop = stop
-	t.Cleanup(func() { stop(); h.runner.Wait() })
-	if h.runner, err = NewRunner(pool, models{h.model}, specialist, 2, lifetime, quiet); err != nil {
-		t.Fatal(err)
-	}
-	h.runner.beatEvery = 20 * time.Millisecond
+	h.stop, h.lifetime = stop, lifetime
+	// The real notification step, over this database, with the queue
+	// replaced by a recorder: a finished run must leave the owner's inbox
+	// row and ask for its push.
+	h.pushes = &recordedPushes{}
+	h.specialist, h.quiet = specialist, quiet
+	h.notifier = &notify.Notifier{Database: pool, Publisher: h.pushes, Log: quiet}
 	routes := Routes{
-		Pool: pool, Models: models{h.model}, Runner: h.runner, Videos: h.videos, SandboxEnabled: sandbox,
-		// A deployment with an image model, as every test here written
-		// before the image gate assumed; TestWhatADeploymentCanMake is the
-		// one that tries it without.
-		ImageEnabled: true,
+		Pool: pool, Models: models{h.model}, Runner: h, Videos: h.videos, SandboxEnabled: sandbox,
 		OpenPodcast: func(ctx context.Context, owner deliverables.Owner, brief deliverables.PodcastBrief, request deliverables.PodcastRequest) (int64, error) {
 			h.opened, h.focuses = append(h.opened, brief), append(h.focuses, request.Focus+"|"+request.Source)
 			h.languages = append(h.languages, request.Language)
@@ -298,13 +430,22 @@ func TestAnArtifactIsMadeFromTheCallersOwnSourcesAlone(t *testing.T) {
 	if h.count("artifacts WHERE user_id = '"+bob+"'") != 0 {
 		t.Error("an artifact was made for him")
 	}
+	// Its owner's inbox has the row, naming the notebook and the output,
+	// and its push was asked for.
+	h.until("the inbox row", `notifications WHERE user_id = '`+alice+`' AND type = 'studio_output' AND title = 'Mind map ready'
+		AND (metadata ->> 'notebook_id')::bigint = 10 AND metadata ->> 'status' = 'completed'
+		AND metadata -> 'push' ->> 'path' = '/notebook/10?pane=studio' AND metadata -> 'push' ->> 'body' = 'Tides'`)
+	if h.pushes.count() != 1 || h.count("notifications WHERE user_id = '"+bob+"'") != 0 {
+		t.Errorf("%d pushes asked for; his inbox has %d rows", h.pushes.count(), h.count("notifications WHERE user_id = '"+bob+"'"))
+	}
 	task := h.model.requests[0].Messages[len(h.model.requests[0].Messages)-1].Content
-	for _, piece := range []string{"Kind of artifact: mindmap.", "## Source: Moon", "The moon pulls the sea.", "Focus: spring tides"} {
+	// Headed by its subject, the notebook, and not by its listing title.
+	for _, piece := range []string{"Kind of artifact: mindmap.", `Title: "Tides"`, "## Source: Moon", "The moon pulls the sea.", "Focus: spring tides"} {
 		if !strings.Contains(task, piece) {
 			t.Errorf("the task lacks %q", piece)
 		}
 	}
-	for _, absent := range []string{"BOBS SECRET TEXT", "The sun pulls less.", "Being deleted."} {
+	for _, absent := range []string{"BOBS SECRET TEXT", "The sun pulls less.", "Being deleted.", "Mind Map: Tides"} {
 		if strings.Contains(task, absent) {
 			t.Errorf("the task holds %q, which is not one of her ticked sources", absent)
 		}
@@ -382,7 +523,7 @@ func TestAudioAndVideoGoThroughTheChatsOwnMakers(t *testing.T) {
 	}
 	queued := h.videos.briefs[0]
 	if strings.Contains(queued.Brief, "\n") || !strings.Contains(queued.Brief, "Format: Short") || !strings.Contains(queued.Brief, "Visual style: Dark") ||
-		queued.Material != "## Source: Moon\n\nThe moon pulls the sea." || queued.Title != "Video Overview: Tides" {
+		queued.Material != "## Source: Moon\n\nThe moon pulls the sea." || queued.Title != "Tides" {
 		t.Errorf("the queued video: %+v", queued)
 	}
 	if h.count("new_chat_threads WHERE id = "+strconv.FormatInt(h.videos.threads[0], 10)+" AND user_id = '"+alice+"' AND source = 'artifact_api'") != 1 {
@@ -395,6 +536,14 @@ func TestAudioAndVideoGoThroughTheChatsOwnMakers(t *testing.T) {
 	}
 	status, body = h.as(bob, "POST", generate, `{"kind":"video"}`)
 	expect(t, "her notebook's video asked by him", status, body, 404, notebookAbsent)
+
+	// The web's dialog in Spanish: the listing keeps the localised title,
+	// and the video is headed by its subject alone.
+	status, body = h.as(alice, "POST", generate, `{"kind":"video","title":"Resumen en vídeo: Tides","request_id":"v2"}`)
+	expect(t, "her video asked in Spanish", status, body, 201, `"title":"Resumen en vídeo: Tides"`)
+	if len(h.videos.briefs) != 2 || h.videos.briefs[1].Title != "Tides" {
+		t.Errorf("the Spanish dialog's video was queued as %+v", h.videos.briefs[len(h.videos.briefs)-1])
+	}
 }
 
 func TestARunStopsWhenAskedAndFailsHonestly(t *testing.T) {
@@ -407,6 +556,9 @@ func TestARunStopsWhenAskedAndFailsHonestly(t *testing.T) {
 	h.until("the run is claimed", "deliverable_jobs WHERE status = 'running' AND claimed_at IS NOT NULL")
 	testpostgres.Exec(t, h.pool, `UPDATE deliverable_jobs SET status = 'cancelling'`)
 	h.until("the run stops", "deliverable_jobs WHERE status = 'cancelled' AND failure_code = 'cancelled' AND finished_at IS NOT NULL")
+	if h.count("notifications") != 0 {
+		t.Error("a cancelled output notified its owner")
+	}
 
 	// A model that fails is a failed job that says why, never a made-up
 	// artifact.
@@ -417,24 +569,9 @@ func TestARunStopsWhenAskedAndFailsHonestly(t *testing.T) {
 	if h.count("artifacts") != 0 {
 		t.Error("a failed run saved an artifact")
 	}
+	h.until("the failure's inbox row", `notifications WHERE type = 'studio_output' AND title = 'Mind map could not be made'
+		AND (metadata ->> 'retry')::boolean AND metadata ->> 'status' = 'failed'`)
 
-	// A job whose process died is failed by the sweep; a live one is not.
-	now := time.Now().UTC()
-	testpostgres.Exec(t, h.pool, `
-INSERT INTO deliverable_jobs (id, user_id, kind, title, tool_call_id, status, heartbeat_at, updated_at) VALUES
- (900, '`+alice+`', 'artifact', 'Dead', 'dead', 'running', now() - interval '10 minutes', now() - interval '10 minutes'),
- (901, '`+alice+`', 'artifact', 'Alive', 'alive', 'running', now(), now()),
- (902, '`+alice+`', 'video', 'Workers', 'video', 'running', now() - interval '10 minutes', now() - interval '10 minutes'),
- (903, '`+alice+`', 'artifact', 'Stopping', 'stopping', 'cancelling', now() - interval '10 minutes', now() - interval '10 minutes')`)
-	failed, err := New(h.pool).FailAbandonedJobs(context.Background(), FailAbandonedJobsParams{Now: now, SilentSince: now.Add(-abandonedAfter)})
-	if err != nil || failed != 2 {
-		t.Fatalf("the sweep closed %d jobs, %v", failed, err)
-	}
-	if h.count("deliverable_jobs WHERE id = 900 AND status = 'failed' AND failure_code = 'interrupted'") != 1 ||
-		h.count("deliverable_jobs WHERE id = 903 AND status = 'cancelled'") != 1 ||
-		h.count("deliverable_jobs WHERE id IN (901, 902) AND status = 'running'") != 2 {
-		t.Error("the sweep should fail the silent artifact job, close the one being stopped, and leave a live one and a worker's video alone")
-	}
 }
 
 func TestSuggestionsAreWrittenOncePerSourceSetAndAreTheOwnersAlone(t *testing.T) {

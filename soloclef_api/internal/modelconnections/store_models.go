@@ -42,7 +42,7 @@ func (s Store) ModelToVerify(ctx context.Context, userID string, id int64) (stri
 	return model, err == nil, err
 }
 
-// StoreDiscovered writes what the catalogue lists onto the caller's own
+// StoreDiscovered writes what the endpoint lists onto the caller's own
 // connection and answers all of its models, by id.
 func (s Store) StoreDiscovered(ctx context.Context, userID string, id int64, listed []pickedModel) ([]ListedModel, error) {
 	queries := New(s.Pool)
@@ -123,37 +123,4 @@ func listedModel(row ModelsOfConnectionRow) ListedModel {
 		SupportsImageGeneration: row.SupportsImageGeneration, CapabilitiesOverride: row.CapabilitiesOverride,
 		Enabled: row.Enabled, Catalog: row.Catalog, CreatedAt: row.CreatedAt,
 	}
-}
-
-// GlobalConnections is the operator's connections with their models, by
-// id, as any signed-in account may see them: no address, no `extra`.
-func (s Store) GlobalConnections(ctx context.Context) ([]ListedConnection, error) {
-	queries := New(s.Pool)
-	rows, err := queries.GlobalConnections(ctx)
-	if err != nil || len(rows) == 0 {
-		return []ListedConnection{}, err
-	}
-	connections := make([]ListedConnection, 0, len(rows))
-	for _, row := range rows {
-		connections = append(connections, ListedConnection{
-			ID: row.ID, Provider: row.Provider, HasAPIKey: row.HasApiKey, Extra: []byte(`{}`),
-			Scope: "global", Enabled: row.Enabled, CreatedAt: row.CreatedAt,
-		})
-	}
-	models, err := queries.GlobalModels(ctx)
-	if err != nil {
-		return nil, err
-	}
-	listed := make([]ListedModel, 0, len(models))
-	for _, row := range models {
-		listed = append(listed, listedModel(ModelsOfConnectionRow(row)))
-	}
-	AttachModels(connections, listed)
-	return connections, nil
-}
-
-// GlobalConnectionExists is whether the operator has given the site a
-// connection that is switched on.
-func (s Store) GlobalConnectionExists(ctx context.Context) (bool, error) {
-	return New(s.Pool).GlobalConnectionExists(ctx)
 }

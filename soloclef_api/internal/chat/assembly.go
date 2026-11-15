@@ -1,6 +1,8 @@
 package chat
 
 import (
+	"context"
+
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/assembly"
 
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/chat/threads"
@@ -21,6 +23,7 @@ type (
 	PromptRows     = assembly.PromptRows
 	Connections    = assembly.Connections
 	ConnectedTools = assembly.ConnectedTools
+	MarkedTool     = assembly.MarkedTool
 	Remembering    = assembly.Remembering
 	TurnContext    = assembly.TurnContext
 	Notebook       = assembly.Notebook
@@ -31,15 +34,22 @@ type (
 	ModelLister    = assembly.ModelLister
 )
 
-// pickerTools is the list GET /agent/tools answers: the assembly's
-// switchable tools, every one on until the person switches it off.
-func pickerTools() []threads.Tool {
-	listed := assembly.SwitchableTools()
-	tools := make([]threads.Tool, 0, len(listed))
-	for _, t := range listed {
-		tools = append(tools, threads.Tool{Name: t.Name, Description: t.Description, EnabledByDefault: true})
+// pickerTools is what GET /agent/tools answers for a caller: the
+// assembly's menu for their account (assembly.Menu), every entry on until
+// the person switches it off.
+func pickerTools(assembled assembly.Assembly) threads.ToolLister {
+	return func(ctx context.Context, userID string) ([]threads.Tool, error) {
+		menu, err := assembled.Menu(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+		tools := make([]threads.Tool, 0, len(menu))
+		for _, t := range menu {
+			tools = append(tools, threads.Tool{Name: t.Name, Description: t.Description, EnabledByDefault: true,
+				Group: t.Group, Connector: t.Connector})
+		}
+		return tools, nil
 	}
-	return tools
 }
 
 // ArtifactSpecialist is the artifact specialist as the assembly is given

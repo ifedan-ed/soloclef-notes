@@ -7,7 +7,6 @@ import brandJson from "@/lib/brand/brand.json";
 import markJson from "@/lib/brand/mark.json";
 import { BRAND_TOKEN, withBrand } from "@/lib/brand/messages";
 import { buildReportMailto } from "@/lib/brand/report";
-import { signedInHomeRedirect } from "@/lib/home-redirect";
 
 const WEB = path.resolve(__dirname, "../../..");
 const base = brandJson as Brand;
@@ -117,11 +116,3 @@ test("problem reports go to the operator by email", () => {
 	assert.match(buildReportMailto(["x"], base, ""), /^mailto:\?subject=Soloclef%20Notes/);
 });
 
-test("/ sends a visitor with a session cookie to the dashboard, and nobody else", () => {
-	const has = (names: string[]) => (name: string) => names.includes(name);
-	assert.equal(signedInHomeRedirect("/", has(["surfsense_session"])), "/dashboard");
-	assert.equal(signedInHomeRedirect("/", has(["surfsense_refresh"])), "/dashboard");
-	assert.equal(signedInHomeRedirect("/", has([])), null);
-	assert.equal(signedInHomeRedirect("/", has(["other"])), null);
-	assert.equal(signedInHomeRedirect("/features", has(["surfsense_session"])), null);
-});

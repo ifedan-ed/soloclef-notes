@@ -6,7 +6,6 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_agent/agent"
 	"git.danvics.com/danvics/soloclef/soloclef_agent/checkpoint"
 	"git.danvics.com/danvics/soloclef/soloclef_agent/model"
-	"git.danvics.com/danvics/soloclef/soloclef_agent/tool"
 )
 
 // KnowledgeBaseName is the specialist that changes the account's notes,
@@ -43,10 +42,8 @@ type KnowledgeOwner struct {
 	// Store is where the specialist's nested run is saved between a pause
 	// for approval and the answer: the turn's own checkpoint store.
 	Store checkpoint.Store
-	// Trusted is asked whether a change that asks first may run without
-	// asking: the account's "always allow" rules, read at each call, as the
-	// main agent reads them.
-	Trusted func(ctx context.Context, call tool.Call) (bool, error)
+	// Policy is the turn's approval policy, the main agent's own.
+	Policy ApprovalPolicy
 	// Notebook is the notebook a notebook chat belongs to, or nil in a
 	// plain chat. A note the specialist writes there is filed in it, as
 	// "Save to note" files one, and the text it reads is held to what the

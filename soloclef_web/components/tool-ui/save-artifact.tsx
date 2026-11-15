@@ -3,7 +3,6 @@
 import type { ToolCallMessagePartProps } from "@assistant-ui/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAtomValue, useSetAtom } from "jotai";
-import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { z } from "zod";
 import { Mp4VideoPlayer } from "@/components/tool-ui/video-presentation/mp4-player";
@@ -60,7 +59,6 @@ function ArtifactCard({
 	title,
 	format,
 	filename,
-	publicRoute,
 	toolCallId,
 	metadataStatus = "ready",
 }: {
@@ -68,14 +66,11 @@ function ArtifactCard({
 	title: string;
 	format: string;
 	filename: string;
-	publicRoute: boolean;
 	toolCallId: string;
 	metadataStatus?: "ready" | "loading" | "unavailable";
 }) {
 	const openPanel = useSetAtom(openArtifactPanelAtom);
 	const panelState = useAtomValue(artifactPanelAtom);
-	// A public link's reader is not signed in, and the download is the owner's route.
-	const canDownload = !publicRoute;
 	const selected = panelState.isOpen && panelState.selectedCardToolCallId === toolCallId;
 
 	return (
@@ -89,7 +84,6 @@ function ArtifactCard({
 			    since a button cannot be nested inside another button. */}
 			<button
 				type="button"
-				disabled={publicRoute}
 				onClick={() => openPanel({ artifactId, selectedCardToolCallId: toolCallId })}
 				className="absolute inset-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none"
 			>
@@ -111,14 +105,12 @@ function ArtifactCard({
 					</span>
 				)}
 			</span>
-			{canDownload ? (
-				<ArtifactDownloadButton
-					path={artifactDownloadPath(artifactId)}
-					filename={filename}
-					appearance="text"
-					className="relative z-10 h-9 shrink-0 rounded-md bg-popover px-3 text-sm font-normal text-foreground hover:bg-popover/80"
-				/>
-			) : null}
+			<ArtifactDownloadButton
+				path={artifactDownloadPath(artifactId)}
+				filename={filename}
+				appearance="text"
+				className="relative z-10 h-9 shrink-0 rounded-md bg-popover px-3 text-sm font-normal text-foreground hover:bg-popover/80"
+			/>
 		</div>
 	);
 }
@@ -127,28 +119,21 @@ function LegacySaveArtifactCompatibilityCard({
 	artifactId,
 	title,
 	filename,
-	publicRoute,
 	toolCallId,
 }: {
 	artifactId: number;
 	title: string;
 	filename: string;
-	publicRoute: boolean;
 	toolCallId: string;
 }) {
-	// The manifest is the owner's route: a public link's reader cannot ask for it.
-	const canResolve = !publicRoute;
-	const { data: manifest, isPending } = useQuery({
-		...artifactManifestQueryOptions(artifactId),
-		enabled: canResolve,
-	});
+	const { data: manifest, isPending } = useQuery(artifactManifestQueryOptions(artifactId));
 	const primary = manifest?.files.find((file) => file.role === "primary");
 	const resolvedFilename = primary?.filename ?? filename;
 
 	// Compatibility layer: only old save_artifact payloads reach this component.
 	// Resolve semantic format from the authorized persisted manifest, never from
 	// the physical filename.
-	if (primary?.mime_type === "video/mp4" && canResolve) {
+	if (primary?.mime_type === "video/mp4") {
 		return (
 			<Mp4ArtifactCard
 				artifactId={artifactId}
@@ -163,9 +148,8 @@ function LegacySaveArtifactCompatibilityCard({
 			title={manifest?.title ?? title}
 			format={manifest?.format ?? "file"}
 			filename={resolvedFilename}
-			publicRoute={publicRoute}
 			toolCallId={toolCallId}
-			metadataStatus={manifest ? "ready" : canResolve && isPending ? "loading" : "unavailable"}
+			metadataStatus={manifest ? "ready" : isPending ? "loading" : "unavailable"}
 		/>
 	);
 }
@@ -229,16 +213,15 @@ export const SaveArtifactToolUI = ({
 	status,
 	toolCallId,
 }: ToolCallMessagePartProps<SaveArtifactArgs, SaveArtifactResult>) => {
-	const pathname = usePathname();
-	const publicRoute = pathname?.startsWith("/public/") ?? false;
+	// Only ever in the owner's own chat (a chat has no public page), so every
+	// route this card reads is the owner's.
 	const queryClient = useQueryClient();
 	const savedArtifactId = result?.status === "saved" ? result.artifact_id : null;
 
 	useEffect(() => {
-		// Nothing of the owner's is cached on a public link.
-		if (!savedArtifactId || publicRoute) return;
+		if (!savedArtifactId) return;
 		void invalidatePublishedArtifact(queryClient, savedArtifactId);
-	}, [queryClient, savedArtifactId, publicRoute]);
+	}, [queryClient, savedArtifactId]);
 
 	if (status.type !== "complete" || result?.status !== "saved") return null;
 	const primary = result.files?.find((file) => file.role === "primary");
@@ -250,12 +233,11 @@ export const SaveArtifactToolUI = ({
 				artifactId={result.artifact_id}
 				title={title}
 				filename={filename}
-				publicRoute={publicRoute}
 				toolCallId={toolCallId}
 			/>
 		);
 	}
-	if (primary?.mime_type === "video/mp4" && !publicRoute) {
+	if (primary?.mime_type === "video/mp4") {
 		return <Mp4ArtifactCard artifactId={result.artifact_id} title={title} filename={filename} />;
 	}
 	return (
@@ -264,7 +246,6 @@ export const SaveArtifactToolUI = ({
 			title={title}
 			format={result.format}
 			filename={filename}
-			publicRoute={publicRoute}
 			toolCallId={toolCallId}
 		/>
 	);

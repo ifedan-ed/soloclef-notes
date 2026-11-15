@@ -94,18 +94,25 @@ type Config struct {
 	DeferredRetryDelay time.Duration
 
 	// ShutdownGrace is how long in-flight work is given to finish before the
-	// worker stops waiting for it — a backstop for a deploy that reached this
-	// process while it was working, not a way to drain one.
+	// worker cuts it off: the drain a deploy waits through.
 	//
-	// It cannot be a drain strategy. A podcast, a video or a deliverable runs
-	// for minutes to hours, so no grace this process could wait out would see
-	// one finish: at the end of it the job is killed and written FAILURE, with
-	// its billing hold held until the stale sweep, its row left GENERATING and
-	// its sandbox still rendering for nobody. Draining is the deployment's
-	// job: restart this worker only when nothing is generating (no Studio
-	// output, podcast, video or automation run still running). The grace is
-	// what bounds the damage when that was not checked.
+	// What it should be depends on the work the process runs, so the
+	// default suits the indexer's (a document is parsed and embedded in
+	// seconds) and the worker's deployment sets its own, from the lengths of
+	// the videos it makes (docker/docker-compose.go.yml says why). The stop
+	// ends as soon as nothing is running, so a long grace costs a deploy
+	// nothing unless work is in flight. Work it does cut off is not lost: a
+	// video gives its attempt back to the queue and is made again by the
+	// next worker, a podcast carries on from the lines already voiced.
 	ShutdownGrace time.Duration
+
+	// HandBack is how long a stopping worker waits, once ShutdownGrace is
+	// over, for the jobs it cut off to give their work back: a guarded
+	// UPDATE of the job's row and a push of its message to Redis, each
+	// bounded by seconds of its own (videojob.Job.conclude,
+	// Consumer.putBack). A stop_grace_period that must outlast this process
+	// is at least ShutdownGrace plus HandBack.
+	HandBack time.Duration
 
 	// Name identifies this worker in the result rows it writes.
 	Name string
@@ -126,11 +133,12 @@ func DefaultConfig() Config {
 		RestoreInterval:    100 * time.Second,
 		PopTimeout:         time.Second,
 		DeferredRetryDelay: time.Second,
-		// Thirty seconds is long enough for a job that was about to finish
-		// and short enough that a stop ends. It is deliberately nowhere near
-		// long enough to drain this tier's work: see ShutdownGrace above, and
-		// run the deploy gate before every restart.
+		// Thirty seconds is long enough for the indexer's documents, the
+		// work of the one process that keeps this default; the worker's
+		// deployment sets a grace that fits its videos (ShutdownGrace).
 		ShutdownGrace: 30 * time.Second,
+		// The two writes of a job giving its work back, with room.
+		HandBack: 10 * time.Second,
 	}
 }
 
@@ -158,6 +166,9 @@ func (c Config) Validate() error {
 	}
 	if c.RenewInterval <= 0 || c.RenewInterval >= c.VisibilityWindow {
 		return fmt.Errorf("broker: renew interval %v does not fit the %v window", c.RenewInterval, c.VisibilityWindow)
+	}
+	if c.ShutdownGrace < 0 || c.HandBack <= 0 {
+		return fmt.Errorf("broker: shutdown grace %v and hand-back %v must be a duration and a positive one", c.ShutdownGrace, c.HandBack)
 	}
 	if c.RestoreInterval <= 0 {
 		return errors.New("broker: restore interval must be positive")

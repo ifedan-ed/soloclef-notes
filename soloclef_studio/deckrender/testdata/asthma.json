@@ -1,0 +1,60 @@
+{
+  "title": "Choosing Wisely in Pediatric Asthma: Reducing Unnecessary Chest Radiographs",
+  "subtitle": "A quality improvement project at NYC Health + Hospitals / Lincoln Medical Center, South Bronx",
+  "theme": "clinical",
+  "slides": [
+    {"kind": "title", "title": "Choosing Wisely in Pediatric Asthma: Reducing Unnecessary Chest Radiographs", "subtitle": "A quality improvement project at NYC Health + Hospitals / Lincoln Medical Center, South Bronx",
+     "narration": ["This is a quality improvement project about chest radiographs in children with asthma.", "It took place at NYC Health and Hospitals, Lincoln Medical Center, in the South Bronx."]},
+    {"kind": "stats", "title": "What an acute exacerbation is treated with, and what it is not", "stats": [
+      {"value": "Radiographs", "label": "not routinely advised during an exacerbation"},
+      {"value": "Bronchodilators", "label": "first-line treatment, repeated and reassessed"},
+      {"value": "2–5%", "label": "of exacerbations show radiographic pneumonia"},
+      {"value": "1 in 3", "label": "exacerbations are imaged all the same"}],
+     "narration": ["Four facts frame the problem.", "Guidelines advise against routine radiographs.", "Bronchodilators are the treatment.", "Only two to five percent have pneumonia on the film.", "Yet about one in three is imaged."]},
+    {"kind": "stats", "title": "Three words that decide the visit", "stats": [
+      {"value": "Corticosteroids", "label": "given early, within the first hour"},
+      {"value": "Radiographs", "label": "only with a specific clinical risk factor"},
+      {"value": "79.5%", "label": "of baseline radiographs did not meet the guideline"}],
+     "narration": ["Three things decide the visit.", "Steroids early.", "Radiographs only for a reason.", "At baseline, seventy-nine and a half percent did not meet the guideline."]},
+    {"kind": "stats", "title": "The change in imaging, and the gap it measures", "stats": [
+      {"value": "11.2 → 4.6 per 1000", "label": "radiographs per 1000 asthma visits, before and after"},
+      {"value": "33.5% vs 24.1%", "label": "imaged visits, white versus Black children, in 44 children's hospitals"}],
+     "narration": ["Here is the change.", "Radiographs fell from eleven point two to four point six per thousand visits.", "And the published gap: thirty-three and a half percent against twenty-four point one."]},
+    {"kind": "comparison", "title": "Where the evidence comes from", "columns": ["NYC Health + Hospitals", "Children's hospitals", "Community departments"], "rows": [
+      {"aspect": "Setting", "cells": ["Urban community hospital, South Bronx", "44 freestanding children's hospitals", "39 pediatric emergency departments"]},
+      {"aspect": "Imaging rate", "cells": ["79.5% of radiographs outside the guideline", "33.5% of white children's visits imaged", "Adjusted odds 0.60 for non-Hispanic Black children"]},
+      {"aspect": "What it shows", "cells": ["A high-burden population and a local baseline", "White children receive more low-value imaging", "Readiness lowers imaging, not the disparity"]}],
+     "narration": ["Three sources of evidence.", "The setting.", "The imaging rates.", "And what each shows."]},
+    {"kind": "timeline", "title": "The project, month by month", "events": [
+      {"label": "Baseline", "text": "Chart review of radiographs from July to December 2025"},
+      {"label": "Education", "text": "Teaching on guideline indications for every clinician"},
+      {"label": "Order set", "text": "Radiograph ordering requires a documented risk factor"},
+      {"label": "Reassessment", "text": "Bronchohyperresponsiveness reassessed after bronchodilators, before any imaging"},
+      {"label": "Feedback", "text": "Monthly feedback on each clinician's radiograph rate"},
+      {"label": "Post-intervention", "text": "Re-audit with the equity measure reported honestly"}],
+     "narration": ["The project ran in six steps.", "A baseline audit.", "Education.", "A new order set.", "Reassessment after bronchodilators.", "Monthly feedback.", "And a re-audit."]},
+    {"kind": "diagram", "style": "flow", "title": "Before a radiograph is ordered", "steps": [
+      {"label": "Bronchodilators", "text": "Give inhaled bronchodilators and systemic corticosteroids"},
+      {"label": "Reassessment", "text": "Reassess the work of breathing and the oxygen saturation"},
+      {"label": "Risk factors", "text": "Focal findings, persistent hypoxemia, fever or suspected pneumothorax"},
+      {"label": "Radiograph-indication", "text": "Order a radiograph only for a documented indication"}],
+     "narration": ["The pathway has four steps.", "Treat first.", "Then reassess.", "Look for a risk factor.", "Image only for a documented indication."]},
+    {"kind": "diagram", "style": "cycle", "title": "Each month of the project", "steps": [
+      {"label": "Baseline audit", "text": "Radiographs reviewed against the guideline"},
+      {"label": "Clinician education", "text": "Indications taught at every handover"},
+      {"label": "Order-set redesign", "text": "A risk factor is documented first"},
+      {"label": "Bronchodilator reassessment", "text": "Response checked before imaging"},
+      {"label": "Monthly feedback", "text": "Each clinician sees their own rate"},
+      {"label": "Re-audit", "text": "The equity measure is reported honestly"}],
+     "narration": ["Each month ran as a cycle.", "Audit.", "Teach.", "Redesign the order set.", "Reassess.", "Feed back.", "And audit again."]},
+    {"kind": "chart", "title": "Radiographs per 1000 asthma visits", "bars": [
+      {"label": "Before the project", "value": 11.2}, {"label": "After the project", "value": 4.6}], "unit": "per 1000",
+     "caption": "Chest radiographs per 1000 pediatric asthma visits, before and after the intervention",
+     "narration": ["The chart shows the same change.", "From eleven point two to four point six per thousand visits."]},
+    {"kind": "bullets", "title": "Where the recommendation is published", "bullets": [
+      "**Choosing Wisely:** the American Academy of Pediatrics' list of tests to question",
+      "https://www.choosingwisely.org/clinician-lists/american-academy-of-pediatrics-chest-x-rays-for-asthma-or-bronchiolitis-in-children/",
+      "**Local data:** no published study reports these rates by race for New York City"],
+     "narration": ["The recommendation is published.", "By the American Academy of Pediatrics.", "At this address.", "And no study yet reports local rates by race."]}
+  ]
+}

@@ -33,7 +33,7 @@ type State struct {
 	// TurnTrust lists the tools the user answered "always allow" for during
 	// the current turn. It is cleared when a new turn starts: trust that
 	// lasts longer than a turn is the caller's to store and to revoke, and
-	// reaches the loop through Config.Trusted.
+	// reaches the loop through Config.AskFirst or Config.Trusted.
 	TurnTrust []string `json:"turn_trust,omitempty"`
 
 	// Citations are the sources the thread's tools have numbered, in number
@@ -93,6 +93,11 @@ type Call struct {
 	Args string `json:"args"`
 
 	Status CallStatus `json:"status"`
+
+	// Approved is set when a person approved the call, and is what the tool
+	// is told (tool.Call.Approved). Saved with the state, so a call approved
+	// before a pause and run after a restart is still known to be approved.
+	Approved bool `json:"approved,omitempty"`
 
 	// Result and IsError are set when Status is CallDone.
 	Result  string `json:"result,omitempty"`

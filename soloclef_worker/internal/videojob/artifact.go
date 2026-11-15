@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"git.danvics.com/danvics/soloclef/soloclef_studio/deckspec"
 )
 
 // The artifact a video is kept as, in the shapes its readers read:
@@ -15,10 +17,7 @@ import (
 //     (Mp4ArtifactCard reads the manifest's primary file) and the download
 //     sends.
 //   - metadata.slides and metadata.scene_codes are what the video route
-//     serves (soloclef_api/internal/artifacts/video.go): each slide with its
-//     narration's storage key, which the route turns into an audio_url and
-//     the slide audio route streams. The Python worker saved neither, so the
-//     route answered 404 for every video it made.
+//     serves (soloclef_api/internal/artifacts/video.go), as metadata says.
 //   - metadata.verification and metadata.duration_seconds are the keys
 //     every artifact of a verified format carries.
 
@@ -43,81 +42,81 @@ func videoFilename(title string, jobID int64) string {
 }
 
 // markdown is the video as text: its document, which search indexes and a
-// screen reader is given. It is titled with the video's own title (the
-// Python worker's said "Video deck" for every one) and carries no bold.
-func markdown(title string, video Authored) string {
-	var b strings.Builder
-	b.WriteString("# " + title + "\n")
-	for _, scene := range video.Scenes {
-		b.WriteString("\n## Scene " + strconv.Itoa(scene.Number) + "\n\n" + strings.TrimSpace(scene.Markdown) + "\n\nNarration: " + scene.Transcript + "\n")
-	}
-	return b.String()
-}
+// screen reader is given. It is the deck's own text (deckspec.Markdown),
+// every slide with what is spoken over it.
+func markdown(video Authored) string { return deckspec.Markdown(video.Deck) }
 
-var headingLine = regexp.MustCompile(`^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$`)
-
-// slideTitle is a scene's title for the player's list: its on-screen
-// heading, else its first line, else its number.
-func slideTitle(scene Scene) string {
-	first := ""
-	for _, line := range strings.Split(scene.Markdown, "\n") {
-		if match := headingLine.FindStringSubmatch(line); match != nil {
-			first = match[1]
-			break
-		}
-		if first == "" && strings.TrimSpace(line) != "" {
-			first = strings.TrimSpace(line)
-		}
-	}
-	first = strings.TrimSpace(strings.Trim(first, "*_`"))
-	if first == "" {
-		return "Scene " + strconv.Itoa(scene.Number)
-	}
-	return clipRunes(first, 120)
-}
-
-// slideAudio is where one scene's narration was stored.
+// slideAudio is where one slide's narration was stored.
 type slideAudio struct {
 	Number int
 	Key    string
 }
 
 // metadata is the artifact's metadata column.
-func metadata(video Authored, voices []voiced, audio []slideAudio, backend string, seconds float64) ([]byte, error) {
+//
+// metadata.slides is what the video route serves (soloclef_api/internal/
+// artifacts/video.go): each slide with its narration's storage key, which
+// the route turns into an audio_url. metadata.scene_codes was the Remotion
+// code of each scene, which an old player compiled in the browser; a video
+// now has no code, and the list is kept, empty, because the route reads it
+// as a list.
+func metadata(video Authored, voices []voiced, shots []shot, audio []slideAudio, backend string, seconds float64) ([]byte, error) {
 	keys := map[int]string{}
 	for _, stored := range audio {
 		keys[stored.Number] = stored.Key
 	}
-	lengths := map[int]float64{}
-	for _, voice := range voices {
-		lengths[voice.Number] = voice.Seconds
-	}
-	slides := make([]map[string]any, 0, len(video.Scenes))
-	codes := make([]map[string]any, 0, len(video.Scenes))
-	for _, scene := range video.Scenes {
-		frames, _ := sceneFrames(lengths[scene.Number], fps, minFrames)
-		title := slideTitle(scene)
+	slides := make([]map[string]any, 0, len(video.Deck.Slides))
+	for i, s := range video.Deck.Slides {
+		title := s.Title
+		if title == "" {
+			title = "Slide " + strconv.Itoa(i+1)
+		}
 		slides = append(slides, map[string]any{
-			"slide_number":        scene.Number,
-			"title":               title,
-			"content_in_markdown": scene.Markdown,
-			"speaker_transcripts": []string{scene.Transcript},
-			"duration_seconds":    math.Round(lengths[scene.Number]*1000) / 1000,
-			"duration_in_frames":  frames,
-			"audio_storage_key":   keys[scene.Number],
-			"storage_backend":     backend,
+			"slide_number":        i + 1,
+			"title":               clipRunes(title, 120),
+			"content_in_markdown": slideMarkdown(s),
+			"speaker_transcripts": []string{deckspec.Spoken(s)},
+			"duration_seconds":    math.Round(voices[i].Seconds*1000) / 1000,
+			// When each passage starts in the slide's audio, measured: a
+			// caption or a player can follow the narration part by part.
+			"passage_starts_seconds": rounded(voices[i].Starts),
+			"duration_in_frames":     shots[i].Frames,
+			"audio_storage_key":      keys[i+1],
+			"storage_backend":        backend,
 		})
-		codes = append(codes, map[string]any{"slide_number": scene.Number, "code": scene.Code, "title": title})
 	}
 	return json.Marshal(map[string]any{
-		// The MP4 passed every structural check, and its scenes the layout
-		// check; nothing is saved that did not, so there is no "not
-		// checked" to record.
+		// The MP4 passed every check; nothing is saved that did not.
 		"verification":     map[string]any{"verified": true, "reason": nil},
 		"duration_seconds": math.Round(seconds*10) / 10,
 		"slide_count":      len(slides),
-		"scene_code_count": len(codes),
+		"theme":            video.Deck.Theme,
 		"slides":           slides,
-		"scene_codes":      codes,
+		"scene_codes":      []any{},
 	})
+}
+
+// rounded is seconds to the millisecond, as the slide's duration is kept.
+func rounded(seconds []float64) []float64 {
+	out := make([]float64, len(seconds))
+	for i, s := range seconds {
+		out[i] = math.Round(s*1000) / 1000
+	}
+	return out
+}
+
+// slideMarkdown is one slide's text as Markdown, without its narration:
+// the deck's own rendering of the slide, less the heading.
+func slideMarkdown(s deckspec.Slide) string {
+	one := deckspec.Deck{Title: s.Title, Slides: []deckspec.Slide{s}}
+	one.Slides[0].Narration = nil
+	text := deckspec.Markdown(one)
+	// Markdown starts with the deck's title and the slide's numbered
+	// heading; a slide's content is what follows them.
+	if _, rest, found := strings.Cut(text, "\n## 1. "); found {
+		if _, body, found := strings.Cut(rest, "\n"); found {
+			return strings.TrimSpace(body)
+		}
+	}
+	return strings.TrimSpace(text)
 }

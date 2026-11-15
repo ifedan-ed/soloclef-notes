@@ -33,6 +33,8 @@ export function NotebookRightPanel({
 	onCollapsedChange,
 	mobileHidden,
 	focusNoteId,
+	retryOutputId,
+	onRetryHandled,
 }: {
 	notebookId: number;
 	notebookTitle: string;
@@ -48,6 +50,9 @@ export function NotebookRightPanel({
 	mobileHidden: boolean;
 	/** A note to open straight away (a link from a search). */
 	focusNoteId: number | null;
+	/** A failed output to run again once (the inbox's "Try again"). */
+	retryOutputId: number | null;
+	onRetryHandled: () => void;
 }) {
 	const t = useTranslations("notebooks");
 	const tn = useTranslations("notes");
@@ -120,6 +125,8 @@ export function NotebookRightPanel({
 					onResearch={onResearch}
 					openOutputId={openOutputId}
 					onOpenOutput={onOpenOutput}
+					retryOutputId={retryOutputId}
+					onRetryHandled={onRetryHandled}
 				/>
 			) : (
 				<NotebookNotesTab

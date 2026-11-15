@@ -4,11 +4,11 @@
 // An account connects remote MCP servers in its settings. Each is a row of
 // search_source_connectors whose config holds the server's address and
 // headers (server_config), who added it (server_origin), the tools it
-// advertised when it was last asked (cached_tools) and the tools its owner
-// said may run without asking (trusted_tools). For a turn, Source.ForTurn
-// returns a Set: the tools to hand the model, the two functions the
-// approval step needs (Trusted, Trust), and a Close that ends the turn's
-// connections.
+// advertised when it was last asked (cached_tools). For a turn,
+// Source.ForTurn returns a Set: the tools to hand the model, Lookup, which
+// names a tool's connection and server name for the step display and for the
+// person's "ask first" marks (kept by the API tier, internal/agentrules), and
+// a Close that ends the turn's connections.
 //
 // # What is cached, and what never is
 //
@@ -17,12 +17,14 @@
 // permission rests on is read from the connection's row at the moment it is
 // used and kept nowhere:
 //
-//   - the server's address and key, at each call;
-//   - the trusted list, at each decision;
-//   - whether the connection still exists in the account, at both;
+//   - the server's address and key, at each call, opened then from their
+//     seal (soloclef_connectors/mcpserver: every secret of a server is
+//     stored AES-256-GCM, bound to its owner) and an OAuth server's access
+//     token renewed then when it has run out (tokens.go);
+//   - whether the connection still exists in the account, at each call;
 //   - the administrators' list of allowed hosts, at each call.
 //
-// So removing a server, changing its key or untrusting a tool takes effect
+// So removing a server or changing its key takes effect
 // at the very next call from any process, with nothing to invalidate. One
 // primary-key read per call is nothing beside the network call after it.
 //
@@ -51,9 +53,9 @@
 // other connection in the account uses it; otherwise the model is given
 // mcp_{connection id}_{cleaned name} (assemble has the exact rules). The
 // model-facing name is used for nothing else. A call goes to the server
-// under the server's own name, and trust is recorded under the connection's
-// id and the server's own name, so a rename caused by connecting a second
-// server neither loses nor grants trust. The names are a pure function of
+// under the server's own name, and an "ask first" mark is recorded under the
+// connection's id and the server's own name, so a rename caused by
+// connecting a second server neither loses nor moves a mark. The names are a pure function of
 // the account's rows, so the process that resumes a paused turn finds the
 // paused call's tool under the name the first process gave it.
 //
@@ -61,22 +63,22 @@
 //
 //   - The cache is invalidated across processes. Python's is a dict in one
 //     process that another process's write cannot clear.
-//   - Trust, the address and the key are not in the cache at all. Python
-//     bakes all three into the cached callables for five minutes, and the
-//     trusted list into a compiled agent kept for thirty.
+//   - The address and the key are not in the cache at all. Python bakes
+//     both into the cached callables for five minutes.
 //   - tools/list is followed to its last page, up to a ceiling. Python
 //     reads the first page and stops.
 //   - A name a provider would refuse is cleaned before the model sees it.
 //     Python hands it over as it is, and one such name fails the request.
 //   - One connection per server per turn. Python connects and initialises
 //     again for every call.
-//   - "Always allow" is refused for a tool that always asks, and for a name
-//     that would break the row, at the one place it is written, with the
-//     row locked so two clicks cannot lose each other's name.
 //   - A tool that reports an error (isError) is a failed result. Python
 //     returns its text as if the call had succeeded.
 //   - Pictures and other binary content are described to the model in a
 //     line, and a result is cut at a limit. Python pastes the base64 in.
+//   - A server's secrets are sealed at rest and opened only here, as a
+//     connection is made. Python stored them as typed.
+//   - A server saved as SSE is spoken to over SSE, and one signed in to with
+//     OAuth carries its own renewed token.
 //   - Errors shown to the model and written to the log never contain the
 //     server's address, which can hold its key. Python's include the
 //     exception's text.
@@ -99,6 +101,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"git.danvics.com/danvics/soloclef/soloclef_agent/tool"
+	"git.danvics.com/danvics/soloclef/soloclef_connectors/sealedsecret"
 )
 
 // Settings is what a Source is built from. Everything is required unless
@@ -112,8 +115,14 @@ type Settings struct {
 	// Network decides where a connection may go. PublicInternet in a
 	// deployment; only tests have reason to set anything else.
 	Network Network
-	Logger  *slog.Logger
-	Now     func() time.Time
+	// Seal opens a server's sealed secrets (soloclef_connectors/mcpserver)
+	// as a connection is made: sealedsecret under the MCP server purpose.
+	Seal sealedsecret.Seal
+	// OAuth renews an OAuth server's access token when it has run out. Its
+	// Network must be the same guard as Network.
+	OAuth  OAuth
+	Logger *slog.Logger
+	Now    func() time.Time
 
 	// ClientName is the name this deployment gives itself to the servers
 	// it connects to.
@@ -169,6 +178,8 @@ type Source struct {
 	rows        Rows
 	generations Generations
 	network     Network
+	seal        sealedsecret.Seal
+	oauth       OAuth
 	logger      *slog.Logger
 	now         func() time.Time
 	client      *mcp.Client
@@ -190,6 +201,8 @@ func NewSource(settings Settings) (*Source, error) {
 	need("Rows", settings.Rows != nil)
 	need("Generations", settings.Generations != nil)
 	need("Network", settings.Network != nil)
+	need("Seal", settings.Seal.Ready())
+	need("OAuth (its Network, Timeout and ClientName)", settings.OAuth.Check() == nil)
 	need("Logger", settings.Logger != nil)
 	need("Now", settings.Now != nil)
 	need("ClientName", strings.TrimSpace(settings.ClientName) != "")
@@ -215,6 +228,7 @@ func NewSource(settings Settings) (*Source, error) {
 	}
 	return &Source{
 		rows: settings.Rows, generations: settings.Generations, network: settings.Network,
+		seal: settings.Seal, oauth: settings.OAuth,
 		logger: settings.Logger, now: settings.Now,
 		// No capabilities are declared: this client lists and calls tools.
 		// It offers a server no roots to read, no model to sample from and
@@ -298,7 +312,7 @@ func (s *Source) build(ctx context.Context, userID string) (*catalog, error) {
 	for i, row := range rows {
 		servers[i] = serverTools{id: row.ID, name: row.Name}
 		answered[i] = true
-		where, err := readTarget(row.Config)
+		where, err := s.target(ctx, userID, row)
 		if err != nil {
 			s.logger.WarnContext(ctx, "mcptools: a connection is left out", "connector_id", row.ID, "reason", err.Error())
 			continue
@@ -406,7 +420,7 @@ type Info struct {
 	Tool string
 	// Description is the server's description, prefixed with the server.
 	Description string
-	// AlwaysAsk says the tool asks every time and cannot be trusted.
+	// AlwaysAsk says the tool is declared tool.AlwaysAsk (always_ask.go).
 	AlwaysAsk bool
 }
 
@@ -434,10 +448,10 @@ func (t *Set) entry(name string) (*offered, bool) {
 // Tools is the turn's MCP tools, connections oldest first and each
 // server's tools in its own order.
 //
-// Every one asks before it runs. The tools that fetch an address the model
-// chose ask every time (tool.AlwaysAsk); the rest (tool.Ask) may be waived
-// by Set.Trusted, which the assembly plugs into agent.Config.Trusted. None
-// is Parallel: a server's tools may write, and "create it, then edit it"
+// Each is declared tool.Ask, and the tools that fetch an address the model
+// chose tool.AlwaysAsk. The declaration decides an unattended run only; a
+// chat goes by the person's "ask first" marks instead (agent.Config.AskFirst).
+// None is Parallel: a server's tools may write, and "create it, then edit it"
 // asked for in one batch means that order.
 func (t *Set) Tools() []tool.Tool {
 	tools := make([]tool.Tool, len(t.catalog.tools))

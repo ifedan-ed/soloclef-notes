@@ -6,14 +6,15 @@ import { BRAND, brandTitle, OG_IMAGES, siteUrl } from "@/lib/brand";
 /**
  * Privacy policy. Every statement was checked against this deployment: no
  * analytics key is configured (PostHog stays off without one), web sign-in is
- * a pair of httpOnly cookies, embeddings run on the server, and the named
+ * a pair of httpOnly cookies, no model runs on the server (every model call,
+ * embeddings included, goes out through the model proxy), and the named
  * outside services are the ones the code calls. Change this page in the same
  * commit as any change to those facts.
  */
 
 const TITLE = brandTitle("Privacy");
 const DESCRIPTION = `What ${BRAND.name} stores, what it sends to other services, and what it does not do.`;
-const UPDATED = "25 September 2026";
+const UPDATED = "13 November 2026";
 
 export const metadata: Metadata = {
 	title: TITLE,
@@ -65,13 +66,13 @@ export default function PrivacyPage() {
 				<li>
 					<strong>AI models.</strong> To answer a question or build a Studio output, your question
 					and the relevant passages from your sources go to the language model provider you chose in
-					Settings. Audio and video narration is spoken by a text-to-speech model.
+					Settings. Audio and video narration is spoken by a text-to-speech model. If you connect
+					your own model API, those models are called directly at that address with your key.
 				</li>
 				<li>
-					<strong>Cloud parsing.</strong> If you choose the Cloud parser, the file is uploaded to
-					Datalab to be read, and with the vision model on, the images inside it go there too. A few
-					file types Datalab can't open, and any file it fails to read, go to LlamaCloud. The Local
-					parser reads it on the server instead.
+					<strong>Hosted parsers.</strong> If you choose Datalab, LlamaParse or Unstructured for a
+					file, it is uploaded to that service to be read, and to no other. The Local parser reads
+					it on the server instead.
 				</li>
 				<li>
 					<strong>Image understanding.</strong> If you turn on the vision model, images from your
@@ -79,13 +80,21 @@ export default function PrivacyPage() {
 				</li>
 				<li>
 					<strong>Research and web answers.</strong> Searches send your query to the provider you
-					picked (for example PubMed, arXiv, Google Scholar, Exa or Tavily).
+					picked (PubMed, arXiv, medRxiv / bioRxiv, Exa or Tavily).
+				</li>
+				<li>
+					<strong>Your mail, files and connected apps.</strong> If you connect a mailbox, Google
+					Drive, Nextcloud or an MCP server, the assistant reads from it when a question needs it,
+					and what it reads goes to the language model like any passage. A call to an MCP server
+					sends that server the request the assistant makes. Mail is read live and not stored; a
+					draft is kept until you send or discard it. An answer that used these is never shown on a
+					notebook's public link.
 				</li>
 			</ul>
 			<p>
-				The search index is built on the server with a BGE-M3 embedding model, so indexing your
-				documents normally sends them nowhere. If that local service is down, the same model on
-				OpenRouter is used as a fallback, and the text being indexed is sent there.
+				The search index is kept on the server, but no model runs there: to index a document, its
+				text is sent in passages to an embedding model, through the same model service as the
+				chat.
 			</p>
 
 			<h2>What is not done</h2>

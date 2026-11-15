@@ -168,6 +168,7 @@ func parsePubMed(raw []byte) (map[string]Paper, error) {
 		paper := Paper{
 			Title: flatten(article.Title.Inner),
 			URL:   "https://pubmed.ncbi.nlm.nih.gov/" + a.Citation.PMID + "/",
+			PMID:  a.Citation.PMID,
 			Venue: strings.TrimSpace(article.Journal.Title),
 			Year:  article.Journal.Issue.Date.Year,
 		}
@@ -196,8 +197,13 @@ func parsePubMed(raw []byte) (map[string]Paper, error) {
 		}
 		paper.Abstract = strings.Join(sections, " ")
 		for _, id := range a.IDs {
-			if id.Type == "pmc" {
+			switch id.Type {
+			case "pmc":
 				paper.PMCID = strings.TrimSpace(id.Value)
+			case "doi":
+				// DOIs are case-insensitive; the lower case is how every
+				// stored paper spells one (notebookresearch.Paper).
+				paper.DOI = strings.ToLower(strings.TrimSpace(id.Value))
 			}
 		}
 		if a.Citation.PMID != "" && paper.Title != "" {
@@ -302,4 +308,71 @@ func (s *Sources) OpenFullText(ctx context.Context, pmcid string, limit int) (st
 		return "", err
 	}
 	return jatsBody(raw, limit), nil
+}
+
+// maxLookupIDs is the most ids PubMedByID takes at once: one search URL with
+// that many terms stays far under any server's limit on a request line.
+const maxLookupIDs = 50
+
+// PubMedByID is PubMed's record of each paper named by a PMID, a DOI or a
+// PubMed Central id ("PMC123"), in one search and one fetch, so a list of
+// papers to add costs two requests and not two per paper. The records come
+// in no particular order; each carries its PMID, DOI and PMCID, which is how
+// the caller tells which of its ids found which paper. An id PubMed does not
+// know finds nothing and is simply not among them.
+func (s *Sources) PubMedByID(ctx context.Context, pmids, dois, pmcids []string) ([]Paper, error) {
+	var terms []string
+	for _, id := range pmids {
+		terms = append(terms, id+"[uid]")
+	}
+	for _, doi := range dois {
+		// Quoted, because a DOI may hold brackets and colons; a quote of its
+		// own would end the term, so none is kept.
+		terms = append(terms, `"`+strings.ReplaceAll(doi, `"`, "")+`"[doi]`)
+	}
+	for _, id := range pmcids {
+		terms = append(terms, id+"[pmcid]")
+	}
+	switch {
+	case len(terms) == 0:
+		return nil, nil
+	case len(terms) > maxLookupIDs:
+		return nil, fmt.Errorf("at most %d ids can be looked up at once", maxLookupIDs)
+	}
+	raw, err := s.get(ctx, s.eutils+"/esearch.fcgi", s.ncbi(url.Values{
+		// Twice as many as asked: a DOI shared by an erratum and its paper
+		// finds both, and the caller keeps the one that matches.
+		"db": {"pubmed"}, "term": {strings.Join(terms, " OR ")}, "retmax": {strconv.Itoa(2 * len(terms))}, "retmode": {"json"},
+	}))
+	if err != nil {
+		return nil, err
+	}
+	var found struct {
+		Result struct {
+			IDs []string `json:"idlist"`
+		} `json:"esearchresult"`
+	}
+	if err := json.Unmarshal(raw, &found); err != nil {
+		return nil, fmt.Errorf("PubMed's search answer is not readable")
+	}
+	if len(found.Result.IDs) == 0 {
+		return nil, nil
+	}
+	raw, err = s.get(ctx, s.eutils+"/efetch.fcgi", s.ncbi(url.Values{
+		"db": {"pubmed"}, "id": {strings.Join(found.Result.IDs, ",")}, "retmode": {"xml"},
+	}))
+	if err != nil {
+		return nil, err
+	}
+	byID, err := parsePubMed(raw)
+	if err != nil {
+		return nil, err
+	}
+	papers := make([]Paper, 0, len(byID))
+	for _, id := range found.Result.IDs {
+		if paper, ok := byID[id]; ok {
+			papers = append(papers, paper)
+		}
+	}
+	return papers, nil
 }

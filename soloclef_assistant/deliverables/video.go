@@ -16,6 +16,7 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_agent/event"
 	"git.danvics.com/danvics/soloclef/soloclef_agent/tool"
 	"git.danvics.com/danvics/soloclef/soloclef_celery/produce"
+	"git.danvics.com/danvics/soloclef/soloclef_studio/notebookoutput"
 )
 
 // A video (slides with narration) is not made in the turn. The specialist
@@ -88,11 +89,11 @@ const (
 	maxVideoSourceChars = 180_000
 )
 
-const videoInstructions = `Video: narrated slides, rendered as a video file.
+const videoInstructions = `Video: narrated, animated slides, made as a video file.
 
 Call ` + VideoTool + ` once, with:
 - title: the video's title, one line, up to 500 characters.
-- brief: what the video should be, in plain sentences: the subject, the audience, the angle, and how long if the task says. Up to 16000 characters.
+- brief: what the video should be, in plain sentences: the subject, the audience, the angle, and how long if the task says. If the user asked for a look, name the theme closest to it, as theme "classic", "whiteboard", "playful", "night" (dark), "swiss" (minimal), "clinical", "amber", "teal" or "signal". Up to 16000 characters.
 - source_content: ALL the material the video should be made from, copied in full from the task. It is the only thing the video is written from; do not summarise it and do not pass a topic alone.
 
 Do not call save_artifact for a video. The tool does not make the video: it queues it, and it is written, narrated and rendered over the next several minutes while a card in the chat shows its progress. So answer only that the video is being generated and that the user can keep chatting. Do not say how long it will take, and do not describe its status.`
@@ -273,7 +274,15 @@ func (s VideoStore) CreateVideo(ctx context.Context, owner Owner, toolCallID, ti
 	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var err error
 		queued, err = s.createVideo(ctx, New(tx), owner, toolCallID, title, request)
-		return err
+		if err != nil || !queued.Created {
+			// A second run of the call found its job, listed (or not) the
+			// first time: listing it again would be a second Studio row.
+			return err
+		}
+		// Listed in the notebook's Studio with the job, in its transaction,
+		// when a notebook's chat queued it (Owner.NotebookID).
+		return notebookoutput.Video(ctx, tx, notebookoutput.Place{UserID: owner.UserID, NotebookID: owner.NotebookID, ThreadID: owner.ThreadID},
+			queued.JobID, title)
 	})
 	if err != nil {
 		return QueuedVideo{}, err

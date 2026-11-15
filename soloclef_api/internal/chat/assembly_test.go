@@ -26,6 +26,7 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/websearch"
 	"git.danvics.com/danvics/soloclef/soloclef_filestore"
 	"git.danvics.com/danvics/soloclef/soloclef_ingest/fileread"
+	"git.danvics.com/danvics/soloclef/soloclef_studio/posterrender"
 )
 
 // shelf is Ada's indexed documents: one chunk, found by any query, and
@@ -114,24 +115,22 @@ type noApps struct{}
 func (noApps) ForTurn(context.Context, string) (ConnectedTools, error) { return appSet{}, nil }
 
 // appSet is one turn's connected-app tools, hand-made: each tool belongs to
-// the app named in apps, and trust is kept in trusted.
+// the app named in apps, on connection 1, under the same name as the
+// model's.
 type appSet struct {
-	tools   []tool.Tool
-	apps    map[string]string
-	trusted map[string]bool
-	closed  *int
+	tools  []tool.Tool
+	apps   map[string]string
+	closed *int
 }
+
+// appConnection is every hand-made app's connection.
+const appConnection = 1
 
 func (a appSet) Tools() []tool.Tool { return a.tools }
 
-func (a appSet) Trusted(_ context.Context, name string) (bool, bool, error) {
+func (a appSet) Marked(name string) (MarkedTool, bool) {
 	_, mine := a.apps[name]
-	return a.trusted[name], mine, nil
-}
-
-func (a appSet) Trust(_ context.Context, name string) error {
-	a.trusted[name] = true
-	return nil
+	return MarkedTool{Connector: appConnection, Name: name}, mine
 }
 
 func (a appSet) App(name string) (string, bool) {
@@ -215,10 +214,10 @@ func production(t testing.TB, main, specialist model.Model, data *rows, store ch
 		Memory:    data,
 		Artifacts: ArtifactSpecialist{Specialist: deliverables.Specialist{
 			Podcasts: made,
-			// No image model, no vision model and no sandbox: each kind
-			// that needs one answers that this deployment has none.
-			Images: deliverables.NoImageModel{}, Reader: deliverables.NoImageReader{},
-			Videos: made, Workshop: deliverables.NoSandbox{},
+			// No sandbox: each kind that needs one answers that this
+			// deployment has none. A poster's PNG is a stand-in.
+			Posters: stubPosters{},
+			Videos:  made, Workshop: deliverables.NoSandbox{},
 			Store: store, Limits: deliverables.Limits{MaxSteps: 8, Timeout: time.Minute},
 			Saver: deliverables.Saver{Rows: made, Files: local, Logger: logger,
 				NewID: func() string { return "00000000000000000000000000000001" },
@@ -268,16 +267,16 @@ func TestTheToolsOfATurnFollowTheScopeAndThePick(t *testing.T) {
 		keys connected
 		want string
 	}{
-		"documents only: the default":               {turn("documents", ""), both, "deliverables search_knowledge_base update_memory"},
-		"everything: each source its own tool":      {turn("all", ""), both, "arxiv_search deliverables exa_web_search preprint_search pubmed_search search_knowledge_base tavily_web_search update_memory web_crawl"},
-		"web only: no document search":              {turn("web", ""), both, "arxiv_search deliverables exa_web_search preprint_search pubmed_search tavily_web_search update_memory web_crawl"},
-		"a provider with no key is not offered":     {turn("all", ""), connected{websearch.Tavily: true}, "arxiv_search deliverables preprint_search pubmed_search search_knowledge_base tavily_web_search update_memory web_crawl"},
-		"Exa picked: Exa alone, never Tavily":       {turn("all", "exa"), both, "deliverables exa_web_search search_knowledge_base update_memory"},
-		"Tavily picked: Tavily alone":               {turn("all", "tavily"), both, "deliverables search_knowledge_base tavily_web_search update_memory"},
-		"PubMed picked: not the other literatures":  {turn("all", "pubmed"), both, "deliverables pubmed_search search_knowledge_base update_memory"},
-		"arXiv picked":                              {turn("all", "arxiv"), both, "arxiv_search deliverables search_knowledge_base update_memory"},
-		"preprints picked":                          {turn("all", "preprints"), both, "deliverables preprint_search search_knowledge_base update_memory"},
-		"Exa picked but not connected: no stand-in": {turn("all", "exa"), connected{websearch.Tavily: true}, "deliverables search_knowledge_base update_memory"},
+		"documents only: the default":               {turn("documents", ""), both, "deliverables draw_figure search_knowledge_base update_memory"},
+		"everything: each source its own tool":      {turn("all", ""), both, "arxiv_search deliverables draw_figure exa_web_search preprint_search pubmed_search search_knowledge_base tavily_web_search update_memory web_crawl"},
+		"web only: no document search":              {turn("web", ""), both, "arxiv_search deliverables draw_figure exa_web_search preprint_search pubmed_search tavily_web_search update_memory web_crawl"},
+		"a provider with no key is not offered":     {turn("all", ""), connected{websearch.Tavily: true}, "arxiv_search deliverables draw_figure preprint_search pubmed_search search_knowledge_base tavily_web_search update_memory web_crawl"},
+		"Exa picked: Exa alone, never Tavily":       {turn("all", "exa"), both, "deliverables draw_figure exa_web_search search_knowledge_base update_memory"},
+		"Tavily picked: Tavily alone":               {turn("all", "tavily"), both, "deliverables draw_figure search_knowledge_base tavily_web_search update_memory"},
+		"PubMed picked: not the other literatures":  {turn("all", "pubmed"), both, "deliverables draw_figure pubmed_search search_knowledge_base update_memory"},
+		"arXiv picked":                              {turn("all", "arxiv"), both, "arxiv_search deliverables draw_figure search_knowledge_base update_memory"},
+		"preprints picked":                          {turn("all", "preprints"), both, "deliverables draw_figure preprint_search search_knowledge_base update_memory"},
+		"Exa picked but not connected: no stand-in": {turn("all", "exa"), connected{websearch.Tavily: true}, "deliverables draw_figure search_knowledge_base update_memory"},
 	} {
 		tools, _, _ := offered(t, c.turn, c.keys)
 		if got := strings.Join(tools, " "); got != c.want {
@@ -454,4 +453,11 @@ type noPDFs struct{}
 
 func (noPDFs) Read(context.Context, fileread.File, fileread.Choices) (fileread.Text, error) {
 	return fileread.Text{}, errors.New("this test reads no PDF")
+}
+
+// stubPosters stands for resvg: a poster's PNG is eight bytes of signature.
+type stubPosters struct{}
+
+func (stubPosters) PNG(context.Context, posterrender.Drawn) ([]byte, error) {
+	return []byte("\x89PNG\r\n\x1a\n"), nil
 }

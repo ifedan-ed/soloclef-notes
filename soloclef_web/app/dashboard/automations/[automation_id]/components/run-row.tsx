@@ -1,6 +1,6 @@
 "use client";
 import { ChevronDown, ChevronRight, Hand } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { LiveRunSummary } from "@/hooks/use-automation-runs";
 import { formatDuration } from "@/lib/automations/run-duration";
 import { isRunInFlight } from "@/lib/automations/run-outcome";
@@ -13,6 +13,8 @@ interface RunRowProps {
 	run: LiveRunSummary;
 	automationId: number;
 	/** Show Cancel while the run is waiting or running (``automations:execute``). */
+	/** The run a link named: shown expanded and scrolled into view. */
+	initiallyOpen?: boolean;
 }
 
 /**
@@ -21,15 +23,22 @@ interface RunRowProps {
  * panel itself only fetches the heavy REST fields on first expand. A run
  * still waiting or running gets a Cancel beside the toggle.
  */
-export function RunRow({ run, automationId }: RunRowProps) {
-	const [open, setOpen] = useState(false);
+export function RunRow({ run, automationId, initiallyOpen = false }: RunRowProps) {
+	const [open, setOpen] = useState(initiallyOpen);
+	const rowRef = useRef<HTMLDivElement>(null);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: once, when the row first shows
+	useEffect(() => {
+		if (!initiallyOpen) return;
+		const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+		rowRef.current?.scrollIntoView({ block: "start", behavior: still ? "auto" : "smooth" });
+	}, []);
 	const duration = formatDuration(run.started_at, run.finished_at);
 	const startedLabel = run.started_at
 		? formatRelativeDate(run.started_at)
 		: formatRelativeDate(run.created_at);
 
 	return (
-		<div className="rounded-md border border-border/60 overflow-hidden">
+		<div ref={rowRef} className="rounded-md border border-border/60 overflow-hidden scroll-mt-4">
 			<div className="flex items-center hover:bg-muted/30 transition-colors">
 				<button
 					type="button"

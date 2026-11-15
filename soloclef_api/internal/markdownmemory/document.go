@@ -45,9 +45,10 @@ func headingText(text string) string {
 // and split with Python's own rules (python_text.go), so U+2028 and the C0
 // separators are line boundaries; and a line before the first heading is
 // *dropped* unless it parses as a bullet, in which case the parser opens an
-// implicit "Memory" section. That is why `short prose` with no heading is
-// re-rendered as the empty document — a data loss this tier reproduces rather
-// than corrects, because the route it replaces does it.
+// implicit "Memory" section. That is why `short prose` with no heading would
+// render as the empty document, and why neither save hands it to the parser
+// as it is: the assistant's refuses it (headingless) and a person's files it
+// under Notes first (withLooseTextUnderNotes).
 func parseDocument(content string) document {
 	if content == "" {
 		return document{}

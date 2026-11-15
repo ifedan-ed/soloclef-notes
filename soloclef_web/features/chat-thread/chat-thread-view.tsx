@@ -17,7 +17,6 @@ import {
 	mentionedDocumentsAtom,
 	messageDocumentsMapAtom,
 } from "@/atoms/chat/mentioned-documents.atom";
-import { closeEditorPanelAtom } from "@/atoms/editor/editor-panel.atom";
 import {
 	EditMessageDialog,
 	type EditMessageDialogChoice,
@@ -70,13 +69,6 @@ import {
 import { NotFoundError } from "@/lib/error";
 import { cacheKeys } from "@/lib/query-client/cache-keys";
 
-const MobileEditorPanel = dynamic(
-	() =>
-		import("@/components/editor-panel/editor-panel").then((m) => ({
-			default: m.MobileEditorPanel,
-		})),
-	{ ssr: false }
-);
 const MobileHitlEditPanel = dynamic(
 	() =>
 		import("@/features/chat-messages/hitl").then((m) => ({
@@ -135,7 +127,6 @@ export function ChatThreadView({ chatId, onThreadNotFound }: ChatThreadViewProps
 	const setMessageDocumentsMap = useSetAtom(messageDocumentsMapAtom);
 	const setMentionedDocuments = useSetAtom(mentionedDocumentsAtom);
 	const setPreferredTool = useSetAtom(preferredToolAtom);
-	const closeEditorPanel = useSetAtom(closeEditorPanelAtom);
 
 	// Edit dialog state. Holds the message id being edited and the (already
 	// extracted) regenerate args so we can resume the edit after the user picks
@@ -266,15 +257,8 @@ export function ChatThreadView({ chatId, onThreadNotFound }: ChatThreadViewProps
 		setPreferredTool(null);
 		tokenUsageStore.clear();
 		setMessageDocumentsMap({});
-		closeEditorPanel();
 		chatStreamStore.clearInactive(nextThreadId);
-	}, [
-		urlChatId,
-		setMentionedDocuments,
-		setPreferredTool,
-		setMessageDocumentsMap,
-		closeEditorPanel,
-	]);
+	}, [urlChatId, setMentionedDocuments, setPreferredTool, setMessageDocumentsMap]);
 
 	useEffect(() => {
 		if (!activeThreadId) {
@@ -752,7 +736,6 @@ export function ChatThreadView({ chatId, onThreadNotFound }: ChatThreadViewProps
 								/>
 							</TurnStoppingProvider>
 						</div>
-						<MobileEditorPanel />
 						<MobileHitlEditPanel />
 						<MobileArtifactsPanel />
 					</div>

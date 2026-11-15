@@ -42,7 +42,8 @@ const maxLinkBody = 4 << 10
 // artifact: there is nothing to freeze yet.
 var errOutputUnfinished = errors.New("publicshare: the output has no finished artifact")
 
-// The frozen copy, in the shape the page route reads (internal/publicchat).
+// The frozen copy, in the shape the page reads (page.go). Links made by
+// the Python tier have the same shape.
 type (
 	outputCopy struct {
 		Kind        string       `json:"kind"`
@@ -162,11 +163,11 @@ func (r Routes) shareOutput(x *exchange) {
 		hash := hex.EncodeToString(sum[:])
 
 		if err := q.DropExpiredOutputLinks(ctx, DropExpiredOutputLinksParams{
-			OutputID: &output.ID, UserID: caller.UserID, ContentHash: hash, Now: now}); err != nil {
+			OutputID: output.ID, UserID: caller.UserID, ContentHash: hash, Now: now}); err != nil {
 			return createdLink{}, err
 		}
 		renewed, err := q.RenewOutputLink(ctx, RenewOutputLinkParams{
-			ExpiresAt: expiresAt, Title: output.Title, OutputID: &output.ID, UserID: caller.UserID, ContentHash: hash})
+			ExpiresAt: expiresAt, Title: output.Title, OutputID: output.ID, UserID: caller.UserID, ContentHash: hash})
 		if err == nil {
 			return r.created(renewed.ID, renewed.ShareToken, renewed.ExpiresAt, false), nil
 		}
@@ -190,7 +191,7 @@ func (r Routes) shareOutput(x *exchange) {
 		if err != nil {
 			return createdLink{}, err
 		}
-		inserted, err := q.InsertOutputLink(ctx, InsertOutputLinkParams{UserID: caller.UserID, OutputID: &output.ID,
+		inserted, err := q.InsertOutputLink(ctx, InsertOutputLinkParams{UserID: caller.UserID, OutputID: output.ID,
 			ShareToken: token, ContentHash: hash, SnapshotData: data, ExpiresAt: expiresAt})
 		if err != nil {
 			return createdLink{}, err

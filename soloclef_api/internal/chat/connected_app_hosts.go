@@ -14,3 +14,8 @@ func ConnectedAppSiteHosts() []string { return assembly.ConnectedAppSiteHosts() 
 // ConnectedAppConnectTimeout is how long one connection to an MCP server
 // may take to open, for the same routes and the same reason.
 const ConnectedAppConnectTimeout = assembly.ConnectedAppConnectTimeout
+
+// ConnectedAppOAuthTimeout is how long one request to an MCP server's
+// authorization server may take: the sign-in routes are given the time a
+// turn's token renewal is (assembly.ConnectedAppOAuthTimeout).
+const ConnectedAppOAuthTimeout = assembly.ConnectedAppOAuthTimeout

@@ -5,7 +5,10 @@ import { cacheKeys } from "@/lib/query-client/cache-keys";
 
 export const agentToolsAtom = atomWithQuery((_get) => ({
 	queryKey: cacheKeys.agentTools.all(),
-	staleTime: 30 * 60 * 1000, // 30 min – tool list rarely changes
+	// The list is the account's and follows its connections (a mailbox or an
+	// MCP server added in settings adds tools), so it is read again after a
+	// minute rather than kept for the session.
+	staleTime: 60 * 1000,
 	queryFn: async () => agentToolsApiService.getTools(),
 }));
 

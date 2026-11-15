@@ -30,25 +30,34 @@ export interface StudioOptionGroup {
 }
 
 /**
- * The backend's infographic presets (app/artifacts/infographic/presets.py)
- * plus Auto, in NotebookLM's order. Each preview is the same rocket drawn in
- * that style (generated once, public/infographic-styles/*.webp).
+ * The looks the server's poster renderer draws an infographic in
+ * (soloclef_studio/posterrender), plus Auto, which lets the server choose
+ * from the material. Each preview is a real poster drawn in that look
+ * (public/infographic-styles/*.webp). The server refuses any other name, so
+ * there is no alias here for a look that has been removed.
  */
 export const INFOGRAPHIC_STYLES = [
 	"auto",
-	"kawaii",
-	"clay",
 	"sketch-note",
-	"anime",
 	"editorial",
 	"instructional",
 	"bento-grid",
-	"bricks",
 	"scientific",
 	"professional",
 ] as const;
 
-/** Canvas shapes the image model draws at (app/artifacts/infographic/layout.py). */
+export type InfographicStyle = (typeof INFOGRAPHIC_STYLES)[number];
+
+/**
+ * Whether a saved output's style is one of today's. An infographic made in a
+ * look that has since been removed keeps its picture; only its style name has
+ * nothing left to be shown as.
+ */
+export function isInfographicStyle(value: unknown): value is InfographicStyle {
+	return (INFOGRAPHIC_STYLES as readonly unknown[]).includes(value);
+}
+
+/** The poster's shapes: wide, tall, or square. */
 export const INFOGRAPHIC_ORIENTATIONS = ["landscape", "portrait", "square"] as const;
 export const INFOGRAPHIC_DETAILS = ["concise", "standard", "detailed"] as const;
 

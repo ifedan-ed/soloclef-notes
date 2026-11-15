@@ -5,17 +5,17 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"git.danvics.com/danvics/soloclef/soloclef_agent/checkpoint"
-	"git.danvics.com/danvics/soloclef/soloclef_assistant/accountvision"
-	"git.danvics.com/danvics/soloclef/soloclef_assistant/ownmodels"
 	filestore "git.danvics.com/danvics/soloclef/soloclef_filestore"
-	"git.danvics.com/danvics/soloclef/soloclef_ingest/vision"
+	"git.danvics.com/danvics/soloclef/soloclef_studio/posterrender"
 	"git.danvics.com/danvics/soloclef/soloclef_studio/sandbox"
 )
 
@@ -25,20 +25,33 @@ import (
 // made by an automation's run are made within the same limits.
 const (
 	// Making an artifact is: load instructions, save, perhaps fix and save
-	// again, answer. A built document is more: instructions, a few
-	// commands, a check, a repair and a second check, a save, about
-	// seventeen steps; thirty is that with room for one more repair.
-	// Twelve minutes covers a cold sandbox, a long render and an
-	// infographic drawn and read twice.
-	specialistSteps   = 30
-	specialistTimeout = 12 * time.Minute
+	// again, answer: three steps for a slide deck, which is saved from its
+	// content (slidedeck.go). A document built by code is more:
+	// instructions, a few commands, a check, a repair and a second check, a
+	// save, about seventeen steps, and a long report the layout rules send
+	// back runs past thirty on a live model (13 Nov 2026, measured on decks
+	// when they were built that way: two of three stopped at thirty), so
+	// sixty leaves room for two repairs and a model that writes one section
+	// per command. Twenty minutes covers a cold sandbox, a long render, and
+	// a server busy with other builds.
+	specialistSteps   = 60
+	specialistTimeout = 20 * time.Minute
 
-	// One image: models take up to two minutes; a picture over 32 MiB is
-	// not one a card shows. Reading an infographic back is one vision
-	// call.
-	imageTimeout     = 150 * time.Second
-	imageMaxBytes    = 32 << 20
-	imageReadTimeout = 60 * time.Second
+	// UnattendedSandboxWait is the longest a Studio output or an
+	// automation's step waits for a place in its account's sandbox limit
+	// (sandboxwait.go). Half of specialistTimeout, because the wait is
+	// spent inside it and the other half must still build the artifact: a
+	// report is about seventeen steps, a deck's preview one conversion.
+	// And long enough for what holds a place to let it go: another output
+	// releases its sandbox the moment it ends (decks and reports finish in
+	// a few minutes), and a chat's expires at its idle time to live, ten
+	// minutes on the live deployment.
+	UnattendedSandboxWait = 10 * time.Minute
+
+	// One poster's PNG: resvg draws a full one in about a quarter of a
+	// second (posterrender's TestPNGs); thirty leaves room for a server
+	// busy with other work, and still stops a stuck process.
+	posterTimeout = 30 * time.Second
 
 	// A podcast is proposed in the shape the podcast routes propose when a
 	// request names none: two voices, twenty to thirty seconds. The person
@@ -55,17 +68,13 @@ type Settings struct {
 	// ModelURL and ModelKey reach the model proxy, the only way a model is
 	// called.
 	ModelURL, ModelKey string
-	// ImageModel is the proxy's name for the model that draws images and
-	// infographics. Empty means this deployment draws none, and a person
-	// who asks for one is told so; no other model is tried.
-	ImageModel string
-	// VisionModel is the proxy's name for the model that reads a drawn
-	// infographic back to check its text, for an account that chose no
-	// vision model of its own: an image model's pixels are the one thing
-	// here no rule can read. Empty means such an account's infographics
-	// are saved marked unchecked. A built document's pages are never
-	// looked at by a model: they are measured (layout_rules.go).
-	VisionModel string
+	// Resvg is the resvg program an infographic's PNG is drawn with, and
+	// FigureFonts figures-go's font directory (the image's copy of the
+	// module's fonts/), which the figures on a poster are set in. Both
+	// required: every deployment draws infographics, and nothing is drawn
+	// in fonts other than the ones the layout measured.
+	Resvg       string
+	FigureFonts string
 	// SandboxEnabled says reports, slides, spreadsheets and interactive
 	// pages are built, in the sandbox Sandbox describes. Off, a person who
 	// asks for one is told it is not available here.
@@ -92,10 +101,6 @@ type Parts struct {
 	// Index queues a saved artifact's document for indexing.
 	Index  func(ctx context.Context, documentID int64, userID string) error
 	Logger *slog.Logger
-	// Own opens a model of an account's own connection as its vision
-	// model (ownmodels.Connections, the one the turn's model is opened
-	// with), for an account that chose one.
-	Own ownmodels.VisionOpener
 }
 
 // NewSpecialist builds the specialist a tier gives its turns (PerTurn), with its
@@ -107,24 +112,21 @@ type Parts struct {
 // with no sandbox there is nothing to remove.
 func NewSpecialist(settings Settings, parts Parts) (specialist Specialist, forget func(ctx context.Context, threadID int64) error, err error) {
 	switch {
-	case parts.Pool == nil || parts.Store == nil || parts.Files == nil || parts.HTTP == nil || parts.Voices == nil || parts.Logger == nil || parts.Own == nil:
-		return Specialist{}, nil, errors.New("deliverables: the pool, the checkpoint store, the file store, the HTTP client, the voices, the logger and the own model connections are all required")
+	case parts.Pool == nil || parts.Store == nil || parts.Files == nil || parts.HTTP == nil || parts.Voices == nil || parts.Logger == nil:
+		return Specialist{}, nil, errors.New("deliverables: the pool, the checkpoint store, the file store, the HTTP client, the voices and the logger are all required")
 	case parts.PublishVideo == nil || parts.Index == nil:
 		return Specialist{}, nil, errors.New("deliverables: how a video job is published and how a document is indexed are both required")
 	}
-	var images ImageModel = NoImageModel{}
-	if settings.ImageModel != "" {
-		images = ProxyImages{BaseURL: settings.ModelURL, Key: settings.ModelKey, Model: settings.ImageModel, HTTP: parts.HTTP, Timeout: imageTimeout, MaxBytes: imageMaxBytes}
+	// The deck's faces are written into a directory of the rasteriser's
+	// own, once per process: resvg reads fonts from directories only.
+	work, err := os.MkdirTemp("", "soloclef-posters-")
+	if err != nil {
+		return Specialist{}, nil, fmt.Errorf("deliverables: a directory for the poster fonts: %w", err)
 	}
-	// The model that reads an account's infographics back: its own vision
-	// choice, else VisionModel (accountvision).
-	sight, err := accountvision.ForDeployment(parts.Pool,
-		vision.Client{BaseURL: settings.ModelURL, Key: settings.ModelKey, HTTP: parts.HTTP, Timeout: imageReadTimeout},
-		parts.Own, settings.VisionModel)
+	posters, err := posterrender.NewRasteriser(settings.Resvg, settings.FigureFonts, work, posterTimeout)
 	if err != nil {
 		return Specialist{}, nil, err
 	}
-	reader := VisionImageReader{Sight: sight, Timeout: imageReadTimeout}
 	var workshop Workshop = NoSandbox{}
 	var verified *Verifications
 	forget = func(context.Context, int64) error { return nil }
@@ -139,9 +141,9 @@ func NewSpecialist(settings Settings, parts Parts) (specialist Specialist, forge
 	}
 	return Specialist{
 		// Model is set per turn, to the turn's (PerTurn).
-		Store:  parts.Store,
-		Limits: Limits{MaxSteps: specialistSteps, Timeout: specialistTimeout},
-		Images: images, Reader: reader,
+		Store:    parts.Store,
+		Limits:   Limits{MaxSteps: specialistSteps, Timeout: specialistTimeout},
+		Posters:  posters,
 		Videos:   Videos{Rows: VideoStore{Pool: parts.Pool}, Publish: parts.PublishVideo, Logger: parts.Logger},
 		Workshop: workshop, Verified: verified,
 		// The podcast's row is written by the specialist's own store, the

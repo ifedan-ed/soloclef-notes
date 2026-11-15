@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -37,10 +38,12 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/apphandoff"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/appreturn"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/artifacts"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/automationdrafts"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/automations"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/celeryqueue"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/chat"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/chat/threads"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/citedsources"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/clienterrors"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/config"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/connectionrevocation"
@@ -65,8 +68,10 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/health"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/indexqueue"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/instructionslint"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/jmapconnect"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/knowledgebase"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/mailaccounts"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/mailconfirm"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/markdownmemory"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/medialinks"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/microsoftmail"
@@ -76,7 +81,6 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/nextcloudimport"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/notebookcopy"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/notebookfollowups"
-	"git.danvics.com/danvics/soloclef/soloclef_api/internal/notebooklinks"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/notebookresearch"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/notebooks"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/notebooksearch"
@@ -87,20 +91,21 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/parserchoice"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/podcasts"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/posthogcapture"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/presencebeat"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/principal"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/prompts"
-	"git.danvics.com/danvics/soloclef/soloclef_api/internal/publicchat"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/publiclinks"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/publicshare"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/pushdevices"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/ratelimit"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/requestbody"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/requestcontext"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/retiredsettings"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/retiredshare"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/routeanalytics"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/searchconnectors"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/signin"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/signinoptions"
-	"git.danvics.com/danvics/soloclef/soloclef_api/internal/siteannouncements"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/sourceguides"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/starlettepath"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/studiogenerate"
@@ -108,12 +113,21 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/studioviews"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/supportcontact"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/uploadvision"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/websearchconnect"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/zerosync"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/academic"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/addsources"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/assembly"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/deliverables"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/maildraftnotice"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/maildrafts"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/mcptools"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/ownmodels"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/pagereader"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/voices"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/websearch"
 	"git.danvics.com/danvics/soloclef/soloclef_connectors/nextcloud"
+	"git.danvics.com/danvics/soloclef/soloclef_connectors/sealedsecret"
 	filestore "git.danvics.com/danvics/soloclef/soloclef_filestore"
 	"git.danvics.com/danvics/soloclef/soloclef_ingest/parserconfig"
 	"git.danvics.com/danvics/soloclef/soloclef_studio/sandbox"
@@ -143,10 +157,19 @@ func main() {
 		}
 		return
 	}
+	// `soloclef-api app-versions` prints which phone app versions are still
+	// in use, for retiring an installed build's snapshot (app_versions.go).
+	if len(os.Args) == 2 && os.Args[1] == appVersionsCommand {
+		if err := appVersions(os.Stdout); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) > 1 {
 		if len(os.Args) != 2 || os.Args[1] != healthcheckCommand {
-			fmt.Fprintf(os.Stderr, "usage: %s [%s | %s <address> | %s <address> true|false]\n",
-				os.Args[0], healthcheckCommand, setPasswordCommand, setAdminCommand)
+			fmt.Fprintf(os.Stderr, "usage: %s [%s | %s | %s <address> | %s <address> true|false]\n",
+				os.Args[0], healthcheckCommand, appVersionsCommand, setPasswordCommand, setAdminCommand)
 			os.Exit(2)
 		}
 		if err := healthcheck(os.Getenv); err != nil {
@@ -168,12 +191,38 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	logger := newLogger(settings.LogLevel)
-
-	// A signalled shutdown stops accepting and lets in-flight reads finish.
+	// A signalled shutdown drains the work in flight and then stops
+	// accepting (serve, drain.go).
 	ctx, stopListeningForSignals := signal.NotifyContext(
 		context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stopListeningForSignals()
+	// A second signal stops the process at once, which is Go's default for
+	// both. The first began a drain that may take minutes, and whoever
+	// sends another (a second Ctrl-C, a `docker kill`) means now; the work
+	// it cuts off is taken up as after any crash (studiogenerate,
+	// requeue.go).
+	go func() {
+		<-ctx.Done()
+		stopListeningForSignals()
+	}()
+	listener, err := net.Listen("tcp", settings.ListenAddress)
+	if err != nil {
+		return err
+	}
+	return serve(ctx, settings, os.Getenv, listener)
+}
+
+// serve is the whole server on a listener it is handed, until ctx ends. It is
+// run's body apart from reading the environment and the signals, so that the
+// installed phone builds' contract test (installed_builds_contract_test.go)
+// runs exactly this server -- every route, the gate, the limiter and the
+// path guard -- against a throwaway Postgres, rather than a copy of its
+// wiring that could drift from it. parserEnv is where the parsers' own
+// settings are read (soloclef_ingest/parserconfig, which run reads from the
+// process environment).
+func serve(ctx context.Context, settings config.Config, parserEnv func(string) string, listener net.Listener) error {
+	defer listener.Close()
+	logger := newLogger(settings.LogLevel)
 
 	startup, cancelStartup := context.WithTimeout(ctx, 30*time.Second)
 	defer cancelStartup()
@@ -190,6 +239,15 @@ func run() error {
 	if err := schemaversion.Check(startup, pool); err != nil {
 		return err
 	}
+	// serving is the lifetime of the work this process does in the
+	// background for its requests: chat turns, Studio runs, Nextcloud
+	// downloads, research page reads, automation mail. It ends when the
+	// shutdown drain does (drainWork), not when the signal arrives, because
+	// the server goes on answering requests through the drain and that work
+	// is part of answering them. It is also ended on every other way out of
+	// this function, by the deferred call, so nothing is left running.
+	serving, endServing := context.WithCancel(context.WithoutCancel(ctx))
+	defer endServing()
 
 	errors := errorenvelope.Writer{ReportURL: settings.ErrorReportURL}
 
@@ -215,6 +273,10 @@ func run() error {
 		return err
 	}
 	defer queue.Close()
+	notices, err := notifier(pool, queue, logger)
+	if err != nil {
+		return err
+	}
 
 	// The event bus, which the two document moves publish a folder arrival on.
 	// It is the same Redis the limiter counts in, as it is there, and it
@@ -298,7 +360,7 @@ func run() error {
 	// writes its name on the row, and the indexer is the one that runs it.
 	// A parser configured here and not there would accept uploads that then
 	// fail; Load refuses a half-configured parser in either.
-	parsers, err := parserconfig.Load(os.Getenv)
+	parsers, err := parserconfig.Load(parserEnv)
 	if err != nil {
 		return err
 	}
@@ -415,23 +477,14 @@ func run() error {
 		Errors:  errors,
 		Logger:  logger,
 	}.Register(api)
-	folders.WatchRoute{
-		Folders: folderStore,
-		Errors:  errors,
-		Logger:  logger,
-	}.Register(api)
 	folders.DeleteRoute{
 		Folders: folderStore,
 		Queue:   queue,
 		Errors:  errors,
 		Logger:  logger,
 	}.Register(api)
-	promptStore := prompts.Store{Pool: pool}
-	// Who may publish a prompt to every account is the account's own
-	// is_superuser flag, read by the two writes themselves
-	// (internal/prompts/admin.go); there is no setting to hand them.
-	prompts.ReadRoutes{
-		Prompts: promptStore,
+	prompts.ListRoute{
+		Prompts: prompts.Store{Pool: pool},
 		Errors:  errors,
 		Logger:  logger,
 	}.Register(api)
@@ -450,11 +503,6 @@ func run() error {
 		Errors: errors,
 		Logger: logger,
 	}.Register(api)
-	prompts.CopyRoute{
-		Pool:   pool,
-		Errors: errors,
-		Logger: logger,
-	}.Register(api)
 	folders.DocumentMoveRoute{
 		Folders:  folderStore,
 		Arrivals: folderArrivals{events: arrivals},
@@ -467,7 +515,7 @@ func run() error {
 		Errors:   errors,
 		Logger:   logger,
 	}.Register(api)
-	// The caller's public share links: the list and the revoke
+	// The caller's public links to Studio outputs: the list and the revoke
 	// (internal/publiclinks). Both are the caller's own links and no others.
 	publicLinks := publiclinks.Store{Pool: pool}
 	publiclinks.ListRoute{
@@ -481,30 +529,32 @@ func run() error {
 		Errors: errors,
 		Logger: logger,
 	}.Register(api)
-	// What a snapshot link serves besides its page: the files of the
-	// artifacts it lists, a shared podcast's audio, a shared video; and the
-	// two things a signed-in person does with one, making an output's link
-	// and copying a shared chat into their own account
-	// (internal/publicshare). The streams are paced like every other.
+	// For installed phone builds (1.0.0 and 1.1.0): the notebook-link list
+	// is empty and sharing a notebook or a chat is refused, where a 404 broke
+	// their Public links page and share menu (internal/retiredshare).
+	// installed-builds: retired-notebook-links
+	// installed-builds: retired-notebook-share
+	// installed-builds: retired-chat-share
+	retiredshare.Routes{Errors: errors, Logger: logger}.Register(api)
+	// For installed phone builds too: the Settings and Admin pages of
+	// features removed on 2026-11-13 get their lists, empty, where a 404
+	// broke each page (internal/retiredsettings).
+	// installed-builds: retired-operator-connections
+	// installed-builds: retired-community-prompts
+	// installed-builds: retired-announcements
+	retiredsettings.Routes{Errors: errors, Logger: logger}.Register(api)
+	// A Studio output's public link, the only thing that can be shared:
+	// making one (its owner), and the page and files a stranger holding the
+	// token reads (internal/publicshare). The streams are paced like every
+	// other.
 	publicShare := publicshare.Routes{
 		Pool: pool, Files: fileStores, StallTimeout: writeTimeout,
-		FrontendURL: settings.FrontendURL, Analytics: writeAnalytics,
-		Errors: errors, Logger: logger,
+		FrontendURL: settings.FrontendURL, Errors: errors, Logger: logger,
 	}
 	if err := publicShare.Check(); err != nil {
 		return err
 	}
 	publicShare.Register(api)
-	// A notebook's live link: the owner's five routes and the six a
-	// visitor's page reads by token (internal/notebooklinks).
-	notebookLinks := notebooklinks.Routes{
-		Pool: pool, Files: fileStores, StallTimeout: writeTimeout,
-		FrontendURL: settings.FrontendURL, Errors: errors, Logger: logger,
-	}
-	if err := notebookLinks.Check(); err != nil {
-		return err
-	}
-	notebookLinks.Register(api)
 	// Duplicating a notebook within the caller's own account.
 	notebookcopy.Route{Pool: pool, Errors: errors, Logger: logger}.Register(api)
 
@@ -614,13 +664,25 @@ func run() error {
 	sso.Register(api)
 	// What the sign-in screens may offer, for anyone: the phone app reads
 	// it before anyone has signed in (internal/signinoptions).
+	// Forgot password is offered exactly when the reset route has a mailer
+	// to send with (the deployment's SMTP, or the e2e stack's outbox).
 	signinoptions.Route{Settings: signinoptions.Settings{
-		SMTPEnabled: settings.SMTPEnabled, SignupAllowed: settings.SignupAllowed, OIDCEnabled: settings.OIDCEnabled,
+		SendsResetMail: mail != nil, SignupAllowed: settings.SignupAllowed, OIDCEnabled: settings.OIDCEnabled,
 		ButtonLabel: settings.OIDCButtonLabel, DisplayName: settings.OIDCDisplayName, AppRedirects: settings.OIDCAppRedirects,
 	}}.Register(api)
-	// The phone's push registration and its choices (internal/pushdevices).
-	// There is no push sender in Go yet: these keep the rows a sender reads.
+	// The phone's push registration and its choices (internal/pushdevices),
+	// which the worker's push delivery reads (soloclef_notify/delivery).
 	pushdevices.Routes{Database: pool, Errors: errors, Logger: logger}.Register(api)
+	// The heartbeat of a visible tab or a foreground app: while one is
+	// live, nothing is pushed to the person's phone (internal/presencebeat).
+	// Its marks are in the application's Valkey, which the worker reads
+	// presence from (in this stack, the broker's Valkey too).
+	presenceMarks, err := presencebeat.NewValkey(settings.RedisURL)
+	if err != nil {
+		return err
+	}
+	defer presenceMarks.Close()
+	presencebeat.Route{Marks: presenceMarks, Errors: errors, Logger: logger}.Register(api)
 
 	// Notes: ten routes (internal/notes). A note is a document, so a save
 	// queues its indexing on the queue an upload's goes through (delayed, so
@@ -636,23 +698,16 @@ func run() error {
 		IndexDelay: settings.NoteIndexDelay,
 	}.Register(api)
 
-	// The account's agent permission rules: four routes over one store,
-	// each confined to the caller's own rules (internal/agentrules).
-	agentrules.Routes{
-		Store: agentrules.Store{Pool: pool},
-		Available: agentrules.Availability{
-			Disabled:          settings.DisableNewAgentStack,
-			PermissionEnabled: settings.PermissionEnabled,
-		},
-		Errors: errors,
-		Logger: logger,
-	}.Register(api)
+	// Which tools ask first: every tool runs without asking unless the
+	// person marks it (internal/agentrules). No feature switch: the chat
+	// reads the marks on every deployment, so a switch could only hide the
+	// way to change them.
+	agentrules.Routes{Marks: agentrules.Store{Pool: pool}, Errors: errors, Logger: logger}.Register(api)
 
-	// The documents slice: nine routes that answer from the caller's own
+	// The documents slice: eight routes that answer from the caller's own
 	// rows -- a document's chunks, its versions, one version and the
-	// restore, and four reads the document browser makes about all of the
-	// caller's documents (status, counts by type, watched folders, the title
-	// search).
+	// restore, and three reads the document browser makes about all of the
+	// caller's documents (status, counts by type, the title search).
 	//
 	// The citation route is `/api/v1/chunks/{chunk_id}/document`: the
 	// Python tier's `/documents/by-chunk/{chunk_id}` overlaps the chunk page
@@ -662,6 +717,13 @@ func run() error {
 		Chunks: documentRows,
 		Errors: errors,
 		Logger: logger,
+	}.Register(api)
+	// The names of an answer's cited documents, all in one read, for the
+	// "Sources" list a copied or downloaded answer ends with.
+	citedsources.Route{
+		Passages: citedsources.New(pool),
+		Errors:   errors,
+		Logger:   logger,
 	}.Register(api)
 	documents.ChunksRoute{
 		Chunks: documentRows,
@@ -699,11 +761,6 @@ func run() error {
 		Errors: errors,
 		Logger: logger,
 	}.Register(api)
-	documents.WatchedFoldersRoute{
-		Folders: documentRows,
-		Errors:  errors,
-		Logger:  logger,
-	}.Register(api)
 	documents.TitlesRoute{
 		Titles: documentRows,
 		Errors: errors,
@@ -729,33 +786,8 @@ func run() error {
 	// streams (internal/documentfiles).
 	documentfiles.Routes{Pool: pool, Files: fileStores, StallTimeout: writeTimeout, Errors: errors, Logger: logger}.Register(api)
 
-	// What a public share link shows to whoever holds it: three of the ten
-	// routes of app/routes/public_chat_routes.py. None takes a caller -- the
-	// share token in the path is the whole of the authorisation -- so they
-	// are registered here as any route is and made public by where frontDoor mounts their paths: outside the
-	// gate (publicRoutes, below). Access is absent for the same reason.
-	//
-	// Now is left nil, which is the system clock a link's expiry is measured
-	// against; only a test names another.
-	sharedRows := publicchat.Store{Pool: pool}
-	publicchat.PageRoute{
-		Rows:   sharedRows,
-		Errors: errors,
-		Logger: logger,
-	}.Register(api)
-	publicchat.VideoRoute{
-		Rows:   sharedRows,
-		Errors: errors,
-		Logger: logger,
-	}.Register(api)
-	publicchat.PodcastRoute{
-		Rows:   sharedRows,
-		Errors: errors,
-		Logger: logger,
-	}.Register(api)
-
-	// The providers a connection can be made to, which is a constant and so
-	// takes no store, and the caller's own connections with their models
+	// The one provider a connection can be made to, which is a constant and
+	// so takes no store, and the caller's own connections with their models
 	// (internal/modelconnections, which is also where it says that a stored
 	// key is never read by this process, let alone answered).
 	modelconnections.ProvidersRoute{
@@ -767,30 +799,13 @@ func run() error {
 		Errors:      errors,
 		Logger:      logger,
 	}.Register(api)
-	// Making, changing, removing and testing a connection, in a session:
-	// anyone's for an OpenAI-compatible endpoint, an administrator's for
-	// every other provider. The key and the headers are sealed under the
-	// deployment's secret before they are stored. An OpenAI-compatible
-	// endpoint is listed and tested at its own address through the egress
-	// guard; every other provider through the model proxy.
+	// Making, changing, removing and testing a connection, in a session,
+	// by any account: every connection is to an OpenAI-compatible endpoint
+	// of the person's own. The key and the headers are sealed under the
+	// deployment's secret before they are stored, and the endpoint is
+	// listed and tested at its own address through the egress guard.
 	connectionKeys, err := modelconnections.NewKeySeal(settings.SessionSecret)
 	if err != nil {
-		return err
-	}
-	connectionProber := modelconnections.ProxyProber{
-		URL: settings.LiteLLMURL, Key: settings.LiteLLMKey,
-		HTTP: &http.Client{}, Timeout: modelTestTimeout,
-	}
-	if err := connectionProber.Check(); err != nil {
-		return err
-	}
-	// Discovery reads the proxy's own catalogue of each provider's models,
-	// kept for an hour; no provider is asked (internal/modelconnections).
-	modelCatalogue := &modelconnections.ProxyCatalogue{
-		URL: settings.LiteLLMURL, Key: settings.LiteLLMKey,
-		HTTP: &http.Client{}, Timeout: modelTestTimeout, Fresh: modelCatalogueFresh,
-	}
-	if err := modelCatalogue.Check(); err != nil {
 		return err
 	}
 	ownRows := ownmodels.Store{Pool: pool}
@@ -806,8 +821,6 @@ func run() error {
 	connectionWrites := modelconnections.WriteRoutes{
 		Connections: modelconnections.Store{Pool: pool},
 		Keys:        connectionKeys,
-		Prober:      connectionProber,
-		Catalogue:   modelCatalogue,
 		Endpoints:   connectionEndpoints,
 		Errors:      errors,
 		Logger:      logger,
@@ -816,9 +829,6 @@ func run() error {
 		return err
 	}
 	connectionWrites.Register(api)
-	// The operator's connections, as every account is shown them: the
-	// provider and its models, never an address or a key.
-	modelconnections.GlobalRoutes{Connections: modelconnections.Store{Pool: pool}, Errors: errors, Logger: logger}.Register(api)
 
 	// The account's own connections and MCP servers: the two lists, one
 	// connection and one MCP server. Every statement behind them names the
@@ -879,7 +889,28 @@ func run() error {
 	// cloned so that nothing else in the process shares its pool.
 	providers := http.DefaultTransport.(*http.Transport).Clone()
 	defer providers.CloseIdleConnections()
-	revocation, err := connectionrevocation.New(settings.SessionSecret, nextcloudCredentials, providers, logger)
+
+	// An MCP server's secrets are sealed with their own key from the
+	// deployment's secret (sealedsecret), the one the chat's MCP client
+	// opens them with; every connection to a server, and every request to
+	// its OAuth authorization server, goes through the one guard.
+	serverSecrets, err := sealedsecret.New(settings.SessionSecret, sealedsecret.MCPServerSecret)
+	if err != nil {
+		return err
+	}
+	serverGuard := mcptools.PublicInternet{Resolve: mcptools.SystemResolve, ConnectTimeout: chat.ConnectedAppConnectTimeout}
+	serverOAuth := mcptools.OAuth{Network: serverGuard, Timeout: chat.ConnectedAppOAuthTimeout, ClientName: settings.BrandName}
+	if err := serverOAuth.Check(); err != nil {
+		return err
+	}
+	// A removed OAuth server's sign-in is revoked with the rest. A site
+	// server's revocation endpoint is held to the site's allowed hosts as
+	// it stands at the removal.
+	serverSignOut := mcptools.SignOut{OAuth: serverOAuth, Seal: serverSecrets, SiteHosts: func(ctx context.Context) ([]string, error) {
+		stored, err := connectorRows.SiteAllowedHosts(ctx)
+		return mcptools.SiteHosts(stored, chat.ConnectedAppSiteHosts()), err
+	}}
+	revocation, err := connectionrevocation.New(settings.SessionSecret, nextcloudCredentials, serverSignOut, providers, logger)
 	if err != nil {
 		return err
 	}
@@ -970,6 +1001,51 @@ func run() error {
 	}
 	mailboxes.Register(api)
 
+	// The account's JMAP mailboxes (internal/jmapconnect): connected by
+	// Stalwart's own sign-in or with an app password, both sealed with
+	// AES-256-GCM bound to the owner, listed, tested and removed (with the
+	// grant revoked at the server). Every request goes to the server the
+	// person named, at public addresses only. The same constructor the
+	// chat's tools use, so a token is refreshed one way in every tier.
+	jmapMail, err := assembly.NewJMAPMail(pool, settings.SessionSecret, logger)
+	if err != nil {
+		return err
+	}
+	jmapRoutes := jmapconnect.Routes{
+		Mailboxes: jmapMail, OAuth: jmapMail.SignIn.OAuth,
+		Settings: jmapconnect.Settings{ClientID: settings.JMAPMailClientID, RedirectURI: settings.JMAPMailRedirectURI,
+			Name: settings.BrandName, FrontendURL: settings.FrontendURL, SecretKey: settings.SessionSecret},
+		Now: time.Now, Errors: errors, Logger: logger,
+	}
+	if err := jmapRoutes.Check(); err != nil {
+		return err
+	}
+	jmapRoutes.Register(api)
+
+	// The card a mail draft is confirmed on (internal/mailconfirm): the only
+	// way a message the assistant drafted is ever sent, through the send
+	// guard (soloclef_assistant/maildrafts). draftNotifier is the hook a
+	// notification "a draft is waiting for your confirmation" is raised
+	// from; the chat is given the same one below. None is raised until the
+	// notification service is wired here.
+	var draftNotifier maildrafts.Notifier = maildraftnotice.Notifier{Drafts: notices, Log: logger}
+	// A draft's files are read back from where they live when it is sent:
+	// the file store for documents and Studio outputs, the mailbox for a
+	// forwarded attachment (soloclef_assistant/mailattachments).
+	draftFiles, err := assembly.NewDraftFiles(pool, fileStores, jmapMail)
+	if err != nil {
+		return err
+	}
+	draftGuard, err := assembly.NewDraftGuard(pool, jmapMail, draftFiles, draftNotifier, logger)
+	if err != nil {
+		return err
+	}
+	draftRoutes := mailconfirm.Routes{Guard: draftGuard, Errors: errors, Logger: logger}
+	if err := draftRoutes.Check(); err != nil {
+		return err
+	}
+	draftRoutes.Register(api)
+
 	// Connecting Google Drive (internal/driveconnect): the consent start,
 	// Google's callback, the Picker's token and disconnecting. Mounted in
 	// every deployment; one that has not set Drive up answers which
@@ -1038,10 +1114,11 @@ func run() error {
 		Logger:      logger,
 	}.Register(api)
 	searchconnectors.ServerDeleteRoute{
-		Changes: connectorRows,
-		Tools:   toolChanges,
-		Errors:  errors,
-		Logger:  logger,
+		Changes:    connectorRows,
+		Revocation: revocation,
+		Tools:      toolChanges,
+		Errors:     errors,
+		Logger:     logger,
 	}.Register(api)
 	// The account's switch for one connection. Off keeps the connection and
 	// its documents; the chat and the indexing schedule leave it alone.
@@ -1051,28 +1128,17 @@ func run() error {
 		Errors:  errors,
 		Logger:  logger,
 	}.Register(api)
-	// One type serves both edits of a server's trusted tools; Remove is
-	// what makes the second the untrust.
-	for _, untrust := range []bool{false, true} {
-		searchconnectors.TrustRoute{
-			Remove:  untrust,
-			Changes: connectorRows,
-			Tools:   toolChanges,
-			Errors:  errors,
-			Logger:  logger,
-		}.Register(api)
-	}
 
 	// Adding, changing and testing an MCP server, and the generic create and
 	// update of a connection (which is also how the settings page edits a
 	// server). All of them decide where a server may be with the guard the
 	// chat calls it through, given the same list of site hosts, so that what
 	// can be saved can be called.
-	serverGuard := mcptools.PublicInternet{Resolve: mcptools.SystemResolve, ConnectTimeout: chat.ConnectedAppConnectTimeout}
 	serverPolicy := searchconnectors.ServerPolicy{
 		Standing:           connectorRows,
 		SiteHostsWhenUnset: chat.ConnectedAppSiteHosts(),
 		Destinations:       serverGuard,
+		Seal:               serverSecrets,
 	}
 	serverProbe := mcptools.Probe{
 		Network:    serverGuard,
@@ -1084,7 +1150,9 @@ func run() error {
 	if err := serverProbe.Check(); err != nil {
 		return err
 	}
-	searchconnectors.PolicyRoute{Policy: serverPolicy, Errors: errors, Logger: logger}.Register(api)
+	searchconnectors.PolicyRoute{
+		Policy: serverPolicy, OAuthAvailable: settings.MCPOAuthRedirectURI != "", Errors: errors, Logger: logger,
+	}.Register(api)
 	searchconnectors.ServerCreateRoute{
 		Writes: connectorRows, Policy: serverPolicy, Tools: toolChanges, Errors: errors, Logger: logger,
 	}.Register(api)
@@ -1092,8 +1160,45 @@ func run() error {
 		Rows: connectorRows, Writes: connectorRows, Policy: serverPolicy, Tools: toolChanges, Errors: errors, Logger: logger,
 	}.Register(api)
 	searchconnectors.ServerTestRoute{
-		Rows: connectorRows, Policy: serverPolicy, Probe: serverProbe, Errors: errors, Logger: logger,
+		Rows: connectorRows, Policy: serverPolicy, Probe: serverProbe,
+		OAuth: serverOAuth, Tokens: mcptools.Postgres{Pool: pool}, Now: time.Now,
+		Errors: errors, Logger: logger,
 	}.Register(api)
+	// Signing in to an MCP server with OAuth: discovery, the start, and the
+	// authorization server's callback (which takes no credential:
+	// publicRoutes). The attempt between the start and the callback is a
+	// sealed cookie, under a key of its own.
+	attemptSeal, err := sealedsecret.New(settings.SessionSecret, sealedsecret.MCPOAuthAttempt)
+	if err != nil {
+		return err
+	}
+	serverSignIn := searchconnectors.OAuthRoutes{
+		Rows: connectorRows, Writes: connectorRows, Policy: serverPolicy, OAuth: serverOAuth, Attempts: attemptSeal,
+		Settings: searchconnectors.OAuthSettings{RedirectURI: settings.MCPOAuthRedirectURI, FrontendURL: settings.FrontendURL},
+		Tools:    toolChanges, Now: time.Now, Errors: errors, Logger: logger,
+	}
+	if err := serverSignIn.Check(); err != nil {
+		return err
+	}
+	serverSignIn.Register(api)
+
+	// Exa and Tavily, connected with the account's own key, checked with
+	// the provider first and stored sealed (internal/websearchconnect).
+	webSearchKeys, err := sealedsecret.New(settings.SessionSecret, sealedsecret.WebSearchKey)
+	if err != nil {
+		return err
+	}
+	webSearch := websearchconnect.Routes{
+		Rows: websearchconnect.Store{Pool: pool},
+		// The very request the tools make, on the providers' transport.
+		Verifier: websearch.Search{Keys: websearch.StoredKeys{Pool: pool, Seal: webSearchKeys},
+			HTTP: &http.Client{Transport: providers, Timeout: 20 * time.Second}},
+		Seal: webSearchKeys, Errors: errors, Logger: logger,
+	}
+	if err := webSearch.Check(); err != nil {
+		return err
+	}
+	webSearch.Register(api)
 	searchconnectors.ConnectionCreateRoute{
 		Writes: connectorRows, Now: time.Now, Errors: errors, Logger: logger,
 	}.Register(api)
@@ -1136,9 +1241,10 @@ func run() error {
 			return err
 		}
 		importRows := nextcloudimport.PostgresRows{Pool: pool}
-		// The pool's lifetime is the signal context: a signal ends every
-		// download at once, and Stop then waits for each to record that.
-		downloads, err := nextcloudimport.NewDownloads(ctx, settings.NextcloudDownloadConcurrency, settings.UploadMaxFileBytes,
+		// The pool's lifetime is serving: the end of the shutdown drain
+		// ends every download still going, and Stop then waits for each to
+		// record that.
+		downloads, err := nextcloudimport.NewDownloads(serving, settings.NextcloudDownloadConcurrency, settings.UploadMaxFileBytes,
 			importRows, importFiles,
 			// The same queue and marker an upload's index job goes through.
 			indexqueue.Indexing{Queue: queue, Marker: indexqueue.PostgresMarker{Pool: pool}, Logger: logger},
@@ -1295,10 +1401,12 @@ func run() error {
 	//
 	// and only after those does the pool close, because all three were
 	// deferred after it. The context is one of this block's own, derived
-	// from the signal context, rather than the signal context itself: run
-	// also returns without a signal (a listener that could not bind, an
-	// error further down this function), and then nothing would have told
-	// the turns to stop and Wait would wait for them for ever.
+	// from serving, rather than serving itself: run also returns without a
+	// signal (a listener that could not bind, an error further down this
+	// function), and then nothing would have told the turns to stop and
+	// Wait would wait for them for ever. On a signal it is ended by the
+	// shutdown sequence at the end of this function, once the drain has
+	// let running turns finish (drain.go).
 	//
 	// The file store is asked for its writer here, at start-up, so that a
 	// deployment whose configured backend cannot be written to is told now
@@ -1307,7 +1415,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	chatLifetime, endChat := context.WithCancel(ctx)
+	chatLifetime, endChat := context.WithCancel(serving)
 	defer endChat()
 	// The start-up context bounds the one thing NewService does with it:
 	// creating the loop's checkpoint table if it is not there.
@@ -1320,6 +1428,33 @@ func run() error {
 		Indexing: indexqueue.Indexing{Queue: queue, Marker: indexqueue.PostgresMarker{Pool: pool}, Logger: logger},
 		Vectors:  documentVectors,
 		Logger:   logger,
+	}
+	// A notebook's research import: what the research box's routes (below)
+	// and the chat's add_sources tool both add sources with
+	// (internal/notebookresearch, Imports). An imported page is read in
+	// this process, a few at a time across all imports and both callers,
+	// which is why the reads are stopped at shutdown beside the Nextcloud
+	// downloads (stopResearchReads, at the end of this function); the end
+	// of the shutdown drain (serving) ends each read still going. A PDF an
+	// import finds is kept where an upload's file is, under the upload's
+	// per-file limit, and indexed as an uploaded PDF. The reads are made
+	// with the chat's page reader and scholarly sources, which the chat
+	// builds, so the chat makes the import too (chat.Deps.Sources).
+	researchFiles, err := fileStores.Writer()
+	if err != nil {
+		return err
+	}
+	var researchReads *notebookresearch.Reads
+	addSources := func(pages *pagereader.Reader, papers *academic.Sources) (addsources.Adder, error) {
+		reads, err := notebookresearch.NewReads(serving, researchConcurrentReads, pool, pages, papers,
+			indexqueue.Indexing{Queue: queue, Marker: indexqueue.PostgresMarker{Pool: pool}, Logger: logger},
+			notebookresearch.Originals{Files: researchFiles, MaxBytes: settings.UploadMaxFileBytes}, logger)
+		if err != nil {
+			return nil, err
+		}
+		researchReads = reads
+		adder := notebookresearch.ChatSources{Imports: notebookresearch.Imports{Pool: pool, Reads: reads}, Lookup: papers}
+		return adder, adder.Check()
 	}
 	chatService, closeChat, err := chat.NewService(startup, chat.Settings{
 		ModelURL:           settings.LiteLLMURL,
@@ -1343,8 +1478,6 @@ func run() error {
 		Brand:     settings.BrandName,
 		MaxSteps:  settings.ChatMaxSteps,
 		MaxTurn:   settings.ChatMaxTurn,
-		// What a public link to a thread starts with: the web app's address.
-		FrontendURL: settings.FrontendURL,
 		// What the chat's mail and Drive tools open an account's stored
 		// credentials with, and where each kind is renewed
 		// (connected_accounts.go).
@@ -1354,19 +1487,20 @@ func run() error {
 		// The Nextcloud the import reaches, which the chat's Nextcloud tools
 		// reach with the same stored app password; none means no tools.
 		NextcloudURL: settings.NextcloudBaseURL,
-		// The models that draw and that look at pictures, each off when its
-		// name is empty; and the sandbox documents are built in, which is
-		// read from the environment only when its switch is on
-		// (internal/config), so with it off this is the zero value and the
-		// chat never looks at it.
-		ImageModel:     settings.ChatImageModel,
-		VisionModel:    settings.ChatVisionModel,
+		// The model that looks at pictures, off when its name is empty;
+		// what an infographic's PNG is drawn with; and the sandbox
+		// documents are built in, which is read from the environment only
+		// when its switch is on (internal/config), so with it off this is
+		// the zero value and the chat never looks at it.
+		VisionModel:  settings.ChatVisionModel,
+		FiguresResvg: settings.FiguresResvg, FiguresFontDir: settings.FiguresFontDir,
+		// Whether an automation the chat drafts may email its result: the
+		// same switch the automations routes are given below.
+		SendsMail:      settings.SMTPEnabled,
 		SandboxEnabled: settings.SandboxEnabled,
 		Sandbox: sandbox.Settings{
-			Stack:          settings.SandboxStack,
 			URL:            settings.SandboxURL,
 			APIKey:         settings.SandboxAPIKey,
-			Image:          settings.SandboxImage,
 			CPU:            settings.SandboxCPU,
 			Memory:         settings.SandboxMemory,
 			IdleTTL:        settings.SandboxIdleTTL,
@@ -1397,6 +1531,13 @@ func run() error {
 		Parsers: parsers,
 		// The specialist that changes the account's documents and folders.
 		KnowledgeBase: knowledgeChanges,
+		// Told when a chat leaves a mail draft waiting for its owner.
+		DraftNotifier: draftNotifier,
+		// Where a draft's attached documents and Studio outputs are read.
+		FileStore: fileStores,
+		// The research import, which add_sources adds a notebook's papers
+		// and pages with.
+		Sources: addSources,
 	})
 	if err != nil {
 		return err
@@ -1406,21 +1547,18 @@ func run() error {
 	defer endChat()
 	chat.Routes{Service: chatService, Errors: errors}.Register(api)
 	// The account's models for its other jobs (quick work, studio work,
-	// looking at pictures, drawing them) and whether it can chat at all.
-	// They are chosen from the same read of the proxy the chat's model
-	// menu is drawn from, which is why they are mounted here, after it.
-	// The chat holds its catalogue as the one list it needs; the pickers
-	// also need the proxy's image models, which the same catalogue reads.
+	// looking at pictures) and whether it can chat at all. They are chosen
+	// from the same read of the proxy the chat's model menu is drawn from,
+	// which is why they are mounted here, after it.
 	proxyLists, listsBoth := chatService.Models.Catalogue.(modelchoices.Lists)
 	if !listsBoth {
-		return fmt.Errorf("the chat's model catalogue (%T) does not list the proxy's image models", chatService.Models.Catalogue)
+		return fmt.Errorf("the chat's model catalogue (%T) is not the proxy's lists the pickers read", chatService.Models.Catalogue)
 	}
 	modelChoices := modelchoices.Choices{
 		Lists:         proxyLists,
 		Stored:        modelchoices.Rows{Pool: pool},
 		ChatDefault:   settings.ChatModel,
 		VisionDefault: settings.ChatVisionModel,
-		ImageDefault:  settings.ChatImageModel,
 		// The account's own connections' models, the same the chat's menu
 		// offers (soloclef_assistant/ownmodels).
 		Own: chatService.Models.Own,
@@ -1484,22 +1622,9 @@ func run() error {
 	// search itself (a stream, paced like the byte streams), and bringing
 	// what was found in as sources (internal/notebookresearch). It starts
 	// on PubMed; every source is asked and reported on its own, never
-	// blended. An imported page is read in this process, a few at a time
-	// across all imports, which is why the reads are stopped at shutdown
-	// beside the Nextcloud downloads (stopResearchReads, at the end of this
-	// function); the signal context ends each read at once.
-	// A PDF an import finds is kept where an upload's file is, under the
-	// upload's per-file limit, and indexed as an uploaded PDF.
-	researchFiles, err := fileStores.Writer()
-	if err != nil {
-		return err
-	}
-	researchReads, err := notebookresearch.NewReads(ctx, researchConcurrentReads, pool, chatService.Parts.Pages, chatService.Parts.Academic,
-		indexqueue.Indexing{Queue: queue, Marker: indexqueue.PostgresMarker{Pool: pool}, Logger: logger},
-		notebookresearch.Originals{Files: researchFiles, MaxBytes: settings.UploadMaxFileBytes}, logger)
-	if err != nil {
-		return err
-	}
+	// blended. Its imports are read by the reads the chat's import was made
+	// with (addSources, above): one set of reads, one bound on how many run
+	// at once, for the box and the chat together.
 	stopResearchReads := researchReads.Stop
 	research := notebookresearch.Routes{
 		Pool:    pool,
@@ -1523,19 +1648,25 @@ func run() error {
 	// the specialist itself, run with nobody watching.
 	//
 	// A run outlives its request, as a turn does, so the runner is stopped
-	// the way the chat is. Deferred calls run last-in first-out: endChat
-	// (again; it is idempotent) cancels the context the runs are under,
-	// then Wait blocks until each has written its ending, and both happen
-	// before the chat's own three and the pool's close, which were deferred
-	// earlier. The sweep fails the jobs of a process that died.
-	studioRunner, err := studiogenerate.NewRunner(pool, chatService.Parts.Models, chatService.Parts.Deliverables,
-		studioConcurrentRuns, chatLifetime, logger)
+	// the way the chat is. It claims jobs until the signal (ctx), and its
+	// runs go on until the drain ends (chatLifetime): one still going then
+	// is queued again for the next process. Deferred calls run last-in
+	// first-out: endChat (again; it is idempotent) cancels the context the
+	// runs are under, then Wait blocks until each has written its ending or
+	// given its job back, and both happen before the chat's own three and
+	// the pool's close, which were deferred earlier. Its loop also takes up
+	// the jobs of a process that died, at start and every minute.
+	studioRunner, err := studiogenerate.NewRunner(studiogenerate.RunnerParts{
+		Pool: pool, Models: chatService.Parts.Models, Specialist: chatService.Parts.Deliverables,
+		Notifier: notices, Concurrent: studioConcurrentRuns,
+		Accepting: ctx, Lifetime: chatLifetime, Logger: logger,
+	})
 	if err != nil {
 		return err
 	}
 	defer studioRunner.Wait()
 	defer endChat()
-	studioRunner.Sweep()
+	studioRunner.Run()
 	// The opener as the chat built it, so that the studio can open a
 	// podcast in the shape its dialog chose (voices and length) through
 	// the very same rows and voice catalogue.
@@ -1558,11 +1689,8 @@ func run() error {
 		},
 		Videos:         chatService.Parts.Deliverables.Videos,
 		SandboxEnabled: settings.SandboxEnabled,
-		// The image model is optional (SOLOCLEF_API_CHAT_IMAGE_MODEL): a
-		// deployment that named none cannot draw an infographic.
-		ImageEnabled: settings.ChatImageModel != "",
-		Errors:       errors,
-		Logger:       logger,
+		Errors:         errors,
+		Logger:         logger,
 	}
 	if err := studio.Check(); err != nil {
 		return err
@@ -1614,9 +1742,16 @@ func run() error {
 		return err
 	}
 	automationRoutes.Register(api)
+	// The chat's automation drafts as their card reads them, and Discard;
+	// Create is the create route above, named with the draft's id.
+	draftCards := automationdrafts.Routes{Pool: pool, Errors: errors, Logger: logger}
+	if err := draftCards.Check(); err != nil {
+		return err
+	}
+	draftCards.Register(api)
 	// The results of runs whose automation asked for an email, sent by this
 	// tier because it holds the SMTP client (automation_mail.go).
-	if err := startAutomationMail(ctx, settings, pool, logger); err != nil {
+	if err := startAutomationMail(serving, settings, pool, logger); err != nil {
 		return err
 	}
 
@@ -1624,9 +1759,6 @@ func run() error {
 	// and a thread's action log (empty until the chat's tools write it; the
 	// two undo routes wait for that and are not served).
 	notifications.Routes{Pool: pool, Errors: errors, Logger: logger}.Register(api)
-	// The administrator's announcements, each delivered as an inbox row
-	// to every active account (internal/siteannouncements).
-	siteannouncements.Routes{Pool: pool, Errors: errors, Logger: logger}.Register(api)
 	// The address "Report Issue" mails go to, for anyone: one setting,
 	// and no address at all when it is empty (internal/supportcontact).
 	supportContact := supportcontact.Route{Email: settings.SupportEmail}
@@ -1645,12 +1777,7 @@ func run() error {
 		Errors:       errors,
 		Logger:       logger,
 	}.Register(api)
-	agentflags.Route{
-		Disabled:          settings.DisableNewAgentStack,
-		PermissionEnabled: settings.PermissionEnabled,
-		Errors:            errors,
-		Logger:            logger,
-	}.Register(api)
+	agentflags.Route{Disabled: settings.DisableNewAgentStack, Errors: errors, Logger: logger}.Register(api)
 	agentactions.Route{Pool: pool, Errors: errors, Logger: logger}.Register(api)
 	// Undoing what the assistant changed: one action, or a turn's.
 	knowledgebase.Routes{Changes: knowledgeChanges, Errors: errors}.Register(api)
@@ -1727,13 +1854,13 @@ func run() error {
 
 	// The thread routes that read a body, from the package's own table.
 	withBodies = append(withBodies, threads.BodyRoutes()...)
+	// The one agent permission write: marking a tool "ask first".
+	withBodies = append(withBodies, agentrules.BodyRoutes()...)
 	// The model settings that read a body: a connection's writes and tests,
 	// the account's model choices, and the instructions check.
 	withBodies = append(withBodies, modelconnections.BodyRoutes()...)
 	withBodies = append(withBodies, modelchoices.BodyRoutes()...)
 	withBodies = append(withBodies, http.MethodPost+" "+instructionslint.Path)
-	// Writing an agent permission rule and changing one, likewise.
-	withBodies = append(withBodies, agentrules.BodyRoutes()...)
 
 	// The connection and MCP-server writes read a small JSON body through
 	// the buffered reader, from the package's own list. The uploads, the
@@ -1741,6 +1868,7 @@ func run() error {
 	// NOT here: an upload must be streamed, and the others read their own
 	// body with their own limit.
 	withBodies = append(withBodies, searchconnectors.BodyRoutes()...)
+	withBodies = append(withBodies, websearchconnect.BodyRoutes()...)
 	// Adding a mailbox and testing unsaved mailbox settings, likewise.
 	withBodies = append(withBodies, mailaccounts.BodyRoutes()...)
 	// Starting a Drive connect, whose body is optional.
@@ -1748,6 +1876,10 @@ func run() error {
 	// Starting a Microsoft mailbox connect. (The Drive import is not here:
 	// it reads its own body, with its own limit.)
 	withBodies = append(withBodies, microsoftmail.BodyRoutes()...)
+	// Connecting a JMAP mailbox, starting a Stalwart sign-in, and sending
+	// a confirmed draft.
+	withBodies = append(withBodies, jmapconnect.BodyRoutes()...)
+	withBodies = append(withBodies, mailconfirm.BodyRoutes()...)
 	// Saving and changing an automation and its triggers.
 	withBodies = append(withBodies, automations.WithBodies()...)
 
@@ -1815,7 +1947,8 @@ func run() error {
 		Forgeries: forgeries,
 		Limiter:   limiter,
 		// A password is checked at most ten times a minute from one
-		// client, on each of the two sign-in routes: the one control that
+		// client, on each of the routes that check or set one (the sign-in
+		// forms, the reset, the signed-in change): the one control that
 		// matters against guessing, beside the general limit above.
 		Attempts: ratelimit.Middleware{
 			Counter: limiter.Counter,
@@ -1828,12 +1961,18 @@ func run() error {
 		Gated:    answer,
 		Served:   served,
 		TestOnly: testOnlyRoutes,
+		// zero-cache's ZERO_QUERY_URL: the web app's live sync asks here
+		// which rows a named query may see. Behind the gate, so the cookie
+		// zero-cache forwards decides whose rows those are
+		// (internal/zerosync).
+		Internal: map[string]http.Handler{
+			http.MethodPost + " " + zerosync.Path: gate.Wrap(zerosync.Handler{Errors: errors, Logger: logger}),
+		},
 	}.handler()
 	if err != nil {
 		return err
 	}
 	server := &http.Server{
-		Addr:              settings.ListenAddress,
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
@@ -1843,8 +1982,8 @@ func run() error {
 
 	failed := make(chan error, 1)
 	go func() {
-		logger.Info("serving", slog.String("address", settings.ListenAddress))
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		logger.Info("serving", slog.String("address", listener.Addr().String()))
+		if err := server.Serve(listener); err != nil && err != http.ErrServerClosed {
 			failed <- err
 		}
 	}()
@@ -1855,6 +1994,19 @@ func run() error {
 	case <-ctx.Done():
 	}
 
+	// The stop, in order. First the drain: the server keeps answering, the
+	// Studio runner has stopped claiming (it watches ctx), and the turns and
+	// runs in flight are given workDrain to finish (drain.go).
+	drainWork(logger, workDrain, chatService, studioRunner)
+	// Then what is still going is stopped: a turn saves what it has, a
+	// Studio run gives its job back to the queue, a download or a page read
+	// records how it ended. Each writes with a context of its own, bounded
+	// by seconds, and both waits return once those writes are done.
+	endServing()
+	chatService.Wait()
+	studioRunner.Wait()
+	// Then the listener closes, and requests still being answered get the
+	// shutdown grace.
 	logger.Info("shutting down", slog.Duration("grace", settings.ShutdownGrace))
 	shutdown, cancelShutdown := context.WithTimeout(context.Background(), settings.ShutdownGrace)
 	defer cancelShutdown()
@@ -1888,9 +2040,6 @@ const (
 	// A report's suggestions are a longer answer than a lint: the model
 	// reads the report's outline and proposes outputs, twice at most.
 	reportSuggestionsTimeout = 30 * time.Second
-	// How long the proxy's catalogue of providers' models is kept before
-	// it is read again. It changes when the proxy is upgraded.
-	modelCatalogueFresh = time.Hour
 )
 
 func newLogger(level string) *slog.Logger {
@@ -1994,6 +2143,17 @@ type frontDoor struct {
 	// a stack that switched them on; nil everywhere else, and then no such
 	// path is mounted (internal/e2eseed).
 	TestOnly []string
+	// Internal is the routes only another service of the stack calls, by
+	// "METHOD /path", each handler already behind whatever credential check
+	// it needs. They are mounted outside the CSRF check and the per-client
+	// limiter, because their one caller is a server: zero-cache's query
+	// route (internal/zerosync) receives the browser's cookie forwarded
+	// with no Origin header, which the CSRF check would refuse, and every
+	// request comes from zero-cache's one address, which the limiter would
+	// count as one very busy client. Neither check protects anything there:
+	// the route writes nothing, and the stack's Caddy never sends /internal
+	// to the API, so no browser reaches it.
+	Internal map[string]http.Handler
 }
 
 func (d frontDoor) handler() (http.Handler, error) {
@@ -2026,7 +2186,7 @@ func (d frontDoor) handler() (http.Handler, error) {
 	//
 	// The method is named in each pattern so that any other method on the
 	// path falls through to "/" and so to the gate: a write under a public
-	// prefix (`POST /api/v1/public/{share_token}/clone`) takes a longer path
+	// prefix (a POST to `/api/v1/public/{share_token}`) takes a longer path
 	// or another method, matches none of these patterns, and needs a
 	// credential like any other write.
 	public := d.Ungated
@@ -2043,7 +2203,22 @@ func (d frontDoor) handler() (http.Handler, error) {
 	for _, pair := range d.TestOnly {
 		routes.Handle(pair, d.Forgeries.Middleware(d.Ungated))
 	}
-	routes.Handle("/", d.Forgeries.Middleware(d.Limiter.Wrap(d.Gated)))
+	for pair, handler := range d.Internal {
+		routes.Handle(pair, handler)
+	}
+	gated := d.Forgeries.Middleware(d.Limiter.Wrap(d.Gated))
+	routes.Handle("/", gated)
+	// The password routes behind the gate (the signed-in password change)
+	// are held to the same per-client attempts limit as the sign-in form,
+	// counted before the gate as the public ones are: a route that checks
+	// the current password must be no faster a way to guess it. Mounted by
+	// pattern, so no other gated request pays for the extra match.
+	if d.Attempts.Covers != nil {
+		limited := d.Forgeries.Middleware(d.Limiter.Wrap(d.Attempts.Wrap(d.Gated)))
+		for _, pair := range signin.SignedInPasswordAttempts() {
+			routes.Handle(pair, limited)
+		}
+	}
 
 	// In front of the mux, because both things it settles are decided by the
 	// mux before any handler runs: ServeMux answers a path with an empty
@@ -2082,24 +2257,15 @@ func (d frontDoor) handler() (http.Handler, error) {
 // answered to anybody. Each is also in servedRoutes(), because the rate
 // limiter counts them as the Python tier's SlowAPI does.
 func publicRoutes() []string {
-	routes := []string{
-		// The three public share-link reads. The share token in the path is
-		// the whole of the authorisation; a credential sent with one is never
-		// looked at, on either tier (internal/publicchat).
-		http.MethodGet + " " + publicchat.PagePath,
-		http.MethodGet + " " + publicchat.VideoPath,
-		http.MethodGet + " " + publicchat.PodcastPath,
-	}
 	// The sign-in routes: nobody is signed in yet, or the access token has
 	// expired and the refresh token in the request is the proof
 	// (internal/signin).
-	routes = append(routes, signin.Public()...)
-	// What a share link serves to whoever holds it: a snapshot link's
-	// files and streams, a notebook's live page and its files. The token in
-	// the path is the whole of the authorisation (internal/publicshare,
-	// internal/notebooklinks).
+	routes := append([]string{}, signin.Public()...)
+	// What a Studio output's public link serves to whoever holds it: its
+	// page and its files. The token in the path is the whole of the
+	// authorisation; a credential sent with one is never looked at
+	// (internal/publicshare).
 	routes = append(routes, publicshare.Public()...)
-	routes = append(routes, notebooklinks.Public()...)
 	// A signed media link inside a report: the signature is the proof.
 	routes = append(routes, medialinks.Public()...)
 	// The support address, shown on pages that have no session.
@@ -2113,6 +2279,12 @@ func publicRoutes() []string {
 	// Microsoft's callback of a mailbox connect, on the same terms
 	// (internal/microsoftmail).
 	routes = append(routes, microsoftmail.Public()...)
+	// A Stalwart server's sign-in callback (its proof is the attempt's
+	// sealed cookie) and the client document the server fetches.
+	routes = append(routes, jmapconnect.Public()...)
+	// An MCP server's OAuth callback, on the same terms
+	// (internal/searchconnectors, oauth_routes.go).
+	routes = append(routes, http.MethodGet+" "+searchconnectors.OAuthCallbackPath)
 	// The phone app's hand-off page, proved by the one-time code in its
 	// path, and its Picker page's import, proved by the ticket in its body
 	// (internal/apphandoff).
@@ -2159,19 +2331,11 @@ func servedRoutes() []string {
 		http.MethodPut + " " + folders.RenamePath,
 		http.MethodPut + " " + folders.MovePath,
 		http.MethodPut + " " + folders.ReorderPath,
-		http.MethodPatch + " " + folders.WatchedPath,
 		http.MethodDelete + " " + folders.DeletePath,
-		// GET /api/v1/prompts/public is a literal beside a GET of the list and
-		// three routes under /prompts/{prompt_id}; there is deliberately no
-		// GET of one prompt, here or there, so a GET of /prompts/7 is the
-		// Python tier's 405 and never reaches this tier
-		// (internal/prompts.ReadRoutes).
 		http.MethodGet + " " + prompts.ListPath,
-		http.MethodGet + " " + prompts.PublicPath,
 		http.MethodPost + " " + prompts.CreatePath,
 		http.MethodPut + " " + prompts.UpdatePath,
 		http.MethodDelete + " " + prompts.DeletePath,
-		http.MethodPost + " " + prompts.CopyPath,
 		http.MethodPut + " " + folders.DocumentMovePath,
 		http.MethodPut + " " + folders.BulkMovePath,
 		http.MethodGet + " " + publiclinks.ListPath,
@@ -2183,26 +2347,20 @@ func servedRoutes() []string {
 		http.MethodPatch + " " + accountprofile.SettingsUpdatePath,
 		// The documents slice, the citation route first.
 		http.MethodGet + " " + documents.ByChunkPath,
+		http.MethodGet + " " + citedsources.Path,
 		http.MethodGet + " " + documents.ChunksPath,
 		http.MethodGet + " " + documents.VersionsPath,
 		http.MethodGet + " " + documents.VersionPath,
 		http.MethodPost + " " + documents.RestorePath,
 		http.MethodGet + " " + documents.StatusPath,
 		http.MethodGet + " " + documents.TypeCountsPath,
-		http.MethodGet + " " + documents.WatchedFoldersPath,
 		http.MethodGet + " " + documents.TitlesPath,
 		http.MethodGet + " " + documentcontent.Path,
-		// Public, and counted all the same: the list is what the rate
-		// limiter counts against, and a public read is no exception
-		// (publicRoutes).
-		http.MethodGet + " " + publicchat.PagePath,
-		http.MethodGet + " " + publicchat.VideoPath,
-		http.MethodGet + " " + publicchat.PodcastPath,
 		http.MethodGet + " " + modelconnections.ProvidersPath,
 		http.MethodGet + " " + modelconnections.ConnectionsPath,
-		// Five of the search-connector reads. The MCP server's delete and the
-		// two trust routes are absent on purpose; the registration block in
-		// run says what they wait for.
+		// Five of the search-connector reads. The MCP server's delete is
+		// absent on purpose; the registration block in run says what it
+		// waits for.
 		http.MethodGet + " " + searchconnectors.ListPath,
 		http.MethodGet + " " + searchconnectors.ServersPath,
 		http.MethodGet + " " + searchconnectors.OnePath,
@@ -2211,8 +2369,6 @@ func servedRoutes() []string {
 		// the chat's MCP cache could be invalidated across processes.
 		http.MethodDelete + " " + searchconnectors.OnePath,
 		http.MethodDelete + " " + searchconnectors.ServerPath,
-		http.MethodPost + " " + searchconnectors.TrustPath,
-		http.MethodPost + " " + searchconnectors.UntrustPath,
 		http.MethodPut + " " + searchconnectors.EnabledPath,
 		http.MethodPost + " " + searchconnectors.ListPath,
 		http.MethodPut + " " + searchconnectors.OnePath,
@@ -2220,6 +2376,15 @@ func servedRoutes() []string {
 		http.MethodPut + " " + searchconnectors.ServerPath,
 		http.MethodPost + " " + searchconnectors.ServerTestPath,
 		http.MethodGet + " " + searchconnectors.ServerPolicyPath,
+		// An MCP server's OAuth sign-in; the callback takes no credential
+		// (publicRoutes).
+		http.MethodPost + " " + searchconnectors.OAuthDiscoverPath,
+		http.MethodPost + " " + searchconnectors.OAuthStartPath,
+		http.MethodGet + " " + searchconnectors.OAuthCallbackPath,
+		// Exa and Tavily, connected natively.
+		http.MethodGet + " " + websearchconnect.ListPath,
+		http.MethodPut + " " + websearchconnect.ProviderPath,
+		http.MethodDelete + " " + websearchconnect.ProviderPath,
 		http.MethodGet + " " + nextcloudconnect.ConnectionPath,
 		http.MethodPost + " " + nextcloudconnect.LoginPath,
 		http.MethodPost + " " + nextcloudconnect.PollPath,
@@ -2235,6 +2400,22 @@ func servedRoutes() []string {
 		http.MethodGet + " " + microsoftmail.AvailabilityPath,
 		http.MethodPost + " " + microsoftmail.ConnectPath,
 		http.MethodGet + " " + microsoftmail.CallbackPath,
+		// A JMAP mailbox: its list and connects, Stalwart's sign-in and the
+		// client document (internal/jmapconnect), and the draft card's
+		// confirmation, send and discard and the list of drafts still
+		// waiting (internal/mailconfirm).
+		http.MethodGet + " " + jmapconnect.AccountsPath,
+		http.MethodPost + " " + jmapconnect.AccountsPath,
+		http.MethodDelete + " " + jmapconnect.AccountPath,
+		http.MethodPost + " " + jmapconnect.AccountTestPath,
+		http.MethodGet + " " + jmapconnect.AvailabilityPath,
+		http.MethodPost + " " + jmapconnect.ConnectPath,
+		http.MethodGet + " " + jmapconnect.CallbackPath,
+		http.MethodGet + " " + jmapconnect.ClientDocumentPath,
+		http.MethodPost + " " + mailconfirm.ConfirmationPath,
+		http.MethodPost + " " + mailconfirm.SendPath,
+		http.MethodPost + " " + mailconfirm.DiscardPath,
+		http.MethodGet + " " + mailconfirm.WaitingPath,
 		http.MethodGet + " " + driveconnect.ConnectionPath,
 		http.MethodPost + " " + driveconnect.ConnectPath,
 		http.MethodGet + " " + driveconnect.AddPath,
@@ -2290,8 +2471,8 @@ func servedRoutes() []string {
 	routes = append(routes, modelconnections.WriteRouteList()...)
 	routes = append(routes, modelchoices.Routes()...)
 	routes = append(routes, http.MethodPost+" "+instructionslint.Path)
-	// The four agent permission rule routes, likewise.
-	routes = append(routes, agentrules.AllRoutes()...)
+	// The two agent permission routes, likewise.
+	routes = append(routes, agentrules.Served()...)
 	// The seven routes of a document's life, from the package that mounts
 	// them, for the reason the notebooks' list is taken from theirs.
 	routes = append(routes, documentlifecycle.Served()...)
@@ -2318,26 +2499,30 @@ func servedRoutes() []string {
 	// The inbox, the agent flags, a thread's action log and its undo.
 	routes = append(routes, notifications.Served()...)
 	routes = append(routes, agentflags.Served()...)
+	// The retired sharing routes installed phone builds still call.
+	routes = append(routes, retiredshare.Served()...)
+	routes = append(routes, retiredsettings.Served()...)
 	routes = append(routes, agentactions.Served()...)
 	routes = append(routes, knowledgebase.Served()...)
 	// An account's automations, their triggers and their runs.
 	routes = append(routes, automations.Served()...)
+	routes = append(routes, automationdrafts.Served()...)
 	routes = append(routes, http.MethodPost+" "+deliverablejobs.CancelPath, http.MethodPost+" "+deliverablejobs.RetryPath,
 		http.MethodGet+" "+deliverablejobs.ReadPath)
-	// The phone's push registration and choices, and the sign-in options.
+	// The phone's push registration and choices, the presence heartbeat,
+	// and the sign-in options.
 	routes = append(routes, pushdevices.Served()...)
+	routes = append(routes, presencebeat.Served()...)
 	routes = append(routes, signinoptions.Served()...)
-	// The task log list, the site's own model connections, the studio's
-	// views and media links, both kinds of share link, the notebook copy,
-	// the announcements, the crash reports and the support address.
+	// The task log list, the studio's views and media links, an output's
+	// public link (public, and counted all the same: the rate limiter counts
+	// against this list), the notebook copy, the crash reports and the
+	// support address.
 	routes = append(routes, http.MethodGet+" "+activitylogs.ListPath)
-	routes = append(routes, modelconnections.GlobalRouteList()...)
 	routes = append(routes, studioviews.Served()...)
 	routes = append(routes, medialinks.Served()...)
 	routes = append(routes, publicshare.Served()...)
-	routes = append(routes, notebooklinks.Served()...)
 	routes = append(routes, notebookcopy.Served()...)
-	routes = append(routes, siteannouncements.Served()...)
 	routes = append(routes, clienterrors.Served()...)
 	routes = append(routes, supportcontact.Served()...)
 	// What an AI agent's sign-in form needs pasted.

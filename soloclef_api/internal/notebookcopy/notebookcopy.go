@@ -12,7 +12,7 @@
 //
 // # What is not
 //
-// Chats, studio outputs, the public link and the pin stay with the
+// Chats, studio outputs (and their public links) and the pin stay with the
 // original: a copy starts a fresh conversation over the same sources and is
 // shared with nobody. Notes filed in the original stay filed there. A note
 // is one document filed in one notebook, so "copying" one would make a

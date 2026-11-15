@@ -1,13 +1,11 @@
 "use client";
 
-import { useSetAtom } from "jotai";
 import {
 	Bell,
 	Check,
 	ChevronRight,
 	ChevronUp,
 	ExternalLink,
-	FolderSync,
 	Info,
 	Languages,
 	LogOut,
@@ -20,9 +18,7 @@ import Image from "next/image";
 import { useTranslations } from "next-intl";
 import type React from "react";
 import { Fragment, useRef, useState } from "react";
-import { watchedFoldersRefreshAtom } from "@/atoms/documents/folder.atoms";
 import { ConnectAgentDialog, McpIcon } from "@/components/mcp/connect-agent-dialog";
-import { FolderWatchDialog } from "@/components/sources/FolderWatchDialog";
 import { Button } from "@/components/ui/button";
 import { Drawer, DrawerContent, DrawerHandle, DrawerTitle } from "@/components/ui/drawer";
 import {
@@ -41,7 +37,6 @@ import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useLocaleContext } from "@/contexts/LocaleContext";
 import { useMediaQuery } from "@/hooks/use-media-query";
-import { usePlatform } from "@/hooks/use-platform";
 import { APP_VERSION } from "@/lib/env-config";
 import { getUserAvatarColor, getUserInitials } from "@/lib/user-avatar";
 import { cn } from "@/lib/utils";
@@ -161,9 +156,6 @@ export function SidebarUserProfile({
 	const displayName = user.name || user.email.split("@")[0];
 	const useMobileSubmenus = !isDesktopViewport;
 	const [connectAgentOpen, setConnectAgentOpen] = useState(false);
-	const [folderWatchOpen, setFolderWatchOpen] = useState(false);
-	const { isDesktop } = usePlatform();
-	const bumpWatchedFoldersRefresh = useSetAtom(watchedFoldersRefreshAtom);
 	// A menu item's action runs once the menu has closed (onCloseAutoFocus), and
 	// the menu then leaves focus alone: a dialog or panel the action opens keeps
 	// it instead of losing it to the avatar and closing again.
@@ -221,12 +213,6 @@ export function SidebarUserProfile({
 					<SidebarButtonBadge>{t("new_badge")}</SidebarButtonBadge>
 				</DropdownMenuItem>
 			)}
-			{isDesktop && (
-				<DropdownMenuItem onSelect={act(() => setFolderWatchOpen(true), true)}>
-					<FolderSync className="h-4 w-4" />
-					{t("watch_local_folder")}
-				</DropdownMenuItem>
-			)}
 		</>
 	);
 
@@ -235,13 +221,6 @@ export function SidebarUserProfile({
 			{showConnectAgent && (
 				<ConnectAgentDialog open={connectAgentOpen} onOpenChange={setConnectAgentOpen} />
 			)}
-			{isDesktop ? (
-				<FolderWatchDialog
-					open={folderWatchOpen}
-					onOpenChange={setFolderWatchOpen}
-					onSuccess={() => bumpWatchedFoldersRefresh((c) => c + 1)}
-				/>
-			) : null}
 		</>
 	);
 

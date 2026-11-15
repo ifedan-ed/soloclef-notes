@@ -7,21 +7,19 @@ import {
 	isRunning,
 } from "../../../features/inbox-clearing/lib/clear-scope";
 
-test("the Unread tab clears only unread items; every other tab clears all of its items", () => {
+test("the Unread tab clears only unread items; All clears every item", () => {
 	const read = { read: true };
 	const unread = { read: false };
 
-	for (const tab of ["all", "announcements"] as const) {
-		assert.equal(isCleared(read, clearScopeFor(tab)), true, tab);
-		assert.equal(isCleared(unread, clearScopeFor(tab)), true, tab);
-	}
+	assert.equal(isCleared(read, clearScopeFor("all")), true);
+	assert.equal(isCleared(unread, clearScopeFor("all")), true);
 	assert.equal(isCleared(read, clearScopeFor("unread")), false);
 	assert.equal(isCleared(unread, clearScopeFor("unread")), true);
 });
 
 test("a running job's item is never cleared, read or not, on any tab", () => {
 	const running = { metadata: { status: "in_progress" } };
-	for (const tab of ["all", "announcements", "unread"] as const) {
+	for (const tab of ["all", "unread"] as const) {
 		assert.equal(isCleared({ ...running, read: false }, clearScopeFor(tab)), false, tab);
 		assert.equal(isCleared({ ...running, read: true }, clearScopeFor(tab)), false, tab);
 	}
@@ -35,6 +33,5 @@ test("a running job's item is never cleared, read or not, on any tab", () => {
 
 test("the question names what the tab clears", () => {
 	assert.equal(clearConfirmTitle("all"), "Clear all notifications?");
-	assert.equal(clearConfirmTitle("announcements"), "Clear all announcements?");
 	assert.equal(clearConfirmTitle("unread"), "Clear all unread notifications?");
 });

@@ -24,6 +24,12 @@ export interface ClientErrorPayload {
 	digest: string;
 	build: string;
 	request_id: string;
+	/** The page reloaded itself to recover (lib/chunk-reload): logged, not a crash anyone saw. */
+	recovered_by_reload: boolean;
+}
+
+export interface ClientErrorOptions {
+	recoveredByReload?: boolean;
 }
 
 const MAX_REPORTS_PER_PAGE = 5;
@@ -47,7 +53,8 @@ function clip(value: unknown, max: number): string {
 export function buildClientErrorPayload(
 	kind: ClientErrorKind,
 	error: unknown,
-	pathname: string
+	pathname: string,
+	options: ClientErrorOptions = {}
 ): ClientErrorPayload {
 	const err = (error && typeof error === "object" ? error : {}) as {
 		name?: unknown;
@@ -67,6 +74,7 @@ export function buildClientErrorPayload(
 		digest: clip(err.digest, 100),
 		build: CLIENT_BUILD_ID,
 		request_id: clip(err.requestId, 64),
+		recovered_by_reload: options.recoveredByReload === true,
 	};
 }
 
@@ -79,11 +87,12 @@ export function resetClientErrorReports(): void {
 /** Returns the payload it sent, or null when skipped. Never throws. */
 export function reportClientError(
 	kind: ClientErrorKind,
-	error: unknown
+	error: unknown,
+	options: ClientErrorOptions = {}
 ): ClientErrorPayload | null {
 	try {
 		if (typeof window === "undefined" || sent >= MAX_REPORTS_PER_PAGE) return null;
-		const payload = buildClientErrorPayload(kind, error, window.location.pathname);
+		const payload = buildClientErrorPayload(kind, error, window.location.pathname, options);
 		const key = `${payload.name}|${payload.message}|${payload.path}`;
 		if (seen.has(key)) return null;
 		seen.add(key);
@@ -103,15 +112,29 @@ export function reportClientError(
 
 let installed = false;
 
+/**
+ * Takes an error before it is reported, and answers true when it handled it
+ * (lib/chunk-reload's recoverByReload: a chunk that failed to load reloads
+ * the page and reports itself). Passed in rather than imported, because
+ * that module reports through this one.
+ */
+export type ClientErrorRecovery = (kind: ClientErrorKind, error: unknown) => boolean;
+
 /** Listen for errors no boundary caught. Idempotent. */
-export function installGlobalClientErrorHandlers(): void {
+export function installGlobalClientErrorHandlers(recover: ClientErrorRecovery): void {
 	if (installed || typeof window === "undefined") return;
 	installed = true;
 	window.addEventListener("error", (event) => {
 		// Resource load failures (img/script 404s) have no `error`; skip them.
-		if (event.error) reportClientError("window-error", event.error);
+		if (event.error && !recover("window-error", event.error)) {
+			reportClientError("window-error", event.error);
+		}
 	});
+	// Where a part of the app is loaded outside React (an `await import()` in
+	// a click handler), a chunk that fails to load ends up here.
 	window.addEventListener("unhandledrejection", (event) => {
-		reportClientError("unhandled-rejection", event.reason);
+		if (!recover("unhandled-rejection", event.reason)) {
+			reportClientError("unhandled-rejection", event.reason);
+		}
 	});
 }

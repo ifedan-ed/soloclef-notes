@@ -125,6 +125,10 @@ export const automationCreateRequest = z.object({
 	description: z.string().nullable().optional(),
 	definition: automationDefinition,
 	triggers: z.array(triggerCreateRequest).default([]),
+	// The chat draft the card creates this from: the server marks it created
+	// in the same transaction, so a draft becomes an automation once. The
+	// builder sends none.
+	draft_id: z.string().uuid().optional(),
 });
 export type AutomationCreateRequest = z.infer<typeof automationCreateRequest>;
 

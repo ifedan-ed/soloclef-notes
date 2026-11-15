@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { useSupportEmail } from "@/lib/brand/use-support-email";
+import { useReloadOnChunkError } from "@/lib/chunk-reload/use-reload-on-chunk-error";
 import { reportClientError } from "@/lib/client-error-report";
 import { buildIssueUrl } from "@/lib/error-toast";
 
@@ -14,17 +15,24 @@ export default function DashboardError({
 	error: globalThis.Error & { digest?: string; code?: string; requestId?: string };
 	reset: () => void;
 }) {
+	// A tab older than the deploy that cannot load its own code reloads
+	// into the new build instead of showing this page.
+	const reloading = useReloadOnChunkError(error, "error-boundary");
+
 	useEffect(() => {
+		if (reloading) return;
 		reportClientError("error-boundary", error);
 		import("posthog-js")
 			.then(({ default: posthog }) => {
 				posthog.captureException(error);
 			})
 			.catch(() => {});
-	}, [error]);
+	}, [error, reloading]);
 
 	const supportEmail = useSupportEmail();
 	const issueUrl = useMemo(() => buildIssueUrl(error, supportEmail), [error, supportEmail]);
+
+	if (reloading) return null;
 
 	return (
 		<div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">

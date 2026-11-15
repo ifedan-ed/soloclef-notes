@@ -5,9 +5,8 @@
 // (ByChunkRoute), a document's chunks a page at a time, its version history,
 // one version, and the restore of one.
 //
-// Four answer about all of the caller's documents (reads.go): the status
-// poll, the counts by type, the watched folders and the mention picker's
-// title search.
+// Three answer about all of the caller's documents (reads.go): the status
+// poll, the counts by type and the mention picker's title search.
 //
 // # Whose documents
 //
@@ -26,11 +25,11 @@
 //   - Each list is read in an order its statement fixes: the chunks by
 //     `position, id`, the versions by a number the table makes unique per
 //     document, the statuses by id, the counts by the type.
-//   - Five of the nine catch their own failures and four do not, so a 500
+//   - Five of the eight catch their own failures and three do not, so a 500
 //     from the chunk routes, the status poll, the counts and the title
 //     search carries the CORS headers, and a 500 from the version routes
-//     and the watched folders carries none (failure.go).
-//   - The four reads take their query string as starlette_query.go reads
+//     carries none (failure.go).
+//   - The three reads take their query string as starlette_query.go reads
 //     it, and the status poll writes a query value back into its 400.
 //   - The title search's threshold is compared in double precision, which
 //     decides whether a title exactly three tenths alike is found

@@ -26,12 +26,12 @@ type Option struct {
 	// say whose model it is.
 	Connection string
 	// Chat says the model answers a conversation: not stated otherwise.
-	// Vision says it may be shown pictures (not stated otherwise), Images
-	// that it draws (stated so). The menus filter on these as the proxy's
-	// lists are filtered on the proxy's modes.
+	// Vision says it may be shown pictures (not stated otherwise). The
+	// menus filter on these as the proxy's lists are filtered on the
+	// proxy's modes. (Nothing here draws: there is no image model to
+	// choose, so whether a model draws is not read.)
 	Chat   bool
 	Vision bool
-	Images bool
 }
 
 // Endpoint is what calling one model of an account's own connection needs.
@@ -68,14 +68,12 @@ func (s Store) Menu(ctx context.Context, userID string) ([]Option, error) {
 			base = *row.BaseUrl
 		}
 		// Unknown is "not said otherwise" for chat and pictures in, as the
-		// proxy's unstated modes are; drawing must be stated, because a
-		// chat model sent a drawing request fails.
+		// proxy's unstated modes are.
 		chat := row.SupportsChat == nil || *row.SupportsChat
 		options = append(options, Option{
 			ID: Choice(row.ID), RowID: row.ID, ModelID: row.ModelID, Label: label, Connection: HostOf(base),
 			Chat:   chat,
 			Vision: chat && (row.SupportsImageInput == nil || *row.SupportsImageInput),
-			Images: row.SupportsImageGeneration != nil && *row.SupportsImageGeneration,
 		})
 	}
 	return options, nil

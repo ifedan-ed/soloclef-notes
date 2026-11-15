@@ -9,8 +9,8 @@ import { desktopDevice as desktop, phoneDevice as phone } from "./tests/helpers/
  * 1. The isolated stack (default). `scripts/e2e-stack-go.sh up` starts a
  *    throwaway copy of the whole app: docker-compose.go.yml with the e2e
  *    overlay (the /__e2e__ token mint switched on, a stand-in model proxy,
- *    stand-in Nextcloud and Google), zero-cache, this checkout's frontend and
- *    the same Caddy routing, on http://127.0.0.1:3945. Projects `setup`,
+ *    stand-in Nextcloud and Google), zero-cache, and the same Caddy routing
+ *    serving this checkout's web app, on http://127.0.0.1:3945. Projects `setup`,
  *    `desktop` and `phone` run here and may create, edit and delete anything.
  *
  * 2. Production, read-only. Project `prod-smoke` runs tests/prod-smoke against

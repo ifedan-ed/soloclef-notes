@@ -15,6 +15,14 @@ export interface EditViewActions {
 	mailboxesNote: string | null;
 }
 
+/**
+ * Removing an MCP server is its disconnect: the server is deleted with its
+ * stored secrets, and an OAuth sign-in is revoked at the provider, so the
+ * warning says both.
+ */
+export const MCP_DISCONNECT_WARNING =
+	"This removes the server: your chats lose its tools, and an OAuth sign-in is revoked.";
+
 export const EMAIL_MAILBOXES_NOTE =
 	"Mailboxes are added and removed on the Email (IMAP) card, under Overview.";
 
@@ -26,6 +34,9 @@ export const EMAIL_MAILBOXES_NOTE =
  * Disconnect's confirm step says what is lost. Nextcloud and Google Drive
  * disconnect through their own routes and the files already added stay
  * (use-connector-dialog); any other connection takes its documents with it.
+ *
+ * An MCP server saves from its own form (mcp-config.tsx), so the footer's
+ * Save is not offered for it.
  *
  * Email (IMAP) has nothing to save here and no Disconnect: its mailboxes are
  * added and removed one by one on its card, and the generic delete would
@@ -45,7 +56,7 @@ export function editViewActions(
 	const canDisconnect = !isEmail;
 
 	const disconnectWarning = isLive
-		? "Your agent will lose access to this service"
+		? MCP_DISCONNECT_WARNING
 		: connector.connector_type === EnumConnectorName.NEXTCLOUD_CONNECTOR
 			? "This disconnects Nextcloud. Files you already added stay."
 			: connector.connector_type === EnumConnectorName.GOOGLE_DRIVE_CONNECTOR
@@ -53,7 +64,7 @@ export function editViewActions(
 				: "This disconnects it and deletes the documents it brought in.";
 
 	const subtitle = isLive
-		? "Manage your connected account"
+		? "Its address and sign-in"
 		: isEmail
 			? "Whether your chats and automations can read your mail"
 			: "Manage your connector settings and sync configuration";

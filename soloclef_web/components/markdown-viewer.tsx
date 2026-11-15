@@ -4,6 +4,7 @@ import { Streamdown, type StreamdownProps } from "streamdown";
 import "katex/dist/katex.min.css";
 import Image from "next/image";
 import { useMemo } from "react";
+import { CitationNumbersProvider } from "@/components/citations/citation-numbers-context";
 import { processChildrenWithCitations } from "@/components/citations/citation-renderer";
 import { type CitationUrlMap, preprocessCitationMarkdown } from "@/lib/citations/citation-parser";
 import { cn } from "@/lib/utils";
@@ -83,6 +84,8 @@ export function MarkdownViewer({
 			urlMap: map,
 		};
 	}, [displayContent, enableCitations]);
+
+	const citedTexts = useMemo(() => [displayContent], [displayContent]);
 
 	// Do not wrap anchors or code; citation buttons inside them would be invalid.
 	const wrap = (children: React.ReactNode): React.ReactNode =>
@@ -192,7 +195,7 @@ export function MarkdownViewer({
 		),
 	};
 
-	return (
+	const viewer = (
 		<div
 			className={cn(
 				"max-w-none overflow-hidden",
@@ -217,5 +220,12 @@ export function MarkdownViewer({
 				</p>
 			)}
 		</div>
+	);
+	// Chips are numbered 1, 2, 3 within what this viewer shows, as an
+	// answer's are (lib/citations/citation-numbering.ts).
+	return enableCitations ? (
+		<CitationNumbersProvider texts={citedTexts}>{viewer}</CitationNumbersProvider>
+	) : (
+		viewer
 	);
 }

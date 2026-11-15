@@ -7,7 +7,11 @@ import {
 	RETRIEVAL_SCOPES,
 	scopeForMentionKinds,
 } from "../../../contracts/types/retrieval-scope.types";
-import { parseRetrievalScopeCookie } from "../../../lib/chat/retrieval-scope-preferences";
+import {
+	parseRetrievalScopeCookie,
+	RETRIEVAL_SCOPE_COOKIE,
+	readRetrievalScopeCookie,
+} from "../../../lib/chat/retrieval-scope-preferences";
 
 test("retrieval scope contract is closed and defaults to documents", () => {
 	assert.deepEqual(RETRIEVAL_SCOPES, ["documents", "web", "all"]);
@@ -61,17 +65,21 @@ test("composer reconciles scope when mentions arrive outside the inline picker",
 	assert.notEqual(mentionSync, -1);
 });
 
-test("dashboard seeds scope from the server cookie before rendering chat", () => {
-	const layout = readFileSync(
-		new URL("../../../app/dashboard/layout.tsx", import.meta.url),
-		"utf8"
-	);
-	const clientLayout = readFileSync(
-		new URL("../../../app/dashboard/client-layout.tsx", import.meta.url),
-		"utf8"
-	);
-	assert.ok(layout.includes("initialRetrievalScope={initialRetrievalScope}"));
-	assert.ok(clientLayout.includes("initialScope={initialRetrievalScope}"));
+test("the saved scope is read from the browser's cookie, for the account that saved it", () => {
+	// The dashboard is a static page now: the cookie is read in the browser,
+	// once the account is known (components/assistant-ui/retrieval-scope-provider.tsx).
+	const g = globalThis as { document?: { cookie: string } };
+	const before = g.document;
+	try {
+		g.document = { cookie: `a=1; ${RETRIEVAL_SCOPE_COOKIE}=${encodeURIComponent("user-1:web")}` };
+		assert.equal(readRetrievalScopeCookie("user-1"), "web");
+		assert.equal(readRetrievalScopeCookie("user-2"), DEFAULT_RETRIEVAL_SCOPE, "someone else's choice");
+		assert.equal(readRetrievalScopeCookie(undefined), DEFAULT_RETRIEVAL_SCOPE, "account not known yet");
+		g.document = { cookie: "" };
+		assert.equal(readRetrievalScopeCookie("user-1"), DEFAULT_RETRIEVAL_SCOPE);
+	} finally {
+		g.document = before;
+	}
 });
 
 test("segmented control renders its indicator position without client measurement", () => {

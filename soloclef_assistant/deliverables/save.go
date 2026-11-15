@@ -2,6 +2,7 @@ package deliverables
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -124,7 +125,7 @@ func (s Saver) SaveMindMap(ctx context.Context, owner Owner, toolCallID string, 
 	})
 }
 
-// pdfMime is the type of a PDF report and of every preview.
+// pdfMime is the type of a PDF report and of a document's preview.
 const pdfMime = "application/pdf"
 
 // BuiltDocument is a file built in the sandbox that passed verification,
@@ -140,6 +141,11 @@ type BuiltDocument struct {
 	// Preview is the PDF the pages were checked on, for a Word document
 	// and a deck; nil otherwise.
 	Preview []byte
+	// LayoutFindings are what the layout rules found in a drawn deck's
+	// preview. A built document is never saved with any (it goes back to
+	// its model for repair); a drawn deck is, marked unverified, because
+	// they are faults in the drawing, which no model can repair.
+	LayoutFindings []string
 }
 
 // SaveDocument stores a built document as a new artifact: the file, and for
@@ -149,9 +155,18 @@ func (s Saver) SaveDocument(ctx context.Context, owner Owner, toolCallID string,
 	if !known {
 		return Saved{}, fmt.Errorf("deliverables: %q is not a built format", document.Format)
 	}
-	// Every check is measurement now, made before the save is allowed, so
-	// a saved document is always a verified one.
+	// Every check is measurement, made before the save; a document is
+	// verified unless the layout rules found something in a drawn deck.
 	metadata := []byte(verifiedMetadata)
+	if len(document.LayoutFindings) > 0 {
+		var err error
+		metadata, err = json.Marshal(map[string]any{"verification": map[string]any{
+			"verified": false, "reason": "the layout rules found: " + strings.Join(document.LayoutFindings, "; "),
+		}})
+		if err != nil {
+			return Saved{}, err
+		}
+	}
 	name := slug(document.Title, document.Format)
 	artifact := NewArtifact{
 		Owner: owner, ToolCallID: toolCallID, Title: document.Title, Format: document.Format,
@@ -159,7 +174,7 @@ func (s Saver) SaveDocument(ctx context.Context, owner Owner, toolCallID string,
 		Filename: name + format.suffix, MimeType: format.mime, Data: document.Data,
 	}
 	if len(document.Preview) > 0 {
-		artifact.Preview, artifact.PreviewFilename = document.Preview, name+".pdf"
+		artifact.Preview, artifact.PreviewFilename, artifact.PreviewMimeType = document.Preview, name+".pdf", pdfMime
 		artifact.PreviewKey = func(artifactID int64) string {
 			return "artifacts/" + owner.UserID + "/" + strconv.FormatInt(artifactID, 10) + "/preview/" + s.NewID() + ".pdf"
 		}
@@ -200,7 +215,7 @@ func (s Saver) save(ctx context.Context, artifact NewArtifact) (Saved, error) {
 		files = append(files, SavedFile{FileID: created.FileID, Role: "primary", Filename: artifact.Filename, MimeType: artifact.MimeType, SizeBytes: len(artifact.Data)})
 	}
 	if created.PreviewFileID != 0 {
-		files = append(files, SavedFile{FileID: created.PreviewFileID, Role: "preview", Filename: artifact.PreviewFilename, MimeType: pdfMime, SizeBytes: len(artifact.Preview)})
+		files = append(files, SavedFile{FileID: created.PreviewFileID, Role: "preview", Filename: artifact.PreviewFilename, MimeType: artifact.PreviewMimeType, SizeBytes: len(artifact.Preview)})
 	}
 	return Saved{Status: statusSaved, ArtifactID: created.ArtifactID, Generation: 1, Title: artifact.Title, Format: artifact.Format, Files: files}, nil
 }

@@ -1,33 +1,48 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { caddyLines } from "./caddy-routes";
 
 // Run with: pnpm exec tsx --test tests/unit/security-headers.test.ts
 
-// The pages' own headers, as next.config.ts serves them. Without them any
-// site could frame the app (clickjacking: a framed "Delete" or "Make public"
-// under a decoy button). SameSite=Lax keeps cross-site frames signed out, but
-// every host under the same registrable domain is the same site, so the
-// cookies are sent there.
-import { PAGE_SECURITY_HEADERS, pageSecurityHeaderRules } from "../../lib/security-headers";
+// The pages' own headers, as the stack's Caddy serves them with the static
+// site (docker/proxy-go/routes.caddy). Without them any site could frame the
+// app (clickjacking: a framed "Delete" or "Make public" under a decoy
+// button). SameSite=Lax keeps cross-site frames signed out, but every host
+// under the same registrable domain is the same site, so the cookies are
+// sent there.
 
-function header(name: string): string | undefined {
-	return PAGE_SECURITY_HEADERS.find((entry) => entry.key.toLowerCase() === name.toLowerCase())
-		?.value;
+/** The `header { ... }` block with no matcher: the one every page gets. */
+function pageHeaders(): Map<string, string> {
+	const lines = caddyLines();
+	const start = lines.indexOf("header {");
+	assert.ok(start >= 0, "routes.caddy has a header block for the pages");
+	const headers = new Map<string, string>();
+	for (const line of lines.slice(start + 1)) {
+		if (line === "}") break;
+		const match = /^(\S+)\s+"(.*)"$/.exec(line);
+		assert.ok(match, `unreadable header line: ${line}`);
+		headers.set(match[1].toLowerCase(), match[2]);
+	}
+	return headers;
 }
 
 test("no other site may frame a page", () => {
-	assert.equal(header("X-Frame-Options"), "SAMEORIGIN");
-	assert.match(header("Content-Security-Policy") ?? "", /frame-ancestors 'self'/);
+	assert.equal(pageHeaders().get("x-frame-options"), "SAMEORIGIN");
+	assert.match(pageHeaders().get("content-security-policy") ?? "", /frame-ancestors 'self'/);
 });
 
 test("pages are not sniffed and do not leak their address", () => {
-	assert.equal(header("X-Content-Type-Options"), "nosniff");
-	assert.equal(header("Referrer-Policy"), "strict-origin-when-cross-origin");
+	assert.equal(pageHeaders().get("x-content-type-options"), "nosniff");
+	assert.equal(pageHeaders().get("referrer-policy"), "strict-origin-when-cross-origin");
 });
 
-test("the rule covers every page", () => {
-	const rules = pageSecurityHeaderRules();
-	assert.equal(rules.length, 1);
-	assert.equal(rules[0].source, "/:path*");
-	assert.deepEqual(rules[0].headers, PAGE_SECURITY_HEADERS);
+test("the headers are set for the pages, after every API path is passed on", () => {
+	// Inside the one route, in order: everything before the block is the
+	// API's (it answers with its own headers), everything after it a page.
+	const lines = caddyLines();
+	const block = lines.indexOf("header {");
+	const lastProxy = lines.map((line) => line.startsWith("reverse_proxy ")).lastIndexOf(true);
+	assert.ok(lastProxy >= 0 && lastProxy < block, "every reverse_proxy comes before the headers");
+	const fileServer = lines.findIndex((line) => line.startsWith("file_server"));
+	assert.ok(fileServer > block, "the pages are served after the headers");
 });

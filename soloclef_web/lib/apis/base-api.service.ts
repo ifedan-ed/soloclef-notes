@@ -1,7 +1,5 @@
 import type { ZodType } from "zod";
-import { getDesktopAccessToken } from "@/lib/auth-fetch";
 import { buildBackendUrl } from "@/lib/env-config";
-import { getClientPlatform } from "../agent-filesystem";
 import { handleUnauthorized, refreshSession } from "../auth-utils";
 import {
 	AbortedError,
@@ -72,7 +70,6 @@ function captureApiException(error: unknown, url: string, method?: RequestOption
 				// `api_url` is relative, so our own backend misconfiguration and a
 				// user simply being offline used to look identical in PostHog.
 				api_host: safeHost(buildBackendUrl(url)),
-				client_platform: typeof window === "undefined" ? "web" : getClientPlatform(),
 				navigator_online: typeof navigator === "undefined" ? null : navigator.onLine,
 				...(error instanceof AppError && {
 					status_code: error.status,
@@ -114,14 +111,12 @@ class BaseApiService {
 		"/auth/jwt/refresh",
 		"/auth/forgot-password",
 		"/auth/reset-password",
+		// Read by the Forgot password page, where nobody is signed in.
+		"/api/v1/sign-in-options",
 	];
 
 	// Prefixes that don't require auth (checked with startsWith)
 	noAuthPrefixes: string[] = ["/api/v1/public/"];
-
-	get isDesktopClient(): boolean {
-		return typeof window !== "undefined" && !!window.electronAPI;
-	}
 
 	async request<T, R extends ResponseType = ResponseType.JSON>(
 		url: string,
@@ -148,14 +143,8 @@ class BaseApiService {
 				this.noAuthEndpoints.includes(url) ||
 				this.noAuthPrefixes.some((prefix) => url.startsWith(prefix)) ||
 				/^\/api\/v1\/invites\/[^/]+\/info$/.test(url);
-			const desktopAccessToken =
-				this.isDesktopClient && !isNoAuthEndpoint ? (await getDesktopAccessToken()) || "" : "";
 			const defaultOptions: RequestOptions = {
-				headers: {
-					...(desktopAccessToken ? { Authorization: `Bearer ${desktopAccessToken}` } : {}),
-					"X-SurfSense-Client-Platform":
-						typeof window === "undefined" ? "web" : getClientPlatform(),
-				},
+				headers: {},
 				method: "GET",
 				responseType: ResponseType.JSON,
 			};
@@ -170,12 +159,6 @@ class BaseApiService {
 			};
 
 			const refreshRetryKey = getRefreshRetryKey(mergedOptions.method, url);
-			if (this.isDesktopClient && !desktopAccessToken && !isNoAuthEndpoint) {
-				// Desktop refresh token is gone/revoked — send the user to /desktop/login
-				// (same treatment as a server 401 below) instead of erroring in place.
-				handleUnauthorized();
-				throw new AuthenticationError("You are not authenticated. Please login again.");
-			}
 
 			const fullUrl = mergedOptions.sameOrigin ? url : buildBackendUrl(url);
 
@@ -239,15 +222,8 @@ class BaseApiService {
 					} else if (!isNoAuthEndpoint && !isRefreshRetryBlocked(refreshRetryKey)) {
 						const refreshed = await refreshSession();
 						if (refreshed) {
-							const newToken = this.isDesktopClient
-								? (await getDesktopAccessToken({ forceRefresh: true })) || ""
-								: "";
 							return this.request(url, responseSchema, {
 								...mergedOptions,
-								headers: {
-									...mergedOptions.headers,
-									...(this.isDesktopClient ? { Authorization: `Bearer ${newToken}` } : {}),
-								},
 								_isRetry: true,
 							} as RequestOptions & { responseType?: R });
 						}
@@ -372,7 +348,7 @@ class BaseApiService {
 				console.error("Request failed:", JSON.stringify(error));
 				// Only 5xx server faults are unexpected; 4xx are handled above and
 				// network outages were already captured before this point.
-				if (error instanceof AppError && error.status >= 500) {
+				if (error instanceof AppError && (error.status ?? 0) >= 500) {
 					captureApiException(error, url, options?.method);
 				}
 			}

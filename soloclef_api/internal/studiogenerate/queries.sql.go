@@ -94,26 +94,94 @@ func (q *Queries) ChosenSources(ctx context.Context, arg ChosenSourcesParams) ([
 	return items, nil
 }
 
-const claimJob = `-- name: ClaimJob :execrows
-UPDATE deliverable_jobs SET status = 'running', phase = 'generating', claimed_at = $1::timestamptz,
+const claimQueuedJobs = `-- name: ClaimQueuedJobs :many
+WITH running AS (
+    SELECT d.user_id, count(*) AS runs FROM deliverable_jobs AS d
+    WHERE d.kind = 'artifact' AND d.status IN ('running', 'cancelling')
+    GROUP BY d.user_id
+),
+waiting AS (
+    SELECT d.id, d.user_id, d.created_at,
+           row_number() OVER (PARTITION BY d.user_id ORDER BY d.created_at, d.id) AS place,
+           min(d.created_at) OVER (PARTITION BY d.user_id) AS waiting_since
+    FROM deliverable_jobs AS d
+    WHERE d.kind = 'artifact' AND d.status = 'queued' AND d.request ->> 'task' IS NOT NULL
+),
+fair AS (
+    SELECT w.id FROM waiting AS w
+    LEFT JOIN running AS r ON r.user_id = w.user_id
+    WHERE w.place + COALESCE(r.runs, 0) <= $2::bigint
+    ORDER BY w.place, w.waiting_since, w.user_id, w.created_at, w.id
+    LIMIT $3
+),
+next AS MATERIALIZED (
+    SELECT d.id FROM deliverable_jobs AS d
+    WHERE d.id IN (SELECT fair.id FROM fair) AND d.status = 'queued'
+    FOR UPDATE SKIP LOCKED
+)
+UPDATE deliverable_jobs AS j SET status = 'running', phase = 'generating', claimed_at = $1::timestamptz,
        heartbeat_at = $1::timestamptz, updated_at = $1::timestamptz
-WHERE id = $2 AND user_id = $3 AND kind = 'artifact' AND status = 'queued'
+FROM next
+WHERE j.id = next.id
+RETURNING j.id, j.user_id, j.thread_id, j.attempt_count, j.request
 `
 
-type ClaimJobParams struct {
-	Now    time.Time
-	ID     int64
-	UserID string
+type ClaimQueuedJobsParams struct {
+	Now        time.Time
+	PerAccount int64
+	Most       int32
 }
 
-// This process takes the job it queued. A job cancelled while it waited
-// for a place matches nothing, and is not run.
-func (q *Queries) ClaimJob(ctx context.Context, arg ClaimJobParams) (int64, error) {
-	result, err := q.db.Exec(ctx, claimJob, arg.Now, arg.ID, arg.UserID)
+type ClaimQueuedJobsRow struct {
+	ID           int64
+	UserID       string
+	ThreadID     *int64
+	AttemptCount int64
+	Request      []byte
+}
+
+// The queued artifact jobs to start now, up to the places this process has
+// free, fairly: no account has more than per_account jobs running at once
+// (counting the ones running in every replica, and the ones being stopped,
+// which still hold their place), and the places go round the accounts. Each
+// account's oldest waiting job comes first, the accounts ordered by how long
+// that job has waited; then each account's second, and so on. So a person
+// who queued twenty outputs has two made at a time, and someone who queues
+// one after them has it started at the next free place, not after the
+// twenty.
+//
+// FOR UPDATE SKIP LOCKED is still the rule that keeps two replicas from
+// taking the same job (LockStudioClaims also serialises them; the row lock
+// is what keeps a claim from waiting on a row a cancel or the sweep holds):
+// a locked row is skipped, not waited for, and one already moved to
+// running no longer matches status = 'queued'. MATERIALIZED, so the choice
+// is made once and LIMIT bounds it (jobreconcile's TakeStale says what
+// happens otherwise). A job with no stored task cannot be made here and is
+// left for the sweep to close.
+func (q *Queries) ClaimQueuedJobs(ctx context.Context, arg ClaimQueuedJobsParams) ([]ClaimQueuedJobsRow, error) {
+	rows, err := q.db.Query(ctx, claimQueuedJobs, arg.Now, arg.PerAccount, arg.Most)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	return result.RowsAffected(), nil
+	defer rows.Close()
+	var items []ClaimQueuedJobsRow
+	for rows.Next() {
+		var i ClaimQueuedJobsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.ThreadID,
+			&i.AttemptCount,
+			&i.Request,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const createArtifactJob = `-- name: CreateArtifactJob :one
@@ -141,57 +209,6 @@ func (q *Queries) CreateArtifactJob(ctx context.Context, arg CreateArtifactJobPa
 		arg.ToolCallID,
 		arg.Request,
 		arg.ThreadID,
-		arg.UserID,
-	)
-	var id int64
-	err := row.Scan(&id)
-	return id, err
-}
-
-const createOutput = `-- name: CreateOutput :one
-WITH touched AS (
-    UPDATE notebooks AS n SET updated_at = now()
-    WHERE n.id = $10 AND n.user_id = $11
-    RETURNING n.id, n.user_id
-)
-INSERT INTO notebook_outputs (notebook_id, user_id, kind, title, options, source_document_ids,
-                              podcast_id, deliverable_job_id, thread_id, generated_by, request_key)
-SELECT touched.id, touched.user_id, $1, $2, $3::jsonb,
-       $4::jsonb, $5, $6,
-       $7, $8::jsonb, $9
-FROM touched
-RETURNING notebook_outputs.id
-`
-
-type CreateOutputParams struct {
-	Kind              string
-	Title             string
-	Options           []byte
-	SourceDocumentIds []byte
-	PodcastID         *int64
-	DeliverableJobID  *int64
-	ThreadID          *int64
-	GeneratedBy       []byte
-	RequestKey        *string
-	NotebookID        int64
-	UserID            string
-}
-
-// The output, pointing at the run that makes it. The notebook is read under
-// the owner, so an output is never added to another account's notebook, and
-// a notebook used is a notebook moved to the top of the list.
-func (q *Queries) CreateOutput(ctx context.Context, arg CreateOutputParams) (int64, error) {
-	row := q.db.QueryRow(ctx, createOutput,
-		arg.Kind,
-		arg.Title,
-		arg.Options,
-		arg.SourceDocumentIds,
-		arg.PodcastID,
-		arg.DeliverableJobID,
-		arg.ThreadID,
-		arg.GeneratedBy,
-		arg.RequestKey,
-		arg.NotebookID,
 		arg.UserID,
 	)
 	var id int64
@@ -279,41 +296,16 @@ func (q *Queries) DocumentsStillInNotebook(ctx context.Context, arg DocumentsSti
 	return items, nil
 }
 
-const failAbandonedJobs = `-- name: FailAbandonedJobs :execrows
-UPDATE deliverable_jobs SET
-    status = CASE WHEN status = 'cancelling' THEN 'cancelled' ELSE 'failed' END::deliverable_job_status,
-    phase = CASE WHEN status = 'cancelling' THEN 'cancelled' ELSE 'failed' END,
-    failure_code = CASE WHEN status = 'cancelling' THEN 'cancelled' ELSE 'interrupted' END,
-    finished_at = $1::timestamptz, updated_at = $1::timestamptz
-WHERE kind = 'artifact' AND status IN ('queued', 'running', 'cancelling')
-  AND COALESCE(heartbeat_at, updated_at) < $2::timestamptz
-`
-
-type FailAbandonedJobsParams struct {
-	Now         time.Time
-	SilentSince time.Time
-}
-
-// Artifact jobs whose process went away: in progress, and silent for longer
-// than a live run ever is. They are failed so the panel stops spinning.
-// Deliberately not owner-keyed: it is this tier's own housekeeping, run on
-// a timer for every account, and it names the one kind this tier runs.
-func (q *Queries) FailAbandonedJobs(ctx context.Context, arg FailAbandonedJobsParams) (int64, error) {
-	result, err := q.db.Exec(ctx, failAbandonedJobs, arg.Now, arg.SilentSince)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const finishJob = `-- name: FinishJob :execrows
 UPDATE deliverable_jobs j SET
     status = $1::deliverable_job_status,
     phase = $2, progress = $3,
     failure_code = $4, internal_error = $5,
     artifact_id = (SELECT a.id FROM artifacts a WHERE a.id = $6 AND a.user_id = j.user_id),
+    request = j.request - 'task',
     finished_at = $7::timestamptz, updated_at = $7::timestamptz
-WHERE j.id = $8 AND j.user_id = $9 AND j.status IN ('queued', 'running', 'cancelling')
+WHERE j.id = $8 AND j.user_id = $9 AND j.attempt_count = $10::int
+  AND j.status IN ('running', 'cancelling')
 `
 
 type FinishJobParams struct {
@@ -326,11 +318,15 @@ type FinishJobParams struct {
 	Now           time.Time
 	ID            int64
 	UserID        string
+	Attempt       int64
 }
 
-// How a run ended, written only over a run still in progress: a job a
-// person cancelled outright stays cancelled. `ready` names the artifact,
-// which is read under the owner so a job can never point at another's.
+// How an attempt ended, written only over that attempt still in progress: a
+// job a person cancelled outright stays cancelled, and an attempt that was
+// superseded writes nothing. `ready` names the artifact, which is read under
+// the owner so a job can never point at another's. The stored task goes:
+// it is a copy of the person's sources, kept only while the job may still
+// have to be made again.
 func (q *Queries) FinishJob(ctx context.Context, arg FinishJobParams) (int64, error) {
 	result, err := q.db.Exec(ctx, finishJob,
 		arg.Status,
@@ -342,7 +338,47 @@ func (q *Queries) FinishJob(ctx context.Context, arg FinishJobParams) (int64, er
 		arg.Now,
 		arg.ID,
 		arg.UserID,
+		arg.Attempt,
 	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const forgetEndedConversations = `-- name: ForgetEndedConversations :execrows
+DELETE FROM soloclef_agent_checkpoints AS c
+WHERE c.thread_id IN (
+    SELECT k.thread_id FROM soloclef_agent_checkpoints AS k
+    WHERE k.thread_id ~>=~ 'studio-job-' AND k.thread_id ~<~ 'studio-job.'
+      AND k.thread_id ~ '^studio-job-[0-9]{1,18}-attempt-[0-9]{1,9}(/|$)'
+      AND NOT EXISTS (
+          SELECT 1 FROM deliverable_jobs AS j
+          WHERE j.kind = 'artifact' AND j.status IN ('running', 'cancelling')
+            AND substring(k.thread_id FROM '^(studio-job-[0-9]+-attempt-[0-9]+)') = 'studio-job-' || j.id || '-attempt-' || j.attempt_count)
+    LIMIT $1
+)
+`
+
+// The conversations of attempts that are not running, removed: each
+// attempt's conversation ("studio-job-<job>-attempt-<n>", attempt.go) holds
+// the task, which is the person's text, and only the attempt a job is
+// running now is ever read again. A run removes its own as it ends
+// (runner.go); this is what removes the rest, whoever ended the job: a
+// cancel of a queued job (deliverablejobs, studiooutputs), the sweep that
+// failed a job cut off on its last attempt, a job deleted with its
+// notebook or account. It runs with the sweep, so nothing is left for
+// longer than a minute after its job ends, and the routes that end a job
+// need not know how a conversation is named.
+//
+// Deliberately not owner-keyed, like the sweep: a conversation row has no
+// owner column, and what decides is whether the job is still running. The
+// prefix range is what the table's text_pattern_ops index serves ('-' is
+// followed by '.' in byte order); the exact shape is checked after it, so a
+// name of any other kind is never touched. Migration 00028 removed, by the
+// same rule, those left before this ran.
+func (q *Queries) ForgetEndedConversations(ctx context.Context, most int32) (int64, error) {
+	result, err := q.db.Exec(ctx, forgetEndedConversations, most)
 	if err != nil {
 		return 0, err
 	}
@@ -351,23 +387,78 @@ func (q *Queries) FinishJob(ctx context.Context, arg FinishJobParams) (int64, er
 
 const heartbeat = `-- name: Heartbeat :one
 UPDATE deliverable_jobs SET heartbeat_at = $1::timestamptz, updated_at = $1::timestamptz
-WHERE id = $2 AND user_id = $3 AND status IN ('queued', 'running', 'cancelling')
+WHERE id = $2 AND user_id = $3 AND attempt_count = $4::int
+  AND status IN ('running', 'cancelling')
 RETURNING status::text
 `
 
 type HeartbeatParams struct {
-	Now    time.Time
-	ID     int64
-	UserID string
+	Now     time.Time
+	ID      int64
+	UserID  string
+	Attempt int64
 }
 
-// "Still being made", and the answer says whether the person has asked for
-// it to stop in the meantime (`cancelling`).
+// "Still being made" by this attempt, and the answer says whether the
+// person has asked for it to stop in the meantime (`cancelling`). No row
+// means the job is no longer this attempt's to make: cancelled outright,
+// deleted, or queued again by a sweep that took this process for dead.
 func (q *Queries) Heartbeat(ctx context.Context, arg HeartbeatParams) (string, error) {
-	row := q.db.QueryRow(ctx, heartbeat, arg.Now, arg.ID, arg.UserID)
+	row := q.db.QueryRow(ctx, heartbeat,
+		arg.Now,
+		arg.ID,
+		arg.UserID,
+		arg.Attempt,
+	)
 	var status string
 	err := row.Scan(&status)
 	return status, err
+}
+
+const lockAccountStudioJobs = `-- name: LockAccountStudioJobs :exec
+SELECT pg_advisory_xact_lock(hashtextextended('soloclef studiogenerate account ' || $1::text, 0))
+`
+
+// One account's Studio requests are counted one at a time, for the rest of
+// the transaction that queues the job, so two clicks at once cannot both be
+// counted under the limit (UnfinishedArtifactJobs) and both be queued. Per
+// account: another account's request never waits on it.
+func (q *Queries) LockAccountStudioJobs(ctx context.Context, userID string) error {
+	_, err := q.db.Exec(ctx, lockAccountStudioJobs, userID)
+	return err
+}
+
+const lockStudioClaims = `-- name: LockStudioClaims :exec
+
+
+SELECT pg_advisory_xact_lock(hashtextextended('soloclef studiogenerate claim', 0))
+`
+
+// The output row itself is written by soloclef_studio/notebookoutput, the
+// one statement a notebook's chat lists what it makes with too.
+// An artifact job's life, as this tier runs it (runner.go, requeue.go):
+//
+//	queued -> running -> ready | failed | cancelled
+//	   ^         |
+//	   +---------+  cut off (a shutdown that outlasted its drain, or a
+//	                process that died), with attempts left: attempt + 1
+//
+// The row is the queue. No process holds a queued job: whichever API replica
+// has a free place claims it, and every write after the claim names the
+// attempt it was claimed as (attempt_count), so a process that lost its job
+// to a re-queue finds every later write of its own refused.
+// Claims run one at a time across every replica, for the rest of the
+// claiming transaction. The per-account limit below counts the account's
+// running jobs, and two claims at once would each count before the other
+// had committed and could together start more than the limit. A claim is
+// one short statement made when a run ends or a job is queued, so waiting
+// for another replica's is milliseconds. The lock is taken in a statement
+// of its own because a statement's snapshot is taken as it starts: the
+// claim that follows, under READ COMMITTED, sees every claim committed
+// before the lock was granted.
+func (q *Queries) LockStudioClaims(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, lockStudioClaims)
+	return err
 }
 
 const notebookTitle = `-- name: NotebookTitle :one
@@ -413,6 +504,194 @@ func (q *Queries) OutputForToolCall(ctx context.Context, arg OutputForToolCallPa
 	var id int64
 	err := row.Scan(&id)
 	return id, err
+}
+
+const releaseJob = `-- name: ReleaseJob :one
+WITH cut AS MATERIALIZED (
+    SELECT d.id,
+           CASE WHEN d.status = 'cancelling' THEN 'cancelled'
+                WHEN d.attempt_count >= $3::int THEN 'failed'
+                ELSE 'queued' END AS next
+    FROM deliverable_jobs AS d
+    WHERE d.id = $4::bigint AND d.user_id = $5::uuid AND d.kind = 'artifact'
+      AND d.attempt_count = $6::int AND d.status IN ('running', 'cancelling')
+    FOR UPDATE
+)
+UPDATE deliverable_jobs AS j SET
+    status = cut.next::deliverable_job_status,
+    phase = cut.next,
+    progress = 0,
+    failure_code = CASE cut.next WHEN 'queued' THEN NULL WHEN 'failed' THEN 'interrupted' ELSE 'cancelled' END,
+    internal_error = CASE cut.next WHEN 'failed' THEN $1::text END,
+    attempt_count = j.attempt_count + CASE cut.next WHEN 'queued' THEN 1 ELSE 0 END,
+    request = CASE cut.next WHEN 'queued' THEN j.request ELSE j.request - 'task' END,
+    claimed_at = CASE cut.next WHEN 'queued' THEN NULL ELSE j.claimed_at END,
+    heartbeat_at = CASE cut.next WHEN 'queued' THEN NULL ELSE j.heartbeat_at END,
+    finished_at = CASE cut.next WHEN 'queued' THEN NULL ELSE $2::timestamptz END,
+    updated_at = $2::timestamptz
+FROM cut
+WHERE j.id = cut.id
+RETURNING j.status::text AS status, j.attempt_count
+`
+
+type ReleaseJobParams struct {
+	Reason      string
+	Now         time.Time
+	MaxAttempts int64
+	ID          int64
+	UserID      string
+	Attempt     int64
+}
+
+type ReleaseJobRow struct {
+	Status       string
+	AttemptCount int64
+}
+
+// An attempt this process is stopping, because the server's drain ended
+// before it did: given back to the queue as the next attempt, for the next
+// process to take up; or, with no attempt left, failed as interrupted. A job
+// whose stop the person had asked for is cancelled instead, as they asked.
+//
+// RequeueAbandonedJobs below does the same to the jobs of a process that
+// died. The two choose their rows differently (this one is one attempt of
+// one owner's job; that one is every silent job) and set them alike; keep
+// their SET lists the same.
+func (q *Queries) ReleaseJob(ctx context.Context, arg ReleaseJobParams) (ReleaseJobRow, error) {
+	row := q.db.QueryRow(ctx, releaseJob,
+		arg.Reason,
+		arg.Now,
+		arg.MaxAttempts,
+		arg.ID,
+		arg.UserID,
+		arg.Attempt,
+	)
+	var i ReleaseJobRow
+	err := row.Scan(&i.Status, &i.AttemptCount)
+	return i, err
+}
+
+const requeueAbandonedJobs = `-- name: RequeueAbandonedJobs :many
+WITH cut AS MATERIALIZED (
+    SELECT d.id,
+           CASE WHEN d.status = 'cancelling' THEN 'cancelled'
+                WHEN d.attempt_count >= $3::int OR d.request ->> 'task' IS NULL THEN 'failed'
+                ELSE 'queued' END AS next
+    FROM deliverable_jobs AS d
+    WHERE d.kind = 'artifact'
+      AND (d.status IN ('running', 'cancelling') OR (d.status = 'queued' AND d.request ->> 'task' IS NULL))
+      AND COALESCE(d.heartbeat_at, d.updated_at) < $4::timestamptz
+    ORDER BY d.id
+    LIMIT $5
+    FOR UPDATE SKIP LOCKED
+)
+UPDATE deliverable_jobs AS j SET
+    status = cut.next::deliverable_job_status,
+    phase = cut.next,
+    progress = 0,
+    failure_code = CASE cut.next WHEN 'queued' THEN NULL WHEN 'failed' THEN 'interrupted' ELSE 'cancelled' END,
+    internal_error = CASE cut.next WHEN 'failed' THEN $1::text END,
+    attempt_count = j.attempt_count + CASE cut.next WHEN 'queued' THEN 1 ELSE 0 END,
+    request = CASE cut.next WHEN 'queued' THEN j.request ELSE j.request - 'task' END,
+    claimed_at = CASE cut.next WHEN 'queued' THEN NULL ELSE j.claimed_at END,
+    heartbeat_at = CASE cut.next WHEN 'queued' THEN NULL ELSE j.heartbeat_at END,
+    finished_at = CASE cut.next WHEN 'queued' THEN NULL ELSE $2::timestamptz END,
+    updated_at = $2::timestamptz
+FROM cut
+WHERE j.id = cut.id
+RETURNING j.id, j.user_id, j.status::text AS status, j.attempt_count
+`
+
+type RequeueAbandonedJobsParams struct {
+	Reason      string
+	Now         time.Time
+	MaxAttempts int64
+	SilentSince time.Time
+	Most        int32
+}
+
+type RequeueAbandonedJobsRow struct {
+	ID           int64
+	UserID       string
+	Status       string
+	AttemptCount int64
+}
+
+// Artifact jobs whose process went away: in progress, and silent for longer
+// than a live run ever is (a running attempt beats every 20 seconds). Each
+// is queued again as its next attempt, or failed as interrupted once its
+// attempts are spent; one whose stop was asked for is cancelled. A queued
+// job holding no task (queued by a version of this tier that did not store
+// one) can never be claimed, and is failed the same way once it is as
+// silent.
+//
+// Deliberately not owner-keyed: it is this tier's own housekeeping, run on a
+// timer in every replica for every account, and it names the one kind this
+// tier runs. SKIP LOCKED lets two replicas sweeping at once share the rows
+// instead of queueing behind each other, and the row lock is what makes the
+// attempt advance once: a second sweep that reaches the row after the first
+// finds it queued, fresh, and no longer silent. Each job it changed comes
+// back with its owner and new status, so a failed one is reported to them.
+func (q *Queries) RequeueAbandonedJobs(ctx context.Context, arg RequeueAbandonedJobsParams) ([]RequeueAbandonedJobsRow, error) {
+	rows, err := q.db.Query(ctx, requeueAbandonedJobs,
+		arg.Reason,
+		arg.Now,
+		arg.MaxAttempts,
+		arg.SilentSince,
+		arg.Most,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []RequeueAbandonedJobsRow
+	for rows.Next() {
+		var i RequeueAbandonedJobsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Status,
+			&i.AttemptCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const setRunningPhase = `-- name: SetRunningPhase :exec
+UPDATE deliverable_jobs SET phase = $1, updated_at = $2::timestamptz
+WHERE id = $3 AND user_id = $4 AND kind = 'artifact' AND status = 'running'
+  AND attempt_count = $5::int
+`
+
+type SetRunningPhaseParams struct {
+	Phase   *string
+	Now     time.Time
+	ID      int64
+	UserID  string
+	Attempt int64
+}
+
+// What a running job is doing now, for the panel: "waiting_for_sandbox"
+// while its account has no sandbox free, "generating" again once it has
+// one. Only over a run still running: a job asked to stop keeps
+// `cancelling`, and an ended one its ending.
+// And only by the attempt that is running: a process that lost its job to a
+// re-queue does not write over the phase of the attempt that replaced it.
+func (q *Queries) SetRunningPhase(ctx context.Context, arg SetRunningPhaseParams) error {
+	_, err := q.db.Exec(ctx, setRunningPhase,
+		arg.Phase,
+		arg.Now,
+		arg.ID,
+		arg.UserID,
+		arg.Attempt,
+	)
+	return err
 }
 
 const sourceDocuments = `-- name: SourceDocuments :many
@@ -519,4 +798,18 @@ func (q *Queries) SuggestionCache(ctx context.Context, arg SuggestionCacheParams
 	var i SuggestionCacheRow
 	err := row.Scan(&i.FocusSuggestions, &i.FocusSuggestionsKey)
 	return i, err
+}
+
+const unfinishedArtifactJobs = `-- name: UnfinishedArtifactJobs :one
+SELECT count(*) FROM deliverable_jobs
+WHERE user_id = $1 AND kind = 'artifact' AND status IN ('queued', 'running', 'cancelling')
+`
+
+// How many of the account's artifact jobs are waiting or being made: what
+// the per-account limit at the generate route counts.
+func (q *Queries) UnfinishedArtifactJobs(ctx context.Context, userID string) (int64, error) {
+	row := q.db.QueryRow(ctx, unfinishedArtifactJobs, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }

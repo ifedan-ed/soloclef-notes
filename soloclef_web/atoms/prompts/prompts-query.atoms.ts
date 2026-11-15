@@ -11,13 +11,3 @@ export const promptsAtom = atomWithQuery(() => {
 		},
 	};
 });
-
-export const publicPromptsAtom = atomWithQuery(() => {
-	return {
-		queryKey: cacheKeys.prompts.public(),
-		staleTime: 2 * 60 * 1000,
-		queryFn: async () => {
-			return promptsApiService.listPublic();
-		},
-	};
-});

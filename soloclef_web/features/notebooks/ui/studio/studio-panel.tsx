@@ -1,10 +1,9 @@
 "use client";
 
-import { ArrowLeft, BellRing, Sparkles } from "lucide-react";
+import { BellRing, Sparkles } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { PodcastPlayer } from "@/components/tool-ui/podcast/player";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -12,8 +11,10 @@ import { useDelayedFlag } from "../../hooks/use-delayed-flag";
 import { useStudioMutations, useStudioOutputs } from "../../hooks/use-notebook-queries";
 import { useStudioNotifications } from "../../hooks/use-studio-notifications";
 import { studioOpenAction } from "../../lib/open-output";
+import { retryDecision } from "../../lib/studio-link";
 import { newRequestId } from "../../lib/studio-request";
 import type { NotebookSource, StudioKind, StudioOutput } from "../../model/notebook";
+import { AudioOverviewView } from "./audio-overview-view";
 import { GenerateDialog } from "./generate-dialog";
 import { OutputView } from "./output-view";
 import { StudioOutputRow } from "./studio-output-row";
@@ -27,6 +28,8 @@ export function StudioPanel({
 	onResearch,
 	openOutputId,
 	onOpenOutput,
+	retryOutputId,
+	onRetryHandled,
 }: {
 	notebookId: number;
 	notebookTitle: string;
@@ -36,6 +39,10 @@ export function StudioPanel({
 	/** The output open in the output view (the notebook page widens the column for it). */
 	openOutputId: number | null;
 	onOpenOutput: (outputId: number | null) => void;
+	/** A failed output a link asked to run again (the inbox's "Try again"), or null. */
+	retryOutputId: number | null;
+	/** Called once the link's output was run again, or found gone: the link is spent. */
+	onRetryHandled: () => void;
 }) {
 	const t = useTranslations("notebooks");
 	const outputs = useStudioOutputs(notebookId);
@@ -52,6 +59,39 @@ export function StudioPanel({
 	);
 	const viewing = (outputs.data ?? []).find((output) => output.id === openOutputId) ?? null;
 
+	// Run an output again with the options it was made with: the row's Retry
+	// and the inbox's "Try again" are the same action.
+	const retry = (output: StudioOutput) =>
+		studio.generate.mutate(
+			{
+				...(output.options as Record<string, unknown>),
+				kind: output.kind,
+				title: output.title,
+				request_id: newRequestId(),
+			},
+			{
+				onSuccess: (generated) => notifications.markStarted(generated.id),
+				// The server's own sentence when it gave one (an account with
+				// ten outputs already waiting is told so), as the dialog does.
+				onError: (error) =>
+					toast.error(error instanceof Error && error.message ? error.message : t("generate_failed")),
+			}
+		);
+
+	// A link's retry runs once: the ref guards a double effect run, and the
+	// page clears the id (onRetryHandled) so a remount does not run it again.
+	const linkRetried = useRef<number | null>(null);
+	useEffect(() => {
+		if (retryOutputId === null || linkRetried.current === retryOutputId) return;
+		const decision = retryDecision(outputs.data, retryOutputId);
+		if (decision === "wait") return;
+		linkRetried.current = retryOutputId;
+		const output = outputs.data?.find((candidate) => candidate.id === retryOutputId);
+		if (decision === "retry" && output) retry(output);
+		else toast.error(t("retry_link_gone"));
+		onRetryHandled();
+	});
+
 	const openOutput = (output: StudioOutput) => {
 		const action = studioOpenAction(output);
 		if (action?.type === "audio-player") setPlaying(output);
@@ -60,27 +100,12 @@ export function StudioPanel({
 
 	if (playing?.artifact_id) {
 		return (
-			<div className="flex min-h-0 flex-1 flex-col">
-				<div className="flex items-center gap-2 px-3 pb-2">
-					<Button
-						variant="ghost"
-						size="icon"
-						className="size-8 rounded-full"
-						onClick={() => setPlaying(null)}
-						aria-label={t("back_to_studio")}
-					>
-						<ArrowLeft className="size-4" />
-					</Button>
-					<h3 className="min-w-0 flex-1 truncate text-sm font-medium">{playing.title}</h3>
-				</div>
-				<div className="min-h-0 flex-1 overflow-y-auto px-3">
-					<PodcastPlayer
-						artifactId={playing.artifact_id}
-						title={playing.title}
-						durationMs={playing.duration_seconds ? playing.duration_seconds * 1000 : undefined}
-					/>
-				</div>
-			</div>
+			<AudioOverviewView
+				notebookId={notebookId}
+				output={playing}
+				artifactId={playing.artifact_id}
+				onBack={() => setPlaying(null)}
+			/>
 		);
 	}
 
@@ -144,20 +169,7 @@ export function StudioPanel({
 									onOpen={() => openOutput(output)}
 									onRename={(title) => studio.rename.mutateAsync({ outputId: output.id, title })}
 									onDelete={() => studio.remove.mutateAsync(output.id)}
-									onRetry={() =>
-										studio.generate.mutate(
-											{
-												...(output.options as Record<string, unknown>),
-												kind: output.kind,
-												title: output.title,
-												request_id: newRequestId(),
-											},
-											{
-												onSuccess: (generated) => notifications.markStarted(generated.id),
-												onError: () => toast.error(t("generate_failed")),
-											}
-										)
-									}
+									onRetry={() => retry(output)}
 								/>
 							))}
 						</div>

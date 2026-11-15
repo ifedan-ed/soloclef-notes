@@ -29,6 +29,7 @@ export function SourcesPanel({
 	onDropFiles,
 	researchFocusToken,
 	initialOpenSourceId = null,
+	openDocument = null,
 }: {
 	notebookId: number;
 	addOpen: boolean;
@@ -41,6 +42,8 @@ export function SourcesPanel({
 	researchFocusToken?: number;
 	/** A source whose guide opens straight away (a home search result's). */
 	initialOpenSourceId?: number | null;
+	/** A source to open by its document, asked for by the chat's add_sources card; each new token opens it. */
+	openDocument?: { documentId: number; token: number } | null;
 }) {
 	const t = useTranslations("notebooks");
 	const { data: sources = [], isLoading } = useNotebookSources(notebookId);
@@ -58,6 +61,7 @@ export function SourcesPanel({
 		}, [onAddOpenChange])
 	);
 	const lastFocusToken = useRef(0);
+	const lastDocumentToken = useRef(0);
 	const selectAllId = useId();
 	const showSkeleton = useDelayedFlag(isLoading);
 	const allState = selectAllState(sources);
@@ -83,6 +87,19 @@ export function SourcesPanel({
 		setResearchFocus(researchFocusToken);
 	}, [researchFocusToken]);
 	const clearResearchFocus = useCallback(() => setResearchFocus(0), []);
+
+	// The chat names a document; the panel opens the notebook's source of it.
+	// A source the chat has just added may not be in the list yet: the
+	// request waits, and this runs again when the list catches up.
+	useEffect(() => {
+		if (!openDocument || openDocument.token === lastDocumentToken.current) return;
+		const source = sources.find(
+			(entry) => entry.kind === "document" && entry.target_id === openDocument.documentId
+		);
+		if (!source) return;
+		lastDocumentToken.current = openDocument.token;
+		setOpenSourceId(source.id);
+	}, [openDocument, sources]);
 
 	const onError = () => toast.error(t("sources_update_failed"));
 

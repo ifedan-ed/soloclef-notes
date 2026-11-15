@@ -122,10 +122,9 @@ type entry struct {
 
 // definitions is the per-process cache of catalogs, one per account.
 //
-// It holds tool definitions and nothing else. A server's address, its key,
-// its trusted list and whether it still exists are read from its row when
-// they are used, so nothing in here can let a removed server be called or a
-// removed permission be honoured: the worst a stale entry does is offer the
+// It holds tool definitions and nothing else. A server's address, its key
+// and whether it still exists are read from its row when they are used, so
+// nothing in here can let a removed server be called: the worst a stale entry does is offer the
 // model a tool whose call then fails.
 type definitions struct {
 	mu      sync.Mutex

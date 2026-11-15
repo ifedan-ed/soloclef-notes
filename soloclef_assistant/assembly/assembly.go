@@ -15,7 +15,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -25,7 +24,11 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_agent/tool"
 
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/academic"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/addsources"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/automationdrafts"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/documents"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/figuretool"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/mailtools"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/pagereader"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/websearch"
 )
@@ -71,8 +74,14 @@ type Turn struct {
 	// DocumentIDs and FolderIDs are the sources mentioned with @.
 	DocumentIDs []int64 `json:"document_ids,omitempty"`
 	FolderIDs   []int64 `json:"folder_ids,omitempty"`
-	// DisabledTools are the tools the person switched off for the chat.
+	// DisabledTools are the tools the person switched off in the
+	// composer's tool list (Menu): any tool a turn could be offered, the
+	// connected ones included.
 	DisabledTools []string `json:"disabled_tools,omitempty"`
+	// TimeZone is the IANA zone of the person's device, as the chat request
+	// said it (checked there), or "". It is saved with a paused turn so the
+	// resumed one drafts schedules in the same zone.
+	TimeZone string `json:"time_zone,omitempty"`
 	// Unattended is set for a turn nobody is present for (an automation's
 	// run) and nil for a chat's. It is never read from a request or from a
 	// saved turn, which is why it has no JSON name: only the code that
@@ -80,14 +89,14 @@ type Turn struct {
 	Unattended *Unattended `json:"-"`
 }
 
-// Unattended is the trust an unattended turn runs under. It replaces every
-// standing "always allow" the account has given in chat: what a person
-// allowed while watching is not what they allowed to happen with nobody
-// there, so the one rule consulted is the automation's own.
+// Unattended is the trust an unattended turn runs under. It replaces the
+// account's "ask first" marks: those are about a chat the person watches,
+// and a run nobody watches could not ask them, so it goes by the tools' own
+// declarations (tool.Approval) and the automation's one rule.
 type Unattended struct {
-	// TrustAskFirst lets a tool that asks first run without asking. A tool
-	// that must always ask is not affected by it: the agent loop never
-	// consults trust for one, so it waits, and the runner refuses it.
+	// TrustAskFirst lets a tool declared tool.Ask run without asking. A
+	// tool declared tool.AlwaysAsk is not affected by it: the agent loop
+	// never consults trust for one, so it waits, and the runner refuses it.
 	TrustAskFirst bool
 	// Model is the proxy's name for the model that answers the turn, when
 	// the automation or its step names one; "" is the account's own chat
@@ -109,6 +118,7 @@ type Unattended struct {
 // <artifacts> block describes and is not a thing to switch.
 var switchable = []Switchable{
 	{Name: documents.ToolName, Description: "Search your documents and notes"},
+	{Name: addsources.ToolName, Description: "Add papers and web pages to the notebook's sources"},
 	{Name: websearch.Exa.ToolName(), Description: "Search the web with Exa, when you have connected it"},
 	{Name: websearch.Tavily.ToolName(), Description: "Search the web with Tavily, when you have connected it"},
 	{Name: academic.PubMedTool, Description: "Search PubMed, with full text from PubMed Central"},
@@ -116,6 +126,7 @@ var switchable = []Switchable{
 	{Name: academic.PreprintTool, Description: "Search bioRxiv and medRxiv preprints"},
 	{Name: pagereader.ToolName, Description: "Read a web page in full, asking first"},
 	{Name: MemoryToolName, Description: "Remember durable facts and preferences between conversations"},
+	{Name: figuretool.ToolName, Description: "Draw charts and diagrams in answers"},
 }
 
 // Switchable is one tool the composer's tool list offers to switch off.
@@ -169,9 +180,10 @@ type Built struct {
 	// the ones that exist only for this turn (an account's connected
 	// apps). Tools the package always has are described in activity.go.
 	Activities map[string]Activity
-	// Trust remembers "always allow" for a tool of this turn, wherever that
-	// tool's trust is kept.
-	Trust func(ctx context.Context, tool string) error
+	// StopAsking takes a tool of this turn off the person's "ask first"
+	// list, which is what an "always allow" answer on its approval card
+	// means. It refuses for an unattended turn: nobody answered a card.
+	StopAsking func(ctx context.Context, tool string) error
 	// Close releases what the turn opened (connections to an account's
 	// connected apps). It is called once, when the turn is over or when the
 	// request that built the agent ends without running it.
@@ -201,10 +213,24 @@ type PromptRows interface {
 	// Context is what the turn's prompt and confinement come from; see
 	// TurnContext.
 	Context(ctx context.Context, turn Turn) (TurnContext, error)
-	// Trusted reports whether the account has said "always allow" for tool.
-	Trusted(ctx context.Context, userID, tool string) (bool, error)
-	// Trust remembers "always allow" for a tool.
-	Trust(ctx context.Context, userID, tool string) error
+	// AsksFirst reports whether the account wants to be asked before the
+	// tool runs. Every tool runs without asking unless the person said so.
+	AsksFirst(ctx context.Context, userID string, tool MarkedTool) (bool, error)
+	// StopAsking takes the tool off the account's "ask first" list. A tool
+	// that is not on it is no error: the answer is the same either way.
+	StopAsking(ctx context.Context, userID string, tool MarkedTool) error
+}
+
+// MarkedTool names a tool the way an "ask first" mark is kept: one of the
+// chat's own tools by its name, a connected app's by its connection and the
+// server's own name for it. The model's name for an app's tool changes when
+// another app with a tool of that name is connected, and a mark must not
+// move with it.
+type MarkedTool struct {
+	// Connector is the connected app's connection, or 0 for one of the
+	// chat's own tools (connections are numbered from 1).
+	Connector int64
+	Name      string
 }
 
 // Connections are an account's connected apps (MCP servers), as tools.
@@ -218,12 +244,9 @@ type Connections interface {
 // ConnectedTools are one turn's connected-app tools.
 type ConnectedTools interface {
 	Tools() []tool.Tool
-	// Trusted reports whether the person has said "always allow" for the
-	// tool, read from its connection's row now. mine is false for a name
-	// that is not one of these tools.
-	Trusted(ctx context.Context, name string) (trusted, mine bool, err error)
-	// Trust remembers "always allow" for one of these tools.
-	Trust(ctx context.Context, name string) error
+	// Marked is how a mark on the tool the model knows as name is kept.
+	// mine is false for a name that is not one of these tools.
+	Marked(name string) (tool MarkedTool, mine bool)
 	// App names the connected app a tool belongs to, for the step display.
 	App(name string) (app string, mine bool)
 	Close()
@@ -233,7 +256,7 @@ type ConnectedTools interface {
 // under Connectors: its mailboxes (mailtools), its Google Drive
 // (drivetools), its Nextcloud (nextcloudtools). Unlike a connected app they are this product's own tools,
 // so the prompt describes them; like one, they exist only for an account
-// that connected the thing, and each call asks first.
+// that connected the thing.
 type AccountTools interface {
 	// Connected reports whether the account has it connected and switched
 	// on. An account that has not is offered none of the tools.
@@ -259,7 +282,9 @@ type Remembering interface {
 type ArtifactMaker interface {
 	// Delegate is the specialist for one turn: run on the turn's model, and
 	// saving what it makes for the turn's account under the turn's thread.
-	Delegate(chat model.Model, userID string, threadID int64) (agent.Delegate, error)
+	// notebookID is the notebook whose Studio lists what it makes: a
+	// notebook chat's own, 0 for any other turn (Build says which).
+	Delegate(chat model.Model, userID string, threadID, notebookID int64) (agent.Delegate, error)
 	// Prompt is the body of the main agent's <artifacts> block.
 	Prompt() string
 	// Check reports what the specialist is missing, with a model in place.
@@ -312,6 +337,15 @@ type Assembly struct {
 	// whose turns change nothing in the knowledge base (an automation's
 	// run, which nobody is present to approve a change for).
 	KnowledgeBase KnowledgeWriter
+	// Automations drafts automations for a card in the chat
+	// (create_automation). Optional in the same way: nil is an assembly
+	// whose turns draft none (an automation's own run, which nobody is
+	// present to read a card in).
+	Automations *automationdrafts.Tools
+	// Sources adds papers and pages to a notebook's sources (add_sources):
+	// the API tier's research import. Optional in the same way: nil is an
+	// assembly whose turns add none (the worker's, which has no import).
+	Sources addsources.Adder
 
 	Limits Limits
 	Now    func() time.Time
@@ -335,9 +369,10 @@ func (a Assembly) Check() error {
 	case a.Connected == nil:
 		return errors.New("chat: the connected apps are not set")
 	case a.Pages.Approval != tool.AlwaysAsk:
-		// Held here as well as where the tool is made: a page reader that
-		// could be "always allowed" is a way to send what the model has
-		// read to an address the model chose, unasked.
+		// Held here as well as where the tool is made: a page reader
+		// declared otherwise would let an automation's unattended run send
+		// what the model has read to an address the model chose. (A chat
+		// goes by the person's own marks, which they chose knowingly.)
 		return errors.New("chat: the page reader is not set, or does not ask every time")
 	case a.Limits.MaxSteps < 1 || a.Limits.MaxParallelTools < 1 || a.Limits.Continuations < 1:
 		return fmt.Errorf("chat: the limits must all be at least 1, got %+v", a.Limits)
@@ -354,6 +389,11 @@ func (a Assembly) Check() error {
 	}
 	if err := a.Web.Check(); err != nil {
 		return err
+	}
+	if a.Automations != nil {
+		if err := a.Automations.Check(); err != nil {
+			return err
+		}
 	}
 	if a.Artifacts == nil {
 		return nil
@@ -392,24 +432,31 @@ func (a Assembly) Build(ctx context.Context, turn Turn) (Built, error) {
 		return Built{}, fmt.Errorf("chat: reading the turn's context: %w", err)
 	}
 	notebook := about.Notebook
+	// The sources this turn adds to its notebook, shared by the tool that
+	// adds them and the search that reads them.
+	joined := &documents.Joined{}
 	chosen, picked := picks[turn.PreferredTool]
 
 	var tools []tool.Tool
 	offered := map[string]bool{}
 	// A tool the person switched off is not offered, and so is not in the
 	// prompt either: every block of the prompt is written from `offered`.
-	// Only the chat's own switchable tools can be named; a connected app
-	// is switched off where it is connected.
+	// Any tool the composer's list shows can be switched off there (Menu),
+	// a mailbox's, Drive's or a connected app's as much as the chat's own:
+	// the list is how a person keeps a notebook chat to the tools they
+	// want, and what a turn is not offered costs no prompt. A name that is
+	// no tool of this turn switches nothing off.
 	off := map[string]bool{}
 	for _, name := range turn.DisabledTools {
 		off[name] = true
 	}
-	offer := func(t tool.Tool) {
-		if off[t.Name] && slices.ContainsFunc(switchable, func(s Switchable) bool { return s.Name == t.Name }) {
-			return
+	offer := func(t tool.Tool) bool {
+		if off[t.Name] {
+			return false
 		}
 		tools = append(tools, t)
 		offered[t.Name] = true
+		return true
 	}
 
 	// The user's own documents, unless they limited this message to the
@@ -419,9 +466,20 @@ func (a Assembly) Build(ctx context.Context, turn Turn) (Built, error) {
 	if turn.Scope != ScopeWeb || notebook != nil {
 		scope := documents.Scope{DocumentIDs: turn.DocumentIDs, FolderIDs: turn.FolderIDs}
 		if notebook != nil {
-			scope.Limited, scope.Limit = true, notebook.DocumentIDs
+			scope.Limited, scope.Limit, scope.Joined = true, notebook.DocumentIDs, joined
 		}
 		offer(a.Documents.Tool(turn.UserID, scope))
+	}
+
+	// Adding papers and pages to the notebook's sources, in a notebook's
+	// chat a person is present for. It is offered with a picked source too:
+	// "search PubMed and add the two best" is one request, and adding is
+	// not a source competing with the pick. What it adds joins the search
+	// above for the rest of this turn (joined), so a paper added is
+	// searchable as soon as it is indexed, not from the next message.
+	addingSources := false
+	if a.Sources != nil && notebook != nil && turn.Unattended == nil {
+		addingSources = offer(addsources.Tool(a.Sources, turn.UserID, notebook.ID, turn.ThreadID, joined))
 	}
 
 	// Outside sources, when the turn may leave the documents. A notebook
@@ -460,24 +518,52 @@ func (a Assembly) Build(ctx context.Context, turn Turn) (Built, error) {
 			offer(a.Pages)
 		}
 	}
+	// The scholarly sources in a notebook's chat with nothing picked
+	// (Daniel, 2026-11-14: a notebook chat searches PubMed without the
+	// pick). A notebook is research material, and the papers its sources
+	// lack are found here and added with add_sources; the sources stay
+	// what an answer is built from (the notebook block of the prompt says
+	// so). Only the keyless scholarly indexes come: web search runs on the
+	// account's own paid key, and the page reader is the web's, so both
+	// still wait for the person to pick them. Not in a run nobody watches
+	// (an automation), whose tools were chosen when it was made.
+	scholarly := false
+	if notebook != nil && !picked && turn.Unattended == nil {
+		for _, source := range a.Academic.Tools() {
+			if offer(source) {
+				scholarly = true
+			}
+		}
+	}
 
 	// The memory the prompt shows, to write as well as read: the asker's
 	// own, which is the document personBlock shows. Every kind of chat has
 	// it, a notebook's included: remembering who is asking is not a source.
 	activities := map[string]Activity{}
+	if addingSources {
+		// Completed is the line a saved step falls back to; a finished call
+		// is worded from its answer ("Added 2 sources", the chat's
+		// finishedLines).
+		activities[addsources.ToolName] = Activity{Kind: addsources.ActivityKind, Active: "Adding sources", Completed: "Added sources",
+			Category: "research", Icon: "library"}
+	}
 	if a.Memory != nil {
 		activities[MemoryToolName] = Activity{Kind: "memory.personal", Active: "Updating your memory", Completed: "Updated your memory", Category: "action", Icon: "brain"}
 		offer(a.Memory.Tool(MemoryTarget{UserID: turn.UserID, Shown: about.UserMemory}))
 	}
 
 	// The account's mail and its Google Drive, where connected apps are
-	// offered and for the same reason: every call that reaches outside
-	// asks first, and asking is the control. A notebook chat answers from
-	// its sources and has neither. They are offered before the connected
-	// apps, so that an app with a tool of the same name is the one left
-	// out: the prompt describes these.
+	// offered. A notebook chat has them too (2026-11-13: the notebook chat
+	// is the only chat the apps have, and its Tools menu offers them): the
+	// notebook's sources stay its primary material, and notebookBlock tells
+	// the model these are for requests about the person's mail, files or
+	// apps. Only a picked source keeps them out, because the person asked
+	// for that source. Like every tool they run unless the person marked
+	// them "ask first". They are offered before the connected apps, so that
+	// an app with a tool of the same name is the one left out: the prompt
+	// describes these.
 	mail, drive, cloud := false, false, false
-	if notebook == nil && !picked {
+	if !picked {
 		for _, kind := range []struct {
 			tools      AccountTools
 			offered    *bool
@@ -499,22 +585,34 @@ func (a Assembly) Build(ctx context.Context, turn Turn) (Built, error) {
 				continue
 			}
 			for _, t := range kind.tools.ForTurn(turn.UserID) {
-				offer(t)
-				activities[t.Name] = kind.activities[t.Name]
-				*kind.offered = true
+				if offer(t) {
+					activities[t.Name] = kind.activities[t.Name]
+					// The block of the prompt about a kind is written only
+					// when one of its tools is offered.
+					*kind.offered = true
+				}
 			}
 		}
 	}
 
-	// Connected apps, in every scope of a plain chat, the documents-only
-	// one included: each call asks first, and asking is the control. (They
+	// Connected apps, in every scope, the documents-only one included: like
+	// every tool they run unless the person marked them "ask first". (They
 	// used to be denied outright in the default scope, so they were never
-	// called at all.) A notebook chat has none: it answers from its
-	// sources.
+	// called at all.) A notebook chat has them as it has the mail, above; a
+	// picked source keeps them out.
+	//
+	// What they cost a turn that does not use them is their definitions
+	// in the prompt. That is bounded by the person, not guessed at here:
+	// the composer lists each app's tools with a switch for the whole app
+	// (Menu), and a switched-off tool is not offered. Loading them lazily
+	// (a tool that reveals the rest) was weighed and not chosen: it adds a
+	// model round trip to every question that needs one, and the agent's
+	// tool list is fixed for a turn (agent.New), which is what lets a
+	// paused turn resume with the same tools.
 	release := func() {}
 	var apps ConnectedTools
 	connected := 0
-	if notebook == nil && !picked {
+	if !picked {
 		if apps, err = a.Connected.ForTurn(ctx, turn.UserID); err != nil {
 			return Built{}, fmt.Errorf("chat: reading the account's connected apps: %w", err)
 		}
@@ -527,12 +625,34 @@ func (a Assembly) Build(ctx context.Context, turn Turn) (Built, error) {
 				// be offered.
 				continue
 			}
-			offer(t)
 			app, _ := apps.App(t.Name)
-			activities[t.Name] = ConnectedActivity(app)
-			connected++
+			// Each answer is numbered and cited like a web page.
+			if offer(citedApp(t, app)) {
+				activities[t.Name] = ConnectedActivity(app)
+				connected++
+			}
 		}
 	}
+	// Drafting an automation, in a chat a person is present for: the draft
+	// is a card for them to create, and a run nobody watches has nobody to
+	// press Create. A picked source keeps it out like every tool not
+	// picked.
+	automations := ""
+	if a.Automations != nil && turn.Unattended == nil && !picked {
+		if offer(a.Automations.Tool(turn.UserID)) {
+			activities[automationdrafts.ToolName] = Activity{Kind: "automation.draft", Active: "Drafting an automation", Completed: "Drafted an automation for you to check", Category: "action", Icon: "workflow"}
+			automations = a.Automations.Prompt(automationdrafts.Here{TimeZone: turn.TimeZone})
+		}
+	}
+
+	// Figures in the answer (a chart, a diagram), in a chat a person reads:
+	// an automation's run is read as text (a notification, a mail), where a
+	// figure would be drawn for nobody. Offered whatever source was picked:
+	// a figure is not a source, it is how the answer is shown.
+	if turn.Unattended == nil {
+		offer(figuretool.Tool())
+	}
+
 	// From here on every failure gives back what was opened.
 	fail := func(err error) (Built, error) {
 		release()
@@ -541,8 +661,17 @@ func (a Assembly) Build(ctx context.Context, turn Turn) (Built, error) {
 
 	var delegates []agent.Delegate
 	artifacts := ""
+	// What a notebook's chat makes is listed in that notebook's Studio as
+	// well as in the chat: the chat is where a person asks for it, the
+	// Studio where they find it again. A turn nobody attends (an
+	// automation's step confined to a notebook) keeps its outputs in its
+	// run, as before; the notebook's Studio lists what was made there.
+	studio := int64(0)
+	if notebook != nil && turn.Unattended == nil {
+		studio = notebook.ID
+	}
 	if a.Artifacts != nil {
-		specialist, err := a.Artifacts.Delegate(chat, turn.UserID, turn.ThreadID)
+		specialist, err := a.Artifacts.Delegate(chat, turn.UserID, turn.ThreadID, studio)
 		if err != nil {
 			return fail(err)
 		}
@@ -551,18 +680,14 @@ func (a Assembly) Build(ctx context.Context, turn Turn) (Built, error) {
 	// The knowledge-base specialist, in every chat but one with a source
 	// picked (the person asked for that source). In a notebook's chat it
 	// files what it writes in the notebook and reads only what the chat may
-	// read. Its changes ask first, by the same "always allow" rules as the
-	// main agent's tools.
+	// read. Its tools go by the turn's approval policy, as the main
+	// agent's do.
+	policy := a.policy(turn, apps)
 	knowledge := ""
 	if a.KnowledgeBase != nil && !picked {
 		writer, err := a.KnowledgeBase.Delegate(chat, KnowledgeOwner{
 			UserID: turn.UserID, ThreadID: turn.ThreadID, Store: a.Store, Notebook: notebook,
-			Trusted: func(ctx context.Context, call tool.Call) (bool, error) {
-				if turn.Unattended != nil {
-					return turn.Unattended.TrustAskFirst, nil
-				}
-				return a.Rows.Trusted(ctx, turn.UserID, call.Name)
-			},
+			Policy: policy,
 		})
 		if err != nil {
 			return fail(err)
@@ -582,7 +707,9 @@ func (a Assembly) Build(ctx context.Context, turn Turn) (Built, error) {
 	system := systemPrompt(promptInput{
 		Brand: a.Brand, Today: a.Now().UTC(), Context: about, Picked: picked,
 		Documents: offered[documents.ToolName], Pages: offered[a.Pages.Name], Apps: connected > 0, Mail: mail, Drive: drive, Nextcloud: cloud, Offered: offered,
-		Artifacts: artifacts, Memory: a.Memory, KnowledgeBase: knowledge,
+		Figures:   offered[figuretool.ToolName],
+		Artifacts: artifacts, Memory: a.Memory, KnowledgeBase: knowledge, Automations: automations,
+		AddingSources: addingSources, Studio: studio != 0 && artifacts != "", Scholarly: scholarly,
 	})
 	built, err := agent.New(agent.Config{
 		Model:            chat,
@@ -593,21 +720,8 @@ func (a Assembly) Build(ctx context.Context, turn Turn) (Built, error) {
 		MaxParallelTools: a.Limits.MaxParallelTools,
 		Store:            a.Store,
 		ModelHooks:       []agent.ModelHook{carryOn},
-		// Asked at each decision and remembered nowhere: a rule removed in
-		// settings is gone from the very next call. A connected app's tool
-		// is trusted on its connection's row, the chat's own tools in the
-		// permission rules; each is asked of the place that holds it.
-		Trusted: func(ctx context.Context, call tool.Call) (bool, error) {
-			if turn.Unattended != nil {
-				return turn.Unattended.TrustAskFirst, nil
-			}
-			if apps != nil {
-				if trusted, mine, err := apps.Trusted(ctx, call.Name); mine || err != nil {
-					return trusted, err
-				}
-			}
-			return a.Rows.Trusted(ctx, turn.UserID, call.Name)
-		},
+		Trusted:          policy.Trusted,
+		AskFirst:         policy.AskFirst,
 	})
 	if err != nil {
 		return fail(err)
@@ -615,15 +729,63 @@ func (a Assembly) Build(ctx context.Context, turn Turn) (Built, error) {
 	return Built{
 		Agent: built, Chat: chat, Model: modelName, Preface: Preface(turn.PreferredTool, offered),
 		Activities: activities, Close: release,
-		Trust: func(ctx context.Context, name string) error {
-			if apps != nil {
-				if _, mine := apps.App(name); mine {
-					return apps.Trust(ctx, name)
-				}
+		StopAsking: func(ctx context.Context, name string) error {
+			if turn.Unattended != nil {
+				return errors.New("chat: an unattended turn has no person to stop asking")
 			}
-			return a.Rows.Trust(ctx, turn.UserID, name)
+			return a.Rows.StopAsking(ctx, turn.UserID, markedTool(apps, name))
 		},
 	}, nil
+}
+
+// ApprovalPolicy is which of the agent's two policies a turn runs under
+// (agent.Config): exactly one of the two is set.
+type ApprovalPolicy struct {
+	Trusted  func(ctx context.Context, call tool.Call) (bool, error)
+	AskFirst func(ctx context.Context, call tool.Call) (bool, error)
+}
+
+// policy is the turn's approval policy, for the main agent and the
+// knowledge-base specialist alike.
+//
+// A chat goes by the person's own "ask first" marks and nothing else (the
+// owner's rule, 2026-11-13: "let default be to always allow all, then
+// settings you can change it"). Each mark is read at the moment a call is
+// decided and remembered nowhere, so one changed in settings applies from
+// the very next call. A turn nobody attends (an automation's run) goes by
+// the tools' own declarations and the automation's one switch instead: a
+// person's marks are about a chat they watch, and the run could not ask
+// them anyway.
+func (a Assembly) policy(turn Turn, apps ConnectedTools) ApprovalPolicy {
+	if turn.Unattended != nil {
+		trust := turn.Unattended.TrustAskFirst
+		return ApprovalPolicy{Trusted: func(context.Context, tool.Call) (bool, error) { return trust, nil }}
+	}
+	return ApprovalPolicy{AskFirst: func(ctx context.Context, call tool.Call) (bool, error) {
+		if cardIsTheQuestion[call.Name] {
+			return false, nil
+		}
+		return a.Rows.AsksFirst(ctx, turn.UserID, markedTool(apps, call.Name))
+	}}
+}
+
+// cardIsTheQuestion are the tools whose own card is the person's decision:
+// the tool only prepares something (an automation draft, a mail draft) that
+// the person then creates or sends, or discards, on its card. An "ask first"
+// prompt before it would ask whether to show them a question, so their
+// marks never apply to it (the settings page does not list it either:
+// agentrules' catalogue).
+var cardIsTheQuestion = map[string]bool{automationdrafts.ToolName: true, mailtools.DraftTool: true}
+
+// markedTool is how the mark on the tool the model knows as name is kept:
+// a connected app's by its connection, any other by its name.
+func markedTool(apps ConnectedTools, name string) MarkedTool {
+	if apps != nil {
+		if marked, mine := apps.Marked(name); mine {
+			return marked
+		}
+	}
+	return MarkedTool{Name: name}
 }
 
 // ConnectedActivity is the step display's line for a connected app's tool.
@@ -667,7 +829,9 @@ type promptInput struct {
 	Mail      bool
 	Drive     bool
 	Nextcloud bool
-	Offered   map[string]bool
+	// Figures says draw_figure is offered.
+	Figures bool
+	Offered map[string]bool
 	// Artifacts is the body of the <artifacts> block, or "" for a turn
 	// with no specialist; Memory words the memory's writing, or is nil for
 	// a turn that cannot write it.
@@ -676,14 +840,25 @@ type promptInput struct {
 	// KnowledgeBase is the body of the <knowledge_base> block, or "" for a
 	// turn that cannot change the knowledge base.
 	KnowledgeBase string
+	// Automations is the body of the <automations> block, or "" for a turn
+	// that cannot draft one.
+	Automations string
+	// AddingSources says the turn can add sources to its notebook
+	// (add_sources); Studio says what it makes is listed in the notebook's
+	// Studio.
+	AddingSources bool
+	Studio        bool
+	// Scholarly says a notebook's chat has the scholarly searches without
+	// a pick.
+	Scholarly bool
 }
 
 // maxInstructionChars bounds the account's own instructions in the prompt.
 const maxInstructionChars = 4000
 
-// pagesPrompt tells the model what reading a page costs the person: a card
-// to approve, every time.
-const pagesPrompt = "You can read web pages the user points at, or that a search found and the answer needs in full. Reading a page sends a request to its address, so each call is shown to the user for approval first: read a page when the answer needs it, not to browse."
+// pagesPrompt tells the model what reading a page is: a request to an
+// address, which the person may have asked to approve each time.
+const pagesPrompt = "You can read web pages the user points at, or that a search found and the answer needs in full. Reading a page sends a request to its address: read a page when the answer needs it, not to browse."
 
 // systemPrompt builds the main agent's system prompt for one turn. It is
 // sent with every model call and stored nowhere, so today's date is today's,
@@ -721,7 +896,7 @@ This does not apply to casual conversation, questions about this conversation, o
 		b.WriteString("<reading_pages>\n" + pagesPrompt + "\n</reading_pages>\n\n")
 	}
 	if in.Apps {
-		b.WriteString("<connected_apps>\nSome of your tools belong to apps the user connected. Use one when the request is about that app's data or needs its action. Each call is shown to the user for approval before it runs: call the tool directly, and do not ask for permission in prose first.\n</connected_apps>\n\n")
+		b.WriteString("<connected_apps>\nSome of your tools belong to apps the user connected. Use one when the request is about that app's data or needs its action. A call is shown to the user for approval first only if they asked for that tool to be: call the tool directly, and do not ask for permission in prose first.\n</connected_apps>\n\n")
 	}
 	if in.Mail {
 		b.WriteString("<email>\n" + mailPrompt + "\n</email>\n\n")
@@ -732,14 +907,26 @@ This does not apply to casual conversation, questions about this conversation, o
 	if in.Nextcloud {
 		b.WriteString("<nextcloud>\n" + nextcloudPrompt + "\n</nextcloud>\n\n")
 	}
+	if in.Figures {
+		b.WriteString("<figures>\n" + figuretool.Guidance + "\n</figures>\n\n")
+	}
 	if in.KnowledgeBase != "" {
 		b.WriteString("<knowledge_base>\n" + in.KnowledgeBase + "\n</knowledge_base>\n\n")
+	}
+	if in.Automations != "" {
+		b.WriteString("<automations>\n" + in.Automations + "</automations>\n\n")
 	}
 	if in.Artifacts != "" {
 		b.WriteString("<artifacts>\n" + in.Artifacts + "\n</artifacts>\n\n")
 	}
+	if in.AddingSources {
+		b.WriteString("<adding_sources>\n" + addsources.Prompt() + "\n</adding_sources>\n\n")
+	}
 	b.WriteString(personBlock(in.Context, in.Memory))
-	b.WriteString(notebookBlock(in.Context.Notebook, in.Picked))
+	b.WriteString(notebookBlock(in.Context.Notebook, notebookAbilities{
+		pickedTool: in.Picked, connected: in.Apps || in.Mail || in.Drive || in.Nextcloud,
+		addsSources: in.AddingSources, studio: in.Studio, scholarly: in.Scholarly,
+	}))
 	if in.Context.Citations {
 		b.WriteString(`<citations>
 Search results label each source [n]. Cite with that label and nothing else:

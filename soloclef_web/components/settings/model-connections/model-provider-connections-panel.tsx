@@ -1,44 +1,28 @@
 "use client";
 
 import { useAtomValue } from "jotai";
-import { type ReactNode, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import {
 	createModelConnectionMutationAtom,
 	previewConnectionModelsMutationAtom,
 	testPreviewModelMutationAtom,
 } from "@/atoms/model-connections/model-connections-mutation.atoms";
-import { modelProvidersAtom } from "@/atoms/model-connections/model-connections-query.atoms";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import type { ConnectionRead, ModelSelection } from "@/contracts/types/model-connections.types";
-import { BRAND } from "@/lib/brand";
 import { ConnectionCard } from "./connection-card";
-import { previewFailureOf, previewRequestFor, providersFor, withNamedModel } from "./model-listing";
-import { capability, type SelectableModel } from "./model-utils";
-import { ProviderConnectDialog } from "./provider-connect-dialog";
 import {
+	CONNECTION_PRESETS,
 	type ConnectionDraft,
-	PROVIDER_ORDER,
-	providerDisplay,
-	providerIcon,
-} from "./provider-metadata";
-
-interface ModelProviderConnectionsPanelProps {
-	connections: ConnectionRead[];
-	/**
-	 * Whether the account administers the site. Every account may connect an
-	 * OpenAI-compatible endpoint of its own; only an administrator is offered
-	 * the other providers (model-listing.ts, providersFor).
-	 */
-	isAdmin: boolean;
-	className?: string;
-	addProviderTitle?: string;
-	addProviderDescription?: string;
-	availableProvidersTitle?: string;
-	footerAction?: ReactNode;
-	showAddProviderHeader?: boolean;
-}
+	type ConnectionPreset,
+	CUSTOM_PRESET,
+	OWN_PROVIDER,
+} from "./connection-presets";
+import { previewFailureOf, previewRequestFor, withNamedModel } from "./model-listing";
+import { capability, type SelectableModel } from "./model-utils";
+import { presetIcon } from "./preset-icon";
+import { ProviderConnectDialog } from "./provider-connect-dialog";
 
 function toModelSelection(model: SelectableModel): ModelSelection {
 	return {
@@ -55,42 +39,26 @@ function toModelSelection(model: SelectableModel): ModelSelection {
 	};
 }
 
-export function ModelProviderConnectionsPanel({
-	connections,
-	isAdmin,
-	className,
-	addProviderTitle = "Add Provider",
-	addProviderDescription = `${BRAND.name} supports popular providers and self-hosted model endpoints.`,
-	availableProvidersTitle = "Available Providers",
-	footerAction,
-	showAddProviderHeader = true,
-}: ModelProviderConnectionsPanelProps) {
-	const { data: allProviders = [] } = useAtomValue(modelProvidersAtom);
-	const providers = providersFor(allProviders, isAdmin);
+/**
+ * The account's own model connections: the presets to start one from, and
+ * the ones already made.
+ *
+ * Every preset makes the same kind of connection, an OpenAI-compatible
+ * endpoint the server calls with the person's key (connection-presets.tsx).
+ * Any account may make one; there is nothing here for an administrator alone.
+ */
+export function ModelProviderConnectionsPanel({ connections }: { connections: ConnectionRead[] }) {
 	const createConnection = useAtomValue(createModelConnectionMutationAtom);
 	const previewModels = useAtomValue(previewConnectionModelsMutationAtom);
 	const testPreviewModel = useAtomValue(testPreviewModelMutationAtom);
 
 	const [isAddProviderOpen, setIsAddProviderOpen] = useState(false);
-	const [provider, setProvider] = useState("openai_compatible");
+	const [preset, setPreset] = useState<ConnectionPreset>(CUSTOM_PRESET);
 	const [connectModels, setConnectModels] = useState<ModelSelection[]>([]);
 	// Why the last listing failed, as the server said it; cleared by the next.
 	const [previewFailure, setPreviewFailure] = useState<ReturnType<typeof previewFailureOf> | null>(
 		null
 	);
-	const selectedProvider = providers.find((item) => item.provider === provider);
-
-	const sortedProviders = [...providers].sort((left, right) => {
-		const leftIndex = PROVIDER_ORDER.indexOf(left.provider);
-		const rightIndex = PROVIDER_ORDER.indexOf(right.provider);
-		if (leftIndex !== -1 || rightIndex !== -1) {
-			return (
-				(leftIndex === -1 ? Number.MAX_SAFE_INTEGER : leftIndex) -
-				(rightIndex === -1 ? Number.MAX_SAFE_INTEGER : rightIndex)
-			);
-		}
-		return providerDisplay(left.provider).name.localeCompare(providerDisplay(right.provider).name);
-	});
 
 	function resetConnectState() {
 		setConnectModels([]);
@@ -117,48 +85,31 @@ export function ModelProviderConnectionsPanel({
 		});
 	}
 
-	function connectionModelsForDraft(draft: ConnectionDraft) {
-		const models = [...connectModels];
-		if (draft.seedModelId && !models.some((model) => model.model_id === draft.seedModelId)) {
-			models.push({
-				model_id: draft.seedModelId,
-				display_name: draft.seedModelId,
-				source: "MANUAL",
-				enabled: true,
-				metadata: {},
-			});
-		}
-		return models;
-	}
-
 	function representativeTestModel(models: ModelSelection[]) {
 		const enabledModels = models.filter((model) => model.enabled);
 		return enabledModels.find((model) => capability(model, "chat")) ?? enabledModels[0];
 	}
 
-	// Each provider connect form builds its own credential payload; the backend
-	// resolver (`to_litellm`) forwards `extra.litellm_params` straight to LiteLLM.
+	// Connecting tests one chosen model first, through the server, so a
+	// connection that cannot answer is never saved; the test's own message is
+	// shown by the mutation when it fails.
 	function handleCreate(draft: ConnectionDraft) {
-		const models = connectionModelsForDraft(draft);
-		const testModel = representativeTestModel(models);
+		const testModel = representativeTestModel(connectModels);
 		if (!testModel) {
 			toast.error("Select at least one model before connecting");
 			return;
 		}
 
 		const request = {
-			provider,
+			provider: OWN_PROVIDER,
 			base_url: draft.base_url,
 			api_key: draft.api_key,
-			// Present only when headers were typed; the form makes them only
-			// for an OpenAI-compatible endpoint.
 			...(draft.headers ? { headers: draft.headers } : {}),
-			// Always the signed-in account's own: shared connections are not
-			// made from this panel.
+			// Always the signed-in account's own.
 			scope: "user" as const,
-			extra: draft.extra,
+			extra: {},
 			enabled: true,
-			models,
+			models: connectModels,
 		};
 
 		testPreviewModel.mutate(
@@ -177,7 +128,9 @@ export function ModelProviderConnectionsPanel({
 		);
 	}
 
-	function listModels(request: NonNullable<ReturnType<typeof previewRequestFor>>) {
+	function refreshConnectModels(draft: ConnectionDraft) {
+		const request = previewRequestFor(draft);
+		if (!request) return;
 		setPreviewFailure(null);
 		previewModels.mutate(request, {
 			onSuccess: mergePreviewModels,
@@ -190,28 +143,10 @@ export function ModelProviderConnectionsPanel({
 		});
 	}
 
-	function openProviderDialog(providerId: string) {
+	function openPresetDialog(next: ConnectionPreset) {
 		resetConnectState();
-		setProvider(providerId);
+		setPreset(next);
 		setIsAddProviderOpen(true);
-		// A catalogue is the model service's own and needs no key, so it is
-		// listed as the dialog opens. An endpoint's list needs the address and
-		// key typed first (previewRequestFor is null until then), and a
-		// provider with no list starts empty, its models added by name.
-		const request = previewRequestFor(
-			providers.find((item) => item.provider === providerId),
-			{ base_url: null, api_key: null }
-		);
-		if (request) listModels(request);
-	}
-
-	function refreshConnectModels(draft: ConnectionDraft) {
-		const request = previewRequestFor(selectedProvider, draft);
-		if (request) listModels(request);
-	}
-
-	function addNamedModel(name: string) {
-		setConnectModels((current) => withNamedModel(current, name));
 	}
 
 	function toggleConnectModel(model: SelectableModel, enabled: boolean) {
@@ -228,54 +163,52 @@ export function ModelProviderConnectionsPanel({
 	}
 
 	return (
-		<div className={className ?? "flex flex-col gap-6"}>
+		<div className="flex flex-col gap-6">
 			<div className="flex flex-col gap-3">
-				{showAddProviderHeader ? (
-					<div>
-						<h3 className="text-base font-semibold">{addProviderTitle}</h3>
-						<p className="text-sm text-muted-foreground">{addProviderDescription}</p>
-					</div>
-				) : null}
-				<div className="grid gap-3 md:grid-cols-2">
-					{sortedProviders.map((item) => {
-						const meta = providerDisplay(item.provider);
-
-						return (
-							<Button
-								key={item.provider}
-								variant="ghost"
-								type="button"
-								className="h-auto justify-between gap-3 whitespace-normal rounded-lg border border-border/60 p-4 text-left transition-colors hover:bg-accent hover:text-accent-foreground"
-								onClick={() => openProviderDialog(item.provider)}
-							>
-								<span className="flex min-w-0 items-center gap-3">
-									{providerIcon(item.provider, "size-5")}
-									<span className="min-w-0">
-										<span className="block truncate text-sm font-semibold">{meta.name}</span>
-										<span className="block truncate text-xs text-muted-foreground">
-											{meta.subtitle}
-										</span>
+				<div>
+					<h3 className="text-base font-semibold">Your own models</h3>
+					<p className="text-sm text-muted-foreground">
+						Connect any OpenAI-compatible API with your own key. Its models join your model menus,
+						marked as yours. A preset only fills in the provider&apos;s address.
+					</p>
+				</div>
+				{/* minmax(0,1fr) and min-w-0: a grid item is as wide as its content by
+				    default, so a long subtitle pushed the cards past a phone's edge. */}
+				<div className="grid grid-cols-[minmax(0,1fr)] gap-3 md:grid-cols-2">
+					{CONNECTION_PRESETS.map((item) => (
+						<Button
+							key={item.id}
+							variant="ghost"
+							type="button"
+							className="h-auto w-full min-w-0 justify-between gap-3 whitespace-normal rounded-lg border border-border/60 p-4 text-left transition-colors hover:bg-accent hover:text-accent-foreground"
+							onClick={() => openPresetDialog(item)}
+						>
+							<span className="flex min-w-0 items-center gap-3">
+								{presetIcon(item, "size-5")}
+								<span className="min-w-0">
+									<span className="block truncate text-sm font-semibold">{item.name}</span>
+									<span className="block truncate text-xs text-muted-foreground">
+										{item.subtitle}
 									</span>
 								</span>
-								<span className="shrink-0 text-sm font-medium text-muted-foreground">Connect</span>
-							</Button>
-						);
-					})}
+							</span>
+							<span className="shrink-0 text-sm font-medium text-muted-foreground">Connect</span>
+						</Button>
+					))}
 				</div>
 			</div>
 
 			<ProviderConnectDialog
 				open={isAddProviderOpen}
 				onOpenChange={handleConnectOpenChange}
-				provider={provider}
-				selectedProvider={selectedProvider}
+				preset={preset}
 				isPending={createConnection.isPending || testPreviewModel.isPending}
 				onSubmit={handleCreate}
 				previewModels={connectModels}
 				isPreviewingModels={previewModels.isPending}
 				onPreviewModels={refreshConnectModels}
 				previewFailure={previewFailure}
-				onAddNamedModel={addNamedModel}
+				onAddNamedModel={(name) => setConnectModels((current) => withNamedModel(current, name))}
 				onTogglePreviewModel={toggleConnectModel}
 				onBulkTogglePreviewModels={bulkToggleConnectModels}
 			/>
@@ -283,7 +216,7 @@ export function ModelProviderConnectionsPanel({
 			{connections.length > 0 ? (
 				<div className="flex flex-col gap-3">
 					<Separator />
-					<h3 className="text-base font-semibold">{availableProvidersTitle}</h3>
+					<h3 className="text-base font-semibold">Connected</h3>
 					<div className="flex flex-col gap-3">
 						{connections.map((connection) => (
 							<ConnectionCard key={connection.id} connection={connection} />
@@ -291,7 +224,6 @@ export function ModelProviderConnectionsPanel({
 					</div>
 				</div>
 			) : null}
-			{footerAction ? <div className="flex justify-center pt-2">{footerAction}</div> : null}
 		</div>
 	);
 }

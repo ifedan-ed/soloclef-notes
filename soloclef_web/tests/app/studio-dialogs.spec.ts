@@ -10,9 +10,8 @@ import { expect, openNotebook, test } from "./fixtures";
  *
  * What is asserted is the POST /studio/generate body and what the page does
  * with the answer. The stack accepts the kinds it can make (a queued row;
- * see MADE_HERE) and answers 503 for the ones that need a sandbox or an
- * image model it does not have; both outcomes must show inline, never as a
- * browser popup.
+ * see MADE_HERE) and answers 503 for the ones that need a sandbox it does
+ * not have; both outcomes must show inline, never as a browser popup.
  */
 
 type Segmented = { label: string; def: string; pick?: string };
@@ -100,13 +99,13 @@ const KINDS: Kind[] = [
 
 /**
  * The kinds the isolated stack accepts. Audio is voiced through the model
- * proxy, and a mind map, flashcards and a quiz are written by the chat's
- * specialist: none needs the sandbox. A video is accepted too, and its
- * render job then fails it at once (the stack's worker has rendering off).
- * The rest need the sandbox (report, slides, data table) or an image model
- * (infographic), which this stack has neither of.
+ * proxy, and a mind map, flashcards, a quiz and an infographic (a poster
+ * drawn by code) are written by the chat's specialist: none needs the
+ * sandbox. A video is accepted too, and its render job then fails it at once
+ * (the stack's worker has rendering off). The rest need the sandbox (report,
+ * slides, data table), which this stack does not have.
  */
-const MADE_HERE = new Set(["audio", "video", "mindmap", "flashcards", "quiz"]);
+const MADE_HERE = new Set(["audio", "video", "mindmap", "flashcards", "quiz", "infographic"]);
 
 const studioTile = (page: Page, name: string) =>
 	page.getByRole("button", { name, exact: true }).first();
@@ -193,7 +192,7 @@ test.describe("Studio dialogs", () => {
 					).toBeVisible();
 				}
 			} else {
-				// What this stack cannot make (no sandbox, no image model) is
+				// What this stack cannot make (no sandbox) is
 				// refused when it is asked for: the 503 shows as an inline
 				// toast and the dialog stays open with the choices intact.
 				// Exactly one toast: the dialog's own, not a second global one.
@@ -251,14 +250,10 @@ test.describe("Studio dialogs", () => {
 		const gallery = dialog.getByRole("group", { name: "Visual style" });
 		const styles = [
 			"Auto-select",
-			"Kawaii",
-			"Clay",
 			"Sketch Note",
-			"Anime",
 			"Editorial",
 			"Instructional",
 			"Bento Grid",
-			"Bricks",
 			"Scientific",
 			"Professional",
 		];

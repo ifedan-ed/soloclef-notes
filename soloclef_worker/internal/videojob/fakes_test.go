@@ -3,14 +3,17 @@ package videojob
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"io"
 	"log/slog"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -19,182 +22,76 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_agent/model"
 	"git.danvics.com/danvics/soloclef/soloclef_agent/model/modeltest"
 	"git.danvics.com/danvics/soloclef/soloclef_filestore"
+	"git.danvics.com/danvics/soloclef/soloclef_notify/notify"
 	"git.danvics.com/danvics/soloclef/soloclef_studio/artifactsave"
-	"git.danvics.com/danvics/soloclef/soloclef_studio/sandbox"
+	"git.danvics.com/danvics/soloclef/soloclef_studio/deckspec"
 
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/speech"
 )
 
-// fakeBox is a sandbox that answers the harness's commands as the real one
-// does, from files it keeps in memory. A test changes one answer by setting
-// a hook.
-type fakeBox struct {
-	mu       sync.Mutex
-	files    map[string][]byte
-	commands []string
-	// preflight, stills and render answer those commands: "" is success,
-	// anything else is printed with exit 1.
-	preflight, stills func() string
-	// layout answers the layout check of each --stills call (counted from
-	// 0): each scene's findings by its number, nil for a clean frame. With
-	// noLayout the stills step writes no report at all.
-	layout   func(call int) map[int][]string
-	noLayout bool
-	stillsAt int
-	// render runs while a full render "renders"; a test blocks in it.
+// fakeRaster draws every frame as the same picture: a gradient with a
+// few bands, so a frame sampled from the video is not blank, encoded once.
+// render, when set, runs before each frame (a test that cancels mid-render
+// sets it).
+type fakeRaster struct {
+	mu     sync.Mutex
+	drawn  int
 	render func(ctx context.Context)
-	// findings make the probe say what is wrong with the video.
-	badResolution bool
-	// blankScene makes the last scene's frame one colour.
-	blankScene bool
-	terminated []string
+	png    []byte
 }
 
-func newFakeBox() *fakeBox {
-	return &fakeBox{files: map[string][]byte{}, preflight: func() string { return "" }, stills: func() string { return "" }}
-}
-
-func (b *fakeBox) RunWithin(ctx context.Context, command string, limit time.Duration) (sandbox.Result, error) {
-	if limit <= 0 {
-		return sandbox.Result{}, errors.New("no limit")
-	}
-	b.mu.Lock()
-	b.commands = append(b.commands, command)
-	b.mu.Unlock()
-	ok := sandbox.Result{}
-	refused := func(text string) sandbox.Result { return sandbox.Result{Output: text, ExitCode: 1} }
-	switch {
-	case strings.Contains(command, "cp -a /opt/remotion/."):
-		return ok, nil
-	case strings.Contains(command, "--preflight"):
-		if text := b.preflight(); text != "" {
-			return refused(text), nil
-		}
-		return sandbox.Result{Output: `{"ok":true}`}, nil
-	case strings.Contains(command, "--stills"):
-		if text := b.stills(); text != "" {
-			return refused(text), nil
-		}
-		// node render.mjs '--stills' '<props>' '<dir>': the report is
-		// written beside the stills, one entry per scene of the props.
-		words := strings.Fields(command)
-		props := strings.Trim(words[len(words)-2], "'")
-		dir := strings.Trim(words[len(words)-1], "'")
-		var written project
-		if err := json.Unmarshal(b.get(props), &written); err != nil {
-			return refused("props.json is not readable"), nil
-		}
-		b.mu.Lock()
-		call := b.stillsAt
-		b.stillsAt++
-		b.mu.Unlock()
-		if b.noLayout {
-			return ok, nil
-		}
-		var found map[int][]string
-		if b.layout != nil {
-			found = b.layout(call)
-		}
-		scenes := []map[string]any{}
-		for _, scene := range written.Scenes {
-			findings := append([]string{}, found[scene.Number]...)
-			scenes = append(scenes, map[string]any{"slide_number": scene.Number, "findings": findings})
-		}
-		report, _ := json.Marshal(map[string]any{"scenes": scenes})
-		b.put(dir+"/layout.json", report)
-		return ok, nil
-	case strings.Contains(command, "node render.mjs"):
-		if b.render != nil {
-			b.render(ctx)
-			if ctx.Err() != nil {
-				return sandbox.Result{}, ctx.Err()
-			}
-		}
-		words := strings.Fields(command)
-		output := strings.Trim(words[len(words)-1], "'")
-		b.put(output, []byte("an mp4 of the scenes"))
-		b.put(output+".segments.json", []byte(`{"expected_duration_seconds": 12.0}`))
-		return ok, nil
-	case strings.HasPrefix(command, "ffprobe"):
-		width := 1920
-		if b.badResolution {
-			width = 1280
-		}
-		return sandbox.Result{Output: fmt.Sprintf(`{"format":{"duration":"12.000"},"streams":[{"codec_type":"video","width":%d,"height":1080,"duration":"12.0","nb_read_packets":"360"},{"codec_type":"audio","duration":"12.0","nb_read_packets":"560"}]}`, width)}, nil
-	case strings.Contains(command, "statistics.pstdev"):
-		var lines []string
-		for range strings.Fields(strings.SplitN(strings.TrimPrefix(command, "for at in "), "; do", 2)[0]) {
-			lines = append(lines, `{"levels": 120, "stddev": 33.5}`)
-		}
-		if b.blankScene {
-			lines[len(lines)-1] = `{"levels": 1, "stddev": 0}`
-		}
-		return sandbox.Result{Output: strings.Join(lines, "\n") + "\n"}, nil
-	case strings.HasPrefix(command, "sha256sum"):
-		path := strings.Trim(strings.TrimPrefix(command, "sha256sum -- "), "'")
-		sum := sha256.Sum256(b.get(path))
-		return sandbox.Result{Output: hex.EncodeToString(sum[:]) + "  " + path + "\n"}, nil
-	}
-	return refused("the fake sandbox has no answer for: " + command), nil
-}
-
-func (b *fakeBox) put(path string, data []byte) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.files[path] = data
-}
-
-func (b *fakeBox) get(path string) []byte {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.files[path]
-}
-
-func (b *fakeBox) ReadFile(_ context.Context, path string, limit int64) ([]byte, error) {
-	data := b.get(path)
-	if data == nil {
-		return nil, sandbox.ErrNotFound
-	}
-	if int64(len(data)) > limit {
-		return nil, sandbox.ErrTooLarge
-	}
-	return data, nil
-}
-
-func (b *fakeBox) WriteFile(_ context.Context, path string, data []byte) error {
-	b.put(path, append([]byte(nil), data...))
-	return nil
-}
-
-func (b *fakeBox) OpenFile(_ context.Context, path string) (io.ReadCloser, error) {
-	data := b.get(path)
-	if data == nil {
-		return nil, sandbox.ErrNotFound
-	}
-	return io.NopCloser(bytes.NewReader(data)), nil
-}
-
-// count is how many commands contained text.
-func (b *fakeBox) count(text string) int {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	n := 0
-	for _, command := range b.commands {
-		if strings.Contains(command, text) {
-			n++
+func newFakeRaster(t *testing.T) *fakeRaster {
+	t.Helper()
+	picture := image.NewRGBA(image.Rect(0, 0, 1920, 1080))
+	for y := 0; y < 1080; y++ {
+		for x := 0; x < 1920; x++ {
+			picture.Set(x, y, color.RGBA{uint8(x / 8), uint8(y / 5), uint8((x + y) / 12), 255})
 		}
 	}
-	return n
+	var encoded bytes.Buffer
+	if err := png.Encode(&encoded, picture); err != nil {
+		t.Fatal(err)
+	}
+	return &fakeRaster{png: encoded.Bytes()}
 }
 
-type fakeBoxes struct{ box *fakeBox }
+func (f *fakeRaster) PNG(ctx context.Context, svg, out string) error {
+	f.mu.Lock()
+	f.drawn++
+	hook := f.render
+	f.mu.Unlock()
+	if hook != nil {
+		hook(ctx)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if !strings.HasPrefix(svg, "<svg") {
+		return errors.New("not an SVG")
+	}
+	return os.WriteFile(out, f.png, 0o600)
+}
 
-func (f fakeBoxes) ForJob(context.Context, string, string) (Sandbox, error) { return f.box, nil }
-func (f fakeBoxes) TerminateJob(_ context.Context, name string) error {
-	f.box.mu.Lock()
-	defer f.box.mu.Unlock()
-	f.box.terminated = append(f.box.terminated, name)
-	return nil
+// blankPNG is a frame of one colour: a slide that drew nothing.
+func blankPNG(t *testing.T) []byte {
+	t.Helper()
+	picture := image.NewRGBA(image.Rect(0, 0, 1920, 1080))
+	for y := 0; y < 1080; y++ {
+		for x := 0; x < 1920; x++ {
+			picture.Set(x, y, color.RGBA{250, 248, 242, 255})
+		}
+	}
+	var encoded bytes.Buffer
+	if err := png.Encode(&encoded, picture); err != nil {
+		t.Fatal(err)
+	}
+	return encoded.Bytes()
+}
+
+func (f *fakeRaster) count() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.drawn
 }
 
 // fakeRows is the job's row in memory, with the state machine's guards.
@@ -279,13 +176,18 @@ func (r *fakeRows) Cancelled(context.Context, Claimed) error {
 	return nil
 }
 
-func (r *fakeRows) Release(context.Context, Claimed) error {
+func (r *fakeRows) Release(_ context.Context, job Claimed, rules ClaimRules) (bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.status == "running" {
-		r.status = "queued"
+	if r.status != "running" {
+		return false, nil
 	}
-	return nil
+	if job.Takeovers >= rules.MaxTakeovers {
+		r.status = "failed"
+		return false, nil
+	}
+	r.status = "queued"
+	return true, nil
 }
 
 func (r *fakeRows) ReserveArtifactID(context.Context) (int64, error) { return 55, nil }
@@ -306,28 +208,95 @@ func (r *fakeRows) snapshot() (string, string, *artifactsave.Rows) {
 	return r.status, r.code, r.delivered
 }
 
-// fakeVoice speaks a line as bytes that name it, and measures it at two
-// and a half words a second.
+// fakeVoice speaks every line as the same real MP3 (a tone ffmpeg made,
+// which the join decodes), and measures a line at two and a half words a
+// second: the length the film is planned to, whatever the tone's own. It
+// joins a slide's passages as audiofile.JoinSpaced does in length: the
+// parts and a gap after each but the last, one part returned as it is.
 type fakeVoice struct {
 	mu    sync.Mutex
 	lines []speech.Line
-	// slow makes every line take this long.
+	tone  []byte
+	// wordsPerSecond slows or speeds the measured narration.
 	wordsPerSecond float64
+	// seconds is what each answer and each join measures, by its bytes.
+	seconds map[string]float64
+	// joins is every join's gap and number of parts.
+	joins []fakeJoin
+}
+
+type fakeJoin struct {
+	parts int
+	gap   float64
+}
+
+func newFakeVoice(t *testing.T) *fakeVoice {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "tone.mp3")
+	if out, err := exec.Command("ffmpeg", "-v", "error", "-f", "lavfi", "-i", "sine=frequency=330:duration=1.5", "-ac", "1", "-ar", "24000", "-b:a", "48k", path).CombinedOutput(); err != nil {
+		t.Fatalf("ffmpeg: %v %s", err, out)
+	}
+	tone, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &fakeVoice{tone: tone, seconds: map[string]float64{}}
+}
+
+// tagged is the tone with a tag after it, so each answer's bytes differ
+// and Seconds can tell which it is measuring.
+func (v *fakeVoice) tagged(tag string) []byte {
+	return append(append([]byte(nil), v.tone...), []byte(tag)...)
 }
 
 func (v *fakeVoice) Speak(_ context.Context, line speech.Line) ([]byte, error) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	v.lines = append(v.lines, line)
-	return []byte("voice:" + line.Text), nil
-}
-
-func (v *fakeVoice) Seconds(_ context.Context, data []byte) (float64, error) {
 	rate := v.wordsPerSecond
 	if rate == 0 {
 		rate = 2.5
 	}
-	return float64(len(strings.Fields(strings.TrimPrefix(string(data), "voice:")))) / rate, nil
+	data := v.tagged(fmt.Sprintf("#line-%d", len(v.lines)))
+	v.seconds[string(data)] = float64(len(strings.Fields(line.Text))) / rate
+	return data, nil
+}
+
+func (v *fakeVoice) Seconds(_ context.Context, data []byte) (float64, error) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	return v.seconds[string(data)], nil
+}
+
+func (v *fakeVoice) JoinSpaced(_ context.Context, parts [][]byte, gap float64) ([]byte, error) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	v.joins = append(v.joins, fakeJoin{parts: len(parts), gap: gap})
+	if len(parts) == 1 {
+		return parts[0], nil
+	}
+	total := gap * float64(len(parts)-1)
+	for _, part := range parts {
+		total += v.seconds[string(part)]
+	}
+	data := v.tagged(fmt.Sprintf("#join-%d", len(v.joins)))
+	v.seconds[string(data)] = total
+	return data, nil
+}
+
+// voicedEvenly is a narration of seconds a slide, its passages starting
+// evenly through it: a film to plan without voicing anything.
+func voicedEvenly(video Authored, seconds float64) []voiced {
+	voices := make([]voiced, len(video.Deck.Slides))
+	for i, s := range video.Deck.Slides {
+		steps := deckspec.Steps(s)
+		starts := make([]float64, steps)
+		for k := range starts {
+			starts[k] = seconds * float64(k) / float64(steps)
+		}
+		voices[i] = voiced{Number: i + 1, Seconds: seconds, Starts: starts}
+	}
+	return voices
 }
 
 // fakeModels hands out one scripted model.
@@ -350,40 +319,23 @@ func (f *fakeIndexer) Index(_ context.Context, documentID int64) error {
 	return nil
 }
 
-// sceneCode is a scene module as an author writes one.
-func sceneCode(heading string) string {
-	return `import {AbsoluteFill, useCurrentFrame, useVideoConfig} from "remotion";
-` + staggerImport + `
-export default function Scene() {
-  const frame = useCurrentFrame();
-  const {fps} = useVideoConfig();
-  return (
-    <AbsoluteFill style={{padding: 100, background: "#0b1f33", color: "white", fontFamily: "Inter", justifyContent: "center"}}>
-      <h1 style={{fontSize: 96, ...stagger(frame, fps, 0, 2)}}>` + heading + `</h1>
-      <p style={{fontSize: 52, ...stagger(frame, fps, 1, 2)}}>Four chambers, four valves.</p>
-    </AbsoluteFill>
-  );
-}
-`
-}
+// deckReply is an author's reply as models write it, in a code fence.
+func deckReply(first, second []string) string { return "```json\n" + deckJSON(first, second) + "\n```" }
 
-// draftReply is an author's reply of scenes with these transcripts.
-func draftReply(transcripts ...string) string {
-	scenes := make([]map[string]string, len(transcripts))
-	for i, transcript := range transcripts {
-		heading := fmt.Sprintf("Part %d", i+1)
-		scenes[i] = map[string]string{"narration": transcript, "onScreenMarkdown": "# " + heading + "\n\n- Four chambers", "tsx": sceneCode(heading)}
+// deckJSON is a two-slide video, a bullets slide and a stats slide,
+// narrated with these passages each.
+func deckJSON(first, second []string) string {
+	deck := map[string]any{
+		"title": "The heart", "theme": "classic",
+		"slides": []any{
+			map[string]any{"kind": "bullets", "title": "The heart has four chambers",
+				"bullets": []string{"**Atria:** receive blood", "**Ventricles:** pump it out"}, "narration": first},
+			map[string]any{"kind": "stats", "title": "A lifetime of beats",
+				"stats":     []any{map[string]any{"value": "72", "label": "beats a minute at rest"}, map[string]any{"value": "5 L", "label": "pumped every minute"}},
+				"narration": second},
+		},
 	}
-	encoded, _ := json.Marshal(map[string]any{"language": "en", "scenes": scenes})
-	return "```json\n" + string(encoded) + "\n```"
-}
-
-func repairReply(count int) string {
-	scenes := make([]map[string]string, count)
-	for i := range scenes {
-		scenes[i] = map[string]string{"on_screen_markdown": "# Repaired", "code": sceneCode("Repaired")}
-	}
-	encoded, _ := json.Marshal(map[string]any{"scenes": scenes})
+	encoded, _ := json.Marshal(deck)
 	return string(encoded)
 }
 
@@ -391,17 +343,24 @@ func repairReply(count int) string {
 type rig struct {
 	job    *Job
 	rows   *fakeRows
-	box    *fakeBox
+	raster *fakeRaster
 	voice  *fakeVoice
 	script *modeltest.Script
 	files  *filestore.Local
 	dir    string
 	index  *fakeIndexer
-	stages []Stage
+	// notified is every ending the job reported to the owner.
+	notified *recordingNotifier
+	stages   []Stage
 }
 
 func newRig(t *testing.T, replies ...string) *rig {
 	t.Helper()
+	for _, program := range []string{"ffmpeg", "ffprobe"} {
+		if _, err := exec.LookPath(program); err != nil {
+			t.Skipf("%s is not installed here; the video is joined and checked with it", program)
+		}
+	}
 	dir := t.TempDir()
 	files, err := filestore.OpenLocal(dir)
 	if err != nil {
@@ -412,18 +371,17 @@ func newRig(t *testing.T, replies ...string) *rig {
 		scripted[i] = modeltest.Reply{Text: reply}
 	}
 	r := &rig{
-		rows: newFakeRows(Request{Brief: "The heart, for students", RootThreadID: 3}), box: newFakeBox(),
-		voice: &fakeVoice{}, script: modeltest.NewScript(scripted...), files: files, dir: dir, index: &fakeIndexer{},
+		rows: newFakeRows(Request{Brief: "The heart, for students", RootThreadID: 3}), raster: newFakeRaster(t),
+		voice: newFakeVoice(t), script: modeltest.NewScript(scripted...), files: files, dir: dir, index: &fakeIndexer{},
+		notified: &recordingNotifier{},
 	}
 	r.job = &Job{
-		Rows: r.rows, Sandboxes: fakeBoxes{r.box}, Models: fakeModels{r.script}, Voicer: r.voice, Audio: r.voice,
-		Files: files, Indexer: r.index,
-		Config: Config{Enabled: true, Mode: ModeFrames, RenderTimeout: time.Hour, RenderConcurrency: 2,
-			FramesPerSegment: 1800, FrameTimeout: 7 * time.Second, MaxRenders: 1,
-			Voice: "marin", VoiceID: "openai:marin", NarrationInstructions: "unhurried",
-			Sandbox: sandbox.Settings{CommandTimeout: time.Minute}},
+		Rows: r.rows, Raster: r.raster, Models: fakeModels{r.script}, Voicer: r.voice, Audio: r.voice,
+		Files: files, Indexer: r.index, Notifier: r.notified,
+		Config: Config{Enabled: true, Resvg: "resvg", FrameWorkers: 4, RenderTimeout: time.Hour, MaxRenders: 1,
+			Voice: "marin", VoiceID: "openai:marin", NarrationInstructions: "unhurried"},
 		Timing: Timing{CallTimeout: time.Minute, StatusInterval: 5 * time.Millisecond, KeepAlive: 20 * time.Millisecond,
-			Claim: ClaimRules{StaleAfter: time.Second, MaxTakeovers: 2}, RepairCycles: 2, NarrationConcurrency: 3},
+			Claim: ClaimRules{StaleAfter: time.Second, MaxTakeovers: 2}, NarrationConcurrency: 3},
 		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Measured: func(_ int64, stages []Stage) { r.stages = stages },
 	}
@@ -457,4 +415,21 @@ func walk(dir string, visit func(string)) error {
 	return nil
 }
 
-func writeFile(path, content string) error { return os.WriteFile(path, []byte(content), 0o600) }
+// recordingNotifier keeps every Studio run the job reported.
+type recordingNotifier struct {
+	mu   sync.Mutex
+	runs []notify.StudioRun
+}
+
+func (n *recordingNotifier) StudioFinished(_ context.Context, run notify.StudioRun) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.runs = append(n.runs, run)
+	return nil
+}
+
+func (n *recordingNotifier) reported() []notify.StudioRun {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return append([]notify.StudioRun(nil), n.runs...)
+}

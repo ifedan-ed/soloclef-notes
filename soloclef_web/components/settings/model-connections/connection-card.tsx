@@ -17,14 +17,18 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { ConnectionRead } from "@/contracts/types/model-connections.types";
+import { presetForConnection } from "./connection-presets";
 import { ConnectionSettingsDialog } from "./connection-settings-dialog";
-import { providerDisplay, providerIcon } from "./provider-metadata";
+import { presetIcon } from "./preset-icon";
 
 export function ConnectionCard({ connection }: { connection: ConnectionRead }) {
 	const deleteConnection = useAtomValue(deleteModelConnectionMutationAtom);
 
-	const providerMeta = providerDisplay(connection.provider);
-	const providerLabel = providerMeta.name;
+	// A connection made from a preset is shown as that provider; one of a
+	// provider the server no longer supports (null) says so, and can only be
+	// removed (connection-presets.tsx).
+	const preset = presetForConnection(connection.provider, connection.base_url);
+	const providerLabel = preset?.name ?? "Unsupported connection";
 
 	function deleteCurrentConnection() {
 		deleteConnection.mutate(connection.id);
@@ -35,7 +39,7 @@ export function ConnectionCard({ connection }: { connection: ConnectionRead }) {
 			<div className="flex items-center justify-between gap-3 p-4 transition-colors hover:bg-accent">
 				<div className="min-w-0">
 					<div className="flex items-center gap-2 font-semibold">
-						{providerIcon(connection.provider)}
+						{presetIcon(preset)}
 						<span className="truncate">{providerLabel}</span>
 						{connection.scope === "global" ? (
 							<Badge variant="outline" className="text-[10px]">
@@ -48,7 +52,9 @@ export function ConnectionCard({ connection }: { connection: ConnectionRead }) {
 					</div>
 				</div>
 				<div className="flex shrink-0 items-center gap-2">
-					<ConnectionSettingsDialog connection={connection} providerLabel={providerLabel} />
+					{preset ? (
+						<ConnectionSettingsDialog connection={connection} providerLabel={providerLabel} />
+					) : null}
 					<AlertDialog>
 						<AlertDialogTrigger asChild>
 							<Button

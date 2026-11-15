@@ -11,15 +11,11 @@ import {
 	AlertCircle,
 	ArrowUpIcon,
 	Camera,
-	ChevronDown,
-	Clipboard,
-	LayoutGrid,
 	Plus,
 	Settings2,
 	SquareIcon,
 	Unplug,
 	Upload,
-	Wrench,
 	X,
 } from "lucide-react";
 import Image from "next/image";
@@ -46,7 +42,10 @@ import { llmSetupStatusAtom } from "@/atoms/model-connections/model-connections-
 import { currentUserAtom } from "@/atoms/user/user-query.atoms";
 import { AssistantMessage } from "@/components/assistant-ui/assistant-message";
 import { ChatViewport } from "@/components/assistant-ui/chat-viewport";
-import { ComposerAddMenuDrawer } from "@/components/assistant-ui/composer-add-menu-drawer";
+import {
+	ComposerAddMenuDrawer,
+	NO_MCP_SERVERS,
+} from "@/components/assistant-ui/composer-add-menu-drawer";
 import {
 	type ConnectorRow,
 	useConnectorRows,
@@ -73,7 +72,6 @@ import {
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuPortal,
-	DropdownMenuSeparator,
 	DropdownMenuSub,
 	DropdownMenuSubContent,
 	DropdownMenuSubTrigger,
@@ -84,12 +82,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { getConnectorIcon } from "@/contracts/enums/connectorIcons";
-import {
-	CONNECTOR_ICON_TO_TYPES,
-	CONNECTOR_TOOL_ICON_PATHS,
-	getToolDisplayName,
-	getToolIcon,
-} from "@/contracts/enums/toolIcons";
+import { getToolDisplayName, getToolIcon } from "@/contracts/enums/toolIcons";
 import type { SearchSourceConnector } from "@/contracts/types/connector.types";
 import { scopeForMentionKinds } from "@/contracts/types/retrieval-scope.types";
 import { InstructionsAppliedBadge } from "@/features/chat-instructions";
@@ -99,21 +92,24 @@ import {
 	usePendingInterrupt,
 } from "@/features/chat-messages/hitl";
 import { useTurnStopping } from "@/features/chat-thread/server-turn/turn-stopping-context";
+import { composerStarterAtom } from "@/features/composer-tools/composer-starter";
+import { ConnectionIcon } from "@/features/composer-tools/connection-icon";
 import { draftToRestore, failedSendDraftAtom } from "@/features/composer-tools/failed-send-draft";
 import {
 	preferredToolAtom,
 	submittedPreferredToolAtom,
 } from "@/features/composer-tools/preferred-tool.atom";
+import { groupMenuTools, menuGroupKey } from "@/features/composer-tools/tool-menu-groups";
 import { ComposerToolsMenu } from "@/features/composer-tools/ui/composer-tools-menu";
 import { PreferredToolChip } from "@/features/composer-tools/ui/preferred-tool-chip";
 import { useConnectedKeyedTools } from "@/features/composer-tools/use-connected-keyed-tools";
 import { useNotebookChat } from "@/features/notebooks/state/notebook-chat-context";
 import { NotebookAskBridge } from "@/features/notebooks/ui/chat/notebook-ask-bridge";
+import { NotebookComposeBridge } from "@/features/notebooks/ui/chat/notebook-compose-bridge";
 import { NotebookSourcePicker } from "@/features/notebooks/ui/chat/notebook-source-picker";
 import { NotebookWelcome } from "@/features/notebooks/ui/chat/notebook-welcome";
 import { NotebookSourcesChip } from "@/features/notebooks/ui/notebook-sources-chip";
 import { useMediaQuery } from "@/hooks/use-media-query";
-import { useElectronAPI } from "@/hooks/use-platform";
 import { canSubmitChat } from "@/lib/chat/can-submit-chat";
 import { captureDisplayToPngDataUrl } from "@/lib/chat/display-media-capture";
 import { getMentionDocKey } from "@/lib/chat/mention-doc-key";
@@ -140,15 +136,13 @@ function ComposerSuggestionAnchor({ point }: { point: ComposerSuggestionAnchorPo
 	);
 }
 
+// The pickers open above the trigger character: the composer sits at the
+// bottom of the screen, so there is room above it and none below.
 function getComposerSuggestionAnchorPoint(
-	triggerRect: SuggestionAnchorRect | null,
-	side: "top" | "bottom"
+	triggerRect: SuggestionAnchorRect | null
 ): ComposerSuggestionAnchorPoint | null {
 	if (!triggerRect) return null;
-	return {
-		left: triggerRect.left,
-		top: side === "bottom" ? triggerRect.bottom : triggerRect.top,
-	};
+	return { left: triggerRect.left, top: triggerRect.top };
 }
 
 interface ThreadProps {
@@ -185,6 +179,7 @@ const ThreadContent: FC<ThreadProps> = ({
 			}}
 		>
 			{inNotebook ? <NotebookAskBridge /> : null}
+			{inNotebook ? <NotebookComposeBridge /> : null}
 			<ChatViewport
 				footerAlwaysVisible={hasActiveThread || inNotebook}
 				footerUnderEmptyContent={inNotebook}
@@ -311,49 +306,6 @@ const PendingScreenImageStrip: FC = () => {
 	);
 };
 
-const ClipboardChip: FC<{ text: string; onDismiss: () => void }> = ({ text, onDismiss }) => {
-	const [expanded, setExpanded] = useState(false);
-	const isLong = text.length > 120;
-	const preview = isLong ? `${text.slice(0, 120)}…` : text;
-
-	return (
-		<div className="mx-3 mt-2 rounded-lg border border-border/40 bg-background/60">
-			<div className="flex items-center gap-2 px-3 py-2">
-				<Clipboard className="size-4 shrink-0 text-muted-foreground" />
-				<span className="text-xs font-medium text-muted-foreground">From clipboard</span>
-				<div className="flex-1" />
-				{isLong && (
-					<Button
-						type="button"
-						onClick={() => setExpanded((v) => !v)}
-						variant="ghost"
-						size="icon"
-						className="size-5 text-muted-foreground hover:bg-transparent hover:text-accent-foreground"
-					>
-						<ChevronDown
-							className={cn("size-3.5 transition-transform", expanded && "rotate-180")}
-						/>
-					</Button>
-				)}
-				<Button
-					type="button"
-					onClick={onDismiss}
-					variant="ghost"
-					size="icon"
-					className="size-5 text-muted-foreground hover:bg-transparent hover:text-accent-foreground"
-				>
-					<X className="size-3.5" />
-				</Button>
-			</div>
-			<div className="px-3 pb-2">
-				<p className="text-xs text-foreground/80 whitespace-pre-wrap wrap-break-word leading-relaxed">
-					{expanded ? text : preview}
-				</p>
-			</div>
-		</div>
-	);
-};
-
 /**
  * Inline "chat is unavailable right now" tray, mirrored on top of the
  * composer. Chat runs on the models every account is offered, so there is
@@ -424,19 +376,19 @@ const Composer: FC<ComposerProps> = ({ isLoadingMessages = false, showExamplePro
 	// Desktop-only auto-focus; on mobile, programmatic focus would
 	// summon the soft keyboard on every picker close / thread switch.
 	const isDesktop = useMediaQuery("(min-width: 640px)");
-
-	const electronAPI = useElectronAPI();
-	const [clipboardInitialText, setClipboardInitialText] = useState<string | undefined>();
-	const clipboardLoadedRef = useRef(false);
+	// Words another page asked the box to start with: typed, never sent. On a
+	// desktop the box takes focus with the caret after them, so the person
+	// just goes on typing; a phone waits for a tap (the keyboard rule above).
+	const [starter, setStarter] = useAtom(composerStarterAtom);
 	useEffect(() => {
-		if (!electronAPI || clipboardLoadedRef.current) return;
-		clipboardLoadedRef.current = true;
-		electronAPI.getQuickAskText().then((text: string) => {
-			if (text) {
-				setClipboardInitialText(text);
-			}
-		});
-	}, [electronAPI]);
+		if (starter === null) return;
+		setStarter(null);
+		if (!isComposerInputEmpty) return;
+		editorRef.current?.setText(starter);
+		aui.composer().setText(starter);
+		setIsComposerInputEmpty(false);
+		if (isDesktop) editorRef.current?.focus();
+	}, [starter, setStarter, isComposerInputEmpty, aui, isDesktop]);
 
 	const isThreadEmpty = useAuiState(({ thread }) => thread.isEmpty);
 	const isThreadRunning = useAuiState(({ thread }) => thread.isRunning);
@@ -565,7 +517,7 @@ const Composer: FC<ComposerProps> = ({ isLoadingMessages = false, showExamplePro
 	);
 
 	const handleMentionTrigger = useCallback((trigger: SuggestionTriggerInfo) => {
-		const anchorPoint = getComposerSuggestionAnchorPoint(trigger.anchorRect, "top");
+		const anchorPoint = getComposerSuggestionAnchorPoint(trigger.anchorRect);
 		if (!anchorPoint) {
 			setShowDocumentPopover(false);
 			setMentionQuery("");
@@ -593,24 +545,18 @@ const Composer: FC<ComposerProps> = ({ isLoadingMessages = false, showExamplePro
 		}
 	}, []);
 
-	const handleActionTrigger = useCallback(
-		(trigger: SuggestionTriggerInfo) => {
-			const anchorPoint = getComposerSuggestionAnchorPoint(
-				trigger.anchorRect,
-				clipboardInitialText ? "bottom" : "top"
-			);
-			if (!anchorPoint) {
-				setShowPromptPicker(false);
-				setActionQuery("");
-				setSuggestionAnchorPoint(null);
-				return;
-			}
-			setSuggestionAnchorPoint((current) => current ?? anchorPoint);
-			setShowPromptPicker(true);
-			setActionQuery(trigger.query);
-		},
-		[clipboardInitialText]
-	);
+	const handleActionTrigger = useCallback((trigger: SuggestionTriggerInfo) => {
+		const anchorPoint = getComposerSuggestionAnchorPoint(trigger.anchorRect);
+		if (!anchorPoint) {
+			setShowPromptPicker(false);
+			setActionQuery("");
+			setSuggestionAnchorPoint(null);
+			return;
+		}
+		setSuggestionAnchorPoint((current) => current ?? anchorPoint);
+		setShowPromptPicker(true);
+		setActionQuery(trigger.query);
+	}, []);
 
 	const handleActionClose = useCallback(() => {
 		if (showPromptPicker) {
@@ -658,24 +604,6 @@ const Composer: FC<ComposerProps> = ({ isLoadingMessages = false, showExamplePro
 			editorRef.current?.focus();
 		},
 		[aui]
-	);
-
-	const handleQuickAskSelect = useCallback(
-		(action: { name: string; prompt: string; mode: "transform" | "explore" }) => {
-			if (!clipboardInitialText) return;
-			electronAPI?.setQuickAskMode(action.mode);
-			const finalPrompt = action.prompt.includes("{selection}")
-				? action.prompt.replace("{selection}", () => clipboardInitialText)
-				: `${action.prompt}\n\n${clipboardInitialText}`;
-			editorRef.current?.setText(finalPrompt);
-			aui.composer().setText(finalPrompt);
-			setIsComposerInputEmpty(false);
-			setShowPromptPicker(false);
-			setActionQuery("");
-			setSuggestionAnchorPoint(null);
-			setClipboardInitialText(undefined);
-		},
-		[clipboardInitialText, electronAPI, aui]
 	);
 
 	// Arrow / Enter / Escape navigation for the active picker.
@@ -744,13 +672,6 @@ const Composer: FC<ComposerProps> = ({ isLoadingMessages = false, showExamplePro
 		if (isLoadingMessages || isThreadRunning || isBlockedByOtherUser || isPausedForQuestion) return;
 		if (showDocumentPopover || showPromptPicker) return;
 
-		if (clipboardInitialText) {
-			const userText = editorRef.current?.getText() ?? "";
-			const combined = userText ? `${userText}\n\n${clipboardInitialText}` : clipboardInitialText;
-			aui.composer().setText(combined);
-			setClipboardInitialText(undefined);
-		}
-
 		// Capture chips before the reset below clears the live atom, so
 		// the async ``onNew`` still sees them.
 		setSubmittedMentions(mentionedDocuments);
@@ -774,7 +695,6 @@ const Composer: FC<ComposerProps> = ({ isLoadingMessages = false, showExamplePro
 		isThreadRunning,
 		isBlockedByOtherUser,
 		isPausedForQuestion,
-		clipboardInitialText,
 		aui,
 		mentionedDocuments,
 		retrievalScope,
@@ -898,10 +818,10 @@ const Composer: FC<ComposerProps> = ({ isLoadingMessages = false, showExamplePro
 				{suggestionAnchorPoint ? (
 					<>
 						<ComposerSuggestionAnchor point={suggestionAnchorPoint} />
-						<ComposerSuggestionPopoverContent side={clipboardInitialText ? "bottom" : "top"}>
+						<ComposerSuggestionPopoverContent side="top">
 							<PromptPicker
 								ref={promptPickerRef}
-								onSelect={clipboardInitialText ? handleQuickAskSelect : handleActionSelect}
+								onSelect={handleActionSelect}
 								onDone={() => {
 									setShowPromptPicker(false);
 									setActionQuery("");
@@ -922,12 +842,6 @@ const Composer: FC<ComposerProps> = ({ isLoadingMessages = false, showExamplePro
 					)}
 				>
 					<PendingScreenImageStrip />
-					{clipboardInitialText && (
-						<ClipboardChip
-							text={clipboardInitialText}
-							onDismiss={() => setClipboardInitialText(undefined)}
-						/>
-					)}
 					<PreferredToolChip tool={preferredTool} onRemove={() => setPreferredTool(null)} />
 					<div
 						ref={inputWrapperRef}
@@ -1010,7 +924,6 @@ const ComposerAction: FC<ComposerActionProps> = ({
 	const openUploadDialog = notebookUpload ?? openLibraryUploadDialog;
 	const pendingScreenImages = useAtomValue(pendingUserImageDataUrlsAtom);
 	const setPendingScreenImages = useSetAtom(pendingUserImageDataUrlsAtom);
-	const electronAPI = useElectronAPI();
 	const turnStopping = useTurnStopping();
 
 	const isComposerTextEmpty = useAuiState(({ composer }) => {
@@ -1021,11 +934,9 @@ const ComposerAction: FC<ComposerActionProps> = ({
 		isComposerTextEmpty && mentionedDocuments.length === 0 && pendingScreenImages.length === 0;
 
 	const handleScreenCapture = useCallback(async () => {
-		const url = electronAPI?.captureFullScreen
-			? await electronAPI.captureFullScreen()
-			: await captureDisplayToPngDataUrl();
+		const url = await captureDisplayToPngDataUrl();
 		if (url) setPendingScreenImages((prev) => [...prev, url]);
-	}, [electronAPI, setPendingScreenImages]);
+	}, [setPendingScreenImages]);
 
 	const { data: setupStatus } = useAtomValue(llmSetupStatusAtom);
 
@@ -1037,10 +948,6 @@ const ComposerAction: FC<ComposerActionProps> = ({
 	const hydrateDisabled = useSetAtom(hydrateDisabledToolsAtom);
 
 	const { data: connectors } = useAtomValue(connectorsAtom);
-	const connectedTypes = useMemo(
-		() => new Set<string>((connectors ?? []).map((c) => c.connector_type)),
-		[connectors]
-	);
 	// "Your connectors" rows for the add-menu (desktop submenu + mobile drawer):
 	// same hook the connectors panel rail uses, so grouping + health glyphs match.
 	const { rows: connectorRows } = useConnectorRows((connectors ?? []) as SearchSourceConnector[]);
@@ -1068,43 +975,14 @@ const ComposerAction: FC<ComposerActionProps> = ({
 		[disabledToolsSet, setDisabledTools]
 	);
 	const filteredTools = agentTools;
-	const groupedTools = useMemo(() => {
-		if (!filteredTools) return [];
-		const toolsByName = new Map(filteredTools.map((t) => [t.name, t]));
-		const result: { label: string; tools: typeof filteredTools; connectorIcon?: string }[] = [];
-		const placed = new Set<string>();
-
-		for (const group of TOOL_GROUPS) {
-			if (group.connectorIcon) {
-				const requiredTypes = CONNECTOR_ICON_TO_TYPES[group.connectorIcon];
-				const isConnected = requiredTypes?.some((t) => connectedTypes.has(t));
-				if (!isConnected) {
-					for (const name of group.tools) placed.add(name);
-					continue;
-				}
-			}
-
-			const matched = group.tools.flatMap((name) => {
-				const tool = toolsByName.get(name);
-				if (!tool) return [];
-				placed.add(name);
-				return [tool];
-			});
-			if (matched.length > 0) {
-				result.push({ label: group.label, tools: matched, connectorIcon: group.connectorIcon });
-			}
-		}
-
-		const ungrouped = filteredTools.filter((t) => !placed.has(t.name));
-		if (ungrouped.length > 0) {
-			result.push({ label: "Other", tools: ungrouped });
-		}
-
-		return result;
-	}, [filteredTools, connectedTypes]);
-	const regularToolGroups = groupedTools.filter((g) => !g.connectorIcon && g.label !== "Other");
-	const connectorToolGroups = groupedTools.filter((g) => g.connectorIcon);
-	const otherToolGroup = groupedTools.find((g) => !g.connectorIcon && g.label === "Other");
+	// The server's list is the account's: its own tools, then each
+	// connection's under the connection's name, only for what is connected
+	// (tool-menu-groups.ts). So a connection's row here is a connection the
+	// next message really has, in a notebook's chat as anywhere.
+	const toolMenu = useMemo(() => groupMenuTools(filteredTools ?? []), [filteredTools]);
+	const regularToolGroups = toolMenu.own;
+	const connectorToolGroups = toolMenu.connections;
+	const otherToolGroup = toolMenu.other;
 
 	useEffect(() => {
 		hydrateDisabled();
@@ -1153,7 +1031,6 @@ const ComposerAction: FC<ComposerActionProps> = ({
 						onUploadFiles={() => openUploadDialog()}
 						connectorRows={connectorRows}
 						onSelectConnector={openConnectorManage}
-						onBrowseConnectors={openConnectors}
 						regularToolGroups={regularToolGroups}
 						connectorToolGroups={connectorToolGroups}
 						otherToolGroup={otherToolGroup}
@@ -1200,18 +1077,21 @@ const ComposerAction: FC<ComposerActionProps> = ({
 								<Camera className="h-4 w-4" />
 								Take a screenshot
 							</DropdownMenuItem>
-							{connectorRows.length > 0 ? (
-								<DropdownMenuSub>
-									<DropdownMenuSubTrigger>
-										<Unplug className="h-4 w-4" />
-										MCP Connectors
-									</DropdownMenuSubTrigger>
-									<DropdownMenuPortal>
-										<DropdownMenuSubContent
-											collisionPadding={8}
-											className="w-60 max-h-72 gap-1 overflow-y-auto overscroll-none"
-										>
-											{connectorRows.map((row) => (
+							{/* The submenu lists the servers only. "Manage connectors" was taken
+							    out: it opened settings and left the chat mid-question. With no
+							    server the submenu says so instead of linking away. */}
+							<DropdownMenuSub>
+								<DropdownMenuSubTrigger>
+									<Unplug className="h-4 w-4" />
+									MCP Connectors
+								</DropdownMenuSubTrigger>
+								<DropdownMenuPortal>
+									<DropdownMenuSubContent
+										collisionPadding={8}
+										className="w-60 max-h-72 gap-1 overflow-y-auto overscroll-none"
+									>
+										{connectorRows.length > 0 ? (
+											connectorRows.map((row) => (
 												<DropdownMenuItem
 													key={row.type}
 													onSelect={() => openConnectorManage(row)}
@@ -1221,21 +1101,13 @@ const ComposerAction: FC<ComposerActionProps> = ({
 													<span className="min-w-0 flex-1 truncate">{row.title}</span>
 													<ConnectorRowStatus row={row} className="text-xs" />
 												</DropdownMenuItem>
-											))}
-											<DropdownMenuSeparator />
-											<DropdownMenuItem onSelect={openConnectors} className="gap-2">
-												<LayoutGrid className="h-4 w-4" />
-												Manage connectors
-											</DropdownMenuItem>
-										</DropdownMenuSubContent>
-									</DropdownMenuPortal>
-								</DropdownMenuSub>
-							) : (
-								<DropdownMenuItem onSelect={openConnectors}>
-									<Unplug className="h-4 w-4" />
-									MCP Connectors
-								</DropdownMenuItem>
-							)}
+											))
+										) : (
+											<p className="px-2 py-1.5 text-xs text-muted-foreground">{NO_MCP_SERVERS}</p>
+										)}
+									</DropdownMenuSubContent>
+								</DropdownMenuPortal>
+							</DropdownMenuSub>
 							<DropdownMenuSub
 								open={toolsPopoverOpen}
 								onOpenChange={(open) => {
@@ -1249,9 +1121,9 @@ const ComposerAction: FC<ComposerActionProps> = ({
 								</DropdownMenuSubTrigger>
 								<DropdownMenuPortal>
 									<DropdownMenuSubContent
-										alignOffset={-192}
+										alignOffset={-256}
 										collisionPadding={8}
-										className="w-60 h-56 gap-1 overflow-y-auto overscroll-none"
+										className="w-72 h-72 gap-1 overflow-y-auto overscroll-none"
 										onScroll={() => setOpenConnectorSubmenu(null)}
 									>
 										{regularToolGroups.map((group) => (
@@ -1292,19 +1164,18 @@ const ComposerAction: FC<ComposerActionProps> = ({
 										{connectorToolGroups.length > 0 && (
 											<div>
 												<div className="px-2 pt-1.5 pb-0.5 text-xs text-muted-foreground font-semibold select-none">
-													Connector Actions
+													Your connections
 												</div>
 												{connectorToolGroups.map((group) => {
-													const iconKey = group.connectorIcon ?? "";
-													const iconInfo = CONNECTOR_TOOL_ICON_PATHS[iconKey];
+													const groupKey = menuGroupKey(group);
 													const toolNames = group.tools.map((t) => t.name);
 													const allDisabled = toolNames.every((n) => disabledToolsSet.has(n));
 													return (
 														<DropdownMenuSub
-															key={group.label}
-															open={openConnectorSubmenu === group.label}
+															key={groupKey}
+															open={openConnectorSubmenu === groupKey}
 															onOpenChange={(open) =>
-																setOpenConnectorSubmenu(open ? group.label : null)
+																setOpenConnectorSubmenu(open ? groupKey : null)
 															}
 														>
 															<DropdownMenuSubTrigger
@@ -1315,18 +1186,7 @@ const ComposerAction: FC<ComposerActionProps> = ({
 																	!allDisabled && "text-primary"
 																)}
 															>
-																{iconInfo ? (
-																	<Image
-																		src={iconInfo.src}
-																		alt={iconInfo.alt}
-																		width={16}
-																		height={16}
-																		className="h-4 w-4 shrink-0 select-none pointer-events-none"
-																		draggable={false}
-																	/>
-																) : (
-																	<Wrench className="h-4 w-4" />
-																)}
+																<ConnectionIcon connector={group.connector} />
 																<span className="min-w-0 flex-1 truncate">{group.label}</span>
 																<Switch
 																	checked={!allDisabled}
@@ -1501,34 +1361,6 @@ const ComposerAction: FC<ComposerActionProps> = ({
 function formatToolName(name: string): string {
 	return getToolDisplayName(name);
 }
-
-interface ToolGroup {
-	label: string;
-	tools: string[];
-	connectorIcon?: string;
-	tooltip?: string;
-}
-
-const TOOL_GROUPS: ToolGroup[] = [
-	{
-		label: "Research",
-		tools: ["scrape_webpage"],
-	},
-	{
-		label: "Generate",
-		tools: ["generate_podcast", "generate_video_presentation", "generate_image"],
-	},
-	{
-		label: "Memory",
-		tools: ["update_memory"],
-	},
-	{
-		label: "Google Drive",
-		tools: ["create_google_drive_file", "delete_google_drive_file"],
-		connectorIcon: "google_drive",
-		tooltip: "Create and delete files in Google Drive",
-	},
-];
 
 const EditComposer: FC = () => {
 	return (

@@ -101,17 +101,15 @@ func TestAFolderUploadAgainstRealServices(t *testing.T) {
 		t.Logf("a folder of 3 files in 3 folders was stored, recorded and queued in %s", time.Since(started).Round(time.Millisecond))
 		root = answer.RootFolderID
 
-		// The top folder: at the top level, marked as kept in step, with
-		// the parser its files were sent to.
+		// The top folder: at the top level, named as the folder sent.
 		var name string
 		var parent *int64
-		var watched, parser *string
-		if err := s.pool.QueryRow(ctx, `SELECT name, parent_id, metadata ->> 'watched', metadata ->> 'parser' FROM folders WHERE id = $1 AND user_id = $2`,
-			root, owner).Scan(&name, &parent, &watched, &parser); err != nil {
+		if err := s.pool.QueryRow(ctx, `SELECT name, parent_id FROM folders WHERE id = $1 AND user_id = $2`,
+			root, owner).Scan(&name, &parent); err != nil {
 			t.Fatal(err)
 		}
-		if name != folder || parent != nil || watched == nil || *watched != "true" || parser == nil || *parser != "datalab" {
-			t.Errorf("the top folder is %q under %v, watched %v, parser %v", name, parent, watched, parser)
+		if name != folder || parent != nil {
+			t.Errorf("the top folder is %q under %v", name, parent)
 		}
 
 		for index, want := range []struct{ relative, title, folders, content string }{

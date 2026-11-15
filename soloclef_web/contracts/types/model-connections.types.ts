@@ -25,7 +25,7 @@ export const modelRead = z.object({
 // A connection as the server answers it. There is no `api_key` here on
 // purpose: the server never sends a stored key back, to anybody. `has_api_key`
 // says whether one is saved, and that is all the browser is told. `extra`
-// arrives without the credentials some providers keep in it (Bedrock, Vertex).
+// arrives without anything sealed in it (the headers' values).
 // So nothing read from a connection may be sent back as a credential: an
 // update leaves `api_key` out to keep the saved key, and a change is tested
 // with `connectionTestUpdateRequest`, where the server uses the key it holds.
@@ -79,13 +79,6 @@ export const connectionCreateRequest = z.object({
 	scope: connectionScopeEnum,
 	enabled: z.boolean().default(true),
 	models: z.array(modelSelection).default([]),
-});
-
-// Listing a provider's models before a connection is made, from the model
-// service's catalogue. Only the provider is sent: the catalogue is the same
-// whatever the key and the address, so neither leaves the browser for it.
-export const modelPreviewRequest = z.object({
-	provider: z.string().min(1),
 });
 
 // Listing the models of an OpenAI-compatible endpoint before a connection is
@@ -144,36 +137,12 @@ export const verifyConnectionResponse = z.object({
 	message: z.string().default(""),
 });
 
-export const globalLlmConfigStatus = z.object({
-	exists: z.boolean(),
-});
-
 export const llmSetupStatus = z.object({
 	status: z.enum(["ready", "needs_setup"]),
 	source: z.enum(["global_config", "models", "none"]),
 	can_configure: z.boolean(),
 	stage: z.enum(["initial_setup", "recovery", "ready"]),
 });
-
-export const modelProviderRead = z.object({
-	provider: z.string(),
-	transport: z.string(),
-	// Where the provider's models are listed from: "proxy_catalogue" when the
-	// model service has a list of them, "endpoint" when the server asks the
-	// connection's own address (an OpenAI-compatible endpoint's GET /models),
-	// "none" when neither (each model is added by its name).
-	discovery: z.string(),
-	// Whether any signed-in account may connect this provider. Only an
-	// OpenAI-compatible endpoint, which the server calls directly behind its
-	// egress guard, is; every other provider is the administrator's.
-	any_account: z.boolean(),
-	default_base_url: z.string().nullable().optional(),
-	base_url_required: z.boolean(),
-	auth_style: z.string(),
-	local_only: z.boolean().default(false),
-});
-
-export const modelProviderListResponse = z.array(modelProviderRead);
 
 export const connectionListResponse = z.array(connectionRead);
 export const modelListResponse = z.array(modelRead);
@@ -185,7 +154,6 @@ export type ModelPreviewRead = z.infer<typeof modelPreviewRead>;
 export type ModelSelection = z.infer<typeof modelSelection>;
 export type ConnectionRead = z.infer<typeof connectionRead>;
 export type ConnectionCreateRequest = z.infer<typeof connectionCreateRequest>;
-export type ModelPreviewRequest = z.infer<typeof modelPreviewRequest>;
 export type EndpointModelPreviewRequest = z.infer<typeof endpointModelPreviewRequest>;
 export type ConnectionHeaders = z.infer<typeof connectionHeaders>;
 export type ModelTestPreviewRequest = z.infer<typeof modelTestPreviewRequest>;
@@ -193,7 +161,5 @@ export type ConnectionUpdateRequest = z.infer<typeof connectionUpdateRequest>;
 export type ConnectionTestUpdateRequest = z.infer<typeof connectionTestUpdateRequest>;
 export type ModelUpdateRequest = z.infer<typeof modelUpdateRequest>;
 export type ModelsBulkUpdateRequest = z.infer<typeof modelsBulkUpdateRequest>;
-export type GlobalLlmConfigStatus = z.infer<typeof globalLlmConfigStatus>;
 export type LlmSetupStatus = z.infer<typeof llmSetupStatus>;
 export type VerifyConnectionResponse = z.infer<typeof verifyConnectionResponse>;
-export type ModelProviderRead = z.infer<typeof modelProviderRead>;

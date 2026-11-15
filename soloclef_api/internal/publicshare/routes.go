@@ -18,11 +18,10 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/humawriter"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/principal"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/requestcontext"
-	"git.danvics.com/danvics/soloclef/soloclef_api/internal/routeanalytics"
 	filestore "git.danvics.com/danvics/soloclef/soloclef_filestore"
 )
 
-// Routes is the eight routes and what they share.
+// Routes is the four routes and what they share.
 type Routes struct {
 	Pool *pgxpool.Pool
 	// Files is every store this process reads; a file's row says which one
@@ -35,11 +34,8 @@ type Routes struct {
 	// FrontendURL is where the web app is served, which a new link's
 	// address begins with.
 	FrontendURL string
-	// Analytics records a copy, the one share-link conversion only the
-	// server can see. Its zero value records nothing.
-	Analytics routeanalytics.Capture
-	Errors    errorenvelope.Writer
-	Logger    *slog.Logger
+	Errors      errorenvelope.Writer
+	Logger      *slog.Logger
 	// Now is nil for the system clock; only a test names another. It is
 	// the moment a link's expiry is measured against.
 	Now func() time.Time
@@ -80,24 +76,6 @@ type (
 		ArtifactID string `path:"artifact_id"`
 		FileID     string `path:"file_id"`
 	}
-	slidePath struct {
-		ShareToken  string `path:"share_token"`
-		ArtifactID  string `path:"artifact_id"`
-		SlideNumber string `path:"slide_number"`
-	}
-	podcastPath struct {
-		ShareToken string `path:"share_token"`
-		PodcastID  string `path:"podcast_id"`
-	}
-	presentationPath struct {
-		ShareToken     string `path:"share_token"`
-		PresentationID string `path:"video_presentation_id"`
-	}
-	presentationSlidePath struct {
-		ShareToken     string `path:"share_token"`
-		PresentationID string `path:"video_presentation_id"`
-		SlideNumber    string `path:"slide_number"`
-	}
 	tokenPath struct {
 		ShareToken string `path:"share_token"`
 	}
@@ -113,18 +91,15 @@ func (r Routes) Register(api huma.API) {
 	if err := r.Check(); err != nil {
 		panic(err)
 	}
+	mount[tokenPath](api, r, http.MethodGet, PagePath, "read-public-output", "What a public link shows: one Studio output", r.page)
 	mount[artifactPath](api, r, http.MethodGet, ContentPath, "read-public-artifact-content", "A shared artifact's main file", r.content)
 	mount[filePath](api, r, http.MethodGet, FilePath, "read-public-artifact-file", "One file of a shared artifact", r.file)
-	mount[slidePath](api, r, http.MethodGet, SlideAudioPath, "read-public-artifact-slide-audio", "A shared video slide's narration", r.slideAudio)
-	mount[podcastPath](api, r, http.MethodGet, PodcastStreamPath, "stream-public-podcast", "A shared podcast's audio", r.podcastStream)
-	mount[presentationPath](api, r, http.MethodGet, PresentationPath, "read-public-video-presentation", "A presentation frozen into a link", r.presentation)
-	mount[presentationSlidePath](api, r, http.MethodGet, PresentationAudioPath, "read-public-video-presentation-slide-audio", "A frozen presentation's slide narration", r.presentationAudio)
-	mount[tokenPath](api, r, http.MethodPost, ClonePath, "clone-public-chat", "Copy a shared chat into the caller's account", r.clone)
 	mount[outputPath](api, r, http.MethodPost, OutputLinkPath, "share-studio-output", "Make a public link to a finished studio output", r.shareOutput)
 }
 
-// exchange is one request being answered. It carries no caller: six of the
-// routes have none, and the two that do ask for one themselves (signedIn).
+// exchange is one request being answered. It carries no caller: three of
+// the routes have none, and the one that does asks for it itself
+// (signedIn).
 type exchange struct {
 	ctx       huma.Context
 	response  http.ResponseWriter
@@ -142,7 +117,7 @@ func mount[P any](api huma.API, r Routes, method, path, id, summary string, serv
 	})
 }
 
-// signedIn is the caller of one of the two gated routes.
+// signedIn is the caller of the gated route.
 func (x *exchange) signedIn() (principal.Principal, bool) {
 	caller, ok := principal.FromContext(x.ctx.Context())
 	if !ok {

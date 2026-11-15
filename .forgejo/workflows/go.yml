@@ -55,6 +55,8 @@ jobs:
           - soloclef_ingest
           - soloclef_mail
           - soloclef_mcp_go
+          - soloclef_notify
+          - soloclef_sandboxd
           - soloclef_schema
           - soloclef_studio
           - soloclef_worker
@@ -93,3 +95,60 @@ jobs:
         # The integration tests skip themselves unless pointed at a throwaway
         # Postgres, Valkey or bucket, so this is the unit suite.
         run: go test ./...
+
+  installed-builds:
+    # The phone builds already installed from the App Store, held to the
+    # server through the real server and a real Postgres
+    # (soloclef_api/internal/installedbuilds, README.md). The contract test
+    # sends every request those builds make through serve() and checks each
+    # answer against the build's own openapi.json; on 2026-11-13 a shape
+    # check passed and the Inbox still answered 500, which only a statement
+    # that reached Postgres could show. SOLOCLEF_API_TEST_CONTRACT_REQUIRED
+    # makes a missing database a failure here, never a skip
+    # (installed_builds_coverage_test.go checks this file sets it).
+    name: Installed phone builds' contract
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # The deployment's own image (docker/docker-compose.go.yml).
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: contract
+          POSTGRES_PASSWORD: contract
+          POSTGRES_DB: contract
+        options: >-
+          --health-cmd "pg_isready -U contract -d contract"
+          --health-interval 2s --health-timeout 5s --health-retries 30
+      valkey:
+        image: valkey/valkey:9.1.2-alpine
+    env:
+      GOTOOLCHAIN: auto
+      SOLOCLEF_API_TEST_CONTRACT_DATABASE: postgres://contract:contract@postgres:5432/contract?sslmode=disable
+      SOLOCLEF_API_TEST_CONTRACT_VALKEY: redis://valkey:6379/0
+      SOLOCLEF_API_TEST_CONTRACT_REQUIRED: "true"
+    steps:
+      - uses: https://github.com/actions/checkout@v4
+      - uses: https://github.com/actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: soloclef_api/go.sum
+      - name: Migrate the throwaway database
+        # With the migrate command a deployment runs, so the server's
+        # start-up schema check passes as it does in production. The secret
+        # is the throwaway's own; an empty database has nothing to seal.
+        working-directory: soloclef_schema
+        run: |
+          printf '%s' "ci-throwaway-$(date +%s%N)" > "$RUNNER_TEMP/migrate-secret"
+          SOLOCLEF_MIGRATE_SECRET_KEY_FILE="$RUNNER_TEMP/migrate-secret" \
+          SOLOCLEF_MIGRATE_DATABASE_URL="$SOLOCLEF_API_TEST_CONTRACT_DATABASE" \
+            go run ./cmd/migrate up
+      - name: Contract
+        working-directory: soloclef_api
+        run: go test ./cmd/api -run 'InstalledBuild|ContractCase|TestEveryCall' -count=1 -v
+      - name: The app-versions report
+        # The same throwaway database, after the contract: each opt-in test
+        # empties the accounts it is given, so they run one after the other.
+        working-directory: soloclef_api
+        env:
+          SOLOCLEF_API_TEST_APPVERSIONS_DATABASE: postgres://contract:contract@postgres:5432/contract?sslmode=disable
+        run: go test ./internal/appversions ./internal/installedbuilds -count=1 -v

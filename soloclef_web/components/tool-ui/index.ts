@@ -42,4 +42,3 @@ export {
 	UpdateMemoryResultSchema,
 	UpdateMemoryToolUI,
 } from "./user-memory";
-export { GenerateVideoPresentationToolUI } from "./video-presentation";

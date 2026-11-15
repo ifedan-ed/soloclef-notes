@@ -20,8 +20,9 @@ type Videos interface {
 	VideoIn(ctx context.Context, userID string, artifactID int64) (*Video, error)
 }
 
-// VideoRoute serves the payload a video artifact is played from: its slides
-// and the scene code for each.
+// VideoRoute serves a video artifact's slides, each with its narration's
+// audio, and its scene codes: a list kept for the route's shape, empty for a
+// video drawn from a narrated deck (the worker's videos), which has no code.
 type VideoRoute struct {
 	Videos Videos
 	Errors errorenvelope.Writer

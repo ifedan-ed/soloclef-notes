@@ -35,12 +35,10 @@ func TestTheFlagsSayWhatThisTierDoes(t *testing.T) {
 		route Route
 		want  string
 	}{
-		{"permission rules on", Route{PermissionEnabled: true},
-			`{"disable_new_agent_stack":false,"enable_permission":true,"enable_action_log":true,"enable_revert_route":true,"enable_desktop_local_filesystem":false}`},
-		{"the kill-switch and the rules are answered as set", Route{Disabled: true, PermissionEnabled: true},
-			`{"disable_new_agent_stack":true,"enable_permission":true,"enable_action_log":true,"enable_revert_route":true,"enable_desktop_local_filesystem":false}`},
+		{"the kill-switch is answered as set", Route{Disabled: true},
+			`{"disable_new_agent_stack":true,"enable_action_log":true,"enable_revert_route":true}`},
 		{"nothing on", Route{},
-			`{"disable_new_agent_stack":false,"enable_permission":false,"enable_action_log":true,"enable_revert_route":true,"enable_desktop_local_filesystem":false}`},
+			`{"disable_new_agent_stack":false,"enable_action_log":true,"enable_revert_route":true}`},
 	} {
 		if status, body := ask(c.route, true); status != 200 || body != c.want {
 			t.Errorf("%s: %d %s", c.name, status, body)
@@ -52,7 +50,7 @@ func TestTheFlagsSayWhatThisTierDoes(t *testing.T) {
 // log and its undo routes are always served: no setting can hide one that
 // works.
 func TestTheUndoIsAlwaysOffered(t *testing.T) {
-	for _, route := range []Route{{}, {Disabled: true}, {PermissionEnabled: true}} {
+	for _, route := range []Route{{}, {Disabled: true}} {
 		_, body := ask(route, true)
 		if !strings.Contains(body, `"enable_action_log":true`) || !strings.Contains(body, `"enable_revert_route":true`) {
 			t.Errorf("%+v: the undo is not offered: %s", route, body)
@@ -61,7 +59,7 @@ func TestTheUndoIsAlwaysOffered(t *testing.T) {
 }
 
 func TestNobodyIsAnsweredWithoutACaller(t *testing.T) {
-	if status, body := ask(Route{PermissionEnabled: true}, false); status != 500 || strings.Contains(body, "enable_") {
+	if status, body := ask(Route{}, false); status != 500 || strings.Contains(body, "enable_") {
 		t.Errorf("%d %s", status, body)
 	}
 }

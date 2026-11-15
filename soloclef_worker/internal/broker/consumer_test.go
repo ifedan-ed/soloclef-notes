@@ -355,7 +355,7 @@ func TestShutdownLetsRunningWorkFinish(t *testing.T) {
 func TestShutdownHonoursItsDeadlineAndLeavesTheClaimBehind(t *testing.T) {
 	rdb := testRedis(t)
 	cfg := fastConfig(1)
-	cfg.ShutdownGrace = 200 * time.Millisecond
+	cfg.ShutdownGrace, cfg.HandBack = 200*time.Millisecond, 200*time.Millisecond
 	started := make(chan struct{})
 	stuck := make(chan struct{})
 
@@ -388,6 +388,49 @@ func TestShutdownHonoursItsDeadlineAndLeavesTheClaimBehind(t *testing.T) {
 		t.Errorf("unacked holds %q; the abandoned job's claim must stay so it is restored", held)
 	}
 	close(stuck)
+}
+
+// A job cut off at the end of the grace that gives its work back (a video
+// releasing its attempt) has its message on the queue again before Run
+// returns, for the next worker to take at once. Before the hand-back wait,
+// Run returned as the jobs were told to stop, and the message stayed
+// claimed for the visibility window.
+func TestAJobCutOffAtTheGraceIsPutBackBeforeTheWorkerExits(t *testing.T) {
+	rdb := testRedis(t)
+	cfg := fastConfig(1)
+	cfg.ShutdownGrace, cfg.HandBack = 100*time.Millisecond, 5*time.Second
+	started := make(chan struct{})
+	consumer, err := NewConsumer(rdb, cfg, runnerFunc(func(ctx context.Context, _ *celery.Message) error {
+		close(started)
+		<-ctx.Done()
+		// Its own last write takes a moment, as a release of a row does.
+		time.Sleep(50 * time.Millisecond)
+		return ErrRequeue
+	}))
+	if err != nil {
+		t.Fatalf("NewConsumer: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- consumer.Run(ctx) }()
+
+	publish(t, rdb, envelopeFor("tag-cut", testQueue, 0))
+	<-started
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, ErrShutdownIncomplete) {
+			t.Fatalf("Run = %v, want ErrShutdownIncomplete: the job was cut off", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("shutdown did not end")
+	}
+	if held, _ := rdb.HLen(context.Background(), "unacked").Result(); held != 0 {
+		t.Errorf("%d claims left behind by a job that gave its message back", held)
+	}
+	if waiting, _ := rdb.LLen(context.Background(), testQueue).Result(); waiting != 1 {
+		t.Errorf("%d messages on the queue, want the cut-off job's one", waiting)
+	}
 }
 
 // The three metrics the tier was built to have.

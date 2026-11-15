@@ -39,10 +39,10 @@ INSERT INTO documents (id, user_id, title, document_type, content, content_hash)
  (500, '`+alice+`', 'Deck', 'ARTIFACT', '', 'd'), (501, '`+alice+`', 'Audio', 'ARTIFACT', '', 'e');
 INSERT INTO artifacts (id, document_id, user_id, format, metadata) VALUES
  (70, 500, '`+alice+`', 'slides', '{"duration_seconds": 61.6}'), (71, 501, '`+alice+`', 'podcast', NULL);
-INSERT INTO deliverable_jobs (id, user_id, kind, title, tool_call_id, status, phase, progress, artifact_id) VALUES
- (80, '`+alice+`', 'slides', 'Deck', 't1', 'ready', 'done', 100, 70),
- (81, '`+alice+`', 'report', 'Draft', 't2', 'running', 'writing', 40, NULL),
- (82, '`+alice+`', 'report', 'Queued', 't3', 'queued', NULL, 0, NULL);
+INSERT INTO deliverable_jobs (id, user_id, kind, title, tool_call_id, status, phase, progress, artifact_id, request) VALUES
+ (80, '`+alice+`', 'slides', 'Deck', 't1', 'ready', 'done', 100, 70, '{}'),
+ (81, '`+alice+`', 'artifact', 'Draft', 't2', 'running', 'writing', 40, NULL, '{"task":"her sources"}'),
+ (82, '`+alice+`', 'artifact', 'Queued', 't3', 'queued', NULL, 0, NULL, '{"task":"her sources"}');
 INSERT INTO podcast_runs (id, user_id, title, status, duration_seconds, artifact_id) VALUES
  (90, '`+alice+`', 'Talk', 'rendering', NULL, 71);
 INSERT INTO notebook_outputs (id, notebook_id, user_id, kind, title, deliverable_job_id, podcast_id, source_document_ids, created_at) VALUES
@@ -117,6 +117,11 @@ INSERT INTO notebook_outputs (id, notebook_id, user_id, kind, title, deliverable
 		count("deliverable_jobs WHERE id = 80 AND status = 'ready'") != 1 ||
 		count("podcast_runs WHERE id = 90 AND status = 'cancelled'") != 1 {
 		t.Error("a run was not stopped as its state asks, or a finished one was changed")
+	}
+	// The queued job cancelled outright lets go of the person's text; the
+	// running one keeps it until its run ends.
+	if count("deliverable_jobs WHERE id = 82 AND request ? 'task'") != 0 || count("deliverable_jobs WHERE id = 81 AND request ? 'task'") != 1 {
+		t.Error("a cancelled job kept its stored task, or a stopping one lost it early")
 	}
 	if len(removed.removed) != 2 || removed.removed[0] != 500 || removed.removed[1] != 501 ||
 		count("documents WHERE id IN (500, 501) AND status ->> 'state' = 'deleting'") != 2 {

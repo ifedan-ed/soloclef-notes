@@ -1,15 +1,14 @@
 /**
  * What "Clear all" on a Notifications tab removes, and how it asks first.
  *
- * Each tab reads one or both of the inboxes (one per server category);
- * clearing a tab clears it in each inbox it reads, with the server applying
- * the same filters its list does, so nothing outside the tab goes.
+ * Both tabs read the one inbox; the server applies the same filter its list
+ * does, so clearing Unread never takes a read item.
  */
 
-export type NotificationTab = "all" | "announcements" | "unread";
+export type NotificationTab = "all" | "unread";
 
 export interface ClearScope {
-	/** The Unread tab clears only the unread items; every other tab clears all of its items. */
+	/** The Unread tab clears only the unread items; All clears every item. */
 	unreadOnly: boolean;
 }
 
@@ -35,7 +34,6 @@ export function isCleared(item: { read: boolean; metadata?: unknown }, scope: Cl
 
 const CONFIRM_TITLE: Record<NotificationTab, string> = {
 	all: "Clear all notifications?",
-	announcements: "Clear all announcements?",
 	unread: "Clear all unread notifications?",
 };
 

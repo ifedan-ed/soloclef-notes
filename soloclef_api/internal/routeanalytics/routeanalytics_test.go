@@ -49,9 +49,8 @@ func TestTheEventIsCaptureForsShape(t *testing.T) {
 	}
 }
 
-// _client_label reads the principal alone, so a session is "web": the method
-// cannot tell the web app from the desktop app. This is not the gated-request
-// middleware's label, which a header decides.
+// _client_label reads the principal alone, so a session is "web". This is not
+// the gated-request middleware's label, which a header decides.
 func TestTheClientLabelIsThePrincipalsAlone(t *testing.T) {
 	for method, want := range map[principal.Method]string{
 		principal.MethodSession:             "web",

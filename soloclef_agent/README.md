@@ -82,6 +82,9 @@ tool.Tool{
 }
 ```
 
+`call.Approved` says a person approved this very call; a tool with
+`MustAsk` checks it before doing what needed the approval.
+
 An error from `Run` is shown to the model as a failed result and the turn
 goes on. A panic stops the run with a `*agent.PanicError` and does not take
 the process down. `call.Citations` numbers a source the model may cite,
@@ -99,9 +102,13 @@ A call is decided in a fixed order, and each rule is final:
 1. An unknown tool, or arguments that are not a JSON object: an error
    result the model can act on.
 2. A delegate runs; its own tools carry their own policies.
-3. `tool.Auto` runs.
-4. `tool.AlwaysAsk` asks. Nothing below is consulted.
-5. `tool.Ask` runs if the person said "always allow" earlier in this turn,
+3. A call the tool's `MustAsk` picks out (by its arguments) asks, under any
+   policy, and cannot be always allowed. Nothing below is consulted.
+4. With `Config.AskFirst` (a person's own policy), the call runs unless it
+   says the person wants to be asked first. Nothing below is consulted.
+5. `tool.Auto` runs.
+6. `tool.AlwaysAsk` asks. Nothing below is consulted.
+7. `tool.Ask` runs if the person said "always allow" earlier in this turn,
    or if `Config.Trusted` says so now; otherwise it asks.
 
 When any call of a batch must ask, the turn pauses with nothing of that

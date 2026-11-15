@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"mime"
 	"net/http"
 	"path"
 	"strconv"
@@ -134,6 +135,7 @@ func (r DownloadRoute) serve(ctx huma.Context) {
 		steady.Header().Set("Content-Disposition", contentDisposition(markdownName(found.Title), false))
 		steady.Header().Set("Cache-Control", privateNoStore)
 		steady.Header().Set("X-Content-Type-Options", "nosniff")
+		sandboxUnlessInline(steady.Header(), steady.Header().Get("Content-Disposition"))
 		steady.WriteHeader(http.StatusOK)
 		sent, err := steady.Write(body)
 		r.streamEnded(ctx.Context(), request.requestID, "", steady, ended{
@@ -425,6 +427,7 @@ func (g Gate) stream(ctx huma.Context, response http.ResponseWriter, requestID s
 		answer.Close()
 		return
 	}
+	sandboxUnlessInline(steady.Header(), object.headers.Disposition)
 
 	// From here the status line is on the wire, so a failure has nobody to be
 	// reported to. It can only be logged, and streamEnded says at what level.
@@ -437,6 +440,32 @@ func (g Gate) stream(ctx huma.Context, response http.ResponseWriter, requestID s
 		result.promised, _ = strconv.ParseInt(steady.Header().Get("Content-Length"), 10, 64)
 	}
 	g.streamEnded(ctx.Context(), requestID, object.key, steady, result)
+}
+
+// sandboxUnlessInline marks a response that is not shown in the page with
+// `Content-Security-Policy: sandbox`, the public link's rule
+// (publicshare/streams.go) on every route that streams a stored file: the
+// owner's downloads and file contents, a document's original, a medium.
+//
+// Why an attachment needs it at all: Content-Disposition is advice. A
+// browser that is sent to the address directly (a link opened in a new tab,
+// a viewer that ignores the header, an extension) may still render the
+// bytes, and an SVG or an HTML file someone uploaded, or a model wrote, is
+// script with this site's cookies if it is rendered from this origin. The
+// sandbox gives such a rendering a unique origin of its own and no script,
+// so the worst it can be is a page that does nothing. Files shown inline
+// are left without it on purpose: they are only the types whose viewers run
+// nothing (inlineTypes), and Chrome's PDF viewer refuses to open under a
+// sandbox.
+//
+// It is decided from the Content-Disposition the route chose, so the header
+// that says "save this" and the policy that says "never run this" cannot
+// disagree. A missing or unreadable disposition is not inline.
+func sandboxUnlessInline(header http.Header, disposition string) {
+	if kind, _, err := mime.ParseMediaType(disposition); err == nil && kind == "inline" {
+		return
+	}
+	header.Set("Content-Security-Policy", "sandbox")
 }
 
 // paced gives the response a write deadline that moves with the body

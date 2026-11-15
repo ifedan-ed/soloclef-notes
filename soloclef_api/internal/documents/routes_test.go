@@ -15,7 +15,6 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humago"
 
-	"git.danvics.com/danvics/soloclef/soloclef_api/internal/folders"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/indexqueue"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/principal"
 	"git.danvics.com/danvics/soloclef/soloclef_celery/produce"
@@ -37,7 +36,6 @@ type library struct {
 	// documents, chunks and folders, each under the account that owns it.
 	documents map[int64]libraryDocument
 	chunks    map[int64]libraryChunk
-	watched   map[string][]folders.Folder
 	versions  map[int64][]Version
 
 	restored []RestoreWork
@@ -190,11 +188,6 @@ func (l *library) TypeCountsOf(_ context.Context, userID string) ([]TypeCount, e
 	return counts, nil
 }
 
-func (l *library) WatchedFoldersOf(_ context.Context, userID string) ([]folders.Folder, error) {
-	l.asked = append(l.asked, userID)
-	return l.watched[userID], nil
-}
-
 func (l *library) titles(userID string, limit, offset int64, keep func(string) bool) []TitleRow {
 	l.asked = append(l.asked, userID)
 	var rows []TitleRow
@@ -226,8 +219,8 @@ func (l *library) MatchingTitles(_ context.Context, userID, term string, limit, 
 
 var day = time.Date(2026, 11, 11, 9, 30, 0, 0, time.UTC)
 
-// newLibrary is the owner's two documents, four chunks, two versions and
-// one watched folder. The stranger has nothing at all.
+// newLibrary is the owner's two documents, four chunks and two versions.
+// The stranger has nothing at all.
 func newLibrary() *library {
 	title := "Tide tables, first draft"
 	old := "# Tides\n\nThe first draft."
@@ -256,13 +249,10 @@ func newLibrary() *library {
 			{Number: 2, Title: &title, ContentHash: "h2", SourceMarkdown: &old, CreatedAt: day},
 			{Number: 1, ContentHash: "h1", CreatedAt: day.Add(-time.Hour)},
 		}},
-		watched: map[string][]folders.Folder{owner: {{
-			ID: 7, Name: "Shore", Position: "a0", CreatedAt: day, UpdatedAt: day, Metadata: []byte(`{"watched": true}`),
-		}}},
 	}
 }
 
-// mount registers the nine routes cmd/api serves on one API, over one
+// mount registers the eight routes cmd/api serves on one API, over one
 // library.
 func mount(held *library) huma.API {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -273,7 +263,6 @@ func mount(held *library) huma.API {
 	RestoreRoute{Restores: held, Queue: held, Logger: logger, Now: func() time.Time { return day }}.Register(served)
 	StatusRoute{Statuses: held, Logger: logger}.Register(served)
 	TypeCountsRoute{Counts: held, Logger: logger}.Register(served)
-	WatchedFoldersRoute{Folders: held, Logger: logger}.Register(served)
 	TitlesRoute{Titles: held, Logger: logger}.Register(served)
 	ByChunkRoute{Chunks: held, Logger: logger}.Register(served)
 	return served
@@ -322,7 +311,6 @@ func TestEachRouteAnswersTheOwner(t *testing.T) {
 		{"the status poll", http.MethodGet, "/api/v1/documents/status?document_ids=42,41",
 			[]string{`"id":41`, `"state":"ready"`, `"id":42`, `"state":"processing"`, `"stage":"embedding"`}},
 		{"the counts by type", http.MethodGet, "/api/v1/documents/type-counts", []string{`"FILE":1`, `"NOTE":1`}},
-		{"the watched folders", http.MethodGet, "/api/v1/documents/watched-folders", []string{`"id":7`, `"name":"Shore"`, `"watched":true`}},
 		{"the title search, with no term", http.MethodGet, "/api/v1/documents/search/titles", []string{`"id":41`, `"id":42`, `"has_more":false`}},
 		{"the title search, with one", http.MethodGet, "/api/v1/documents/search/titles?title=shore", []string{`"id":42`, `"title":"Shore notes"`}},
 	} {
@@ -369,7 +357,6 @@ func TestAnotherAccountSeesAndChangesNothing(t *testing.T) {
 		{name: "the restore", method: http.MethodPost, target: "/api/v1/documents/41/versions/2/restore", unused: "/api/v1/documents/9041/versions/2/restore"},
 		{name: "the status poll", method: http.MethodGet, target: "/api/v1/documents/status?document_ids=41,42", empty: `{"items":[]}`},
 		{name: "the counts by type", method: http.MethodGet, target: "/api/v1/documents/type-counts", empty: `{}`},
-		{name: "the watched folders", method: http.MethodGet, target: "/api/v1/documents/watched-folders", empty: `[]`},
 		{name: "the title search", method: http.MethodGet, target: "/api/v1/documents/search/titles", empty: `{"items":[],"has_more":false}`},
 		{name: "the title search for a title the owner has", method: http.MethodGet, target: "/api/v1/documents/search/titles?title=tide", empty: `{"items":[],"has_more":false}`},
 	} {
@@ -434,7 +421,6 @@ func TestNothingInARequestNamesAnOwner(t *testing.T) {
 	for _, target := range []string{
 		"/api/v1/documents/status?document_ids=41",
 		"/api/v1/documents/type-counts",
-		"/api/v1/documents/watched-folders",
 		"/api/v1/documents/search/titles",
 	} {
 		separator := "?"

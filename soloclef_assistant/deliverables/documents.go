@@ -16,11 +16,13 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_studio/sandbox"
 )
 
-// The five kinds built by code. A report, a Word document, a slide deck, a
-// workbook and an interactive page are not written by the model as text:
-// the model writes a program (WeasyPrint, python-docx, python-pptx,
-// openpyxl) and runs it in the thread's sandbox, and the file that program
-// leaves behind is the artifact. The path is always the same four steps:
+// The four kinds built by code. A report, a Word document, a workbook and an
+// interactive page are not written by the model as text: the model writes
+// a program (WeasyPrint, python-docx, openpyxl) and runs it in the thread's
+// sandbox, and the file that program leaves behind is the artifact. A
+// slide deck is a file too, and is stored the same way, but it is drawn by
+// this process from content the model writes (slidedeck.go); the sandbox
+// only converts it for its preview. The path is always the same four steps:
 //
 //  1. load_artifact_instructions reads the kind's skill out of the sandbox
 //     image, where it lives beside the libraries it describes.
@@ -86,20 +88,24 @@ type documentFormat struct {
 	// placement rules, expected to be exactly as many as the deck declares,
 	// and allowed to hold no text.
 	slides bool
+	// drawn says this process draws the file from content the model
+	// writes (a deck): it is never built, verified or saved from the
+	// sandbox.
+	drawn bool
 }
 
 // documentFormats is the built formats by name.
 var documentFormats = map[string]documentFormat{
 	FormatPDF:  {suffix: ".pdf", mime: "application/pdf", check: checkPDFBytes, rendered: true},
 	FormatDOCX: {suffix: ".docx", mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", check: checkDOCX, rendered: true, converted: true},
-	FormatPPTX: {suffix: ".pptx", mime: "application/vnd.openxmlformats-officedocument.presentationml.presentation", check: checkPPTX, rendered: true, converted: true, slides: true},
+	FormatPPTX: {suffix: ".pptx", mime: "application/vnd.openxmlformats-officedocument.presentationml.presentation", check: checkPPTX, rendered: true, converted: true, slides: true, drawn: true},
 	FormatXLSX: {suffix: ".xlsx", mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", check: checkXLSX},
 	FormatHTML: {suffix: ".html", mime: "text/html", check: checkHTML},
 }
 
-// documentFormatNames is the built formats in the order a sentence lists
-// them.
-const documentFormatNames = "pdf, docx, pptx, xlsx or html"
+// documentFormatNames is the formats built in the sandbox, in the order a
+// sentence lists them.
+const documentFormatNames = "pdf, docx, xlsx or html"
 
 // MaxDocumentBytes is the largest file a built artifact may be. It is the
 // limit the rest of the application puts on an artifact's file; a document
@@ -125,31 +131,44 @@ type Workshop interface {
 	// Check reports what is missing. Called once at start-up.
 	Check() error
 	// Bench returns the thread's sandbox, making it if the thread has
-	// none. A *WorkshopRefusal is a reason the person can be told.
-	Bench(ctx context.Context, owner Owner) (Bench, error)
+	// none, and waiting for a place as wait says when the account has
+	// none free (sandboxwait.go). A *WorkshopRefusal is a reason the person
+	// can be told.
+	Bench(ctx context.Context, owner Owner, wait SandboxWait) (Bench, error)
+	// Release removes the thread's sandbox, if it has one, so that its
+	// place in the account's limit is free at once rather than at its idle
+	// time to live. It is for a run whose thread nothing will use again.
+	Release(ctx context.Context, owner Owner) error
 }
 
-// WorkshopRefusal is why a sandbox cannot be had, in words for the person.
-type WorkshopRefusal struct{ Reason string }
+// WorkshopRefusal is why a sandbox cannot be had, in words for the person,
+// with the failure code an unattended run is closed with (runfailures.go).
+type WorkshopRefusal struct {
+	Reason string
+	Code   string
+}
 
 func (r *WorkshopRefusal) Error() string { return r.Reason }
 
-// The refusals' sentences.
+// The refusals' sentences. A chat turn, which does not wait, is told the
+// first; a run that waited its whole wait is closed with
+// FailureSandboxBusy's own sentence.
 const (
 	noSandboxSentence   = "This deployment has no code sandbox, so reports, Word documents, slide decks, spreadsheets and interactive pages cannot be made here."
-	sandboxFullSentence = "Your other conversations are using all of your sandboxes. Try again in a few minutes."
+	sandboxFullSentence = "All of your code sandboxes are in use by your other conversations and outputs. Try again in a few minutes."
 )
 
-// NoSandbox is the Workshop of a deployment that has no sandbox server,
+// NoSandbox is the Workshop of a deployment that has no sandbox service,
 // chosen on purpose. Every built kind answers with the sentence saying so.
 type NoSandbox struct{}
 
 func (NoSandbox) Check() error { return nil }
-func (NoSandbox) Bench(context.Context, Owner) (Bench, error) {
-	return nil, &WorkshopRefusal{Reason: noSandboxSentence}
+func (NoSandbox) Bench(context.Context, Owner, SandboxWait) (Bench, error) {
+	return nil, &WorkshopRefusal{Reason: noSandboxSentence, Code: FailureNoSandbox}
 }
+func (NoSandbox) Release(context.Context, Owner) error { return nil }
 
-// Sandboxes is the Workshop over the OpenSandbox server.
+// Sandboxes is the Workshop over the stack's sandbox service.
 type Sandboxes struct {
 	Client *sandbox.Client
 }
@@ -161,15 +180,30 @@ func (s Sandboxes) Check() error {
 	return nil
 }
 
-func (s Sandboxes) Bench(ctx context.Context, owner Owner) (Bench, error) {
+func (s Sandboxes) Bench(ctx context.Context, owner Owner, wait SandboxWait) (Bench, error) {
+	// Asked first without waiting: almost always there is a place, and the
+	// run's phase then never flickers to "waiting".
 	session, err := s.Client.ForThread(ctx, owner.UserID, owner.ThreadID)
+	if errors.Is(err, sandbox.ErrAccountFull) && wait.For > 0 {
+		wait.tell(ctx, true)
+		session, err = s.Client.WaitForThread(ctx, owner.UserID, owner.ThreadID, wait.For)
+		wait.tell(context.WithoutCancel(ctx), false)
+		if errors.Is(err, sandbox.ErrAccountFull) {
+			sentence, _ := FailureSentence(FailureSandboxBusy)
+			return nil, &WorkshopRefusal{Reason: sentence, Code: FailureSandboxBusy}
+		}
+	}
 	if errors.Is(err, sandbox.ErrAccountFull) {
-		return nil, &WorkshopRefusal{Reason: sandboxFullSentence}
+		return nil, &WorkshopRefusal{Reason: sandboxFullSentence, Code: FailureSandboxBusy}
 	}
 	if err != nil {
 		return nil, err
 	}
 	return sessionBench{session}, nil
+}
+
+func (s Sandboxes) Release(ctx context.Context, owner Owner) error {
+	return s.Client.Terminate(ctx, owner.ThreadID)
 }
 
 // sessionBench is a sandbox session as a Bench.
@@ -182,9 +216,10 @@ const refusedDocumentNote = " Nothing was made; tell the requester exactly that.
 
 // bench returns the turn's sandbox, or the error the model is shown. The
 // cause of a failure can name hosts and keys, so it is logged and the model
-// gets a sentence it can pass on.
+// gets a sentence it can pass on; a run nobody watches also notes the
+// failure's code (runfailures.go).
 func (s Specialist) bench(ctx context.Context, owner Owner) (Bench, error) {
-	bench, err := s.Workshop.Bench(ctx, owner)
+	bench, err := s.Workshop.Bench(ctx, owner, s.SandboxWait)
 	if err == nil {
 		return bench, nil
 	}
@@ -193,11 +228,22 @@ func (s Specialist) bench(ctx context.Context, owner Owner) (Bench, error) {
 	}
 	var refused *WorkshopRefusal
 	if errors.As(err, &refused) {
+		s.Failures.note(refused.Code, err)
 		return nil, errors.New(refused.Reason + refusedDocumentNote)
 	}
+	s.Failures.note(FailureSandbox, err)
 	s.Saver.Logger.LogAttrs(ctx, slog.LevelError, "a thread's sandbox could not be had",
 		slog.String("error", err.Error()), slog.String("user_id", owner.UserID), slog.Int64("thread_id", owner.ThreadID))
 	return nil, errors.New("the code sandbox could not be reached, so nothing was made; tell the requester to try again shortly")
+}
+
+// ReleaseSandbox removes the thread's sandbox, for a run whose thread is
+// its own and is done with (a Studio output, an automation's run): its
+// place in the account's limit is free for the next run at once. A failure
+// is the caller's to log; the sandbox then expires at its idle time to
+// live.
+func (s Specialist) ReleaseSandbox(ctx context.Context, owner Owner) error {
+	return s.Workshop.Release(ctx, owner)
 }
 
 // sandboxFailure words an error from a sandbox call for the model.
@@ -205,6 +251,7 @@ func (s Specialist) sandboxFailure(ctx context.Context, owner Owner, doing strin
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+	s.Failures.note(FailureSandbox, fmt.Errorf("%s: %w", doing, err))
 	if errors.Is(err, sandbox.ErrGone) {
 		// Its files went with it, so the model must start again, not retry.
 		return errors.New("the sandbox expired and its files are gone; build the artifact again from the start")
@@ -277,7 +324,7 @@ const maxShownOutput = 16_000
 func (s Specialist) executeTool(owner Owner) tool.Tool {
 	return tool.Tool{
 		Name:        ExecuteTool,
-		Description: "Run Python or a Bash command in the sandbox, to build a pdf, docx, pptx, xlsx or html artifact. Each call is a new process in /workspace; carry state between calls in files. The sandbox has no network. It answers the output and the exit code.",
+		Description: "Run Python or a Bash command in the sandbox, to build a pdf, docx, xlsx or html artifact (never a slide deck: a deck is saved from its content with save_artifact). Each call is a new process in /workspace; carry state between calls in files. The sandbox has no network. It answers the output and the exit code.",
 		Parameters:  json.RawMessage(`{"type":"object","properties":{"code_or_command":{"type":"string","description":"Python source, or a Bash command line."},"language":{"type":"string","enum":["python","bash"],"description":"python unless stated."}},"required":["code_or_command"]}`),
 		// The code runs in a container of the thread's own with no network
 		// and nothing of the user's in it but what this task wrote, and it

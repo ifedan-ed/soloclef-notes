@@ -275,21 +275,19 @@ type Config struct {
 	CookieDomain              string
 	SessionCookieSameSite     string
 	SessionCookieSecurePolicy string
-	// DisableNewAgentStack and PermissionEnabled mirror
-	// SOLOCLEF_DISABLE_NEW_AGENT_STACK and SOLOCLEF_ENABLE_PERMISSION, the two
-	// flags `_flag_guard` reads before it serves an agent permission rule
-	// (internal/agentrules.Availability). They are read as
-	// app/agents/chat/multi_agent_chat/shared/feature_flags.py reads them —
-	// stripped, lower-cased, and one of `1`, `true`, `yes` or `on` — with that
-	// module's own defaults, so a deployment that sets neither gets the same
-	// answer on both tiers.
+	// DisableNewAgentStack mirrors SOLOCLEF_DISABLE_NEW_AGENT_STACK, which
+	// the agent flags route answers (internal/agentflags). It is read as
+	// app/agents/chat/multi_agent_chat/shared/feature_flags.py read it —
+	// stripped, lower-cased, and one of `1`, `true`, `yes` or `on` — with
+	// that module's own default. (SOLOCLEF_ENABLE_PERMISSION is gone: the
+	// tool permissions it hid are read by the chat on every deployment, so
+	// hiding their routes only hid the way to change them.)
 	//
 	// One edge differs and cannot be closed from here: a variable that is
 	// *present but empty* is False there and the default here, because Go's
 	// environment accessor cannot tell an empty value from an unset one. Every
 	// other setting in this file has the same limitation.
 	DisableNewAgentStack bool
-	PermissionEnabled    bool
 	// The chat (internal/chat), which this tier runs itself: the model, the
 	// search over indexed documents, the outside sources, and the bounds of
 	// one turn. Every one of these is required unless it says otherwise, and
@@ -346,44 +344,41 @@ type Config struct {
 	// from CHAT_MAX_TURN_SECONDS.
 	ChatMaxSteps int
 	ChatMaxTurn  time.Duration
-	// ChatImageModel is the proxy's name for the model that draws images
-	// and infographics. Optional: empty means this deployment draws none,
-	// and a person who asks for one is told so.
-	ChatImageModel string
 	// ChatVisionModel is the proxy's name for the model that looks at
 	// pictures for an account that chose none of its own: a photo attached
-	// to a question, an upload's pictures, and an infographic read back to
-	// check its text. Optional: empty, an account with no choice has none
-	// of those looked at. A built document's pages are never shown to it:
-	// they are measured (soloclef_assistant/deliverables, layout_rules.go).
+	// to a question and an upload's pictures. Optional: empty, an account
+	// with no choice has none of those looked at. Nothing is drawn by a
+	// model: figures and infographics are drawn by code (FiguresResvg).
 	ChatVisionModel string
+	// FiguresResvg is the resvg program an infographic's PNG is drawn
+	// with, and FiguresFontDir figures-go's fonts, which a poster's figures
+	// are set in: the image's own paths (soloclef_api/Dockerfile), named in
+	// the compose file. Both required.
+	FiguresResvg   string
+	FiguresFontDir string
 	// SandboxEnabled says whether reports, slides, spreadsheets and pages
 	// are built, in a sandbox. Required, exactly "true" or "false": whether
 	// a deployment runs people's document builds is a decision, not
 	// something to fall into.
 	//
-	// The nine Sandbox settings describe that sandbox (an OpenSandbox
-	// server), and every one is required when the switch is on. None has a
-	// default: the image decides what a build can do, and the CPU, the
-	// memory, the lifetimes and the number per account decide what an
-	// account can cost. With the switch off they are not read at all, so
-	// a deployment can keep them written down while it is switched off.
+	// The seven Sandbox settings describe that sandbox (the stack's
+	// sandbox service, soloclef_sandboxd), and every one is required when
+	// the switch is on. None has a default: the CPU, the memory, the
+	// lifetimes and the number per account decide what an account can
+	// cost. With the switch off they are not read at all, so a deployment
+	// can keep them written down while it is switched off. The image and
+	// the stack's label on its sandboxes are the service's own settings.
 	//
-	// SandboxStack (SANDBOX_STACK) is this deployment's name on every
-	// sandbox it makes and in every lookup, the worker's too (its own
-	// SANDBOX_STACK settings), because the server finds sandboxes among
-	// every container on its Docker: the Compose project's name.
-	// SandboxURL is the server's root (http://opensandbox-server:8080);
+	// SandboxURL is the service's root (http://soloclefgo-sandboxd-1:8080);
 	// SandboxAPIKey is the contents of the file SANDBOX_API_KEY_FILE names.
-	// SandboxCPU and SandboxMemory are in the server's own spelling ("2",
-	// "6Gi"). SandboxIdleTTL (SANDBOX_IDLE_TTL_SECONDS, at least 60) is how
-	// long a sandbox outlives its last use; SandboxCommandTimeout
-	// (SANDBOX_COMMAND_TIMEOUT_SECONDS) the longest one command may run.
+	// SandboxCPU and SandboxMemory are spelled as "2" and "6Gi" (the
+	// service reads them). SandboxIdleTTL (SANDBOX_IDLE_TTL_SECONDS, at
+	// least 60) is how long a sandbox outlives its last use;
+	// SandboxCommandTimeout (SANDBOX_COMMAND_TIMEOUT_SECONDS) the longest
+	// one command may run.
 	SandboxEnabled        bool
-	SandboxStack          string
 	SandboxURL            string
 	SandboxAPIKey         string
-	SandboxImage          string
 	SandboxCPU            string
 	SandboxMemory         string
 	SandboxIdleTTL        time.Duration
@@ -447,6 +442,25 @@ type Config struct {
 	MicrosoftMailClientSecret string
 	MicrosoftMailTenant       string
 	MicrosoftMailRedirectURI  string
+	// The two settings Stalwart's sign-in for a JMAP mailbox needs
+	// (internal/jmapconnect). Optional, as a pair: a deployment that sets
+	// neither offers JMAP mailboxes by app password only, and says so.
+	// JMAPMailClientID is the https address this tier serves its client
+	// metadata document at (its path is jmapconnect.ClientDocumentPath):
+	// Stalwart takes that address as the app's client id and reads the
+	// redirect URI from the document. JMAPMailRedirectURI is that redirect
+	// URI, whose path is jmapconnect.CallbackPath.
+	JMAPMailClientID    string
+	JMAPMailRedirectURI string
+	// MCPOAuthRedirectURI is MCP_OAUTH_REDIRECT_URI: this tier's callback
+	// for an MCP server's OAuth sign-in as the world reaches it, the public
+	// address of /api/v1/connectors/mcp/oauth/callback. Empty, no sign-in
+	// is offered and the form says so; set, FRONTEND_URL is required too,
+	// because the callback sends the person back to the website. An
+	// authorization server that registers clients itself is given this
+	// address; one that does not must have it registered for the client id
+	// a person types.
+	MCPOAuthRedirectURI string
 	// ShutdownGrace is how long in-flight requests have after a signal.
 	ShutdownGrace time.Duration
 	// LogLevel is debug, info, warn or error.
@@ -607,7 +621,6 @@ func Load(env func(string) string) (Config, error) {
 		SessionCookieSecurePolicy: strings.ToLower(optional("SESSION_COOKIE_SECURE_POLICY", "auto")),
 		// feature_flags.py's _env_bool, with that module's own defaults.
 		DisableNewAgentStack: truth(env, "DISABLE_NEW_AGENT_STACK", false),
-		PermissionEnabled:    truth(env, "ENABLE_PERMISSION", true),
 		// The chat's settings (see the fields). TrimRight on the two
 		// addresses for the reason POSTHOG_HOST has it: a path is appended
 		// to each, and "…/v1/" would make "…/v1//chat/completions".
@@ -627,7 +640,8 @@ func Load(env func(string) string) (Config, error) {
 		NCBIAPIKey:              secretFile("NCBI_API_KEY_FILE"),
 		ChatMaxSteps:            requiredWhole("CHAT_MAX_STEPS"),
 		ChatMaxTurn:             time.Duration(requiredWhole("CHAT_MAX_TURN_SECONDS")) * time.Second,
-		ChatImageModel:          optional("CHAT_IMAGE_MODEL", ""),
+		FiguresResvg:            required("FIGURES_RESVG"),
+		FiguresFontDir:          required("FIGURES_FONT_DIR"),
 		ChatVisionModel:         optional("CHAT_VISION_MODEL", ""),
 		SandboxEnabled:          requiredSwitch("SANDBOX_ENABLED"),
 		SignupAllowed:           requiredSwitch("SIGNUP_ALLOWED"),
@@ -649,7 +663,10 @@ func Load(env func(string) string) (Config, error) {
 		MicrosoftMailClientID:     optional("MICROSOFT_MAIL_CLIENT_ID", ""),
 		MicrosoftMailClientSecret: secretFile("MICROSOFT_MAIL_CLIENT_SECRET_FILE"),
 		MicrosoftMailTenant:       optional("MICROSOFT_MAIL_TENANT", ""),
+		JMAPMailClientID:          optional("JMAP_MAIL_CLIENT_ID", ""),
+		JMAPMailRedirectURI:       optional("JMAP_MAIL_REDIRECT_URI", ""),
 		MicrosoftMailRedirectURI:  optional("MICROSOFT_MAIL_REDIRECT_URI", ""),
+		MCPOAuthRedirectURI:       optional("MCP_OAUTH_REDIRECT_URI", ""),
 	}
 
 	if config.FrontendURL == "" {
@@ -666,6 +683,11 @@ func Load(env func(string) string) (Config, error) {
 		if err != nil || (address.Scheme != "http" && address.Scheme != "https") || address.Host == "" {
 			problems = append(problems, prefix+name+" must be an http(s) address")
 		}
+	}
+
+	webAddress("MCP_OAUTH_REDIRECT_URI", config.MCPOAuthRedirectURI)
+	if config.MCPOAuthRedirectURI != "" && config.FrontendURL == "" {
+		problems = append(problems, prefix+"MCP_OAUTH_REDIRECT_URI is set and FRONTEND_URL is not: the sign-in's callback has nowhere to send the person")
 	}
 
 	// Single sign-on, whole when it is switched on and unread when it is off.
@@ -730,20 +752,17 @@ func Load(env func(string) string) (Config, error) {
 
 	// The sandbox, whole when it is switched on and unread when it is off.
 	if config.SandboxEnabled {
-		// Checked for its spelling by the sandbox client, at start-up too.
-		config.SandboxStack = required("SANDBOX_STACK")
 		config.SandboxURL = strings.TrimRight(required("SANDBOX_URL"), "/")
 		if config.SandboxURL != "" {
 			address, err := url.Parse(config.SandboxURL)
 			if err != nil || (address.Scheme != "http" && address.Scheme != "https") || address.Host == "" {
-				problems = append(problems, prefix+"SANDBOX_URL must be an http(s) address (http://opensandbox-server:8080)")
+				problems = append(problems, prefix+"SANDBOX_URL must be an http(s) address (http://soloclefgo-sandboxd-1:8080)")
 			}
 		}
 		config.SandboxAPIKey = requiredSecretFile("SANDBOX_API_KEY_FILE")
-		config.SandboxImage = required("SANDBOX_IMAGE")
 		config.SandboxCPU = required("SANDBOX_CPU")
 		config.SandboxMemory = required("SANDBOX_MEMORY")
-		// The server refuses a time to live under a minute, and would
+		// The service refuses a time to live under a minute, and would
 		// refuse it on the first build rather than at start-up.
 		if seconds := requiredWhole("SANDBOX_IDLE_TTL_SECONDS"); seconds > 0 && seconds < 60 {
 			problems = append(problems, prefix+"SANDBOX_IDLE_TTL_SECONDS must be at least 60")

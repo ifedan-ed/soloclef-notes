@@ -122,6 +122,15 @@ func TestWhatAFileIsServedAs(t *testing.T) {
 				t.Errorf("status %d, %q, %q", got.status,
 					got.header.Get("Content-Type"), got.header.Get("Content-Disposition"))
 			}
+			// Saved files are sandboxed in case a browser renders them
+			// anyway; shown ones are not, or the PDF viewer would not open.
+			wantPolicy := "sandbox"
+			if test.disposition == "inline" {
+				wantPolicy = ""
+			}
+			if policy := got.header.Get("Content-Security-Policy"); policy != wantPolicy {
+				t.Errorf("Content-Security-Policy %q, want %q", policy, wantPolicy)
+			}
 		})
 	}
 }
@@ -231,10 +240,23 @@ func TestTheDownloadIsTheFileNamedAfterTheArtifact(t *testing.T) {
 		}
 	}
 
+	if got.header.Get("Content-Security-Policy") != "sandbox" {
+		t.Errorf("a download is sent under %q, want the sandbox", got.header.Get("Content-Security-Policy"))
+	}
+
 	// Even a type that may be shown in the page is an attachment here.
 	s.download.File.MimeType, s.download.File.Filename = "application/pdf", "x.pdf"
-	if got := s.get(t, downloadURL, nil); !strings.HasPrefix(got.header.Get("Content-Disposition"), "attachment;") {
-		t.Errorf("a PDF download is %q", got.header.Get("Content-Disposition"))
+	if got := s.get(t, downloadURL, nil); !strings.HasPrefix(got.header.Get("Content-Disposition"), "attachment;") ||
+		got.header.Get("Content-Security-Policy") != "sandbox" {
+		t.Errorf("a PDF download is %q under %q", got.header.Get("Content-Disposition"), got.header.Get("Content-Security-Policy"))
+	}
+	// An SVG or HTML download, which a browser opened directly could run,
+	// is sandboxed.
+	for _, file := range []struct{ name, mimeType string }{{"logo.svg", "image/svg+xml"}, {"page.html", "text/html"}} {
+		s.download.File.MimeType, s.download.File.Filename = file.mimeType, file.name
+		if got := s.get(t, downloadURL, nil); got.header.Get("Content-Security-Policy") != "sandbox" {
+			t.Errorf("a %s download is sent under %q", file.mimeType, got.header.Get("Content-Security-Policy"))
+		}
 	}
 	// A large download can be resumed.
 	if got := s.get(t, downloadURL, http.Header{"Range": {"bytes=10-19"}}); got.status != 206 ||
@@ -252,10 +274,11 @@ func TestAnArtifactWithNoFileDownloadsAsItsMarkdown(t *testing.T) {
 		t.Fatalf("status %d: %q", got.status, got.raw)
 	}
 	for header, want := range map[string]string{
-		"Content-Type":           "text/markdown; charset=utf-8",
-		"Content-Length":         strconv.Itoa(len("# Réunion\n\nDécisions prises.\n")),
-		"Cache-Control":          "private, no-store",
-		"X-Content-Type-Options": "nosniff",
+		"Content-Type":            "text/markdown; charset=utf-8",
+		"Content-Length":          strconv.Itoa(len("# Réunion\n\nDécisions prises.\n")),
+		"Cache-Control":           "private, no-store",
+		"X-Content-Type-Options":  "nosniff",
+		"Content-Security-Policy": "sandbox",
 		"Content-Disposition": `attachment; filename="Runion _ notes.md"; ` +
 			`filename*=UTF-8''R%C3%A9union%20_%20notes.md`,
 	} {

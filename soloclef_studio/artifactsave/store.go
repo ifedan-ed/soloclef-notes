@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"git.danvics.com/danvics/soloclef/soloclef_filestore"
+	"git.danvics.com/danvics/soloclef/soloclef_studio/notebookoutput"
 )
 
 // Store writes artifacts over the pool.
@@ -52,6 +53,14 @@ func (s Store) Create(ctx context.Context, artifact NewArtifact, files filestore
 		if err := queries.LinkDocumentToArtifact(ctx, LinkDocumentToArtifactParams{ArtifactID: artifactID, DocumentID: documentID, UserID: artifact.Owner.UserID}); err != nil {
 			return err
 		}
+		// Listed in the notebook's Studio in the same transaction, so an
+		// artifact a notebook's chat made is never in the chat and missing
+		// from the Studio, or the reverse.
+		owner := artifact.Owner
+		if err := notebookoutput.Artifact(ctx, tx, notebookoutput.Place{UserID: owner.UserID, NotebookID: owner.NotebookID, ThreadID: owner.ThreadID},
+			artifactID, artifact.Title, artifact.Format); err != nil {
+			return err
+		}
 		created = Created{ArtifactID: artifactID, DocumentID: documentID}
 		if !artifact.HasFile() {
 			// An artifact that is its document: there is nothing to store
@@ -75,10 +84,12 @@ func (s Store) Create(ctx context.Context, artifact NewArtifact, files filestore
 			return err
 		}
 		if len(artifact.Preview) > 0 {
-			if artifact.PreviewKey == nil {
-				return errors.New("artifactsave: an artifact with a preview has no key for it")
+			if artifact.PreviewKey == nil || artifact.PreviewMimeType == "" {
+				// Named by the caller, never guessed: a preview stored under
+				// the wrong type is a viewer that draws nothing.
+				return errors.New("artifactsave: an artifact with a preview has no key or no type for it")
 			}
-			if created.PreviewFileID, err = store("preview", artifact.PreviewKey(artifactID), artifact.PreviewFilename, previewMime, artifact.Preview); err != nil {
+			if created.PreviewFileID, err = store("preview", artifact.PreviewKey(artifactID), artifact.PreviewFilename, artifact.PreviewMimeType, artifact.Preview); err != nil {
 				return err
 			}
 		}
@@ -106,6 +117,9 @@ const removeTimeout = 10 * time.Second
 // insertDocument writes the artifact's document under the first free name
 // in the account's tree.
 func insertDocument(ctx context.Context, queries *Queries, userID, title, markdown string) (int64, error) {
+	if err := queries.LockAccountNames(ctx, userID); err != nil {
+		return 0, err
+	}
 	path := ""
 	for attempt := 1; attempt <= pathAttempts; attempt++ {
 		candidate := "/documents/" + documentName(title, attempt)

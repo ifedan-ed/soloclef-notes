@@ -1,7 +1,6 @@
 package modelconnections
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -12,11 +11,11 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/ownmodels"
 )
 
-// The three tests. Each builds a Probe and sends it through the model
-// proxy, or, for an OpenAI-compatible connection, to the endpoint itself
-// through the egress guard (endpoint.go); none stores anything. A test that fails is a 200 whose verdict
-// says so: the request to this tier succeeded, and the settings screen
-// shows the verdict's sentence beside the connection.
+// The three tests. Each builds a Probe and asks the endpoint itself a short
+// question, through the egress guard (endpoint.go); none stores anything.
+// A test that fails is a 200 whose verdict says so: the request to this
+// tier succeeded, and the settings screen shows the verdict's sentence
+// beside the connection.
 
 // modelID reads the `model_id` a test body names.
 func modelID(sent body) (string, []errorenvelope.Failure) {
@@ -28,24 +27,9 @@ func modelID(sent body) (string, []errorenvelope.Failure) {
 	return id, failures
 }
 
+// verdict tries the probe and answers how it went.
 func (w writeRequest) verdict(probe Probe) {
-	if !w.mayConnect(probe.Provider) {
-		return
-	}
-	var verdict Verdict
-	if probe.Provider == ownmodels.Provider {
-		verdict = w.routes.Endpoints.Try(w.ctx.Context(), probe)
-	} else {
-		verdict = w.routes.Prober.Try(w.ctx.Context(), probe)
-	}
-	rendered, err := json.Marshal(verdict)
-	if err != nil {
-		w.failed("could not render the verdict", err)
-		return
-	}
-	w.response.Header().Set("Content-Type", "application/json")
-	w.response.WriteHeader(http.StatusOK)
-	_, _ = w.response.Write(rendered)
+	w.sendJSON(w.routes.Endpoints.Try(w.ctx.Context(), probe))
 }
 
 // opened is a stored connection's key. A key this deployment's secret can
@@ -84,7 +68,7 @@ func (w writeRequest) openedHeaders(stored StoredCredentials) (map[string]string
 // stored is a stored connection as a Probe of one of its models: the key
 // and the headers opened.
 func (w writeRequest) stored(stored StoredCredentials, model string) (Probe, bool) {
-	probe := Probe{Provider: stored.Provider, BaseURL: stored.BaseURL, Params: paramsBag(stored.Extra), ModelID: model}
+	probe := Probe{BaseURL: stored.BaseURL, ModelID: model}
 	var ok bool
 	if probe.Key, ok = w.opened(stored); !ok {
 		return Probe{}, false
@@ -112,14 +96,11 @@ func (r WriteRoutes) testPreview(ctx huma.Context) {
 		r.Errors.WriteValidation(request.response, request.requestID, failures)
 		return
 	}
-	if !request.mayConnect(fields.provider) {
-		return
-	}
-	if failures := providerRules(fields.provider, fields, true, false); len(failures) > 0 {
+	if failures := providerRules(fields, true); len(failures) > 0 {
 		r.Errors.WriteValidation(request.response, request.requestID, failures)
 		return
 	}
-	request.verdict(Probe{Provider: fields.provider, BaseURL: fields.baseURL, Key: fields.key, Params: paramsBag(fields.extra), Headers: fields.headers, ModelID: model})
+	request.verdict(Probe{BaseURL: fields.baseURL, Key: fields.key, Headers: fields.headers, ModelID: model})
 }
 
 // testUpdate tries a stored connection as it would be after a change,
@@ -156,15 +137,13 @@ func (r WriteRoutes) testUpdate(ctx huma.Context) {
 		request.refuse(http.StatusNotFound, connectionAbsent)
 		return
 	}
-	probe := Probe{Provider: stored.Provider, BaseURL: stored.BaseURL, Params: paramsBag(stored.Extra), ModelID: model}
-	if fields.setProvider {
-		probe.Provider = fields.provider
-	}
-	// Both kinds' rule, as the save that would follow applies it.
-	if !request.mayConnect(stored.Provider, probe.Provider) {
+	// As the save that would follow it: a row of a provider that is gone
+	// is refused, and the fields named are held to the rules.
+	if !request.supported(stored.Provider) {
 		return
 	}
-	if failures := providerRules(probe.Provider, fields, false, probe.Provider != stored.Provider); len(failures) > 0 {
+	probe := Probe{BaseURL: stored.BaseURL, ModelID: model}
+	if failures := providerRules(fields, false); len(failures) > 0 {
 		r.Errors.WriteValidation(request.response, request.requestID, failures)
 		return
 	}
@@ -180,12 +159,6 @@ func (r WriteRoutes) testUpdate(ctx huma.Context) {
 		probe.Headers = fields.headers
 	} else if probe.Headers, ok = request.openedHeaders(stored); !ok {
 		return
-	}
-	// A proposed `extra` that names the bag replaces it; one that does not
-	// leaves the stored bag, as the save would (queries.sql,
-	// UpdateConnection).
-	if proposed := paramsBag(fields.extra); fields.setExtra && proposed != nil {
-		probe.Params = proposed
 	}
 	request.verdict(probe)
 }
@@ -209,7 +182,7 @@ func (r WriteRoutes) testModel(ctx huma.Context) {
 		request.refuse(http.StatusNotFound, modelAbsent)
 		return
 	}
-	if !request.mayConnect(stored.Provider) {
+	if !request.supported(stored.Provider) {
 		return
 	}
 	probe, ok := request.stored(stored, model)

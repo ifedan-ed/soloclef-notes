@@ -9,30 +9,6 @@ import (
 	"context"
 )
 
-const lockConfig = `-- name: LockConfig :one
-SELECT c.config
-FROM search_source_connectors c
-WHERE c.id = $1
-  AND c.user_id = $2
-  AND c.connector_type = 'MCP_CONNECTOR'
-FOR UPDATE
-`
-
-type LockConfigParams struct {
-	ID     int64
-	UserID string
-}
-
-// The config of a connection its owner is about to change, locked until the
-// transaction ends so that two "always allow" clicks cannot each write a
-// list without the other's name.
-func (q *Queries) LockConfig(ctx context.Context, arg LockConfigParams) ([]byte, error) {
-	row := q.db.QueryRow(ctx, lockConfig, arg.ID, arg.UserID)
-	var config []byte
-	err := row.Scan(&config)
-	return config, err
-}
-
 const markAuthExpired = `-- name: MarkAuthExpired :execrows
 UPDATE search_source_connectors
 SET config = jsonb_set(config, '{auth_expired}', 'true'::jsonb, true),
@@ -81,8 +57,7 @@ type ServerRow struct {
 	SiteHosts []byte
 }
 
-// One connection as it is now, asked at the moment a call is made or a trust
-// decision is taken. The account is part of the question: a connection that
+// One connection as it is now, asked at the moment a call is made. The account is part of the question: a connection that
 // was removed, switched off, or was never this account's is "not found",
 // whatever a turn built earlier believes.
 func (q *Queries) Server(ctx context.Context, arg ServerParams) (ServerRow, error) {
@@ -163,6 +138,43 @@ func (q *Queries) SetConfigKey(ctx context.Context, arg SetConfigKeyParams) (int
 		arg.Value,
 		arg.ID,
 		arg.UserID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const storeTokens = `-- name: StoreTokens :execrows
+UPDATE search_source_connectors
+SET config = jsonb_set(
+        jsonb_set(config, '{server_config,auth,oauth,tokens_sealed}', to_jsonb($1::text), true),
+        '{server_config,auth,oauth,expires_at}', to_jsonb($2::bigint), true),
+    updated_at = now()
+WHERE id = $3
+  AND user_id = $4
+  AND connector_type = 'MCP_CONNECTOR'
+  AND config #>> '{server_config,auth,oauth,tokens_sealed}' = $5::text
+`
+
+type StoreTokensParams struct {
+	Sealed    string
+	ExpiresAt int64
+	ID        int64
+	UserID    string
+	Previous  string
+}
+
+// Replaces an OAuth server's sealed tokens after a renewal, only while the
+// row still holds the ones that were renewed (previous): of two processes
+// renewing at once one writes and the other reads what it wrote.
+func (q *Queries) StoreTokens(ctx context.Context, arg StoreTokensParams) (int64, error) {
+	result, err := q.db.Exec(ctx, storeTokens,
+		arg.Sealed,
+		arg.ExpiresAt,
+		arg.ID,
+		arg.UserID,
+		arg.Previous,
 	)
 	if err != nil {
 		return 0, err

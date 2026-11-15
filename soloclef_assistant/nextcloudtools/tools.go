@@ -310,7 +310,7 @@ var createParameters = json.RawMessage(`{"type":"object","properties":{` +
 	`"content":{"type":"string","description":"The file's content, in the format its extension names."}},` +
 	`"required":["name","content"]}`)
 
-const createDescription = `Create a new file in the user's Nextcloud with the content you write: Markdown (.md), plain text (.txt) or CSV (.csv). It never replaces a file: if the name is taken, choose another. The user is shown the file and approves before it is made, every time: call the tool directly, do not ask in prose first. Give the user the new file's link from the result.`
+const createDescription = `Create a new file in the user's Nextcloud with the content you write: Markdown (.md), plain text (.txt) or CSV (.csv). It never replaces a file: if the name is taken, choose another. If the user asked to approve this tool, they are shown the file first: call the tool directly, do not ask in prose first. Give the user the new file's link from the result.`
 
 // written are the kinds a file can be made as, by extension.
 var written = map[string]string{
@@ -372,7 +372,7 @@ func (t *Tools) create(userID string) tool.Tool {
 	}
 }
 
-const trashDescription = `Move one file of the user's Nextcloud to its deleted files, from where they can restore it. Only a file, never a folder. Find the file with search_nextcloud_files first. The user is shown the file and approves before it is moved, every time: call the tool directly, do not ask in prose first.`
+const trashDescription = `Move one file of the user's Nextcloud to its deleted files, from where they can restore it. Only a file, never a folder. Find the file with search_nextcloud_files first. If the user asked to approve this tool, they are shown the file first: call the tool directly, do not ask in prose first.`
 
 func (t *Tools) trash(userID string) tool.Tool {
 	return tool.Tool{

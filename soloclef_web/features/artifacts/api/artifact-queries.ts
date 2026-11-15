@@ -9,11 +9,9 @@ export const artifactManifestQueryKey = (artifactId: number) =>
 const artifactImageBlobQueryPrefix = (artifactId: number) =>
 	["artifact-image-blob", artifactId] as const;
 
-export const artifactImageBlobQueryKey = (
-	artifactId: number,
-	shareToken: string | null,
-	fileId?: number
-) => [...artifactImageBlobQueryPrefix(artifactId), shareToken, fileId] as const;
+/** A chat image card's bytes, per artifact and file (a regenerated image is a new file). */
+export const artifactImageBlobQueryKey = (artifactId: number, fileId?: number) =>
+	[...artifactImageBlobQueryPrefix(artifactId), fileId] as const;
 
 export const artifactManifestQueryOptions = (artifactId: number) =>
 	queryOptions({

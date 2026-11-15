@@ -123,3 +123,25 @@ func TestAUserMessagesSavedContent(t *testing.T) {
 		t.Errorf("chips\n got %s\nwant %s", chips, want)
 	}
 }
+
+// Deleting a thread forgets its conversation, the specialists' beneath it
+// and the turn kept beside it, and nothing of a thread whose id only begins
+// the same way.
+func TestForgettingAThreadTakesItsKeptTurn(t *testing.T) {
+	ctx := context.Background()
+	store := checkpoint.NewMemory()
+	for _, name := range []string{"chat-1", "chat-1/call_a", "chat-1.turn", "chat-10", "chat-10.turn"} {
+		if err := store.Save(ctx, checkpoint.Checkpoint{Thread: name, Seq: 1, Status: checkpoint.Done, State: []byte(`{}`)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := forgetConversation(ctx, store, 1); err != nil {
+		t.Fatal(err)
+	}
+	for name, kept := range map[string]bool{"chat-1": false, "chat-1/call_a": false, "chat-1.turn": false, "chat-10": true, "chat-10.turn": true} {
+		_, err := store.Load(ctx, name)
+		if found := err == nil; found != kept {
+			t.Errorf("%s: found %v, want %v (%v)", name, found, kept, err)
+		}
+	}
+}

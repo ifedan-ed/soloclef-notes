@@ -10,6 +10,8 @@
 // ---------------------------------------------------------------------------
 
 import { type Descendant, KEYS } from "platejs";
+import { decodeSourceMarker } from "@/lib/citations/addressless-source";
+import { type CitationNumbering, citationKey } from "@/lib/citations/citation-numbering";
 import {
 	CITATION_REGEX,
 	type CitationToken,
@@ -24,9 +26,15 @@ import {
  */
 export type CitationElementNode = {
 	type: "citation";
-	kind: "chunk" | "doc" | "url";
+	kind: "chunk" | "doc" | "url" | "source";
 	chunkId?: number;
 	url?: string;
+	/**
+	 * An addressless source's marker value ("src_mail_…"), kept as written:
+	 * the label is decoded from it when drawn, so the note stores one copy
+	 * of the words and writes the marker back byte for byte.
+	 */
+	sourceRef?: string;
 	/** Original literal token that produced this citation node. */
 	rawText: string;
 	children: [{ text: "" }];
@@ -50,6 +58,7 @@ export const CITATION_NODE = {
  */
 export function citationMarker(node: CitationElementNode): string {
 	if (node.kind === "url") return `[citation:${node.url ?? ""}]`;
+	if (node.kind === "source") return `[citation:${node.sourceRef ?? ""}]`;
 	return `[citation:${node.kind === "doc" ? "doc-" : ""}${node.chunkId ?? ""}]`;
 }
 
@@ -104,6 +113,15 @@ function makeCitationElement(rawText: string, segment: CitationToken): CitationE
 			type: CITATION_TYPE,
 			kind: "url",
 			url: segment.url,
+			rawText,
+			children: [{ text: "" }],
+		};
+	}
+	if (segment.kind === "source") {
+		return {
+			type: CITATION_TYPE,
+			kind: "source",
+			sourceRef: segment.ref,
 			rawText,
 			children: [{ text: "" }],
 		};
@@ -196,4 +214,52 @@ function transformChildren(children: Descendant[], urlMap: CitationUrlMap): Desc
  */
 export function injectCitationNodes(value: Descendant[], urlMap: CitationUrlMap): Descendant[] {
 	return transformChildren(value, urlMap);
+}
+
+// Numbering the chips of a tree
+
+/** The citation a chip stands for, in the form the numbering keys it by. */
+export function citationOfNode(node: CitationElementNode): CitationToken | null {
+	if (node.kind === "url") return node.url ? { kind: "url", url: node.url } : null;
+	if (node.kind === "source") return node.sourceRef ? decodeSourceMarker(node.sourceRef) : null;
+	if (node.chunkId === undefined) return null;
+	return { kind: "chunk", chunkId: node.chunkId, isDocsChunk: node.kind === "doc" };
+}
+
+// Slate replaces the children array on every change and keeps it otherwise,
+// so the array is the cache key: each chip asks for the numbering of the
+// same tree and only the first ask walks it.
+const numberingByTree = new WeakMap<readonly Descendant[], CitationNumbering>();
+
+/**
+ * The chips of a note or document numbered as the chat numbers an answer's
+ * (lib/citations/citation-numbering.ts): 1, 2, 3 in reading order, a source
+ * cited again keeping its number. Read from the tree as it is now, so a chip
+ * deleted or moved while editing renumbers the rest.
+ */
+export function numberCitationNodes(value: readonly Descendant[]): CitationNumbering {
+	const cached = numberingByTree.get(value);
+	if (cached) return cached;
+	const order: string[] = [];
+	const numbers = new Map<string, number>();
+	const walk = (nodes: readonly Descendant[]) => {
+		for (const node of nodes) {
+			if (isText(node)) continue;
+			const element = asElement(node);
+			if (element.type === CITATION_TYPE) {
+				const citation = citationOfNode(element as unknown as CitationElementNode);
+				const key = citation ? citationKey(citation) : null;
+				if (key !== null && !numbers.has(key)) {
+					order.push(key);
+					numbers.set(key, order.length);
+				}
+				continue;
+			}
+			walk(element.children);
+		}
+	};
+	walk(value);
+	const numbering = { order, numbers };
+	numberingByTree.set(value, numbering);
+	return numbering;
 }

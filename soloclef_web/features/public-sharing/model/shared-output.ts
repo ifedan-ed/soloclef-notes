@@ -1,6 +1,6 @@
-import type { PublicSharedOutput } from "@/contracts/types/public-chat.types";
 import type { ArtifactManifest } from "@/features/artifacts/model/artifact";
 import { publicFilePath } from "../lib/public-link-url";
+import type { PublicSharedOutput } from "../model/public-output";
 
 /**
  * Which of the owner's viewers a shared output opens in, as the owner's own

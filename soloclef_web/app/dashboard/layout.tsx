@@ -1,58 +1,18 @@
-import { cookies } from "next/headers";
 import type React from "react";
-import { RuntimeConfig } from "@/components/providers/runtime-config.server";
-import {
-	parseRetrievalScopeCookie,
-	RETRIEVAL_SCOPE_COOKIE,
-} from "@/lib/chat/retrieval-scope-preferences";
 import { DashboardClientLayout } from "./client-layout";
 import { DashboardShell } from "./dashboard-shell";
 
-const RIGHT_PANEL_COLLAPSED_COOKIE = "surfsense_right_panel_collapsed";
-
-/** The signed-in account's id, read from the session token without verifying it. */
-function sessionUserId(token: string | undefined): string | undefined {
-	if (!token) return undefined;
-	try {
-		const encodedPayload = decodeURIComponent(token).split(".")[1];
-		if (!encodedPayload) return undefined;
-		const payload = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8")) as {
-			sub?: unknown;
-		};
-		return typeof payload.sub === "string" ? payload.sub : undefined;
-	} catch {
-		return undefined;
-	}
-}
-
 /**
- * Every signed-in page. The two cookies are read on the server so the first
- * paint already has the right panel and the chat's retrieval scope as the
- * person left them; the id only decides whose saved scope the cookie is,
- * and the backend still checks every request itself.
+ * Every signed-in page. The page is a static file, so nothing here knows who
+ * is asking: DashboardShell asks the API for the session in the browser and
+ * sends a stranger to /login, and the two remembered choices (the right
+ * panel, the chat's retrieval scope) are read from their cookies in the
+ * browser too, where they are written.
  */
-export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-	const cookieStore = await cookies();
-	const initialRightPanelCollapsed =
-		cookieStore.get(RIGHT_PANEL_COLLAPSED_COOKIE)?.value === "true";
-	const currentUserId = sessionUserId(
-		cookieStore.get(process.env.SESSION_COOKIE_NAME ?? "surfsense_session")?.value
-	);
-	const initialRetrievalScope = parseRetrievalScopeCookie(
-		cookieStore.get(RETRIEVAL_SCOPE_COOKIE)?.value,
-		currentUserId
-	);
-
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
 	return (
-		<RuntimeConfig>
-			<DashboardShell>
-				<DashboardClientLayout
-					initialRetrievalScope={initialRetrievalScope}
-					initialRightPanelCollapsed={initialRightPanelCollapsed}
-				>
-					{children}
-				</DashboardClientLayout>
-			</DashboardShell>
-		</RuntimeConfig>
+		<DashboardShell>
+			<DashboardClientLayout>{children}</DashboardClientLayout>
+		</DashboardShell>
 	);
 }

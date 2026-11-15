@@ -85,7 +85,8 @@ func NewConsumer(rdb redis.UniversalClient, cfg Config, runner Runner) (*Consume
 }
 
 // Run consumes until ctx is cancelled, then stops taking new messages and
-// gives the running ones ShutdownGrace to finish.
+// gives the running ones ShutdownGrace to finish, and those it then cuts off
+// HandBack to give their work back.
 func (c *Consumer) Run(ctx context.Context) error {
 	// The runner's context outlives the shutdown signal: a graceful stop is
 	// the point at which no new work is taken, not the point at which running
@@ -103,15 +104,31 @@ func (c *Consumer) Run(ctx context.Context) error {
 	c.poll(ctx, runCtx)
 
 	drained := c.drain(c.cfg.ShutdownGrace)
-	// Claims are renewed until the grace period is over, so a job that
-	// finishes inside it is never restored under itself.
+	cutOff := 0
+	if !drained {
+		cutOff = c.claims.size()
+		// The grace is over with work still running: it is cut off now.
+		// Each job is told by its context, and one that can give its work
+		// back does so on the way out (a video releases its row and asks for
+		// its message to go back on the queue; a podcast goes back to carry
+		// on from the lines already voiced). Those last writes are waited
+		// for, briefly. This wait used not to exist: Run returned the moment
+		// the jobs were told, the process exited under them, and a job's
+		// message stayed claimed for the whole visibility window (hours)
+		// instead of going back to the queue at once for the next worker.
+		endRun()
+		c.drain(c.cfg.HandBack)
+	}
+	// Claims are renewed until the jobs have finished or given their
+	// messages back, so a job that finishes inside the grace is never
+	// restored under itself.
 	stopBackground()
 	background0.Wait()
 	endRun()
 
 	if !drained {
-		return fmt.Errorf("%w: %d still running, their claims left for the %v visibility window",
-			ErrShutdownIncomplete, c.claims.size(), c.cfg.VisibilityWindow)
+		return fmt.Errorf("%w: %d cut off at the end of the %v grace; %d did not give their message back in %v and keep their claims for the %v visibility window",
+			ErrShutdownIncomplete, cutOff, c.cfg.ShutdownGrace, c.claims.size(), c.cfg.HandBack, c.cfg.VisibilityWindow)
 	}
 	return nil
 }

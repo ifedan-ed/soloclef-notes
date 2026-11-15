@@ -20,17 +20,14 @@ func (s Store) Links(ctx context.Context, userID string) ([]Link, error) {
 	links := make([]Link, 0, len(rows))
 	for _, row := range rows {
 		links = append(links, Link{
-			ID:               row.ID,
-			ShareToken:       row.ShareToken,
-			CreatedAt:        row.CreatedAt,
-			ExpiresAt:        row.ExpiresAt,
-			OwnerID:          row.UserID,
-			ThreadID:         row.ThreadID,
-			NotebookOutputID: row.NotebookOutputID,
-			NotebookID:       row.NotebookID,
-			StoredTitle:      row.StoredTitle,
-			ThreadTitle:      row.ThreadTitle,
-			Messages:         row.Messages,
+			ID:          row.ID,
+			ShareToken:  row.ShareToken,
+			CreatedAt:   row.CreatedAt,
+			ExpiresAt:   row.ExpiresAt,
+			OwnerID:     row.UserID,
+			NotebookID:  row.NotebookID,
+			StoredTitle: row.StoredTitle,
+			OutputTitle: row.OutputTitle,
 		})
 	}
 	return links, nil

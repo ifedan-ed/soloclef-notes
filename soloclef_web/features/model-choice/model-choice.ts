@@ -7,11 +7,11 @@ import { modelOptionSchema, optionLabel } from "@/features/chat-model/model-opti
  *
  *   GET, PUT /api/v1/users/me/quick-model    small helper calls
  *   GET, PUT /api/v1/users/me/studio-model   Studio outputs
- *   GET, PUT /api/v1/users/me/model-roles    {vision, image}
+ *   GET, PUT /api/v1/users/me/model-roles    {vision}
  *
  * It is the chat model's shape (features/chat-model) with two differences:
  * `model` and `default` can be null, because a server may name no model for
- * looking at pictures or drawing them. A model is known by its id (the
+ * looking at pictures. A model is known by its id (the
  * proxy's name, or "own:<n>" for a model of the account's own connection),
  * which is stored and sent; its label is what is shown.
  */
@@ -29,13 +29,18 @@ export const modelChoiceSchema = z.object({
 });
 export type ModelChoice = z.infer<typeof modelChoiceSchema>;
 
+/**
+ * The roles the web reads and writes. Pictures are drawn by the application
+ * now, not by a model, so there is no image model to choose; the server still
+ * answers `image` for installed phone builds, and the schema drops it (zod
+ * strips keys it does not name) so nothing here can show or send it.
+ */
 export const modelRolesSchema = z.object({
 	vision: modelChoiceSchema,
-	image: modelChoiceSchema,
 });
 export type ModelRoles = z.infer<typeof modelRolesSchema>;
 
-/** The two jobs of /model-roles; also the field each is chosen by. */
+/** The jobs of /model-roles the web offers; also the field each is chosen by. */
 export type ModelRole = keyof ModelRoles;
 
 /** The jobs that have a route of their own, and the route. */
@@ -68,7 +73,7 @@ export type DefaultSource = "server" | "chat";
 /**
  * The label of the "no choice" option: what the default is today, by name.
  * Quick tasks and Studio default to the model answering the account's chat;
- * vision and image generation to the model the server names, if it names one.
+ * vision to the model the server names, if it names one.
  */
 export function defaultLabel(choice: ModelChoice, source: DefaultSource = "server"): string {
 	// The chat model a job follows may be one of the account's own, whose id

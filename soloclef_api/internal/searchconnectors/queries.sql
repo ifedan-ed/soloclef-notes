@@ -60,34 +60,29 @@ RETURNING id, name, connector_type, enabled, is_indexable, last_indexed_at, conf
           enable_vision_llm, periodic_indexing_enabled, indexing_frequency_minutes,
           next_scheduled_at, user_id, created_at, updated_at;
 
--- name: LockTrustedTools :one
--- The trusted-tool list of an MCP server its owner is about to edit, locked
--- until the transaction ends, so two edits made at once cannot each write a
--- list without the other's change. The list alone is read: the rest of the
--- config holds the server's key and this edit has no use for it.
-SELECT COALESCE(config -> 'trusted_tools', 'null'::jsonb)::jsonb AS trusted_tools
-FROM search_source_connectors
+-- name: DeleteServer :one
+-- An MCP server holds no documents, so its row is the whole of it. No row
+-- back is "not found". The config comes back so that an OAuth sign-in it
+-- held can be revoked at its provider once the delete has committed.
+DELETE FROM search_source_connectors
 WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id)
   AND connector_type = 'MCP_CONNECTOR'
-FOR UPDATE;
+RETURNING config;
 
--- name: StoreTrustedTools :execrows
--- Writes the one key and leaves the rest of the config as it is. A config
--- that is not an object cannot take a key, matches nothing, and the route
--- reports the server as one it cannot edit.
+-- name: StoreServerSignIn :execrows
+-- A finished OAuth sign-in: the client, the endpoints and the sealed
+-- tokens, written over the server's `auth.oauth` only while the server is
+-- still an OAuth server at the address the sign-in started for. The "enter
+-- the key again" flag goes, and so does the tool list, which the server is
+-- asked for again with the sign-in.
 UPDATE search_source_connectors
-SET config = jsonb_set(config, '{trusted_tools}', sqlc.arg(trusted_tools)::jsonb, true),
+SET config = jsonb_set(config - 'auth_expired' - 'cached_tools', '{server_config,auth,oauth}',
+                       sqlc.arg(oauth)::jsonb, true),
     updated_at = now()
 WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id)
   AND connector_type = 'MCP_CONNECTOR'
-  AND jsonb_typeof(config) = 'object';
-
--- name: DeleteServer :execrows
--- An MCP server holds no documents, so its row is the whole of it. The count
--- is the answer: 0 is "not found".
-DELETE FROM search_source_connectors
-WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id)
-  AND connector_type = 'MCP_CONNECTOR';
+  AND config #>> '{server_config,auth,type}' = 'oauth'
+  AND config #>> '{server_config,url}' = sqlc.arg(server_url)::text;
 
 -- name: MarkConnectionDocumentsDeleting :execrows
 -- The first step of removing a connection: every document that came through
@@ -158,9 +153,8 @@ WHERE user_id = sqlc.arg(user_id) AND connector_type = sqlc.arg(connector_type)
 
 -- name: UpdateServer :one
 -- An edit of an MCP server: its name, its settings, or both. Only the
--- `server_config` key is written, so the trusted tools and the origin stay
--- whatever they are at the moment of the write, not what they were when
--- the form was opened. New settings also drop the two things that were
+-- `server_config` key is written, so the origin stays whatever it is at
+-- the moment of the write, not what it was when the form was opened. New settings also drop the two things that were
 -- true of the old ones only: the "enter the key again" flag, and the tool
 -- list the old address answered with.
 UPDATE search_source_connectors

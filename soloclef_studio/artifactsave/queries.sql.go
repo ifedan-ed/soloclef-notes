@@ -158,7 +158,6 @@ func (q *Queries) CreateArtifactWithID(ctx context.Context, arg CreateArtifactWi
 }
 
 const documentPathTaken = `-- name: DocumentPathTaken :one
-
 SELECT EXISTS (
     SELECT 1 FROM documents
     WHERE user_id = $1 AND path = $2::text
@@ -170,11 +169,6 @@ type DocumentPathTakenParams struct {
 	Path   string
 }
 
-// Saving an artifact: the document it sits on, the artifact, and its files.
-// The read side is soloclef_api/internal/artifacts, which lists and serves
-// these rows; the columns written here are the ones it and the web app read.
-// Every row is the saving account's: the composite keys (document, owner)
-// refuse an artifact that names another account's document.
 func (q *Queries) DocumentPathTaken(ctx context.Context, arg DocumentPathTakenParams) (bool, error) {
 	row := q.db.QueryRow(ctx, documentPathTaken, arg.UserID, arg.Path)
 	var exists bool
@@ -198,6 +192,25 @@ type LinkDocumentToArtifactParams struct {
 // transaction: no statement here writes a row by its id alone.
 func (q *Queries) LinkDocumentToArtifact(ctx context.Context, arg LinkDocumentToArtifactParams) error {
 	_, err := q.db.Exec(ctx, linkDocumentToArtifact, arg.ArtifactID, arg.DocumentID, arg.UserID)
+	return err
+}
+
+const lockAccountNames = `-- name: LockAccountNames :exec
+
+SELECT pg_advisory_xact_lock(hashtextextended('artifactsave.names:' || $1::text, 0))
+`
+
+// Saving an artifact: the document it sits on, the artifact, and its files.
+// The read side is soloclef_api/internal/artifacts, which lists and serves
+// these rows; the columns written here are the ones it and the web app read.
+// Every row is the saving account's: the composite keys (document, owner)
+// refuse an artifact that names another account's document.
+// Saves in one account choose their document's name one at a time, until
+// the transaction ends: two artifacts of one title finishing together
+// (two Studio runs of an account at once) would otherwise both find the
+// same name free and the second fail on the owner-and-identity key.
+func (q *Queries) LockAccountNames(ctx context.Context, userID string) error {
+	_, err := q.db.Exec(ctx, lockAccountNames, userID)
 	return err
 }
 

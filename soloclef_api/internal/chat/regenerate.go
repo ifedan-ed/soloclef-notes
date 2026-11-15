@@ -69,7 +69,9 @@ type regenerateRequest struct {
 	FolderIDs     []int64   `json:"mentioned_folder_ids"`
 	Mentions      []Mention `json:"mentioned_documents"`
 	DisabledTools []string  `json:"disabled_tools"`
-	FromMessageID *int64    `json:"from_message_id"`
+	// TimeZone is turnRequest.TimeZone.
+	TimeZone      string `json:"time_zone"`
+	FromMessageID *int64 `json:"from_message_id"`
 	// Images is read only to refuse it, as on a new turn.
 	Images []json.RawMessage `json:"user_images"`
 }
@@ -109,6 +111,7 @@ func readRegenerate(raw []byte) (regenerateRequest, []errorenvelope.Failure) {
 	if len(request.DisabledTools) > maxDisabledTools {
 		failures = append(failures, failure("disabled_tools", "Too many tools are listed as switched off"))
 	}
+	failures = append(failures, checkTimeZone(request.TimeZone)...)
 	if request.FromMessageID != nil && *request.FromMessageID < 1 {
 		failures = append(failures, failure("from_message_id", "from_message_id is not a message's id"))
 	}
@@ -225,7 +228,7 @@ func (r Routes) regenerate(ctx huma.Context) {
 		ThreadID: thread.ID, UserID: thread.UserID,
 		Scope: request.Scope, PreferredTool: mark.Tool,
 		DocumentIDs: request.DocumentIDs, FolderIDs: request.FolderIDs,
-		DisabledTools: request.DisabledTools,
+		DisabledTools: request.DisabledTools, TimeZone: request.TimeZone,
 	}
 	if assembly.IsPick(turn.PreferredTool) && turn.Scope == scopeDocuments {
 		turn.Scope = scopeAll

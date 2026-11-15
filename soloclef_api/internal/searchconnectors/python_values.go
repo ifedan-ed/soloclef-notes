@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
-	"unicode/utf8"
 
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/pythonjson"
 )
@@ -177,41 +176,4 @@ func writeHexEscape(out *strings.Builder, character rune) {
 // day either side moves.
 func pyPrintable(character rune) bool {
 	return unicode.IsPrint(character)
-}
-
-// lowersToASCII is the whole of str.lower() that an ASCII search can see: the
-// non-ASCII code points whose lower case contains an ASCII character. Python
-// has exactly two. U+0130, the dotted capital I, lowers to an `i` *followed by
-// a combining dot*, so a name spelt with it in place of the I of "NAVIGATE" does not spell "navigate" there -- and
-// does under Go's strings.ToLower, which lowers it to a bare `i`. U+212A, the
-// Kelvin sign, lowers to `k`.
-//
-// TestTheLoweringTableIsPythons holds this to a sweep of every code point.
-var lowersToASCII = map[rune]string{
-	0x0130: "i\u0307",
-	0x212a: "k",
-}
-
-// pyLowerForASCIISearch lowers a name far enough to look for ASCII words in
-// it, which is all always_asks does with the result. ASCII letters are
-// lowered; the two code points above become what Python makes of them; every
-// other character is left as it is, because whatever Python lowers it to is
-// not ASCII and so cannot be part of a match either way.
-func pyLowerForASCIISearch(name string) string {
-	var out strings.Builder
-	for _, character := range name {
-		switch {
-		case character >= 'A' && character <= 'Z':
-			out.WriteRune(character + ('a' - 'A'))
-		case character < utf8.RuneSelf:
-			out.WriteRune(character)
-		default:
-			if lowered, special := lowersToASCII[character]; special {
-				out.WriteString(lowered)
-			} else {
-				out.WriteRune(character)
-			}
-		}
-	}
-	return out.String()
 }

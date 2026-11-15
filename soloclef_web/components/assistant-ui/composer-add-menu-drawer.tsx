@@ -1,15 +1,6 @@
 "use client";
 
-import {
-	ChevronLeft,
-	ChevronRight,
-	LayoutGrid,
-	Settings2,
-	Unplug,
-	Upload,
-	Wrench,
-} from "lucide-react";
-import Image from "next/image";
+import { ChevronLeft, ChevronRight, Settings2, Unplug, Upload } from "lucide-react";
 import { type ReactNode, useCallback, useRef, useState } from "react";
 import type { ConnectorRow } from "@/components/assistant-ui/connector-popup/hooks/use-connector-rows";
 import { ConnectorRowStatus } from "@/components/assistant-ui/connector-popup/your-connectors/connector-row-status";
@@ -22,22 +13,20 @@ import {
 	DrawerTitle,
 	DrawerTrigger,
 } from "@/components/ui/drawer";
-import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { getConnectorIcon } from "@/contracts/enums/connectorIcons";
-import {
-	CONNECTOR_TOOL_ICON_PATHS,
-	getToolDisplayName,
-	getToolIcon,
-} from "@/contracts/enums/toolIcons";
+import { getToolDisplayName, getToolIcon } from "@/contracts/enums/toolIcons";
+import { ConnectionIcon } from "@/features/composer-tools/connection-icon";
+import { menuGroupKey } from "@/features/composer-tools/tool-menu-groups";
 import { cn } from "@/lib/utils";
 
-/** Minimal shape of a grouped agent-tool section (mirrors thread.tsx). */
+/** Minimal shape of a grouped agent-tool section (features/composer-tools/tool-menu-groups.ts). */
 export interface ToolGroupView {
 	label: string;
 	tools: { name: string }[];
-	connectorIcon?: string;
+	/** Set for a connection's group: its kind, which picks the icon. */
+	connector?: string;
 }
 
 interface ComposerAddMenuDrawerProps {
@@ -48,8 +37,6 @@ interface ComposerAddMenuDrawerProps {
 	connectorRows: ConnectorRow[];
 	/** Open a connector's manage view (deep-links via importConnectorRequestAtom). */
 	onSelectConnector: (row: ConnectorRow) => void;
-	/** Navigate to the full connectors catalog. */
-	onBrowseConnectors: () => void;
 	regularToolGroups: ToolGroupView[];
 	connectorToolGroups: ToolGroupView[];
 	otherToolGroup?: ToolGroupView;
@@ -71,7 +58,14 @@ type Screen =
 	| { kind: "root" }
 	| { kind: "connectors" }
 	| { kind: "tools" }
-	| { kind: "toolGroup"; label: string };
+	| { kind: "toolGroup"; key: string; label: string };
+
+/**
+ * What the in-chat MCP submenu says when no server is connected. The menu
+ * holds no link to the connectors settings: that left the chat mid-question.
+ * Shared with the desktop dropdown (thread.tsx) so the two say the same.
+ */
+export const NO_MCP_SERVERS = "No MCP servers connected.";
 
 const ROW =
 	"flex w-full items-center gap-3 px-4 py-3 text-sm hover:bg-accent hover:text-accent-foreground transition-colors";
@@ -81,7 +75,6 @@ export function ComposerAddMenuDrawer({
 	onUploadFiles,
 	connectorRows,
 	onSelectConnector,
-	onBrowseConnectors,
 	regularToolGroups,
 	connectorToolGroups,
 	otherToolGroup,
@@ -173,9 +166,7 @@ export function ComposerAddMenuDrawer({
 			return (
 				<>
 					{connectorRows.length === 0 ? (
-						<p className="px-4 py-6 text-center text-sm text-muted-foreground">
-							No connectors yet.
-						</p>
+						<p className="px-4 py-6 text-center text-sm text-muted-foreground">{NO_MCP_SERVERS}</p>
 					) : (
 						connectorRows.map((row) => (
 							<button
@@ -193,24 +184,12 @@ export function ComposerAddMenuDrawer({
 							</button>
 						))
 					)}
-					<Separator className="my-1" />
-					<button
-						type="button"
-						className={ROW}
-						onClick={() => {
-							onBrowseConnectors();
-							close();
-						}}
-					>
-						<LayoutGrid className="size-4 shrink-0 text-muted-foreground" />
-						<span className="flex-1 text-left">Manage connectors</span>
-					</button>
 				</>
 			);
 		}
 
 		if (current.kind === "toolGroup") {
-			const group = connectorToolGroups.find((g) => g.label === current.label);
+			const group = connectorToolGroups.find((g) => menuGroupKey(g) === current.key);
 			return <>{group?.tools.map((t) => renderToolRow(t.name))}</>;
 		}
 
@@ -243,31 +222,20 @@ export function ComposerAddMenuDrawer({
 				{connectorToolGroups.length > 0 && (
 					<div>
 						<div className="px-4 pt-3 pb-1 text-xs text-muted-foreground font-semibold select-none">
-							Connector Actions
+							Your connections
 						</div>
 						{connectorToolGroups.map((group) => {
-							const iconInfo = CONNECTOR_TOOL_ICON_PATHS[group.connectorIcon ?? ""];
+							const groupKey = menuGroupKey(group);
 							const toolNames = group.tools.map((t) => t.name);
 							const allDisabled = toolNames.every((n) => disabledToolsSet.has(n));
 							return (
-								<div key={group.label} className={ROW}>
+								<div key={groupKey} className={ROW}>
 									<button
 										type="button"
 										className="flex min-w-0 flex-1 items-center gap-3"
-										onClick={() => push({ kind: "toolGroup", label: group.label })}
+										onClick={() => push({ kind: "toolGroup", key: groupKey, label: group.label })}
 									>
-										{iconInfo ? (
-											<Image
-												src={iconInfo.src}
-												alt={iconInfo.alt}
-												width={18}
-												height={18}
-												className="size-[18px] shrink-0 select-none pointer-events-none"
-												draggable={false}
-											/>
-										) : (
-											<Wrench className="size-4 shrink-0 text-muted-foreground" />
-										)}
+										<ConnectionIcon connector={group.connector} className="size-[18px]" />
 										<span className="min-w-0 flex-1 truncate text-left font-medium">
 											{group.label}
 										</span>
@@ -320,7 +288,7 @@ export function ComposerAddMenuDrawer({
 				</DrawerHeader>
 				<div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin pb-6">
 					<div
-						key={current.kind === "toolGroup" ? `toolGroup:${current.label}` : current.kind}
+						key={current.kind === "toolGroup" ? `toolGroup:${current.key}` : current.kind}
 						className={cn(
 							"animate-in fade-in-0 duration-200",
 							dirRef.current === "forward" ? "slide-in-from-right-4" : "slide-in-from-left-4"

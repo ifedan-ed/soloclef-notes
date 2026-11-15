@@ -14,8 +14,6 @@ import {
 
 // Run with: pnpm exec tsx --test tests/unit/chat/turn-request-bodies.test.ts
 
-const CLOUD = { filesystem_mode: "cloud", client_platform: "web" } as const;
-
 const MENTIONS: MentionedDocumentInfo[] = [
 	{ id: 11, title: "Notes", document_type: "FILE", kind: "doc" },
 	{ id: 4, title: "Term one", kind: "folder" },
@@ -37,12 +35,12 @@ test("a new turn names the thread and the question, and no owner", () => {
 			threadId: 42,
 			userQuery: "  What is osmosis?  ",
 			turnToolFields: { retrieval_scope: "documents" },
-			selection: CLOUD,
 			messageHistory: [{ role: "user", content: "Hello" }],
 			mentionPayload: deriveMentionedPayload(MENTIONS),
 			mentionedDocuments: MENTIONS,
 			disabledTools: ["web_search"],
 			userImages: [],
+			timeZone: "Africa/Lagos",
 		})
 	);
 
@@ -56,6 +54,8 @@ test("a new turn names the thread and the question, and no owner", () => {
 	assert.deepEqual(body.mentioned_folder_ids, [4]);
 	assert.deepEqual(body.mentioned_documents, MENTIONS);
 	assert.deepEqual(body.disabled_tools, ["web_search"]);
+	// The device's zone, for a schedule the chat drafts.
+	assert.equal(body.time_zone, "Africa/Lagos");
 });
 
 test("a new turn leaves out what it has none of, and never sends an empty list", () => {
@@ -64,12 +64,12 @@ test("a new turn leaves out what it has none of, and never sends an empty list",
 			threadId: 1,
 			userQuery: "Hi",
 			turnToolFields: { retrieval_scope: "all" },
-			selection: CLOUD,
 			messageHistory: [],
 			mentionPayload: deriveMentionedPayload([]),
 			mentionedDocuments: [],
 			disabledTools: [],
 			userImages: [],
+			timeZone: undefined,
 		})
 	);
 
@@ -83,6 +83,8 @@ test("a new turn leaves out what it has none of, and never sends an empty list",
 		"mentioned_documents",
 		"disabled_tools",
 		"user_images",
+		// An unknown zone is left out, never guessed: the assistant then asks.
+		"time_zone",
 	]) {
 		assert.equal(absent in body, false, `${absent} should be absent`);
 	}
@@ -95,12 +97,12 @@ test("a new turn carries its pictures and the tool that was picked", () => {
 			threadId: 1,
 			userQuery: "Describe this",
 			turnToolFields: { retrieval_scope: "all", preferred_tool: "pubmed" },
-			selection: CLOUD,
 			messageHistory: [],
 			mentionPayload: deriveMentionedPayload([]),
 			mentionedDocuments: [],
 			disabledTools: [],
 			userImages: [image],
+			timeZone: undefined,
 		})
 	);
 	assert.deepEqual(body.user_images, [image]);
@@ -114,7 +116,6 @@ test("a resume sends the decisions and no owner: the path names the thread", () 
 			retrievalScope: "documents",
 			decisions,
 			disabledTools: [],
-			selection: CLOUD,
 		})
 	);
 
@@ -122,8 +123,6 @@ test("a resume sends the decisions and no owner: the path names the thread", () 
 	assert.deepEqual(body, {
 		retrieval_scope: "documents",
 		decisions,
-		filesystem_mode: "cloud",
-		client_platform: "web",
 	});
 });
 
@@ -133,8 +132,8 @@ test("a regenerate sends a null question, the old mentions and no owner", () => 
 			retrievalScope: "documents",
 			userQuery: null,
 			disabledTools: [],
-			selection: CLOUD,
 			mentions: MENTIONS,
+			timeZone: undefined,
 		})
 	);
 
@@ -156,11 +155,11 @@ test("an edit sends its pictures even when it removed them all, and where to rew
 			retrievalScope: "all",
 			userQuery: "A better question",
 			disabledTools: ["web_search"],
-			selection: CLOUD,
 			mentions: [],
 			editedUserImages: [],
 			fromMessageId: 7,
 			revertActions: true,
+			timeZone: undefined,
 		})
 	);
 
@@ -181,9 +180,9 @@ test("reverting actions is asked for only together with a message to rewind to",
 			retrievalScope: "all",
 			userQuery: "Again",
 			disabledTools: [],
-			selection: CLOUD,
 			mentions: [],
 			revertActions: true,
+			timeZone: undefined,
 		})
 	);
 	assert.equal("revert_actions" in body, false);

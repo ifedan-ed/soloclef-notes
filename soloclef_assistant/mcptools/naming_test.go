@@ -2,6 +2,7 @@ package mcptools
 
 import (
 	"encoding/json"
+	"git.danvics.com/danvics/soloclef/soloclef_connectors/mcpserver"
 	"reflect"
 	"strings"
 	"testing"
@@ -142,41 +143,26 @@ func TestToolsThatFetchAnAddressAlwaysAsk(t *testing.T) {
 	}
 	for _, name := range always {
 		if !alwaysAsks(name) {
-			t.Errorf("%q can be trusted, and it fetches an address the model chose", name)
+			t.Errorf("%q is not declared always-ask, and it fetches an address the model chose", name)
 		}
 	}
 	for _, name := range []string{"search", "web_search_exa", "tavily_search", "create_note", "extract", "observe", "goto_line", ""} {
 		if alwaysAsks(name) {
-			t.Errorf("%q always asks, and should be trustable", name)
-		}
-	}
-}
-
-func TestWhichNamesCanBeSavedInATrustedList(t *testing.T) {
-	for _, name := range []string{"search", "list.all", "été", "a b", strings.Repeat("x", 255)} {
-		if !storable(name) {
-			t.Errorf("%q is refused", name)
-		}
-	}
-	for label, name := range map[string]string{
-		"empty": "", "a NUL": "a\x00b", "a control character": "a\nb", "a replaced surrogate": "a�b",
-		"broken UTF-8": "a\xffb", "too long": strings.Repeat("x", 256),
-	} {
-		if storable(name) {
-			t.Errorf("a name with %s can be saved", label)
+			t.Errorf("%q is declared always-ask, and fetches nothing", name)
 		}
 	}
 }
 
 func TestWhatIsReadFromAConnectionsConfig(t *testing.T) {
-	where, err := readTarget([]byte(`{"server_config": {"transport": "sse", "url": " https://tools.example.com/mcp ", "headers": {"Authorization": "Bearer k"}}, "server_origin": "member"}`))
-	if err != nil || where.origin != originMember || where.headers["Authorization"] != "Bearer k" || !strings.Contains(where.address, "tools.example.com") {
+	where, err := openedTarget(ada, sealedForTest(ada, `{"server_config": {"transport": "sse", "url": " https://tools.example.com/mcp ", "headers": {"Authorization": "Bearer k"}}, "server_origin": "member"}`))
+	if err != nil || where.origin != originMember || where.headers["Authorization"] != "Bearer k" || where.transport != mcpserver.SSE ||
+		where.address != "https://tools.example.com/mcp" {
 		t.Errorf("target = %+v, %v", where, err)
 	}
 	// No marker, or any marker but "member", is a site server.
 	for _, marker := range []string{``, `, "server_origin": "site"`, `, "server_origin": 5`, `, "server_origin": "MEMBER"`} {
-		where, err := readTarget([]byte(`{"server_config": {"transport": "http", "url": "https://mcp.example.com/"}` + marker + `}`))
-		if err != nil || where.origin != originSite || where.headers != nil {
+		where, err := openedTarget(ada, sealedForTest(ada, `{"server_config": {"transport": "http", "url": "https://mcp.example.com/"}`+marker+`}`))
+		if err != nil || where.origin != originSite || len(where.headers) != 0 || where.transport != mcpserver.StreamableHTTP {
 			t.Errorf("marker %q: %+v, %v", marker, where, err)
 		}
 	}
@@ -188,21 +174,19 @@ func TestWhatIsReadFromAConnectionsConfig(t *testing.T) {
 		"no address":          `{"server_config": {"transport": "http", "url": "  "}}`,
 		"an address not text": `{"server_config": {"transport": "http", "url": 5}}`,
 		"a header not text":   `{"server_config": {"transport": "http", "url": "https://mcp.example.com/", "headers": {"x-api-key": 12345678}}}`,
+		// Settings in the clear, as they were stored before 00012: never
+		// read, so a key is never taken from where it was not sealed.
+		"settings in the clear": `{"server_config": {"transport": "http", "url": "https://mcp.example.com/", "headers": {"x-api-key": "k"}}}`,
 	} {
-		if _, err := readTarget([]byte(config)); err == nil {
+		if _, err := openedTarget(ada, config); err == nil {
 			t.Errorf("%s: a target was read", label)
 		} else if strings.Contains(err.Error(), "example.com") {
 			t.Errorf("%s: the refusal repeats the address: %v", label, err)
 		}
 	}
-
-	if got := readTrusted([]byte(`{"trusted_tools": ["lookup", 5, null, "search", {"a": 1}]}`)); !reflect.DeepEqual(got, []string{"lookup", "search"}) {
-		t.Errorf("trusted = %v", got)
-	}
-	for _, config := range []string{`{}`, `{"trusted_tools": "lookup"}`, `{"trusted_tools": null}`, `[]`} {
-		if got := readTrusted([]byte(config)); len(got) != 0 {
-			t.Errorf("%s: trusted = %v", config, got)
-		}
+	// Another account's sealed settings do not open for this one.
+	if _, err := openedTarget(ben, sealedForTest(ada, serverConfig("https://mcp.example.com/", "k"))); err == nil {
+		t.Error("Ada's sealed settings opened for Ben")
 	}
 
 	if _, found := readCached([]byte(`{"cached_tools": {"tools": [{"description": "nameless"}]}}`)); found {

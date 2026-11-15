@@ -82,7 +82,7 @@ func newEstate() *estate {
 	add := func(id int64, name, kind, config string) {
 		e.connections[id] = &held{connection: Connection{ID: id, Name: name, Type: kind, UserID: owner, Enabled: true}, config: config}
 	}
-	add(810, "Tools", serverTypeTag, `{"server_config": {"url": "https://mcp.example/mcp"}, "trusted_tools": ["search"]}`)
+	add(810, "Tools", serverTypeTag, `{"server_config": `+sealedServerJSON(nil, owner, "https://mcp.example/mcp", "")+`, "kept": ["search"]}`)
 	add(800, "Drive", "GOOGLE_DRIVE_CONNECTOR", `{"refresh_token": "fake-refresh"}`)
 	e.documents[800] = map[int64]string{41: "ready", 42: "processing", 43: "failed"}
 	return e
@@ -124,39 +124,16 @@ func (e *estate) SetEnabled(ctx context.Context, ownerID string, id int64, enabl
 	return e.Connection(ctx, ownerID, id)
 }
 
-func (e *estate) DeleteServer(_ context.Context, ownerID string, id int64) (bool, error) {
+func (e *estate) DeleteServer(_ context.Context, ownerID string, id int64) ([]byte, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	row := e.row(ownerID, id)
 	if row == nil || !row.connection.IsServer() {
-		return false, nil
+		return nil, nil
 	}
 	delete(e.connections, id)
 	e.order = append(e.order, "committed")
-	return true, nil
-}
-
-func (e *estate) EditTrustedTools(_ context.Context, ownerID string, id int64,
-	edit func([]string) ([]string, bool)) ([]string, bool, bool, error) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	row := e.row(ownerID, id)
-	if row == nil || !row.connection.IsServer() {
-		return nil, false, false, nil
-	}
-	var config map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(row.config), &config); err != nil {
-		return nil, false, false, err
-	}
-	next, changed := edit(storedToolNames(config["trusted_tools"]))
-	if !changed {
-		return next, false, true, nil
-	}
-	config["trusted_tools"], _ = json.Marshal(next)
-	written, _ := json.Marshal(config)
-	row.config = string(written)
-	e.order = append(e.order, "committed")
-	return next, true, true, nil
+	return []byte(`{"server_config":{}}`), nil
 }
 
 func (e *estate) MarkDocumentsDeleting(_ context.Context, _ string, id int64) error {
@@ -211,7 +188,7 @@ func (e *estate) Remove(_ context.Context, documentID int64) error {
 	return nil
 }
 
-func (e *estate) Revoke(_ context.Context, _ int64, kind string, config []byte) {
+func (e *estate) Revoke(_ context.Context, _ string, _ int64, kind string, config []byte) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.order = append(e.order, "revoked "+kind+" "+string(config))
@@ -242,14 +219,12 @@ func newWrites(t *testing.T) *writes {
 	ConnectionDeleteRoute{Connections: e, Removals: e, Documents: e, Revocation: e, Tools: w.tools,
 		Analytics: routeanalytics.Capture{Sink: w.events}, Errors: envelope, Logger: logger}.Register(api)
 	EnabledRoute{Changes: e, Tools: w.tools, Errors: envelope, Logger: logger}.Register(api)
-	ServerDeleteRoute{Changes: e, Tools: w.tools, Errors: envelope, Logger: logger}.Register(api)
-	TrustRoute{Changes: e, Tools: w.tools, Errors: envelope, Logger: logger}.Register(api)
-	TrustRoute{Remove: true, Changes: e, Tools: w.tools, Errors: envelope, Logger: logger}.Register(api)
+	ServerDeleteRoute{Changes: e, Revocation: e, Tools: w.tools, Errors: envelope, Logger: logger}.Register(api)
 	withCaller := http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		api.Adapter().ServeHTTP(response, request.WithContext(principal.WithPrincipal(request.Context(), w.as)))
 	})
 	bodies := requestbody.Middleware{
-		Covers: requestbody.CoveringRoutes("POST "+TrustPath, "POST "+UntrustPath, "PUT "+EnabledPath),
+		Covers: requestbody.CoveringRoutes("PUT " + EnabledPath),
 	}
 	w.server = httptest.NewServer(requestcontext.Middleware(logger, bodies.Wrap(withCaller)))
 	t.Cleanup(w.server.Close)
@@ -349,8 +324,6 @@ func TestAnotherAccountsConnectionIsNotFoundOnEveryWrite(t *testing.T) {
 		{"remove a server by the connection route", stranger, http.MethodDelete, "/api/v1/search-source-connectors/810", "", 404, connectorAbsent},
 		{"remove a server", stranger, http.MethodDelete, "/api/v1/connectors/mcp/810", "", 404, serverAbsent},
 		{"switch a connection off", stranger, http.MethodPut, "/api/v1/search-source-connectors/800/enabled", `{"enabled": false}`, 404, connectorAbsent},
-		{"trust a tool", stranger, http.MethodPost, "/api/v1/connectors/mcp/810/trust-tool", `{"tool_name": "summarise"}`, 404, serverAbsent},
-		{"untrust a tool", stranger, http.MethodPost, "/api/v1/connectors/mcp/810/untrust-tool", `{"tool_name": "search"}`, 404, serverAbsent},
 		// The same answers for ids nobody has, so the two cannot be told apart.
 		{"remove a connection nobody has", owner, http.MethodDelete, "/api/v1/search-source-connectors/999", "", 404, connectorAbsent},
 		{"an id no connection can have", owner, http.MethodDelete, "/api/v1/search-source-connectors/99999999999999999999", "", 404, connectorAbsent},
@@ -388,8 +361,6 @@ func TestEveryChangeToAnAccountsMCPServersMovesItsCounterAfterTheCommit(t *testi
 		{"a server removed by the MCP route", http.MethodDelete, "/api/v1/connectors/mcp/810", "", 204},
 		{"a server removed by the connection route", http.MethodDelete, "/api/v1/search-source-connectors/810", "", 200},
 		{"a server switched off", http.MethodPut, "/api/v1/search-source-connectors/810/enabled", `{"enabled": false}`, 200},
-		{"a tool trusted", http.MethodPost, "/api/v1/connectors/mcp/810/trust-tool", `{"tool_name": "summarise"}`, 200},
-		{"a tool untrusted", http.MethodPost, "/api/v1/connectors/mcp/810/untrust-tool", `{"tool_name": "search"}`, 200},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			w := newWrites(t)
@@ -448,47 +419,6 @@ func TestTheSwitchAnswersTheConnectionAndLeavesOtherTypesCountersAlone(t *testin
 	}
 }
 
-func TestATrustEditThatChangesNothingMovesNoCounter(t *testing.T) {
-	for path, body := range map[string]string{
-		"/api/v1/connectors/mcp/810/trust-tool":   `{"tool_name": "search"}`,    // already trusted
-		"/api/v1/connectors/mcp/810/untrust-tool": `{"tool_name": "summarise"}`, // never trusted
-	} {
-		w := newWrites(t)
-		status, raw := w.call(http.MethodPost, path, body)
-		if status != http.StatusOK || !strings.Contains(raw, `"trusted_tools":["search"]`) {
-			t.Fatalf("%s answered %d %s", path, status, raw)
-		}
-		if len(w.tools.accounts) != 0 || len(w.estate.order) != 0 {
-			t.Errorf("%s wrote %q and moved the counter for %v", path, w.estate.order, w.tools.accounts)
-		}
-	}
-}
-
-// "Run this without asking me" is the person's decision: a key or an agent
-// acting for the account may not make it, and is told so before any row is
-// read. A tool that opens web addresses can never be trusted.
-func TestWhoMayTrustATool(t *testing.T) {
-	w := newWrites(t)
-	if status, raw := w.call(http.MethodPost, "/api/v1/connectors/mcp/810/trust-tool", `{"tool_name": "summarise"}`); status != 200 || !strings.Contains(raw, `"trusted_tools":["search","summarise"]`) {
-		t.Fatalf("answered %d %s", status, raw)
-	}
-	if !strings.Contains(w.estate.connections[810].config, `"trusted_tools":["search","summarise"]`) ||
-		!strings.Contains(w.estate.connections[810].config, "https://mcp.example/mcp") {
-		t.Errorf("the row holds %s", w.estate.connections[810].config)
-	}
-	if status, raw := w.call(http.MethodPost, "/api/v1/connectors/mcp/810/trust-tool", `{"tool_name": "web_fetch"}`); status != http.StatusBadRequest || !strings.Contains(raw, toolAlwaysAsk) {
-		t.Errorf("a tool that opens addresses answered %d %s", status, raw)
-	}
-	for _, method := range []principal.Method{principal.MethodPersonalAccessToken, principal.MethodAgent} {
-		w.as.Method = method
-		for _, path := range []string{"/api/v1/connectors/mcp/810/trust-tool", "/api/v1/connectors/mcp/810/untrust-tool"} {
-			if status, raw := w.call(http.MethodPost, path, `{"tool_name": "search"}`); status != http.StatusForbidden || !strings.Contains(raw, sessionRequired) {
-				t.Errorf("%s by %s answered %d %s", path, method, status, raw)
-			}
-		}
-	}
-}
-
 func TestACounterThatCannotBeMovedDoesNotFailTheChange(t *testing.T) {
 	w := newWrites(t)
 	w.tools.down = true
@@ -497,36 +427,5 @@ func TestACounterThatCannotBeMovedDoesNotFailTheChange(t *testing.T) {
 	}
 	if w.estate.connections[810] != nil {
 		t.Error("the server is still there")
-	}
-}
-
-// The decision of one edit, on its own.
-func TestEditTrusted(t *testing.T) {
-	for _, test := range []struct {
-		held    []string
-		tool    string
-		remove  bool
-		want    []string
-		changed bool
-	}{
-		{[]string{"a"}, "b", false, []string{"a", "b"}, true},
-		{[]string{"a"}, "a", false, []string{"a"}, false},
-		{[]string{"a", "b", "a"}, "a", true, []string{"b"}, true},
-		{[]string{"a"}, "b", true, []string{"a"}, false},
-		{[]string{}, "a", true, []string{}, false},
-	} {
-		got, changed := editTrusted(test.held, test.tool, test.remove)
-		if !reflect.DeepEqual(got, test.want) || changed != test.changed {
-			t.Errorf("editTrusted(%v, %q, %v) = %v, %v", test.held, test.tool, test.remove, got, changed)
-		}
-	}
-	// A stored list that is not a list, or holds what is not a name, reads
-	// as the names it does hold.
-	for raw, want := range map[string][]string{
-		`null`: {}, `"text"`: {}, `{"a": 1}`: {}, `["a", 7, null, "b"]`: {"a", "b"},
-	} {
-		if got := storedToolNames([]byte(raw)); !reflect.DeepEqual(got, want) {
-			t.Errorf("storedToolNames(%s) = %v, want %v", raw, got, want)
-		}
 	}
 }

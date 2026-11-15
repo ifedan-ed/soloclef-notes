@@ -17,11 +17,12 @@ type PerTurn struct {
 	Specialist Specialist
 }
 
-// Delegate is the specialist for one turn.
-func (p PerTurn) Delegate(chat model.Model, userID string, threadID int64) (agent.Delegate, error) {
+// Delegate is the specialist for one turn. notebookID is the notebook whose
+// Studio lists what it makes, 0 for none (assembly.ArtifactMaker).
+func (p PerTurn) Delegate(chat model.Model, userID string, threadID, notebookID int64) (agent.Delegate, error) {
 	maker := p.Specialist
 	maker.Model = chat
-	return maker.Delegate(Owner{UserID: userID, ThreadID: threadID})
+	return maker.Delegate(Owner{UserID: userID, ThreadID: threadID, NotebookID: notebookID})
 }
 
 // Prompt is the body of the main agent's <artifacts> block.

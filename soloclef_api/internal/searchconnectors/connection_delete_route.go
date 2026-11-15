@@ -63,7 +63,8 @@ type DocumentRemover interface {
 // Revoker ends a connection's credential at its provider, best effort
 // (connectionrevocation.Revocation).
 type Revoker interface {
-	Revoke(ctx context.Context, connectorID int64, connectorType string, config []byte)
+	// ownerID is whose credential it is: a sealed one is bound to its owner.
+	Revoke(ctx context.Context, ownerID string, connectorID int64, connectorType string, config []byte)
 }
 
 // The pace of a removal.
@@ -291,7 +292,7 @@ func (r ConnectionDeleteRoute) remove(ctx context.Context, connection Connection
 	// rendered back to JSON from what was read; a config that cannot be
 	// rendered holds no credential this tier could have used.
 	if config, err := pythonjson.Marshal(connection.Config); err == nil {
-		r.Revocation.Revoke(ctx, connection.ID, connection.Type, config)
+		r.Revocation.Revoke(ctx, connection.UserID, connection.ID, connection.Type, config)
 	} else {
 		r.Logger.LogAttrs(ctx, slog.LevelWarn, "a removed connection's stored settings could not be read to end its credential",
 			slog.Int64("connector_id", connection.ID), slog.String("error", err.Error()))

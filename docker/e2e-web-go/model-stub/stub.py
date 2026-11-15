@@ -25,6 +25,13 @@ has to, and says only what the suite's specs wait for:
   Audio Overview goes the whole way: drafted, voiced, joined, stored.
 - Speech is one short MP3 for every line (line.mp3 beside this file, made
   by the stack script with the worker image's own ffmpeg).
+- A slide deck asked of the artifact specialist (the Studio's task says
+  "Kind of artifact: pptx") is written as the real deck path expects: the
+  instructions loaded, then save_artifact with a deck's content (E2E_DECK),
+  which the API draws, previews and stores. A video's author is answered
+  with a narrated deck (E2E_VIDEO_DECK), which the worker draws, animates,
+  voices and joins. Both are answered at once, not after the specialist's
+  thinking time below, so a run measures the product and not the stub.
 
 Every request is logged to stderr in one line (what was asked, what tools
 were offered, what was answered): when a spec fails, `e2e-stack-go.sh logs
@@ -57,6 +64,45 @@ MODELS = {
 SPECIALIST_TOOL = "save_artifact"
 SPECIALIST_SECONDS = 20
 
+# The deck and the video the stub "writes": content in the shapes
+# soloclef_studio/deckspec reads, with a slide of most kinds, so the
+# renderer, the preview's layout check and the video's animation all run
+# on something like a real deck.
+E2E_DECK = {
+    "title": "E2E deck: the canary topic", "subtitle": "What the seeded source says, in eight slides", "theme": "clinical",
+    "sources": [{"title": "E2E seeded source", "detail": "The Playwright suite's own document"}],
+    "slides": [
+        {"kind": "title", "title": "E2E deck: the canary topic", "subtitle": "What the seeded source says, in eight slides"},
+        {"kind": "bullets", "title": "The canary topic has three parts", "cites": [1],
+         "bullets": ["**First:** the seeded source explains it", "**Second:** the suite checks it", "**Third:** the deck shows it"],
+         "notes": "E2E speaker notes for the second slide."},
+        {"kind": "diagram", "style": "flow", "title": "How a deck is made now",
+         "steps": [{"label": "Content", "text": "The model writes what each slide says"},
+                   {"label": "Drawing", "text": "Go lays out every slide in a theme"},
+                   {"label": "Preview", "text": "LibreOffice draws the PDF the viewer shows"}]},
+        {"kind": "stats", "title": "E2E figures", "stats": [{"value": "1", "label": "model call writes the deck"}, {"value": "0", "label": "programs run for it"}]},
+        {"kind": "comparison", "title": "Before and after", "columns": ["Before", "After"],
+         "rows": [{"aspect": "Model steps", "cells": ["17 to 60", "3"]}, {"aspect": "Code run", "cells": ["python-pptx in a sandbox", "None"]}]},
+        {"kind": "timeline", "title": "E2E timeline", "events": [{"label": "Step 1", "text": "The task is written"}, {"label": "Step 2", "text": "The deck is drawn"}, {"label": "Step 3", "text": "The preview is saved"}]},
+        {"kind": "chart", "title": "E2E chart", "unit": "s", "caption": "Illustrative seconds per stage", "bars": [{"label": "Writing", "value": 30}, {"label": "Drawing", "value": 0.1}, {"label": "Preview", "value": 3}]},
+        {"kind": "quote", "quote": "One idea per slide, with a title that states it.", "attribution": "E2E style guide"},
+    ],
+}
+E2E_VIDEO_DECK = {
+    "title": "E2E video", "theme": "classic",
+    "slides": [
+        {"kind": "title", "title": "E2E video: the canary topic", "subtitle": "A narrated deck",
+         "narration": ["This is the end to end video.", "It is a narrated deck, drawn and animated."]},
+        {"kind": "bullets", "title": "Three parts", "bullets": ["The seeded source explains it", "The suite checks it", "The video shows it"],
+         "narration": ["The canary topic has three parts.", "The seeded source explains it.", "The suite checks it.", "And this video shows it."]},
+        {"kind": "stats", "title": "E2E figures", "stats": [{"value": "1", "label": "model call"}, {"value": "0", "label": "browsers"}],
+         "narration": ["Two numbers to end with.", "One model call wrote it.", "And no browser drew it."]},
+    ],
+}
+DECK_TASK = "Kind of artifact: pptx"
+VIDEO_AUTHOR = "You write a narrated video as a slide deck"
+INSTRUCTIONS_TOOL = "load_artifact_instructions"
+
 # The speech model's voices: OpenAI's own names, which is the roster the
 # settings choose (SOLOCLEF_GO_TTS_SERVICE=openai/tts-1).
 VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
@@ -65,6 +111,18 @@ DIMENSION = int(os.environ.get("E2E_EMBEDDING_DIMENSION", "1024"))
 # What the specs wait for. The same words as the Python fakes, so one suite
 # reads either stack.
 ANSWER = "E2E notebook answer: the seeded source explains the canary topic."
+# E2E_CITE_RICH's answer: every block a copy has to carry, three sources.
+RICH_ANSWER = (
+    "## Findings\n\nThe canary is **CITE-ME-91** [citation:{a}]. A second source agrees "
+    "[citation:{b}], and so does a page [citation:https://example.org/guide].\n\n"
+    "| Item | Value |\n|---|---|\n| Dose | *5 mg* [citation:{a}] |\n\n"
+    "- First point [citation:{b}]\n- Second point, with \\(r^2 \\le \\alpha\\)\n\n"
+    "Code stays code: `x = [1]`."
+)
+# A reply that begins with this is streamed a word every SLOW_SECONDS, and
+# the marker itself is not sent.
+SLOW_WORDS = "\u0001slow "
+SLOW_SECONDS = 0.25
 EXPLAIN_ANSWER = "E2E explain answer: the notebook sources cover this in depth."
 NOTHING_FOUND = "No relevant indexed content found."
 # A Studio viewer's "Explain": the English templates' closing lines
@@ -75,6 +133,15 @@ EXPLAIN_ENDINGS = (
     "Explain this in more detail.",
 )
 SCOPE_CANARY = re.compile(r"SCOPE-[A-Z]+-\d+")
+# The chat's automation drafter (soloclef_assistant/automationdrafts) and
+# what the stub says for the three automation markers. The question and the
+# "cannot" answer are given only when the product told the model to ask and
+# listed what an automation cannot do, so a spec that sees them has checked
+# the product's own instructions, not just this stub.
+AUTOMATION_TOOL = "create_automation"
+AUTOMATION_QUESTION = "E2E question: which day and time should it run, and should I email you the result or keep it as a note?"
+AUTOMATION_READY = "E2E automation draft: it is on the card for you to check and create."
+
 NEEDS_WEB_REASON = "This task needs a web page that nobody was present to approve reading."
 # The product's page reader (soloclef_assistant/pagereader.ToolName).
 PAGE_READER = "web_crawl"
@@ -182,8 +249,20 @@ def chat_reply(body):
     if system.startswith("Name a research notebook"):
         return ("text", quick_reply(system))
 
+    # The deck path: instructions, then the deck's content, then a sentence.
+    if SPECIALIST_TOOL in offered and DECK_TASK in asked:
+        if not called(messages, INSTRUCTIONS_TOOL):
+            return ("tool", INSTRUCTIONS_TOOL, json.dumps({"artifact_type": "pptx"}))
+        if not called(messages, SPECIALIST_TOOL):
+            return ("tool", SPECIALIST_TOOL, json.dumps({"format": "pptx", "title": E2E_DECK["title"], "deck": E2E_DECK}))
+        return ("text", "Made a slide deck of eight slides: " + E2E_DECK["title"] + ".")
+    if system.startswith(VIDEO_AUTHOR):
+        return ("text", json.dumps(E2E_VIDEO_DECK))
+
     # A marker in the person's message wins over anything the prompt says:
     # a chat turn's system prompt may quote a short job's words.
+    if "E2E_AUTOMATION" in asked:
+        return automation_reply(body, messages, offered, system, asked, results)
     if "E2E_AUTOMATION_NEEDS_WEB" in asked:
         # Ask to read the page the task names. A run has nobody present to
         # approve the page reader, so the product refuses the call and tells
@@ -204,6 +283,31 @@ def chat_reply(body):
             return ("tool", tool, json.dumps({"query": ("SCOPE canary " + rest).strip()}))
         found = sorted(set(SCOPE_CANARY.findall(" ".join(text_of(r) for r in results))))
         return ("text", "E2E scope answer: " + (" ".join(found) or "none"))
+    rich = re.search(r"E2E_CITE_RICH:(\d+),(\d+)", asked)
+    if rich:
+        # A formatted answer citing two passages and a web page, the first
+        # passage twice: what a copy must keep (heading, bold, list, table,
+        # code, maths) and number (1, 2, 3 in order of first appearance).
+        return ("text", RICH_ANSWER.format(a=rich.group(1), b=rich.group(2)))
+    if "E2E_CITE_LABELS" in asked:
+        # Cite as a real model does: search, then write the labels the
+        # search numbered ("[7]"), which the API saves as markers when the
+        # turn ends. The answer streams slowly (SLOW_WORDS), so a spec can
+        # look at the chips while it is still streaming.
+        tool = search_tool(offered)
+        if tool and not results:
+            rest = asked.split("E2E_CITE_LABELS", 1)[1].splitlines()[0].strip()
+            return ("tool", tool, json.dumps({"query": rest or "canary"}))
+        labels = []
+        for found in re.findall(r"^\s*\[(\d+)\]", "\n".join(text_of(r) for r in results), re.M):
+            if found not in labels:
+                labels.append(found)
+        if not labels:
+            return ("text", NOTHING_FOUND)
+        # The last-found first, then the first, then the last again: the
+        # numbers on screen must follow the answer, not the search.
+        first, last = labels[0], labels[-1]
+        return ("text", SLOW_WORDS + "Streamed claim one [%s] and claim two [%s], and one again [%s]." % (last, first, last))
     cite = re.search(r"E2E_CITE:(\d+)", asked)
     if cite:
         return ("text", "%s Grounded in the notebook source [citation:%s]." % (ANSWER, cite.group(1)))
@@ -228,6 +332,56 @@ def chat_reply(body):
     if quick is not None:
         return ("text", quick)
     return ("text", NOTHING_FOUND)
+
+
+def tool_description(body, name):
+    """The description the product gave the offered tool `name`, or ""."""
+    for t in body.get("tools") or []:
+        function = t.get("function") or {}
+        if function.get("name") == name:
+            return function.get("description") or ""
+    return ""
+
+
+def automations_block(system):
+    """The system prompt's <automations> block, or ""."""
+    found = re.search(r"<automations>(.*?)</automations>", system, re.S)
+    return found.group(1) if found else ""
+
+
+def automation_reply(body, messages, offered, system, asked, results):
+    """The three automation markers.
+
+    E2E_AUTOMATION_DRAFT drafts an automation the first time (a Monday
+    08:00 schedule in the zone the prompt says the device is in), then says
+    the card is ready. E2E_AUTOMATION_VAGUE asks a clarifying question, but
+    only if the tool's description tells the model to ask. E2E_AUTOMATION_CANNOT
+    answers with the prompt's own "cannot" lines about sub-minute schedules
+    and sending mail.
+    """
+    block = automations_block(system)
+    if AUTOMATION_TOOL not in offered or not block:
+        return ("text", "E2E: no automation drafter was offered")
+    if "E2E_AUTOMATION_VAGUE" in asked:
+        if "ask one short question" in tool_description(body, AUTOMATION_TOOL) and "clarifying question" in block:
+            return ("text", AUTOMATION_QUESTION)
+        return ("text", "E2E: nothing told the model to ask")
+    if "E2E_AUTOMATION_CANNOT" in asked:
+        lines = [line[2:] for line in block.split("An automation cannot:", 1)[-1].splitlines() if line.startswith("- ")]
+        said = [line for line in lines if "once a minute" in line or "Send email to anyone" in line]
+        return ("text", "E2E: an automation cannot do all of that. " + " ".join(said))
+    if not called(messages, AUTOMATION_TOOL):
+        zone = re.search(r"device is in the time zone ([A-Za-z_/+-]+)\.", block)
+        name = re.search(r"E2E_AUTOMATION_DRAFT ([^\n]+)", asked)
+        return ("tool", AUTOMATION_TOOL, json.dumps({
+            "name": name.group(1).strip() if name else "E2E weekly digest",
+            "description": "E2E: Monday summary of what arrived",
+            "task": "Summarise the documents that arrived this week, in five bullet points.",
+            "schedule": {"cron": "0 8 * * 1", "timezone": zone.group(1) if zone else "UTC"},
+        }))
+    if any("automation_draft_id=" in text_of(r) for r in results):
+        return ("text", AUTOMATION_READY)
+    return ("text", "E2E: the draft was refused: " + " ".join(text_of(r) for r in results)[:300])
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -292,7 +446,8 @@ class Handler(BaseHTTPRequestHandler):
     def _chat(self, body):
         reply = chat_reply(body)
         offered = [(t.get("function") or {}).get("name") for t in body.get("tools") or []]
-        if SPECIALIST_TOOL in offered:
+        asked_now, _ = this_turn(body.get("messages") or [])
+        if SPECIALIST_TOOL in offered and DECK_TASK not in asked_now:
             # The artifact specialist (a quiz, a mind map, flashcards): this
             # stub cannot write one, so the run will end "nothing made". It
             # ends after a real model's thinking time and not at once, so
@@ -332,10 +487,15 @@ class Handler(BaseHTTPRequestHandler):
         if call is None:
             # A word at a time: the page under test renders a stream, and
             # one frame holding the whole answer would not be one.
-            words = reply[1].split(" ")
+            text, slow = reply[1], reply[1].startswith(SLOW_WORDS)
+            if slow:
+                text = text[len(SLOW_WORDS):]
+            words = text.split(" ")
             for index, word in enumerate(words):
                 piece = word if index == len(words) - 1 else word + " "
                 frame({**base, "choices": [{"index": 0, "delta": {"content": piece}, "finish_reason": None}]})
+                if slow:
+                    time.sleep(SLOW_SECONDS)
             finish = "stop"
         else:
             frame({**base, "choices": [{"index": 0, "delta": {"tool_calls": [{"index": 0, **call}]}, "finish_reason": None}]})

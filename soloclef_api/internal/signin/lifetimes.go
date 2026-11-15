@@ -20,10 +20,21 @@ const (
 	// webAbsolute caps a browser's sign-in from the moment of the sign-in,
 	// however often it refreshes.
 	webAbsolute = 30 * 24 * time.Hour
-	// phoneLifetime is a phone's sign-in. It has no idle limit: a phone left
-	// in a drawer for a month is still signed in when it is picked up, and
-	// the person can sign it out from the devices list.
-	phoneLifetime = 365 * 24 * time.Hour
+	// phoneIdle is how long a phone's refresh token lives unused, and the
+	// only thing that ends a phone's sign-in by time. The owner's rule
+	// (2026-11-13): the app "should sign out after 6 months if unused ... but
+	// if always used no need for ever signing out". So every refresh starts
+	// the 180 days again and there is no cap from the sign-in: a phone in use
+	// stays signed in, and one given away or left in a drawer ends half a
+	// year after it was last used. What ends one sooner is unchanged and
+	// immediate: signing out, a device signed out from the list, signing out
+	// everywhere, a new password, and a replayed refresh token.
+	phoneIdle = 180 * 24 * time.Hour
+	// ssoProofWindow is how recently the identity provider must have proved
+	// a sign-in for an account with no password to set one from it
+	// (password_change.go): long enough to sign in and type a password,
+	// short enough that a phone left unlocked later is no way in.
+	ssoProofWindow = 10 * time.Minute
 	// rotationGrace is how soon after a rotation the spent token may be
 	// presented again without that being taken for theft (rotation.go).
 	rotationGrace = 45 * time.Second
@@ -35,24 +46,35 @@ const (
 	kindPhone = "app"
 )
 
-// familyLifetime is how long a sign-in of this kind lives from its start.
-func familyLifetime(kind string) time.Duration {
+// signInCap is when a sign-in of this kind started at `start` must end
+// however often it refreshes: a browser's is webAbsolute from the sign-in. A
+// phone's has none, and nil says so; it is stored as a NULL absolute_expiry,
+// which every reader of the column (the gate, the devices list, the pushes)
+// already takes as "no cap". A far-future date would be a second, made-up
+// rule to keep in step with this one.
+func signInCap(kind string, start time.Time) *time.Time {
 	if kind == kindPhone {
-		return phoneLifetime
+		return nil
 	}
-	return webAbsolute
+	end := start.Add(webAbsolute)
+	return &end
 }
 
-// tokenExpiry is when a refresh token minted now stops working: a browser's
-// slides with use and never passes its family's cap; a phone's lives as long
-// as its family.
-func tokenExpiry(kind string, now, familyCap time.Time) time.Time {
+// idleLifetime is how long a refresh token of this kind lives unused.
+func idleLifetime(kind string) time.Duration {
 	if kind == kindPhone {
-		return familyCap
+		return phoneIdle
 	}
-	idle := now.Add(webIdle)
-	if idle.After(familyCap) {
-		return familyCap
+	return webIdle
+}
+
+// tokenExpiry is when a refresh token minted now stops working. Both kinds
+// slide with use (each refresh mints a token that lives its idle time from
+// now); a token never outlives its sign-in's cap, where it has one.
+func tokenExpiry(kind string, now time.Time, familyCap *time.Time) time.Time {
+	idle := now.Add(idleLifetime(kind))
+	if familyCap != nil && idle.After(*familyCap) {
+		return *familyCap
 	}
 	return idle
 }

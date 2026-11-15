@@ -1,8 +1,8 @@
 import {
 	IconBooks,
-	IconBrandNextcloud,
 	IconDeviceMobile,
 	IconFileSearch,
+	IconFolders,
 	IconMessageCircleCheck,
 	IconSparkles,
 } from "@tabler/icons-react";
@@ -29,7 +29,8 @@ const ADVANTAGE_ICONS: Record<string, ComponentType<{ className?: string }>> = {
 	studio: IconSparkles,
 	research: IconFileSearch,
 	parsing: IconBooks,
-	nextcloud: IconBrandNextcloud,
+	// Google Drive and Nextcloud share one card, so a neutral folder icon.
+	drives: IconFolders,
 	phone: IconDeviceMobile,
 };
 

@@ -10,6 +10,7 @@ import { getToolDisplayName } from "@/contracts/enums/toolIcons";
 import type { HitlDecision, InterruptResult, PerToolApprovalCard } from "../types";
 import { useHitlDecision } from "../use-hitl-decision";
 import { useHitlPhase } from "../use-hitl-phase";
+import { hasEditableInput, isEditableInput } from "./editable-inputs";
 
 function ParamEditor({
 	params,
@@ -26,6 +27,16 @@ function ParamEditor({
 	return (
 		<div className="space-y-2">
 			{entries.map(([key, value]) => {
+				if (!isEditableInput(value)) {
+					return (
+						<div key={key} className="space-y-1">
+							<p className="text-xs font-medium text-muted-foreground">{key}</p>
+							<pre className="text-xs text-foreground/80 whitespace-pre-wrap break-all bg-muted/50 rounded-lg p-3">
+								{JSON.stringify(value, null, 2)}
+							</pre>
+						</div>
+					);
+				}
 				const strValue = value == null ? "" : String(value);
 				const isLong = strValue.length > 120;
 				const fieldId = `hitl-param-${key}`;
@@ -82,7 +93,7 @@ function GenericApprovalCardView({
 
 	const reviewConfig = interruptData.review_configs?.[0];
 	const allowedDecisions = reviewConfig?.allowed_decisions ?? ["approve", "reject"];
-	const canEdit = allowedDecisions.includes("edit");
+	const canEdit = allowedDecisions.includes("edit") && hasEditableInput(args);
 	const canApproveAlways = allowedDecisions.includes("approve_always");
 
 	const hasChanged = useMemo(() => {

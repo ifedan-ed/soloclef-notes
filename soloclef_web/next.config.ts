@@ -1,9 +1,6 @@
-import path from "node:path";
 import { createMDX } from "fumadocs-mdx/next";
 import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
-import { docsRedirects } from "./lib/docs-redirects";
-import { pageSecurityHeaderRules } from "./lib/security-headers";
 
 // Create the next-intl plugin
 const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
@@ -19,45 +16,50 @@ if (process.env.NODE_ENV === "production" && !process.env.NEXT_PUBLIC_SITE_URL?.
 	);
 }
 
-// TODO: Separate app routes (/login, /dashboard) from marketing routes
-// (landing page, /contact, /docs) so the desktop build only
-// ships what desktop users actually need.
+// `next build` writes the site as static files (out/), which the stack's
+// Caddy serves (docker/proxy-go/routes.caddy); no Node process runs on the
+// server. Everything a Next.js server used to do at request time has a new
+// home, each named where it went:
+//
+//   - the security headers, the old-address redirects, the signed-in "/"
+//     redirect, the address of a dynamic page (/dashboard/notebooks/<id>,
+//     /public/<token>, ...) and the cache headers: Caddy;
+//   - the Zero query route zero-cache calls: the Go API (internal/zerosync);
+//   - the /api/v1, /auth and /verify-token pass-throughs: Caddy already sends
+//     those paths to the API directly;
+//   - what a page read on the server: the cookies and the support address
+//     are read in the browser, and the sign-in page's SSO button is the
+//     build's setting, as the docs' wording already was;
+//   - docs search: an index built here and searched in the browser.
+//
+// `next dev` is not an export: it serves every route itself and, given
+// SOLOCLEF_BACKEND_INTERNAL_URL, passes the API's paths on to it, so a
+// developer runs the app without Caddy.
+const exporting = process.env.NODE_ENV === "production";
+const devBackend = process.env.SOLOCLEF_BACKEND_INTERNAL_URL?.trim().replace(/\/+$/, "");
+
 const nextConfig: NextConfig = {
-	output: "standalone",
-	// No other site may frame a page, and no page is sniffed (lib/security-headers.ts says why).
-	async headers() {
-		return pageSecurityHeaderRules();
-	},
-	async redirects() {
-		return [
-			// /mcp-connector was split into the two MCP directions; the external
-			// (client) side kept the original content.
-			{ source: "/mcp-connector", destination: "/external-mcp-connectors", permanent: true },
-			// The connectors index was renamed to /plugins, which is what the
-			// product calls them everywhere else.
-			{ source: "/connectors", destination: "/plugins", permanent: true },
-			...docsRedirects,
-		];
-	},
-	outputFileTracingRoot: path.join(__dirname, ".."),
+	...(exporting ? { output: "export" as const } : {}),
+	...(!exporting && devBackend
+		? {
+				async rewrites() {
+					// The same paths routes.caddy sends to the API.
+					return ["/api/v1/:path*", "/auth/:path*", "/users/:path*", "/verify-token"].map(
+						(source) => ({ source, destination: `${devBackend}${source}` })
+					);
+				},
+			}
+		: {}),
 	reactStrictMode: false,
 	typescript: {
 		ignoreBuildErrors: true,
 	},
 	images: {
-		remotePatterns: [
-			{
-				protocol: "https",
-				hostname: "**",
-			},
-		],
-		// Allow remote SVGs (e.g. README badges from img.shields.io, trendshift.io,
-		// etc.) which are otherwise blocked by next/image. The CSP below sandboxes
-		// the SVG and forbids any embedded scripts, which is the mitigation
-		// recommended by Vercel's NEXTJS_SAFE_SVG_IMAGES conformance rule.
-		dangerouslyAllowSVG: true,
-		contentDispositionType: "attachment",
-		contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
+		// There is no image server any more: an image is fetched by the
+		// browser as it is. The app's own pictures are already sized for
+		// where they appear, and a remote picture in an answer was never worth
+		// a round trip through the server.
+		unoptimized: true,
 	},
 	experimental: {
 		optimizePackageImports: [

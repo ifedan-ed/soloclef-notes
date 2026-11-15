@@ -75,7 +75,7 @@ func TestASpecialistsQuestionApprovalProgressAndSourcesAllReachTheParent(t *test
 	res, err := tree(
 		script(
 			modeltest.Reply{Calls: []model.ToolCall{call("s1", "search", `{"docs":["a"]}`)}},
-			modeltest.Reply{Calls: []model.ToolCall{call("q1", "choose_style", `{}`)}},
+			modeltest.Reply{Calls: []model.ToolCall{call("q1", "choose_style", `{"for":"cover"}`)}},
 		),
 		script(modeltest.Reply{Calls: []model.ToolCall{call("k1", "deliverables", `{"task":"a deck about a"}`)}}),
 	).Start(ctx, "t1", user("make me a deck"), first.sink)
@@ -98,7 +98,9 @@ func TestASpecialistsQuestionApprovalProgressAndSourcesAllReachTheParent(t *test
 	if err != nil || res.Outcome != agent.Paused {
 		t.Fatalf("answer: %+v, %v", res, err)
 	}
-	if got := second.of(event.ToolResult); len(got) != 1 || got[0].CallID != "k1/q1" || got[0].Text != "style: bold" {
+	// The result of a call resumed in a later run still carries the call's
+	// arguments, which a card may be drawn from.
+	if got := second.of(event.ToolResult); len(got) != 1 || got[0].CallID != "k1/q1" || got[0].Text != "style: bold" || got[0].Args != `{"for":"cover"}` {
 		t.Fatalf("the tool that asked answered %+v", got)
 	}
 	if len(second.of(event.Notice)) != 0 || publishes.Load() != 0 {

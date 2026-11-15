@@ -36,7 +36,6 @@ const (
 
 // Writer is the statements behind the writes and the tests (Store).
 type Writer interface {
-	IsAdministrator(ctx context.Context, userID string) (bool, error)
 	// Create and Update take the key and the headers sealed; headers is
 	// the object ownmodels.SealedHeaders made, merged into `extra`.
 	Create(ctx context.Context, userID string, fields change, sealedKey string, headers json.RawMessage, picked []pickedModel) (int64, error)
@@ -71,20 +70,25 @@ type Writer interface {
 //
 // # Who may
 //
-// Any account, in an interactive session, for its own connections to an
-// OpenAI-compatible endpoint (ownmodels.Provider): "anyone can add any
-// OpenAI-compatible API and use it". This tier calls such an endpoint
+// Any account, in an interactive session, for its own connections, which
+// are all to an OpenAI-compatible endpoint (providers.go): "anyone can add
+// any OpenAI-compatible API and use it". This tier calls the endpoint
 // itself, to list its models, to test it and to chat with it, and every
 // one of those calls goes through the egress guard (ownmodels.Egress), so
 // the address a person names cannot be a way into this server's network.
+// That guard is the one control, and it is enough: there is no
+// administrator's tier of providers left to hold back.
 //
-// A connection to any other provider is an administrator's to make, test
-// and change, as before: its test and its use go through the model proxy,
-// which is handed the address and calls it from inside the deployment's
-// network, where this tier's guard cannot follow. Moving a connection from
-// one kind to the other is held to both kinds' rule, and everything else
-// about a connection (removing it, switching and editing its models)
-// follows its provider's rule, so the two kinds stay apart whole.
+// A key and an agent are refused: what a model is reached with, and with
+// whose key, is the person's decision on the settings screen.
+//
+// # A row of a provider that is gone
+//
+// A connection stored to another provider (the Python tier's, or this
+// tier's before it offered one provider) is listed, so the person sees it,
+// and may be removed. Everything else about it (testing it, listing or
+// switching its models, changing it) is refused with providerRetired: it
+// could only ever be stored, never used.
 //
 // # Whose
 //
@@ -94,15 +98,13 @@ type Writer interface {
 // # The key
 //
 // It is sealed before it is stored (keyseal.go), never answered, and
-// opened only to be sent to the model proxy by a test. A change that
-// leaves `api_key` out keeps the stored key; `"api_key": null` removes it.
+// opened only to be sent to the connection's own endpoint by a test or a
+// listing (endpoint.go), and by the chat (soloclef_assistant/ownmodels).
+// A change that leaves `api_key` out keeps the stored key;
+// `"api_key": null` removes it.
 type WriteRoutes struct {
 	Connections Writer
 	Keys        KeySeal
-	Prober      Prober
-	// Catalogue lists a provider's models, from the model proxy
-	// (proxy_catalogue.go).
-	Catalogue Catalogue
 	// Endpoints lists and tests an OpenAI-compatible connection at its own
 	// address, through the egress guard (endpoint.go).
 	Endpoints Endpoints
@@ -111,10 +113,13 @@ type WriteRoutes struct {
 }
 
 const (
-	administratorRequired = "Only an administrator can connect this provider. Anyone can add an OpenAI-compatible connection."
-	connectionAbsent      = "Connection not found"
-	modelAbsent           = "Model not found"
-	keyUnreadable         = "The saved key can no longer be read. Enter the key again and save the connection."
+	connectionAbsent = "Connection not found"
+	modelAbsent      = "Model not found"
+	keyUnreadable    = "The saved key can no longer be read. Enter the key again and save the connection."
+	// providerRetired answers anything but the list and the removal for a
+	// connection of a provider that is gone ("A row of a provider that is
+	// gone").
+	providerRetired = "This connection's provider is no longer supported: only OpenAI-compatible connections can be used. Remove it, then add the endpoint as an OpenAI-compatible connection."
 )
 
 // Check reports a dependency that was left out. Called once at start-up,
@@ -123,10 +128,6 @@ func (r WriteRoutes) Check() error {
 	switch {
 	case r.Connections == nil:
 		return errors.New("modelconnections: the write routes have no store")
-	case r.Prober == nil:
-		return errors.New("modelconnections: the write routes have no prober")
-	case r.Catalogue == nil:
-		return errors.New("modelconnections: the write routes have no model catalogue")
 	case r.Endpoints == nil:
 		return errors.New("modelconnections: the write routes have no client for OpenAI-compatible endpoints")
 	case !r.Keys.Ready():
@@ -165,24 +166,19 @@ func (r WriteRoutes) Register(api huma.API) {
 	}
 }
 
-// writeRequest is what each of the six starts with.
+// writeRequest is what each of the routes starts with.
 type writeRequest struct {
 	ctx       huma.Context
 	routes    WriteRoutes
 	response  http.ResponseWriter
 	requestID string
 	userID    string
-	// administrator is whether the caller administers the deployment:
-	// what a connection to a provider other than an OpenAI-compatible
-	// endpoint needs (mayConnect).
-	administrator bool
 	// what names the route in a log line.
 	what string
 }
 
-// begin resolves the caller and applies the gate: a session, and the
-// caller's standing read for mayConnect. ok is false when the request has
-// been answered.
+// begin resolves the caller and applies the gate: a session. ok is false
+// when the request has been answered.
 func (r WriteRoutes) begin(ctx huma.Context, what string) (writeRequest, bool) {
 	request := writeRequest{ctx: ctx, routes: r, response: humawriter.New(ctx), requestID: requestcontext.ID(ctx.Context()), what: what}
 	caller, authenticated := principal.FromContext(ctx.Context())
@@ -196,26 +192,20 @@ func (r WriteRoutes) begin(ctx huma.Context, what string) (writeRequest, bool) {
 		r.Errors.Write(request.response, http.StatusForbidden, sessionRequired, request.requestID)
 		return request, false
 	}
-	administrator, err := r.Connections.IsAdministrator(ctx.Context(), caller.UserID)
-	if err != nil {
-		request.failed("could not read the caller's standing", err)
-		return request, false
-	}
-	request.userID, request.administrator = caller.UserID, administrator
+	request.userID = caller.UserID
 	return request, true
 }
 
-// mayConnect applies "Who may" to a provider a route is about to name an
-// address for, or to call: an OpenAI-compatible endpoint is anyone's, every
-// other provider an administrator's. false is answered with the 403.
-func (w writeRequest) mayConnect(providers ...string) bool {
-	for _, provider := range providers {
-		if provider != ownmodels.Provider && !w.administrator {
-			w.refuse(http.StatusForbidden, administratorRequired)
-			return false
-		}
+// supported answers providerRetired for a stored connection of a provider
+// that is gone, and reports whether the route may go on. A 409: the
+// request is well formed, the row is the caller's, and it is the row's
+// state that refuses it.
+func (w writeRequest) supported(provider string) bool {
+	if knownProvider(provider) {
+		return true
 	}
-	return true
+	w.refuse(http.StatusConflict, providerRetired)
+	return false
 }
 
 // storedProvider is the provider of the caller's own connection, or the
@@ -333,10 +323,7 @@ func (r WriteRoutes) create(ctx huma.Context) {
 		r.Errors.WriteValidation(request.response, request.requestID, failures)
 		return
 	}
-	if !request.mayConnect(fields.provider) {
-		return
-	}
-	if failures := providerRules(fields.provider, fields, true, false); len(failures) > 0 {
+	if failures := providerRules(fields, true); len(failures) > 0 {
 		r.Errors.WriteValidation(request.response, request.requestID, failures)
 		return
 	}
@@ -374,20 +361,14 @@ func (r WriteRoutes) update(ctx huma.Context) {
 		r.Errors.WriteValidation(request.response, request.requestID, failures)
 		return
 	}
+	// A provider the body names is the one there is (readChange); the
+	// stored row's must be it too, or the row is one that can only be
+	// removed.
 	stored, ok := request.storedProvider(id)
-	if !ok {
+	if !ok || !request.supported(stored) {
 		return
 	}
-	provider := stored
-	if fields.setProvider {
-		provider = fields.provider
-	}
-	// Both kinds' rule: a connection may be neither taken from a provider
-	// nor moved to one the caller may not connect.
-	if !request.mayConnect(stored, provider) {
-		return
-	}
-	if failures := providerRules(provider, fields, false, provider != stored); len(failures) > 0 {
+	if failures := providerRules(fields, false); len(failures) > 0 {
 		r.Errors.WriteValidation(request.response, request.requestID, failures)
 		return
 	}
@@ -398,11 +379,6 @@ func (r WriteRoutes) update(ctx huma.Context) {
 	headers, ok := request.sealedHeaders(fields)
 	if !ok {
 		return
-	}
-	if provider != ownmodels.Provider && !fields.setHeaders {
-		// A connection that leaves the OpenAI-compatible kind leaves its
-		// headers behind: no other provider is sent them.
-		headers, fields.setHeaders = json.RawMessage(`{}`), true
 	}
 	found, err := r.Connections.Update(ctx.Context(), request.userID, id, fields, sealed, headers)
 	if err != nil {
@@ -425,10 +401,8 @@ func (r WriteRoutes) remove(ctx huma.Context) {
 	if !ok {
 		return
 	}
-	provider, ok := request.storedProvider(id)
-	if !ok || !request.mayConnect(provider) {
-		return
-	}
+	// Any provider: removing a connection of one that is gone is exactly
+	// what the person is told to do with it.
 	found, err := r.Connections.Delete(ctx.Context(), request.userID, id)
 	if err != nil {
 		request.failed("could not remove the connection", err)

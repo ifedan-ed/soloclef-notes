@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { AUTOMATIONS_PAGE, NOTEBOOKS_HOME } from "@/lib/dashboard-paths";
+import { AUTOMATIONS_PAGE } from "@/lib/dashboard-paths";
+import { CreateViaChatMenu } from "./create-via-chat-menu";
 
 interface AutomationsHeaderProps {
 	total: number;
@@ -15,10 +16,9 @@ interface AutomationsHeaderProps {
 }
 
 /**
- * Page header: title + count + "Create via chat" CTA. Creation is intent-driven
- * (the create_automation tool runs inside chat with a HITL approval card), so
- * the CTA opens the notebooks home, where any notebook chat can draft one. Model eligibility is
- * handled per-automation in the builder + approval card, not gated here.
+ * Page header: title + count + the two ways to make one: in a notebook's
+ * chat, where the assistant drafts it onto a card (CreateViaChatMenu), or
+ * by hand in the builder.
  */
 export function AutomationsHeader({
 	total,
@@ -45,9 +45,7 @@ export function AutomationsHeader({
 					>
 						<Link href={`${AUTOMATIONS_PAGE}/new`}>Create manually</Link>
 					</Button>
-					<Button asChild size="sm">
-						<Link href={NOTEBOOKS_HOME}>Create via chat</Link>
-					</Button>
+					<CreateViaChatMenu />
 				</div>
 			)}
 		</div>

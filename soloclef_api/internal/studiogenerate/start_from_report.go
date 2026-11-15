@@ -93,6 +93,5 @@ func (r Routes) CanMake(kind string) bool {
 		return false
 	}
 	request, failures := parseRequest(body)
-	return len(failures) == 0 && (r.SandboxEnabled || !needsSandbox(request)) &&
-		(r.ImageEnabled || !needsImageModel(request))
+	return len(failures) == 0 && (r.SandboxEnabled || !needsSandbox(request))
 }

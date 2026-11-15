@@ -211,6 +211,13 @@ sql:
         package: pushdevices
         out: internal/pushdevices
   - <<: *slice
+    queries: internal/appversions/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: appversions
+        out: internal/appversions
+  - <<: *slice
     queries: internal/documents/queries.sql
     gen:
       go:
@@ -225,6 +232,13 @@ sql:
         package: searchconnectors
         out: internal/searchconnectors
   - <<: *slice
+    queries: internal/websearchconnect/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: websearchconnect
+        out: internal/websearchconnect
+  - <<: *slice
     queries: internal/modelconnections/queries.sql
     gen:
       go:
@@ -238,13 +252,6 @@ sql:
         <<: *slice_go
         package: modelchoices
         out: internal/modelchoices
-  - <<: *slice
-    queries: internal/publicchat/queries.sql
-    gen:
-      go:
-        <<: *slice_go
-        package: publicchat
-        out: internal/publicchat
   - <<: *slice
     queries: internal/notebooks/queries.sql
     gen:
@@ -435,20 +442,6 @@ sql:
         package: drivesync
         out: internal/drivesync
   - <<: *slice
-    queries: internal/siteannouncements/queries.sql
-    gen:
-      go:
-        <<: *slice_go
-        package: siteannouncements
-        out: internal/siteannouncements
-  - <<: *slice
-    queries: internal/notebooklinks/queries.sql
-    gen:
-      go:
-        <<: *slice_go
-        package: notebooklinks
-        out: internal/notebooklinks
-  - <<: *slice
     queries: internal/notebookcopy/queries.sql
     gen:
       go:
@@ -477,6 +470,13 @@ sql:
         package: medialinks
         out: internal/medialinks
   - <<: *slice
+    queries: internal/citedsources/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: citedsources
+        out: internal/citedsources
+  - <<: *slice
     queries: internal/e2eseed/queries.sql
     gen:
       go:
@@ -490,6 +490,13 @@ sql:
         <<: *slice_go
         package: automations
         out: internal/automations
+  - <<: *slice
+    queries: internal/automationdrafts/queries.sql
+    gen:
+      go:
+        <<: *slice_go
+        package: automationdrafts
+        out: internal/automationdrafts
   - <<: *slice
     queries: internal/automationmail/queries.sql
     gen:

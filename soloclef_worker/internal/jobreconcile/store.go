@@ -15,6 +15,13 @@ type Store struct {
 
 // TakeStale is one statement: choose, stamp, return.
 //
+// Only videos: they are the one kind a worker makes, and the only kind whose
+// row names a task id a message could carry. An artifact job (the Studio's
+// other outputs) is queued for the API tier, which claims it from the row
+// itself (soloclef_api/internal/studiogenerate); this used to take those too,
+// logging each as a job with no task id every two minutes and stamping its
+// updated_at, which kept the API's sweep from ever seeing it silent.
+//
 // It is the one statement in this worker that names no owner, because it is
 // not about an account: it sweeps the outbox of every account, and what it
 // returns is only ever published, to a worker whose claim reads the owner
@@ -32,7 +39,7 @@ func (s Store) TakeStale(ctx context.Context, staleAfter time.Duration, limit in
 	rows, err := s.Pool.Query(ctx, `
 		WITH stale AS MATERIALIZED (
 			SELECT id FROM deliverable_jobs
-			WHERE status = 'queued' AND updated_at <= now() - make_interval(secs => $1)
+			WHERE status = 'queued' AND kind = 'video' AND updated_at <= now() - make_interval(secs => $1)
 			ORDER BY updated_at
 			LIMIT $2
 			FOR UPDATE SKIP LOCKED

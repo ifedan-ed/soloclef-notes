@@ -64,8 +64,8 @@ func TestAnAccountsOwnModelsJoinItsMenuAndAnswerItsTurn(t *testing.T) {
 	own := &ownRows{menus: map[string][]ownmodels.Option{
 		ada: {
 			{ID: "own:7", RowID: 7, Label: "Her model", Chat: true},
-			// A model that only draws is not a chat model.
-			{ID: "own:8", RowID: 8, Label: "Her painter", Images: true},
+			// A model that says it does not chat is not a chat model.
+			{ID: "own:8", RowID: 8, Label: "Her painter"},
 		},
 	}}
 	models := ownModels(choices{ada: "own:7", ben: "own:7"}, own)

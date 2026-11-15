@@ -121,15 +121,10 @@ export const ConnectorAccountsListView: FC<ConnectorAccountsListViewProps> = ({
 		[setConnectorEnabled]
 	);
 
-	// Helper to get display name for connector (handles MCP server name extraction)
-	const getDisplayName = (connector: SearchSourceConnector): string => {
-		if (isMCP) {
-			// For MCP, extract server name from config if available
-			const serverName = connector.config?.server_config?.name || connector.name;
-			return serverName;
-		}
-		return getConnectorDisplayName(connector.name);
-	};
+	// An MCP server's name is the one its owner gave it, whole; other
+	// connections are named "Type - account", shown by the account part.
+	const getDisplayName = (connector: SearchSourceConnector): string =>
+		isMCP ? connector.name : getConnectorDisplayName(connector.name);
 
 	return (
 		<div className="flex flex-col h-full">

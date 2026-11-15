@@ -65,6 +65,7 @@ test("the banner shows only until the user decides, and never when blocked", () 
 
 test("backend phases map to labels, unknown ones fall back", () => {
 	assert.equal(knownPhase("drafting"), "drafting");
+	assert.equal(knownPhase("waiting_for_sandbox"), "waiting_for_sandbox");
 	assert.equal(knownPhase("generating"), null);
 	assert.equal(knownPhase(null), null);
 });

@@ -126,6 +126,17 @@ type savedTurns struct {
 	store checkpoint.Store
 }
 
+// forgetConversation removes everything the loop keeps for a thread: its
+// conversation, every specialist's beneath it, and the turn kept beside it.
+// The turn is named with a dot, not beneath the conversation (turnKey), so
+// removing the tree alone left it behind with the turn's choices in it.
+func forgetConversation(ctx context.Context, store checkpoint.Store, threadID int64) error {
+	if err := store.DeleteTree(ctx, agentThread(threadID)); err != nil {
+		return err
+	}
+	return store.Delete(ctx, turnKey(threadID))
+}
+
 func turnKey(threadID int64) string {
 	// A dot, not a slash: slashes name nested agents' threads.
 	return agentThread(threadID) + ".turn"

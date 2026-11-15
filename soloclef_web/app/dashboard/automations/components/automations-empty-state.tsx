@@ -3,13 +3,12 @@ import { AlarmClock } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { BRAND } from "@/lib/brand";
-import { AUTOMATIONS_PAGE, NOTEBOOKS_HOME } from "@/lib/dashboard-paths";
+import { AUTOMATIONS_PAGE } from "@/lib/dashboard-paths";
+import { CreateViaChatMenu } from "./create-via-chat-menu";
 
 /**
- * Zero-state for the automations list. The primary CTA points to a new
- * chat — creation happens via the ``create_automation`` HITL tool, not a
- * "new automation" form. We surface the chat path explicitly so users
- * don't go hunting for an "add" button that doesn't exist.
+ * Zero-state for the automations list: the two ways to make one, the chat
+ * first (CreateViaChatMenu), since describing it is the quicker way.
  */
 export function AutomationsEmptyState() {
 	return (
@@ -19,13 +18,11 @@ export function AutomationsEmptyState() {
 			</div>
 			<h3 className="mt-4 text-base font-semibold text-foreground">No automations yet</h3>
 			<p className="mt-1 text-sm text-muted-foreground max-w-md mx-auto">
-				Automations let {BRAND.name} run agent tasks on a schedule. Describe what you want in chat
-				and {BRAND.name} drafts the automation for your approval.
+				Automations let {BRAND.name} run tasks on a schedule or when a document arrives. Describe
+				what you want in a notebook's chat and {BRAND.name} drafts it for you to check and create.
 			</p>
 			<div className="mt-6 flex items-center justify-center gap-2 flex-wrap">
-				<Button asChild>
-					<Link href={NOTEBOOKS_HOME}>Create via chat</Link>
-				</Button>
+				<CreateViaChatMenu size="default" />
 				<Button
 					asChild
 					variant="ghost"

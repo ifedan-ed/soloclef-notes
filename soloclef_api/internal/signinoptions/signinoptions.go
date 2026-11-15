@@ -17,8 +17,14 @@
 //
 //   - password: always. This tier always serves the password sign-ins
 //     (internal/signin).
-//   - forgot_password: the mail switch (SMTP_ENABLED). Without mail the
-//     reset is refused in so many words, so the link is not offered.
+//   - forgot_password: whether the reset route has a mailer, which is what
+//     it obeys (internal/signin refuses a reset in so many words without
+//     one). That is the mail switch (SMTP_ENABLED) on a deployment, and the
+//     end-to-end stack's in-memory outbox, which mails resets with SMTP off;
+//     reading the switch itself there told the website resets were off
+//     while the route sent them. The phone app offers its reset link only
+//     when it is true; the website's Forgot Password? page says plainly
+//     that resets by email are not available when it is false.
 //   - sign_up: SIGNUP_ALLOWED, the switch the sign-up form obeys.
 //   - sso: single sign-on when OIDC_ENABLED is on. `label` is the button's
 //     words (OIDC_BUTTON_LABEL, the website's own setting, so the two never
@@ -63,9 +69,10 @@ const websiteButtonWords = "Continue with single sign-on"
 
 // Settings is what the answer is made of: the deployment's own switches.
 type Settings struct {
-	SMTPEnabled   bool
-	SignupAllowed bool
-	OIDCEnabled   bool
+	// SendsResetMail is whether the password-reset route has a mailer.
+	SendsResetMail bool
+	SignupAllowed  bool
+	OIDCEnabled    bool
 	// ButtonLabel, DisplayName and AppRedirects are read only with
 	// OIDCEnabled on (internal/config).
 	ButtonLabel  string
@@ -94,7 +101,7 @@ func Build(settings Settings) Options {
 	options := Options{
 		Service:        Service,
 		Password:       true,
-		ForgotPassword: settings.SMTPEnabled,
+		ForgotPassword: settings.SendsResetMail,
 		SignUp:         settings.SignupAllowed,
 	}
 	if settings.OIDCEnabled {

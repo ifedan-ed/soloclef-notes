@@ -15,7 +15,7 @@ require (
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-ini/ini v1.67.0 // indirect
-	github.com/google/uuid v1.6.0 // indirect
+	github.com/google/uuid v1.6.0
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
@@ -24,7 +24,7 @@ require (
 	github.com/klauspost/crc32 v1.3.0 // indirect
 	github.com/minio/crc64nvme v1.1.1 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
-	github.com/modelcontextprotocol/go-sdk v1.8.0 // indirect
+	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/philhofer/fwd v1.2.0 // indirect
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/tinylib/msgp v1.6.1 // indirect
@@ -43,8 +43,10 @@ require (
 	git.danvics.com/danvics/soloclef/soloclef_filestore v0.0.0
 	git.danvics.com/danvics/soloclef/soloclef_ingest v0.0.0
 	git.danvics.com/danvics/soloclef/soloclef_mail v0.0.0
+	git.danvics.com/danvics/soloclef/soloclef_notify v0.0.0
 	git.danvics.com/danvics/soloclef/soloclef_schema v0.0.0
 	git.danvics.com/danvics/soloclef/soloclef_studio v0.0.0
+	github.com/ifedan-ed/figures-go v0.4.1
 	golang.org/x/text v0.32.0
 )
 
@@ -128,3 +130,9 @@ replace git.danvics.com/danvics/soloclef/soloclef_assistant => ../soloclef_assis
 // the worker that runs one. A relative replace for the reason soloclef_celery
 // is one: this tier must refuse at save time what the worker would refuse.
 replace git.danvics.com/danvics/soloclef/soloclef_automations => ../soloclef_automations
+
+// The one notification step (an inbox row, then a push) and the push
+// delivery, shared by the API, the worker and the indexer: every tier that
+// finishes work for a person notifies through the same code. From this
+// checkout for the reason soloclef_celery is.
+replace git.danvics.com/danvics/soloclef/soloclef_notify => ../soloclef_notify

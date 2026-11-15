@@ -8,6 +8,7 @@ import { openCitationPanelAtom } from "@/atoms/citation/citation-panel.atom";
 import { useCitationMetadata } from "@/components/assistant-ui/citation-metadata-context";
 import { PublicCitation, usePublicCitations } from "@/components/assistant-ui/public-citations";
 import { CitationPanelContent } from "@/components/citation-panel/citation-panel";
+import { useCitationNumber } from "@/components/citations/citation-numbers-context";
 import { Citation } from "@/components/tool-ui/citation";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,12 +29,26 @@ interface InlineCitationProps {
 	isDocsChunk?: boolean;
 }
 
+/** The pill every citation chip is drawn as. */
+export const PILL =
+	"ml-0.5 inline-flex h-5 min-w-5 items-center justify-center gap-0.5 rounded-md bg-popover px-1.5 text-[11px] font-medium text-popover-foreground/80 align-baseline";
+
+/**
+ * What a chip shows: its number in this answer (1, 2, 3 in order of first
+ * appearance; lib/citations/citation-numbering.ts), never the passage id,
+ * which means nothing to a reader. Without a number (a chip outside any
+ * numbering) it shows a source icon.
+ */
+const ChipFace: FC<{ number: number | null }> = ({ number }) =>
+	number === null ? <FileText className="size-3" aria-hidden /> : number;
+
 /**
  * Inline citation badge for knowledge-base chunks (numeric chunk IDs).
  *
- * Numeric KB chunks resolve through the document chunk API. Artifact
- * documents open the artifact panel; all others open the citation panel,
- * which shows the cited chunk surrounded by adjacent chunks.
+ * The badge shows the citation's number in its answer. A click resolves the
+ * chunk through the document chunk API: artifact documents open the artifact
+ * panel; all others open the citation panel, which shows the cited chunk
+ * surrounded by adjacent chunks.
  *
  * Negative chunk IDs and legacy Soloclef-docs chunks (`isDocsChunk`) render
  * as a static, non-interactive "doc" pill. The Soloclef product-docs feature
@@ -42,17 +57,18 @@ interface InlineCitationProps {
  */
 export const InlineCitation: FC<InlineCitationProps> = ({ chunkId, isDocsChunk = false }) => {
 	const resolvePublic = usePublicCitations();
+	const number = useCitationNumber({ kind: "chunk", chunkId, isDocsChunk });
 	if (resolvePublic && !isDocsChunk) {
-		return <PublicCitation number={chunkId} target={resolvePublic(chunkId)} />;
+		// On a public page the marker holds the page's own source number
+		// (it is what resolves the source); the chip still shows the
+		// citation's number within this answer.
+		return <PublicCitation number={number} target={resolvePublic(chunkId)} />;
 	}
 	if (chunkId < 0 || isDocsChunk) {
 		return (
 			<Tooltip>
 				<TooltipTrigger asChild>
-					<span
-						className="ml-0.5 inline-flex h-5 min-w-5 items-center justify-center gap-0.5 rounded-md bg-popover px-1.5 text-[11px] font-medium text-popover-foreground/80 align-baseline"
-						role="note"
-					>
+					<span className={PILL} role="note">
 						<FileText className="size-3" />
 						doc
 					</span>
@@ -64,10 +80,28 @@ export const InlineCitation: FC<InlineCitationProps> = ({ chunkId, isDocsChunk =
 		);
 	}
 
-	return <NumericChunkCitation chunkId={chunkId} />;
+	return <NumericChunkCitation chunkId={chunkId} number={number} />;
 };
 
-const NumericChunkCitation: FC<{ chunkId: number }> = ({ chunkId }) => {
+/**
+ * A citation the model has written in an answer that is still streaming:
+ * "[3]", which is saved as a marker naming its source only when the answer
+ * ends. It shows the number it will keep then, and opens nothing yet,
+ * because which passage it names is known only to the server until then.
+ */
+export const LabelCitation: FC<{ label: number }> = ({ label }) => {
+	const number = useCitationNumber({ kind: "label", label });
+	return (
+		<span className={PILL} role="note" aria-label="Citation; opens when the answer is finished">
+			<ChipFace number={number} />
+		</span>
+	);
+};
+
+const NumericChunkCitation: FC<{ chunkId: number; number: number | null }> = ({
+	chunkId,
+	number,
+}) => {
 	const isTouchLike = useMediaQuery("(hover: none), (pointer: coarse)");
 	const openCitationPanel = useSetAtom(openCitationPanelAtom);
 	const openArtifactPanel = useSetAtom(openArtifactPanelAtom);
@@ -109,11 +143,12 @@ const NumericChunkCitation: FC<{ chunkId: number }> = ({ chunkId }) => {
 				variant="ghost"
 				onClick={() => void handleClick()}
 				disabled={loading}
-				className="ml-0.5 inline-flex h-5 min-w-5 items-center justify-center gap-0.5 rounded-md bg-popover px-1.5 text-[11px] font-medium text-popover-foreground/80 align-baseline"
-				title={`View source chunk #${chunkId}`}
+				className={PILL}
+				title={number === null ? "View source" : `View source ${number}`}
 				aria-label={`View cited chunk ${chunkId}`}
+				data-citation-number={number ?? undefined}
 			>
-				{chunkId}
+				<ChipFace number={number} />
 			</Button>
 			<Drawer
 				open={mobilePreviewOpen}
@@ -143,14 +178,16 @@ interface UrlCitationProps {
 
 /**
  * Inline citation for URL-based chunk IDs (e.g. scraped/linked web pages).
- * Renders a compact chip with favicon + domain and a hover popover showing the
- * page title and snippet when citation metadata is available.
+ * The chip shows the citation's number, from the same sequence as the
+ * passages', so a reader sees one list of sources; the hover popover names
+ * the page (favicon, domain, title and snippet when known).
  */
 export const UrlCitation: FC<UrlCitationProps> = ({ url }) => {
 	const reactId = useId();
 	const citationInstanceId = `url-cite-${reactId.replace(/:/g, "")}`;
 	const domain = tryGetHostname(url) ?? url;
 	const meta = useCitationMetadata(url);
+	const number = useCitationNumber({ kind: "url", url });
 
 	return (
 		<Citation
@@ -162,6 +199,7 @@ export const UrlCitation: FC<UrlCitationProps> = ({ url }) => {
 			favicon={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`}
 			variant="inline"
 			type="webpage"
+			inlineLabel={number === null ? undefined : String(number)}
 		/>
 	);
 };

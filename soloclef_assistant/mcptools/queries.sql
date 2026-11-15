@@ -13,8 +13,7 @@ WHERE c.user_id = sqlc.arg(user_id)
 ORDER BY c.id;
 
 -- name: Server :one
--- One connection as it is now, asked at the moment a call is made or a trust
--- decision is taken. The account is part of the question: a connection that
+-- One connection as it is now, asked at the moment a call is made. The account is part of the question: a connection that
 -- was removed, switched off, or was never this account's is "not found",
 -- whatever a turn built earlier believes.
 SELECT c.name, c.config,
@@ -24,17 +23,6 @@ WHERE c.id = sqlc.arg(id)
   AND c.user_id = sqlc.arg(user_id)
   AND c.connector_type = 'MCP_CONNECTOR'
   AND c.enabled;
-
--- name: LockConfig :one
--- The config of a connection its owner is about to change, locked until the
--- transaction ends so that two "always allow" clicks cannot each write a
--- list without the other's name.
-SELECT c.config
-FROM search_source_connectors c
-WHERE c.id = sqlc.arg(id)
-  AND c.user_id = sqlc.arg(user_id)
-  AND c.connector_type = 'MCP_CONNECTOR'
-FOR UPDATE;
 
 -- name: SetConfigKey :execrows
 -- Sets one top-level key of a connection's config and leaves the rest.
@@ -58,3 +46,17 @@ WHERE id = sqlc.arg(id)
   AND connector_type = 'MCP_CONNECTOR'
   AND jsonb_typeof(config) = 'object'
   AND config -> 'auth_expired' IS DISTINCT FROM 'true'::jsonb;
+
+-- name: StoreTokens :execrows
+-- Replaces an OAuth server's sealed tokens after a renewal, only while the
+-- row still holds the ones that were renewed (previous): of two processes
+-- renewing at once one writes and the other reads what it wrote.
+UPDATE search_source_connectors
+SET config = jsonb_set(
+        jsonb_set(config, '{server_config,auth,oauth,tokens_sealed}', to_jsonb(sqlc.arg(sealed)::text), true),
+        '{server_config,auth,oauth,expires_at}', to_jsonb(sqlc.arg(expires_at)::bigint), true),
+    updated_at = now()
+WHERE id = sqlc.arg(id)
+  AND user_id = sqlc.arg(user_id)
+  AND connector_type = 'MCP_CONNECTOR'
+  AND config #>> '{server_config,auth,oauth,tokens_sealed}' = sqlc.arg(previous)::text;

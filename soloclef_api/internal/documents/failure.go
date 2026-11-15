@@ -22,8 +22,8 @@ import (
 //     500 carries the CORS headers. `caught` writes it.
 //     get_documents_status, get_document_type_counts and
 //     search_document_titles do the same.
-//   - list_document_versions, get_document_version,
-//     restore_document_version and get_watched_folders have no try at all. Whatever goes wrong in
+//   - list_document_versions, get_document_version and
+//     restore_document_version have no try at all. Whatever goes wrong in
 //     them is answered by ServerErrorMiddleware, the outermost middleware, so
 //     the 500 carries none. `uncaught` writes it.
 //

@@ -22,9 +22,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 
 	"git.danvics.com/danvics/soloclef/soloclef_celery/celery"
+	"git.danvics.com/danvics/soloclef/soloclef_notify/notify"
 
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/broker"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/indexing"
@@ -50,23 +52,34 @@ type Ready interface {
 	DocumentReady(ctx context.Context, documentID int64)
 }
 
+// Finished is told how each document's indexing ended, ready or failed
+// (notify.Notifier: a failed source, or a large or slow one, notifies its
+// owner). Like Ready it cannot fail the job: the document's own status is
+// written whatever it does, so an error is only logged.
+type Finished interface {
+	SourceIndexed(ctx context.Context, outcome notify.SourceOutcome) error
+}
+
 // Runner runs index_document messages.
 type Runner struct {
 	indexer Indexer
 	// observe is told how each job ended, for the metrics.
-	observe func(indexing.Result)
-	ready   Ready
+	observe  func(indexing.Result)
+	ready    Ready
+	finished Finished
+	log      *slog.Logger
 }
 
-// New builds the runner. observe and ready may be nil.
-func New(indexer Indexer, observe func(indexing.Result), ready Ready) (*Runner, error) {
+// New builds the runner. observe, ready and finished may be nil (a test
+// that does not ask about them); the indexing worker gives all three.
+func New(indexer Indexer, observe func(indexing.Result), ready Ready, finished Finished) (*Runner, error) {
 	if indexer == nil {
 		return nil, errors.New("indextask: no indexer")
 	}
 	if observe == nil {
 		observe = func(indexing.Result) {}
 	}
-	return &Runner{indexer: indexer, observe: observe, ready: ready}, nil
+	return &Runner{indexer: indexer, observe: observe, ready: ready, finished: finished, log: slog.Default()}, nil
 }
 
 // Run is broker.Runner. A nil return or a plain error acknowledges the
@@ -86,6 +99,15 @@ func (r *Runner) Run(ctx context.Context, msg *celery.Message) error {
 	r.observe(result)
 	if err == nil && result.Outcome == indexing.Indexed && r.ready != nil {
 		r.ready.DocumentReady(ctx, documentID)
+	}
+	// Only a verdict is reported: a job handed back for a retry, or a
+	// document deleted meanwhile, has nothing to tell anyone yet.
+	if err == nil && (result.Outcome == indexing.Indexed || result.Outcome == indexing.Failed) && r.finished != nil {
+		outcome := notify.SourceOutcome{DocumentID: documentID, Failed: result.Outcome == indexing.Failed,
+			Reason: result.Reason, Bytes: result.Bytes, Took: result.Timings.Total}
+		if notifyErr := r.finished.SourceIndexed(context.WithoutCancel(ctx), outcome); notifyErr != nil {
+			r.log.Error("the document's notification could not be written", "document", documentID, "error", notifyErr.Error())
+		}
 	}
 	if errors.Is(err, indexing.ErrRetry) {
 		return fmt.Errorf("%w: document %d: %w", broker.ErrRequeue, documentID, err)

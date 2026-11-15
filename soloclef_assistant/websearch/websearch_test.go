@@ -153,25 +153,39 @@ func TestNoResultsIsAnAnswerNotAnError(t *testing.T) {
 	}
 }
 
-func TestAKeyIsTakenOnlyFromItsProvidersOwnServer(t *testing.T) {
-	for _, c := range []struct {
-		name, config string
-		provider     Provider
-		want         string
-	}{
-		{"exa header", `{"server_config":{"url":"https://mcp.exa.ai/mcp","headers":{"X-API-Key":" abc "}}}`, Exa, "abc"},
-		{"exa query", `{"server_config":{"url":"https://mcp.exa.ai/mcp?exaApiKey=q1"}}`, Exa, "q1"},
-		{"tavily bearer", `{"server_config":{"url":"https://mcp.tavily.com/mcp/","headers":{"authorization":"Bearer tv"}}}`, Tavily, "tv"},
-		{"tavily query", `{"server_config":{"url":"https://mcp.tavily.com/mcp/?tavilyApiKey=q2"}}`, Tavily, "q2"},
-		{"another server's x-api-key is not an Exa key", `{"server_config":{"url":"https://tools.example.com/mcp","headers":{"x-api-key":"other"}}}`, Exa, ""},
-		{"a look-alike domain", `{"server_config":{"url":"https://notexa.ai/mcp","headers":{"x-api-key":"other"}}}`, Exa, ""},
-		{"exa's server is not tavily's", `{"server_config":{"url":"https://mcp.exa.ai/mcp","headers":{"x-api-key":"abc"}}}`, Tavily, ""},
-		{"a config that is not an object", `[]`, Exa, ""},
-		{"no key at all", `{"server_config":{"url":"https://mcp.exa.ai/mcp"}}`, Exa, ""},
-	} {
-		if got := keyFrom([]byte(c.config), c.provider); got != c.want {
-			t.Errorf("%s: got %q want %q", c.name, got, c.want)
+// Verify is the smallest search, with the key in the provider's own place,
+// and says why a key will not do.
+func TestVerifyChecksAKeyWithOneSmallSearch(t *testing.T) {
+	tavily := newProvider(t, `{"results":[]}`)
+	s := Search{Keys: fixedKeys{}, HTTP: tavily.Client(), endpoints: map[Provider]string{Tavily: tavily.URL}}
+	if err := s.Verify(context.Background(), Tavily, "tv-new"); err != nil {
+		t.Fatal(err)
+	}
+	if tavily.header.Get("Authorization") != "Bearer tv-new" || tavily.body["max_results"] != 1.0 {
+		t.Fatalf("sent %v with %v", tavily.body, tavily.header)
+	}
+	for status, want := range map[int]error{401: ErrKeyRejected, 403: ErrKeyRejected, 432: ErrQuota, 429: ErrQuota, 503: ErrUnavailable} {
+		tavily.status = status
+		err := s.Verify(context.Background(), Tavily, "tv-new")
+		if !errors.Is(err, want) {
+			t.Errorf("status %d: err = %v, want %v", status, err, want)
 		}
+		if err != nil && strings.Contains(err.Error(), "tv-new") {
+			t.Errorf("status %d: the key is in the message", status)
+		}
+	}
+	tavily.status, tavily.reply = 200, `not json`
+	if err := s.Verify(context.Background(), Tavily, "k"); !errors.Is(err, ErrUnavailable) {
+		t.Errorf("an unreadable answer: %v", err)
+	}
+	if err := s.Verify(context.Background(), Provider("bing"), "k"); err == nil {
+		t.Error("an unknown provider was verified")
+	}
+	closed := newProvider(t, `{}`)
+	closed.Close()
+	s.endpoints[Exa] = closed.URL
+	if err := s.Verify(context.Background(), Exa, "k"); !errors.Is(err, ErrUnavailable) {
+		t.Errorf("an unreachable provider: %v", err)
 	}
 }
 

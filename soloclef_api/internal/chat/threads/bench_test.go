@@ -88,19 +88,6 @@ func BenchmarkListLimited(b *testing.B) {
 	}
 }
 
-// BenchmarkShare is making a public link to the long thread: reading it,
-// cleaning 200 messages, hashing, and the upsert (the same content each
-// time, so every iteration after the first finds the link).
-func BenchmarkShare(b *testing.B) {
-	w := benchWorld(b)
-	b.ResetTimer()
-	for b.Loop() {
-		if got := w.call(ada, "POST", "/api/v1/threads/20/snapshots", `{}`); got.status != 200 {
-			b.Fatalf("share: %d %s", got.status, got.raw)
-		}
-	}
-}
-
 // BenchmarkDelete is deleting a thread with a saved conversation and a
 // nested one, among 100,000 other saved conversations: the claim, the tree
 // delete and the cascade.

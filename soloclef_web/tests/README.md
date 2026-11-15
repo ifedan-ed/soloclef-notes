@@ -26,7 +26,7 @@ only what a browser test needs:
   `docker/e2e-web-go/google-stub`), standard-library Python;
 - Caddy with the deployment's own routes plus the three test-only ones
   (`docker/e2e-web-go/Caddyfile`);
-- the frontend built from this checkout.
+- the web app built from this checkout, as static files in the Caddy image.
 
 Only Caddy is published, on 127.0.0.1:3945 (`docker/e2e-web-go/settings.env`).
 Everything else is on internal networks with no route out, so no test can
@@ -43,16 +43,23 @@ pnpm test:e2e                  # desktop + phone
 pnpm test:e2e:stack:down       # stop and delete containers, volumes, networks, secrets
 ```
 
+Two branches tested at once on one host need two stacks. Give the second a
+project and a port of its own, to the script and to Playwright alike:
+`E2E_STACK_PROJECT=soloclefgo-e2e-mine E2E_WEB_PORT=3961 bash
+scripts/e2e-stack-go.sh up`, then `E2E_WEB_PORT=3961 pnpm test:e2e`
+(`nextcloud-connect.spec.ts` names the default stack's stand-in, so it runs
+on the default stack only).
+
 After changing app code, `pnpm test:e2e:stack:rebuild` rebuilds every image
 from this checkout and restarts the stack; `bash scripts/e2e-stack-go.sh
-rebuild api frontend` rebuilds only the ones named.
+rebuild api proxy` rebuilds only the ones named (`proxy` is the web app).
 `bash scripts/e2e-stack-go.sh status|logs [service]` for diagnostics.
 
 ## What is real and what is faked
 
 Real: Postgres, Valkey, Qdrant, MinIO, the parser service, the indexer and the
 worker, zero-cache, Caddy, the API's routes, permissions and persistence, the
-frontend build, and every browser interaction. Nothing in the application has
+web app's static build, and every browser interaction. Nothing in the application has
 a test-only branch: a fake is a stand-in at an address the stack already
 calls.
 

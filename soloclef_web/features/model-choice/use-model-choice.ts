@@ -17,7 +17,7 @@ const CHOOSE_FAILED = "The model could not be changed. Try again in a moment.";
 
 /**
  * The sentence for a refused choice. The server names the field after what
- * was sent (`model`, `vision`, `image`); chat-model's reader looks for
+ * was sent (`model`, `vision`); chat-model's reader looks for
  * `model`, so a role's refusal is looked for under its own name first.
  */
 function failureSentence(error: unknown, field: string): string {
@@ -66,7 +66,7 @@ export function useChooseModel(job: ModelJob) {
 	});
 }
 
-/** The account's vision and image models. */
+/** The account's vision model. */
 export function useModelRoles() {
 	return useQuery<ModelRoles, Error>({
 		queryKey: cacheKeys.modelConnections.roles(),
@@ -76,7 +76,7 @@ export function useModelRoles() {
 	});
 }
 
-/** Choose the vision or the image model; null goes back to the default. */
+/** Choose the vision model; null goes back to the default. */
 export function useChooseModelRole(role: ModelRole) {
 	const queryClient = useQueryClient();
 	const key = cacheKeys.modelConnections.roles();

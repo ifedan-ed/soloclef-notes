@@ -13,7 +13,6 @@ const PUBLIC_ROUTE_PREFIXES = [
 	"/forgot-password",
 	"/reset-password",
 	"/auth",
-	"/desktop/login",
 	"/docs",
 	"/public",
 	// The public site. A marketing route missing from this list still renders,

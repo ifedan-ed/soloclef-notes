@@ -5,7 +5,6 @@
 //	GET    /api/v1/folders                        the account's folders, flat
 //	GET    /api/v1/folders/{folder_id}            one folder
 //	GET    /api/v1/folders/{folder_id}/breadcrumb its ancestors, root first
-//	PATCH  /api/v1/folders/{folder_id}/watched    stop watching a folder
 //	PUT    /api/v1/folders/{folder_id}            rename
 //	PUT    /api/v1/folders/{folder_id}/move       move under another parent
 //	PUT    /api/v1/folders/{folder_id}/reorder    reorder among its siblings
@@ -50,7 +49,6 @@ const (
 	ListPath         = "/api/v1/folders"
 	ReadPath         = "/api/v1/folders/{folder_id}"
 	BreadcrumbPath   = "/api/v1/folders/{folder_id}/breadcrumb"
-	WatchedPath      = "/api/v1/folders/{folder_id}/watched"
 	RenamePath       = "/api/v1/folders/{folder_id}"
 	MovePath         = "/api/v1/folders/{folder_id}/move"
 	ReorderPath      = "/api/v1/folders/{folder_id}/reorder"
@@ -69,7 +67,6 @@ const (
 	MovedIntoOwnSubree = "Cannot move a folder into one of its own descendants."
 	InvalidPosition    = "The neighbouring positions are not ones a folder can be placed between."
 	QueueFailed        = "Could not queue folder deletion. Documents have been restored."
-	WatchUpdated       = "Folder watch status updated"
 	DeletionStarted    = "Folder deletion started"
 	NameTakenHere      = "A folder with this name already exists at this location"
 	NameTakenAtTarget  = "A folder with this name already exists at the target location"

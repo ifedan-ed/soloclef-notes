@@ -67,17 +67,15 @@ type Catalogue struct {
 	Fresh time.Duration
 	Now   func() time.Time
 	// NotChat are names this deployment's own settings give another job
-	// (its embedding model, its image model). What every other name is for
+	// (its embedding model). What every other name is for
 	// is the proxy's to say (forChat); these are left out whatever it says,
 	// because a model the deployment embeds with is not a chat model even
 	// on a proxy that states no purpose for it.
 	NotChat []string
 
 	mu sync.Mutex
-	// names are the chat models and images the models that draw: one read
-	// of the proxy gives both, so they are remembered and aged together.
+	// names are the chat models, remembered and aged together.
 	names  []string
-	images []string
 	readAt time.Time
 }
 
@@ -104,46 +102,31 @@ const maxCatalogueBody = 4 << 20
 
 // Names is the proxy's chat model names, sorted.
 func (c *Catalogue) Names(ctx context.Context) ([]string, error) {
-	names, _, err := c.lists(ctx)
-	return names, err
+	return c.lists(ctx)
 }
 
-// ImageNames is the proxy's names for the models that draw, sorted: the
-// ones it says are for image generation. Unlike a chat model, a name the
-// proxy states no purpose for is not offered here: a chat model sent a
-// drawing request fails, so only what the proxy calls an image model is
-// one (internal/modelchoices offers these for an account's image model).
-func (c *Catalogue) ImageNames(ctx context.Context) ([]string, error) {
-	_, images, err := c.lists(ctx)
-	return images, err
-}
-
-// lists is both lists, from memory while they are fresh.
-func (c *Catalogue) lists(ctx context.Context) ([]string, []string, error) {
+// lists is the chat list, from memory while it is fresh.
+func (c *Catalogue) lists(ctx context.Context) ([]string, error) {
 	c.mu.Lock()
 	if c.names != nil && c.Now().Sub(c.readAt) < c.Fresh {
-		names, images := c.names, c.images
+		names := c.names
 		c.mu.Unlock()
-		return names, images, nil
+		return names, nil
 	}
 	c.mu.Unlock()
 
 	// Read outside the lock: a slow proxy must not queue every turn of the
 	// process behind one request. Two turns that both find the list old
 	// both ask; the second answer replaces the first, and both are right.
-	names, images, err := c.read(ctx)
+	names, err := c.read(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	c.mu.Lock()
-	c.names, c.images, c.readAt = names, images, c.Now()
+	c.names, c.readAt = names, c.Now()
 	c.mu.Unlock()
-	return names, images, nil
+	return names, nil
 }
-
-// imageMode is the proxy's word for a model that draws (LiteLLM's
-// model_info.mode).
-const imageMode = "image_generation"
 
 // chatModes are the proxy's words for a model that answers a conversation
 // (LiteLLM's model_info.mode). Every other stated mode is a model for
@@ -176,7 +159,7 @@ func forChat(modes []string) bool {
 // is an error like one whose list cannot: offering the unfiltered list
 // instead would put image and speech models back in the picker on exactly
 // the day something is already wrong.
-func (c *Catalogue) read(ctx context.Context) (names, images []string, err error) {
+func (c *Catalogue) read(ctx context.Context) (names []string, err error) {
 	ctx, cancel := context.WithTimeout(ctx, c.Timeout)
 	defer cancel()
 
@@ -216,13 +199,13 @@ func (c *Catalogue) read(ctx context.Context) (names, images []string, err error
 	listErr := c.get(ctx, "/models", "model list", &list)
 	said := <-purposes
 	if listErr != nil {
-		return nil, nil, listErr
+		return nil, listErr
 	}
 	if said.err != nil {
-		return nil, nil, said.err
+		return nil, said.err
 	}
-	// Empty lists, never nil: nil is how lists tells "not read yet".
-	names, images = make([]string, 0, len(list.Data)), []string{}
+	// An empty list, never nil: nil is how lists tells "not read yet".
+	names = make([]string, 0, len(list.Data))
 	for _, entry := range list.Data {
 		if entry.ID == "" {
 			continue
@@ -231,13 +214,9 @@ func (c *Catalogue) read(ctx context.Context) (names, images []string, err error
 		if forChat(modes) && !slices.Contains(c.NotChat, entry.ID) && !slices.Contains(names, entry.ID) {
 			names = append(names, entry.ID)
 		}
-		if slices.Contains(modes, imageMode) && !slices.Contains(images, entry.ID) {
-			images = append(images, entry.ID)
-		}
 	}
 	sort.Strings(names)
-	sort.Strings(images)
-	return names, images, nil
+	return names, nil
 }
 
 // get reads one JSON answer from the proxy. what names it in an error.

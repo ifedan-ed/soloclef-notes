@@ -1,12 +1,8 @@
 package publicshare
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"net/http"
-	"path"
-	"strconv"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -66,9 +62,10 @@ func (x *exchange) sendFile(file linkFile, absent string) {
 	inline := shownInline(mediaType)
 	headers := x.response.Header()
 	headers.Set("X-Content-Type-Options", "nosniff")
-	if !inline {
-		headers.Set("Content-Security-Policy", "sandbox")
-	}
+	// A file that is not shown inline is also sent under
+	// `Content-Security-Policy: sandbox`; the stream sets it from the
+	// disposition below, for this route and the owner's alike
+	// (artifacts.sandboxUnlessInline).
 	etag := ""
 	if file.checksum != "" {
 		etag = `"` + file.checksum + `"`
@@ -86,8 +83,8 @@ func (x *exchange) sendFile(file linkFile, absent string) {
 	})
 }
 
-// content is an artifact's main file: the picture in a shared chat's image
-// card, a shared podcast's audio, a shared output's file.
+// content is a shared output's main file: the address apps from before the
+// page listed every file still ask for (the page's `file`).
 func (r Routes) content(x *exchange) {
 	ids, ok := x.ids("artifact_id")
 	if !ok {
@@ -127,180 +124,4 @@ func (r Routes) file(x *exchange) {
 	}
 	x.sendFile(linkFile{backend: row.StorageBackend, key: row.StorageKey, filename: row.OriginalFilename,
 		mimeType: row.MimeType, checksum: row.ChecksumSha256}, artifactBytesGone)
-}
-
-// slideAudio is the narration of one slide of a shared video: the address
-// the shared video's payload gives each slide (internal/publicchat).
-func (r Routes) slideAudio(x *exchange) {
-	ids, ok := x.ids("artifact_id", "slide_number")
-	if !ok {
-		return
-	}
-	slides, err := New(r.Pool).SharedVideoSlides(x.ctx.Context(), SharedVideoSlidesParams{
-		ShareToken: x.ctx.Param("share_token"), Now: r.now(), ArtifactID: ids[0]})
-	if errors.Is(err, pgx.ErrNoRows) {
-		x.refuse(http.StatusNotFound, presentationAbsent)
-		return
-	}
-	if err != nil {
-		x.fail("could not read a shared video's slides", err)
-		return
-	}
-	x.sendSlideAudio(entries(slides), ids[1])
-}
-
-// sendSlideAudio streams the narration of the slide with this number, out
-// of the file store.
-//
-// A slide rendered before narration moved into the store names only a path
-// on the machine that rendered it (`audio_file`). That path is never
-// opened: it is not in the store, and a route with no caller does not read
-// the server's disk on the word of a stored string.
-func (x *exchange) sendSlideAudio(slides []map[string]any, number int64) {
-	slide := numbered(slides, "slide_number", number)
-	if slide == nil {
-		x.refuse(http.StatusNotFound, "Slide "+strconv.FormatInt(number, 10)+" not found")
-		return
-	}
-	key, _ := slide["audio_storage_key"].(string)
-	if strings.TrimSpace(key) == "" {
-		x.refuse(http.StatusNotFound, slideAudioAbsent)
-		return
-	}
-	// A slide records its backend beside its key, and that record is
-	// followed. One written before the backend was recorded names none, and
-	// its bytes are where the writer then put them: the configured backend.
-	// That is what an absent record means, as for the owner's own stream
-	// (internal/artifacts); a slide that names a backend is read from it
-	// and from no other.
-	backend := x.routes.Files.Configured()
-	if recorded, _ := slide["storage_backend"].(string); recorded != "" {
-		backend = recorded
-	}
-	// The writer stores WAV or MP3 and names the key to match.
-	extension, mediaType := ".mp3", "audio/mpeg"
-	if strings.EqualFold(path.Ext(key), ".wav") {
-		extension, mediaType = ".wav", "audio/wav"
-	}
-	x.response.Header().Set("X-Content-Type-Options", "nosniff")
-	x.stream(artifacts.StoredObject{
-		Backend: backend,
-		Key:     key,
-		Absent:  slideAudioAbsent,
-		Headers: objecthttp.Headers{
-			ContentType: mediaType,
-			// No checksum is kept for a slide's audio; objecthttp derives
-			// the validator from the stored object.
-			CacheControl: revalidate,
-			// Named for what it is, never for where it is stored.
-			Disposition: artifacts.ContentDisposition("slide-"+strconv.FormatInt(number, 10)+extension, true),
-		},
-	})
-}
-
-// podcastStream is a shared podcast's audio by the podcast's id, which is
-// how the podcast card of a shared chat asks for it: the card's result
-// names the podcast, and the link's frozen entry for that podcast says
-// which artifact holds the audio.
-func (r Routes) podcastStream(x *exchange) {
-	ids, ok := x.ids("podcast_id")
-	if !ok {
-		return
-	}
-	token := x.ctx.Param("share_token")
-	frozen, err := New(r.Pool).FrozenMedia(x.ctx.Context(), FrozenMediaParams{ShareToken: token, Now: r.now()})
-	if errors.Is(err, pgx.ErrNoRows) {
-		x.refuse(http.StatusNotFound, podcastAbsent)
-		return
-	}
-	if err != nil {
-		x.fail("could not read a link's podcasts", err)
-		return
-	}
-	podcast := numbered(entries(frozen.Podcasts), "original_id", ids[0])
-	if podcast == nil {
-		x.refuse(http.StatusNotFound, podcastAbsent)
-		return
-	}
-	if artifactID, isArtifact := wholeNumber(podcast["artifact_id"]); isArtifact {
-		// The audio is the artifact's main file, reached through the same
-		// statement as any shared file: the link must list the artifact
-		// and its owner must own it.
-		row, err := New(r.Pool).SharedPrimaryFile(x.ctx.Context(), SharedPrimaryFileParams{
-			ShareToken: token, Now: r.now(), ArtifactID: artifactID})
-		if errors.Is(err, pgx.ErrNoRows) {
-			x.refuse(http.StatusNotFound, podcastBytesGone)
-			return
-		}
-		if err != nil {
-			x.fail("could not read a shared podcast's audio file", err)
-			return
-		}
-		x.sendFile(linkFile{backend: row.StorageBackend, key: row.StorageKey, filename: row.OriginalFilename,
-			mimeType: row.MimeType, checksum: row.ChecksumSha256}, podcastBytesGone)
-		return
-	}
-	// A link frozen between the file store and artifacts: its entry holds
-	// the key the audio was stored under and no backend, because there was
-	// one backend then and the writer used the configured one. A link older
-	// still names a path on the server, which is not read (sendSlideAudio).
-	key, _ := podcast["storage_key"].(string)
-	if strings.TrimSpace(key) == "" {
-		x.refuse(http.StatusNotFound, podcastBytesGone)
-		return
-	}
-	x.response.Header().Set("X-Content-Type-Options", "nosniff")
-	x.stream(artifacts.StoredObject{
-		Backend: r.Files.Configured(),
-		Key:     key,
-		Absent:  podcastBytesGone,
-		Headers: objecthttp.Headers{
-			ContentType:  "audio/mpeg",
-			CacheControl: revalidate,
-			Disposition:  artifacts.ContentDisposition("podcast-"+strconv.FormatInt(ids[0], 10)+".mp3", true),
-		},
-	})
-}
-
-// entries reads a stored JSON list of objects; anything else in the column,
-// and anything in the list that is not an object, is no entry. Numbers keep
-// their digits (json.Number), so an id is compared exactly.
-func entries(column []byte) []map[string]any {
-	if len(column) == 0 {
-		return nil
-	}
-	decoder := json.NewDecoder(bytes.NewReader(column))
-	decoder.UseNumber()
-	var list []any
-	if err := decoder.Decode(&list); err != nil {
-		return nil
-	}
-	out := make([]map[string]any, 0, len(list))
-	for _, item := range list {
-		if entry, isObject := item.(map[string]any); isObject {
-			out = append(out, entry)
-		}
-	}
-	return out
-}
-
-// wholeNumber reads a stored JSON integer; text, a fraction and a truth
-// are not ids.
-func wholeNumber(value any) (int64, bool) {
-	number, isNumber := value.(json.Number)
-	if !isNumber {
-		return 0, false
-	}
-	n, err := strconv.ParseInt(number.String(), 10, 64)
-	return n, err == nil
-}
-
-// numbered is the first entry whose key holds this whole number, or nil.
-func numbered(list []map[string]any, key string, number int64) map[string]any {
-	for _, entry := range list {
-		if stored, ok := wholeNumber(entry[key]); ok && stored == number {
-			return entry
-		}
-	}
-	return nil
 }

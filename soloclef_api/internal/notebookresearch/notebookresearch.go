@@ -108,6 +108,9 @@ type Papers interface {
 	Preprints(ctx context.Context, query, server string, limit int) ([]academic.Paper, error)
 	// OpenFullText is a paper's open-access body from PubMed Central.
 	OpenFullText(ctx context.Context, pmcid string, limit int) (string, error)
+	// PubMedByID is PubMed's record of papers by their ids: an imported
+	// PubMed paper with no open full text is read from it (reads.go).
+	PubMedByID(ctx context.Context, pmids, dois, pmcids []string) ([]academic.Paper, error)
 }
 
 // WebSearch is the account's own keyed web search (websearch.Search).

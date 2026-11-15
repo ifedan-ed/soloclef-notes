@@ -83,7 +83,7 @@ test("the account read has no credit balance", () => {
 	assert.equal(Object.hasOwn(me, "credit_micros_balance"), false);
 });
 
-test("prompts are listed and made with no workspace id", async (t) => {
+test("prompts are listed and made with no workspace id and no sharing flag", async (t) => {
 	const get = mock.method(baseApiService, "get", async () => []);
 	const post = mock.method(baseApiService, "post", async () => ({}));
 	t.after(() => mock.restoreAll());
@@ -99,25 +99,29 @@ test("prompts are listed and made with no workspace id", async (t) => {
 		mode: "transform",
 	});
 
-	// Neither the request nor a prompt read keeps one that is passed in.
+	// Neither the request nor a prompt read keeps either one passed in:
+	// prompts belong to no workspace and are never shared.
 	const stripped = promptCreateRequest.parse({
 		name: "Shorten",
 		prompt: "Shorten this.",
 		mode: "transform",
 		workspace_id: 7,
+		is_public: true,
 	});
 	assert.equal(Object.hasOwn(stripped, "workspace_id"), false);
+	assert.equal(Object.hasOwn(stripped, "is_public"), false);
 	const read = promptRead.parse({
 		id: 1,
 		name: "Shorten",
 		prompt: "Shorten this.",
 		mode: "transform",
-		is_public: false,
 		version: 1,
 		created_at: "2026-11-11T09:00:00Z",
 		workspace_id: 7,
+		is_public: false,
 	});
 	assert.equal(Object.hasOwn(read, "workspace_id"), false);
+	assert.equal(Object.hasOwn(read, "is_public"), false);
 });
 
 test("the activity log is the account's: list, create and summary name no workspace", async (t) => {
@@ -210,22 +214,6 @@ test("model connections, roles and setup status are the account's", async (t) =>
 	});
 });
 
-test("the account's own connections are not refetched with the shared ones", () => {
-	// Invalidation matches by prefix: the own list's key must not start any
-	// of the shared model keys, and none of them may start it.
-	const own = cacheKeys.modelConnections.all();
-	for (const other of [
-		cacheKeys.modelConnections.global(),
-		cacheKeys.modelConnections.globalConfigStatus(),
-		cacheKeys.modelConnections.providers(),
-	]) {
-		assert.notDeepEqual(other.slice(0, own.length), [...own]);
-		assert.notDeepEqual(own.slice(0, other.length), [...other]);
-	}
-	assert.deepEqual(cacheKeys.modelConnections.roles(), ["model-roles"]);
-	assert.deepEqual(cacheKeys.modelConnections.setupStatus(), ["llm-setup-status"]);
-});
-
 test("notifications are asked for with their filters and no workspace id", async (t) => {
 	const get = mock.method(baseApiService, "get", async () => ({}));
 	const del = mock.method(baseApiService, "delete", async () => ({}));
@@ -236,13 +224,13 @@ test("notifications are asked for with their filters and no workspace id", async
 	});
 	await notificationsApiService.getSourceTypes();
 	await notificationsApiService.getUnreadCount();
-	await notificationsApiService.getUnreadCount(undefined, "announcements");
+	await notificationsApiService.getUnreadCount(undefined, "status");
 	await notificationsApiService.getBatchUnreadCounts();
 	assert.deepEqual(urls(get.mock.calls), [
 		"/api/v1/notifications?category=status&limit=20",
 		"/api/v1/notifications/source-types",
 		"/api/v1/notifications/unread-count",
-		"/api/v1/notifications/unread-count?category=announcements",
+		"/api/v1/notifications/unread-count?category=status",
 		"/api/v1/notifications/unread-counts-batch",
 	]);
 
@@ -275,38 +263,25 @@ test("notifications are asked for with their filters and no workspace id", async
 	]);
 });
 
-test("agent permission rules live at /agent/permissions/rules", async (t) => {
-	// The Go API's rule has no user_id: every rule is the account's.
-	const rule = {
-		id: 3,
-		thread_id: null,
-		permission: "mcp:search",
-		pattern: "*",
-		action: "allow",
-		created_at: "2026-11-11T09:00:00Z",
-	};
-	const get = mock.method(baseApiService, "get", async () => [rule]);
-	const post = mock.method(baseApiService, "post", async () => rule);
-	const patch = mock.method(baseApiService, "patch", async () => rule);
-	const del = mock.method(baseApiService, "delete", async () => undefined);
+test("the tools are listed and marked ask first at /agent/permissions", async (t) => {
+	const tool = { tool: "search_emails", group: "Mail", connector_id: null, ask_first: false };
+	const get = mock.method(baseApiService, "get", async () => [tool]);
+	const put = mock.method(baseApiService, "put", async () => undefined);
 	t.after(() => mock.restoreAll());
 
 	await agentPermissionsApiService.list();
-	await agentPermissionsApiService.create({
-		permission: "mcp:search",
-		pattern: "*",
-		action: "allow",
+	await agentPermissionsApiService.setAskFirst({
+		tool: "edit_page",
+		connector_id: 7,
+		ask_first: true,
 	});
-	await agentPermissionsApiService.update(3, { action: "deny" });
-	await agentPermissionsApiService.remove(3);
 
-	assert.deepEqual(urls(get.mock.calls), ["/api/v1/agent/permissions/rules"]);
-	assert.deepEqual(urls(post.mock.calls), ["/api/v1/agent/permissions/rules"]);
-	assert.deepEqual(bodyOf(post.mock.calls[0]), {
-		permission: "mcp:search",
-		pattern: "*",
-		action: "allow",
+	assert.deepEqual(urls(get.mock.calls), ["/api/v1/agent/permissions/tools"]);
+	assert.deepEqual(urls(put.mock.calls), ["/api/v1/agent/permissions/ask-first"]);
+	assert.deepEqual(bodyOf(put.mock.calls[0]), {
+		tool: "edit_page",
+		connector_id: 7,
+		ask_first: true,
 	});
-	assert.deepEqual(urls(patch.mock.calls), ["/api/v1/agent/permissions/rules/3"]);
-	assert.deepEqual(urls(del.mock.calls), ["/api/v1/agent/permissions/rules/3"]);
+	assert.deepEqual(Object.keys(agentPermissionsApiService).sort(), ["list", "setAskFirst"]);
 });

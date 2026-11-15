@@ -25,6 +25,7 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_celery/celery"
 	"git.danvics.com/danvics/soloclef/soloclef_celery/produce"
 	"git.danvics.com/danvics/soloclef/soloclef_ingest/fileread"
+	"git.danvics.com/danvics/soloclef/soloclef_notify/notify"
 )
 
 const ada = "11111111-1111-4111-8111-111111111111"
@@ -81,21 +82,21 @@ func (account) Context(_ context.Context, turn assembly.Turn) (assembly.TurnCont
 
 // The assembly must not ask either of an unattended turn; the test fails
 // if it does.
-func (account) Trusted(context.Context, string, string) (bool, error) { return false, errAttended }
-func (account) Trust(context.Context, string, string) error           { return errAttended }
-func (account) ChatModel(context.Context, string) (string, error)     { return "", nil }
+func (account) AsksFirst(context.Context, string, assembly.MarkedTool) (bool, error) {
+	return false, errAttended
+}
+func (account) StopAsking(context.Context, string, assembly.MarkedTool) error { return errAttended }
+func (account) ChatModel(context.Context, string) (string, error)             { return "", nil }
 
 type offered []string
 
 func (o offered) Names(context.Context) ([]string, error) { return o, nil }
 
-// app is the account's one connected app, with one tool that asks first.
-// It counts how often the tool really ran.
+// app is the account's one connected app, with one tool declared
+// tool.Ask. It counts how often the tool really ran.
 type app struct {
 	mu   sync.Mutex
 	runs int
-	// standing is the account's "always allow" for the tool, given in chat.
-	standing bool
 }
 
 const appTool = "post_message"
@@ -115,11 +116,8 @@ func (a *app) Tools() []tool.Tool {
 	}}
 }
 
-func (a *app) Trusted(_ context.Context, name string) (bool, bool, error) {
-	return a.standing, name == appTool, nil
-}
-func (a *app) Trust(context.Context, string) error {
-	return errors.New("an unattended run stores no trust")
+func (a *app) Marked(name string) (assembly.MarkedTool, bool) {
+	return assembly.MarkedTool{Connector: 1, Name: name}, name == appTool
 }
 func (a *app) App(name string) (string, bool) { return "Team chat", name == appTool }
 func (a *app) Close()                         {}
@@ -249,6 +247,29 @@ type fixture struct {
 	index  *indexed
 	built  *recording
 	opened *[]string
+	// told is every ending reported to the owner.
+	told *told
+	// released is every thread whose sandbox the job gave back.
+	released *[]int64
+}
+
+// told keeps the runs the job reported.
+type told struct {
+	mu   sync.Mutex
+	runs []notify.AutomationRun
+}
+
+func (t *told) AutomationFinished(_ context.Context, run notify.AutomationRun) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.runs = append(t.runs, run)
+	return nil
+}
+
+func (t *told) reported() []notify.AutomationRun {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return append([]notify.AutomationRun(nil), t.runs...)
 }
 
 func newFixture(t *testing.T, definition string, replies ...modeltest.Reply) *fixture {
@@ -291,16 +312,21 @@ func newFixture(t *testing.T, definition string, replies ...modeltest.Reply) *fi
 	}
 	rows := &ledger{status: "pending", run: Run{ID: 7, AutomationID: 3, UserID: ada, Name: "Digest", ThreadID: 900,
 		Snapshot: []byte(definition), Inputs: []byte(`{"fired_at":"2026-11-12T09:00:00Z"}`)}}
-	publisher, index, built := &sent{}, &indexed{}, &recording{Assembler: agents}
+	publisher, index, built, notified := &sent{}, &indexed{}, &recording{Assembler: agents}, &told{}
+	var released []int64
 	job := &Job{
-		Rows: rows, Assembler: built, Store: store, Publisher: publisher, Indexer: index,
+		Rows: rows, Assembler: built, Store: store, Publisher: publisher, Indexer: index, Notifier: notified,
+		ReleaseSandbox: func(_ context.Context, threadID int64) error {
+			released = append(released, threadID)
+			return nil
+		},
 		Timing: Timing{StatusInterval: 10 * time.Millisecond, RetryStep: time.Millisecond, MaxPauses: 5, ResultChars: 2000},
 		Log:    slog.New(slog.NewTextHandler(io.Discard, nil)), Now: func() time.Time { return time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC) },
 	}
 	if err := job.Check(); err != nil {
 		t.Fatal(err)
 	}
-	return &fixture{job: job, rows: rows, app: connected, script: script, sent: publisher, index: index, built: built, opened: &opened}
+	return &fixture{job: job, rows: rows, app: connected, script: script, sent: publisher, index: index, built: built, opened: &opened, told: notified, released: &released}
 }
 
 func (f *fixture) run(t *testing.T) Ending {
@@ -342,6 +368,13 @@ func TestARunIsAHeadlessTurnThatRecordsItsTranscriptResultAndTokens(t *testing.T
 	ending := f.run(t)
 	if ending.Status != Succeeded || ending.Error != nil || f.rows.status != Succeeded {
 		t.Fatalf("ended %s (%v), row %s", ending.Status, ending.Error, f.rows.status)
+	}
+	if got := f.told.reported(); len(got) != 1 || got[0] != (notify.AutomationRun{UserID: f.rows.run.UserID, AutomationID: 3, RunID: 7, Name: "Digest", Status: Succeeded}) {
+		t.Errorf("told %+v", got)
+	}
+	// The run's own thread is done with: its sandbox's place is given back.
+	if len(*f.released) != 1 || (*f.released)[0] != 900 {
+		t.Errorf("released %v, want the run's thread 900", *f.released)
 	}
 	// The label the model wrote is the marker the pages draw as a source
 	// chip, from the passage the search numbered.
@@ -416,14 +449,14 @@ func storedThreads(t *testing.T, store *checkpoint.Memory) []string {
 
 // A tool that asks first is refused when nobody is present: it does not
 // run, the model is told why and finishes, and the run says what was
-// refused and ends as needs_attention. The account's standing "always
-// allow" from chat does not carry into an unattended run.
+// refused and ends as needs_attention. The person's chat policy (every tool
+// runs unless they marked it "ask first") does not carry into an unattended
+// run: it goes by the tool's own declaration.
 func TestAnAskFirstToolIsRefusedUnattended(t *testing.T) {
 	f := newFixture(t, plan(`{"query":"Post the digest to the team."}`),
 		modeltest.Reply{Calls: calls("c1", appTool, `{"text":"Digest"}`)},
 		modeltest.Reply{Text: "I could not post the digest: posting needs your approval."},
 	)
-	f.app.standing = true
 	ending := f.run(t)
 	if ending.Error["type"] != "approval_refused" {
 		t.Errorf("the run's error is of type %v", ending.Error["type"])
@@ -505,6 +538,9 @@ func TestAFailedStepIsRetriedAndThenTheRunFails(t *testing.T) {
 	if ending.Status != Failed || ending.Steps[0].Attempts != 2 || !strings.Contains(ending.Error["message"].(string), "the provider is down") || ending.Error["step_id"] != "digest" {
 		t.Fatalf("ended %s, %+v", ending.Status, ending.Error)
 	}
+	if got := f.told.reported(); len(got) != 1 || got[0].Status != Failed {
+		t.Errorf("told %+v", got)
+	}
 }
 
 // A run cancelled from the page stops, and its row keeps the cancellation.
@@ -519,6 +555,9 @@ func TestACancelledRunStopsAndKeepsItsCancellation(t *testing.T) {
 	ending := f.run(t)
 	if ending.Status != Cancelled || f.rows.status != Cancelled {
 		t.Fatalf("ended %s, row %s", ending.Status, f.rows.status)
+	}
+	if got := f.told.reported(); len(got) != 0 {
+		t.Errorf("a cancelled run was reported: %+v", got)
 	}
 }
 
@@ -590,8 +629,9 @@ func TestAStepRunsOnTheModelItNames(t *testing.T) {
 }
 
 // A step confined to a notebook is built as that notebook's chat is: its
-// search is limited to the notebook's sources and it has no connected
-// app. A notebook that is gone fails the step and runs nothing.
+// search is limited to the notebook's sources, it has no web, and it has
+// the account's connected apps as that chat does (since 2026-11-13). A
+// notebook that is gone fails the step and runs nothing.
 func TestAStepConfinedToANotebook(t *testing.T) {
 	f := newFixture(t, plan(`{"query":"Summarise.","notebook_id":5}`),
 		modeltest.Reply{Calls: calls("c1", documents.ToolName, `{"query":"mitosis"}`)}, modeltest.Reply{Text: "Summary."})
@@ -600,8 +640,8 @@ func TestAStepConfinedToANotebook(t *testing.T) {
 		t.Fatalf("ended %s, built as %+v", ending.Status, f.built.turns[0].Unattended)
 	}
 	first := f.script.Requests()[0]
-	if names := toolNames(first); names != documents.ToolName {
-		t.Errorf("tools %s, want the document search alone", names)
+	if names := toolNames(first); names != documents.ToolName+",post_message" {
+		t.Errorf("tools %s, want the document search and the connected app", names)
 	}
 	if system := first.Messages[0].Content; !strings.Contains(system, "Biology") || !strings.Contains(system, "Cell biology") {
 		t.Errorf("the prompt does not name the notebook and its source")

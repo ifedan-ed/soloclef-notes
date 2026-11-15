@@ -47,7 +47,7 @@ func (e *events) notices(name string) []event.Event {
 func TestAChangeWaitsForApprovalAndIsLoggedUnderItsCard(t *testing.T) {
 	h := open(t)
 	store := checkpoint.NewMemory()
-	run := func(trusted bool) (*agent.Agent, *modeltest.Script, *modeltest.Script) {
+	run := func(asks bool) (*agent.Agent, *modeltest.Script, *modeltest.Script) {
 		main := modeltest.NewScript(
 			modeltest.Reply{Calls: []model.ToolCall{{ID: "call_kb", Name: assembly.KnowledgeBaseName, Args: `{"task":"Save a note called Loop note saying x."}`}}},
 			modeltest.Reply{Text: "Saved."},
@@ -58,7 +58,7 @@ func TestAChangeWaitsForApprovalAndIsLoggedUnderItsCard(t *testing.T) {
 		)
 		delegate, err := Writer{Changes: h.changes}.Delegate(specialist, assembly.KnowledgeOwner{
 			UserID: alice, ThreadID: 10, Store: store,
-			Trusted: func(context.Context, tool.Call) (bool, error) { return trusted, nil },
+			Policy: assembly.ApprovalPolicy{AskFirst: func(context.Context, tool.Call) (bool, error) { return asks, nil }},
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -70,7 +70,7 @@ func TestAChangeWaitsForApprovalAndIsLoggedUnderItsCard(t *testing.T) {
 		return parent, main, specialist
 	}
 
-	parent, _, _ := run(false)
+	parent, _, _ := run(true)
 	asked := &events{}
 	result, err := parent.Start(assembly.WithTurnID(context.Background(), "10:1"), "chat-10", []model.Message{model.User("save it")}, asked.sink)
 	if err != nil || result.Outcome != agent.Paused {
@@ -98,15 +98,14 @@ func TestAChangeWaitsForApprovalAndIsLoggedUnderItsCard(t *testing.T) {
 		t.Errorf("the card was not told: %+v", notices)
 	}
 
-	// With "always allow" given for the tool, the next note is written
-	// without asking; a delete would still ask (tool.AlwaysAsk, which the
-	// loop never asks Trusted about).
-	parent, _, _ = run(true)
+	// With the tool not marked "ask first", the next note is written
+	// without asking.
+	parent, _, _ = run(false)
 	result, err = parent.Start(assembly.WithTurnID(context.Background(), "10:3"), "chat-11", []model.Message{model.User("save it")}, event.Discard)
 	if err != nil || result.Outcome != agent.Finished {
-		t.Fatalf("a trusted note: %+v %v", result, err)
+		t.Fatalf("an unmarked note: %+v %v", result, err)
 	}
 	if h.count(`SELECT count(*) FROM documents WHERE title = 'Loop note'`) != 2 {
-		t.Error("the trusted note was not written")
+		t.Error("the unmarked note was not written")
 	}
 }

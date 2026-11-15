@@ -15,7 +15,7 @@ import (
 )
 
 // FolderPath is the folder upload's route, where the web app's folder
-// picker and the desktop app's folder sync already post.
+// picker posts.
 const FolderPath = "/api/v1/documents/folder-upload"
 
 // The folder form's own part names; parser, use_vision_llm and files are
@@ -43,8 +43,8 @@ const (
 )
 
 // relativePathsLimit bounds the relative_paths field. The web app sends at
-// most ten paths a request and the desktop app the same; four megabytes
-// holds a thousand of the longest paths allowed.
+// most ten paths a request; four megabytes holds a thousand of the longest
+// paths allowed.
 const relativePathsLimit = 4 << 20
 
 // pathLimit is the longest relative path accepted, in bytes: what Linux
@@ -53,7 +53,7 @@ const pathLimit = 4096
 
 // FolderIdentity is what makes two folder uploads the same document: the
 // folder's name, the file's path inside it, and the account, as sha256 of
-// "LOCAL_FOLDER_FILE:{folder}:{path}:{user_id}". A folder synced again is
+// "LOCAL_FOLDER_FILE:{folder}:{path}:{user_id}". A folder uploaded again is
 // recognised file by file through it, which is why neither the name nor
 // the path is tidied before hashing.
 func FolderIdentity(folderName, relativePath, userID string) string {

@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -24,6 +25,8 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/requestcontext"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/testpostgres"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/mcptools"
+	"git.danvics.com/danvics/soloclef/soloclef_connectors/mcpserver"
+	"git.danvics.com/danvics/soloclef/soloclef_connectors/sealedsecret"
 )
 
 // fakeInternet stands in for the real guard's DNS: the address's shape is
@@ -44,22 +47,32 @@ func (f fakeInternet) Verify(ctx context.Context, address string, hosts []string
 
 // fakeProbe records what a test would have connected with.
 type fakeProbe struct {
-	address string
-	headers map[string]string
-	hosts   []string
-	calls   int
-	fail    bool
+	address   string
+	transport string
+	headers   map[string]string
+	hosts     []string
+	calls     int
+	fail      bool
 }
 
-func (f *fakeProbe) Tools(_ context.Context, address string, headers map[string]string, hosts []string) ([]mcptools.ProbedTool, error) {
+func (f *fakeProbe) Tools(_ context.Context, address, transport string, headers map[string]string, hosts []string) ([]mcptools.ProbedTool, error) {
 	f.calls++
-	f.address, f.headers, f.hosts = address, headers, hosts
+	f.address, f.transport, f.headers, f.hosts = address, transport, headers, hosts
 	if f.fail {
 		return nil, errors.New("the server did not answer")
 	}
 	return []mcptools.ProbedTool{{Name: "search", Description: "Search the web",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{"q":{"type":"string"}}}`)}}, nil
 }
+
+// testServerSeal is the tests' deployment's seal for server secrets.
+var testServerSeal = func() sealedsecret.Seal {
+	seal, err := sealedsecret.New("fake-deployment-secret", sealedsecret.MCPServerSecret)
+	if err != nil {
+		panic(err)
+	}
+	return seal
+}()
 
 // connectorWrites is every write route of this file's subject over the real
 // statements, with a caller that a test switches.
@@ -86,15 +99,19 @@ func newConnectorWrites(t *testing.T) *connectorWrites {
 		Standing:           store,
 		SiteHostsWhenUnset: []string{"mcp.site.example"},
 		Destinations:       fakeInternet{private: map[string]bool{"inside.example.test": true}},
+		Seal:               testServerSeal,
 	}
 	now := func() time.Time { return fixedNow }
+	oauth := mcptools.OAuth{Network: mcptools.PublicInternet{Resolve: mcptools.SystemResolve, ConnectTimeout: time.Second},
+		Timeout: time.Second, ClientName: "notes"}
 	api := humago.New(http.NewServeMux(), huma.DefaultConfig("test", "0"))
 	OneRoute{Rows: store, Errors: envelope, Logger: logger}.Register(api)
 	ServerRoute{Rows: store, Errors: envelope, Logger: logger}.Register(api)
 	ServerCreateRoute{Writes: store, Policy: policy, Tools: w.tools, Errors: envelope, Logger: logger}.Register(api)
 	ServerUpdateRoute{Rows: store, Writes: store, Policy: policy, Tools: w.tools, Errors: envelope, Logger: logger}.Register(api)
-	ServerTestRoute{Rows: store, Policy: policy, Probe: w.probe, Errors: envelope, Logger: logger}.Register(api)
-	PolicyRoute{Policy: policy, Errors: envelope, Logger: logger}.Register(api)
+	ServerTestRoute{Rows: store, Policy: policy, Probe: w.probe, OAuth: oauth, Tokens: mcptools.Postgres{Pool: pool},
+		Now: now, Errors: envelope, Logger: logger}.Register(api)
+	PolicyRoute{Policy: policy, OAuthAvailable: true, Errors: envelope, Logger: logger}.Register(api)
 	ConnectionCreateRoute{Writes: store, Now: now, Errors: envelope, Logger: logger}.Register(api)
 	ConnectionUpdateRoute{Rows: store, Writes: store, Policy: policy, Tools: w.tools, Now: now, Errors: envelope, Logger: logger}.Register(api)
 
@@ -125,8 +142,9 @@ func (w *connectorWrites) send(method, path, body string) (int, string) {
 	w.handler.ServeHTTP(recorder, request)
 	answered := recorder.Body.String()
 	// The rule for every answer of every route: no stored credential, in
-	// the clear or as ciphertext. Every invented one here begins "fake-".
-	if strings.Contains(answered, "fake-") {
+	// the clear or as ciphertext. Every invented one here begins "fake-",
+	// and every sealed value "v1:".
+	if strings.Contains(answered, "fake-") || strings.Contains(answered, `"v1:`) || strings.Contains(answered, "sealed") {
 		w.t.Fatalf("%s %s answered a stored credential: %s", method, path, answered)
 	}
 	return recorder.Code, answered
@@ -135,16 +153,39 @@ func (w *connectorWrites) send(method, path, body string) (int, string) {
 // config is a connection's stored config as the database holds it.
 func (w *connectorWrites) config(id int64) map[string]any {
 	w.t.Helper()
+	var config map[string]any
+	if err := json.Unmarshal(w.rawConfig(id), &config); err != nil {
+		w.t.Fatal(err)
+	}
+	return config
+}
+
+func (w *connectorWrites) rawConfig(id int64) []byte {
+	w.t.Helper()
 	var raw []byte
 	if err := w.pool.QueryRow(context.Background(),
 		`SELECT config FROM search_source_connectors WHERE id = $1`, id).Scan(&raw); err != nil {
 		w.t.Fatalf("reading connection %d: %v", id, err)
 	}
-	var config map[string]any
-	if err := json.Unmarshal(raw, &config); err != nil {
+	return raw
+}
+
+// opened is a stored server's settings opened as the chat opens them.
+func (w *connectorWrites) opened(ownerID string, id int64) (mcpserver.Stored, mcpserver.Target) {
+	w.t.Helper()
+	var server map[string]json.RawMessage
+	if err := json.Unmarshal(w.rawConfig(id), &server); err != nil {
 		w.t.Fatal(err)
 	}
-	return config
+	stored, err := mcpserver.Parse(server["server_config"])
+	if err != nil {
+		w.t.Fatalf("connection %d: %v", id, err)
+	}
+	target, err := mcpserver.Open(testServerSeal, ownerID, stored, nil)
+	if err != nil {
+		w.t.Fatalf("opening connection %d: %v", id, err)
+	}
+	return stored, target
 }
 
 // estate is everything an account's connections hold, to compare before
@@ -172,8 +213,16 @@ func idOf(t *testing.T, answered string) int64 {
 	return body.ID
 }
 
+// newServer is the form filled in: a key in the address, a bearer token and
+// an extra header, all invented.
 const newServer = `{"name": "Search", "server_config": {"url": "https://mcp.example.test/mcp?api_key=fake-query-key-0123456789",
- "headers": {"Authorization": "Bearer fake-header-key-0123456789"}}}`
+ "transport": "streamable-http", "auth": {"type": "bearer", "token": "fake-header-key-0123456789"},
+ "headers": {"X-Team": "fake-team-value-4321"}}}`
+
+// server is a request's server_config with nothing secret, at url.
+func server(url string) string {
+	return `{"url": "` + url + `", "transport": "streamable-http", "auth": {"type": "none"}}`
+}
 
 func TestAddingAnMCPServer(t *testing.T) {
 	w := newConnectorWrites(t)
@@ -184,14 +233,22 @@ func TestAddingAnMCPServer(t *testing.T) {
 		t.Fatalf("answered %d %s", status, answered)
 	}
 	id := idOf(t, answered)
-	if !strings.Contains(answered, `"Authorization":"••••6789"`) || !strings.Contains(answered, `"connector_type":"MCP_CONNECTOR"`) {
-		t.Errorf("the answer does not show the server with its key masked: %s", answered)
+	for _, shown := range []string{`"auth":{"type":"bearer","token":"••••6789"}`, `"headers":{"X-Team":"••••4321"}`,
+		`"url":"https://mcp.example.test/mcp?api_key=••••6789"`, `"transport":"streamable-http"`, `"connector_type":"MCP_CONNECTOR"`} {
+		if !strings.Contains(answered, shown) {
+			t.Errorf("the answer does not show %s: %s", shown, answered)
+		}
 	}
-	stored := w.config(id)
-	server := stored["server_config"].(map[string]any)
-	if server["headers"].(map[string]any)["Authorization"] != "Bearer fake-header-key-0123456789" ||
-		server["transport"] != "streamable-http" || stored["server_origin"] != "member" {
-		t.Errorf("stored %v", stored)
+	// Stored sealed: no secret in the clear in the row, and the chat opens
+	// exactly what was typed.
+	if raw := string(w.rawConfig(id)); strings.Contains(raw, "fake-") {
+		t.Errorf("a secret is stored in the clear: %s", raw)
+	}
+	stored, target := w.opened(alice, id)
+	if target.Address != "https://mcp.example.test/mcp?api_key=fake-query-key-0123456789" ||
+		target.Headers["Authorization"] != "Bearer fake-header-key-0123456789" || target.Headers["X-Team"] != "fake-team-value-4321" ||
+		stored.Auth.Type != mcpserver.AuthBearer || w.config(id)["server_origin"] != "member" {
+		t.Errorf("stored %+v, opened %+v", stored, target)
 	}
 	if !slices.Equal(w.tools.accounts, []string{alice}) {
 		t.Errorf("the account's MCP counter was moved for %v, want once for her", w.tools.accounts)
@@ -203,7 +260,8 @@ func TestAddingAnMCPServer(t *testing.T) {
 			{http.MethodGet, strings.Replace(ServerPath, "{connector_id}", "1", 1), ""},
 			{http.MethodPut, strings.Replace(ServerPath, "{connector_id}", "1", 1), `{"name": "Mine now"}`},
 			{http.MethodPut, strings.Replace(OnePath, "{connector_id}", "1", 1), `{"name": "Mine now"}`},
-			{http.MethodPost, ServerTestPath, `{"url": "https://mcp.example.test/mcp", "headers": {"Authorization": "••••6789"}, "connector_id": 1}`},
+			{http.MethodPost, ServerTestPath, `{"url": "https://mcp.example.test/mcp?api_key=••••6789", "transport": "streamable-http",
+				"auth": {"type": "bearer", "token": "••••6789"}, "connector_id": 1}`},
 		} {
 			if status, answered := w.as(bob, attempt.method, attempt.path, attempt.body); status != http.StatusNotFound {
 				t.Errorf("%s %s as the other account answered %d %s, want 404", attempt.method, attempt.path, status, answered)
@@ -223,23 +281,34 @@ func TestAddingAnMCPServer(t *testing.T) {
 
 	t.Run("what is refused", func(t *testing.T) {
 		before := w.estate(alice)
+		with := func(config string) string { return `{"name": "a", "server_config": ` + config + `}` }
 		for _, refused := range []struct {
 			name, body string
 			status     int
 			says       string
 		}{
 			{"a name she already uses", newServer, http.StatusConflict, nameTaken},
-			{"plain http", `{"name": "a", "server_config": {"url": "http://mcp.example.test/mcp"}}`, http.StatusBadRequest, "not https"},
-			{"an IP address", `{"name": "a", "server_config": {"url": "https://93.184.216.34/mcp"}}`, http.StatusBadRequest, "an IP address, not a name"},
-			{"a container's name", `{"name": "a", "server_config": {"url": "https://litellm/mcp"}}`, http.StatusBadRequest, memberNeedsDomain},
-			{"a name that resolves inside", `{"name": "a", "server_config": {"url": "https://inside.example.test/mcp"}}`, http.StatusBadRequest, "not public"},
-			{"another port", `{"name": "a", "server_config": {"url": "https://mcp.example.test:8443/mcp"}}`, http.StatusBadRequest, "port"},
-			{"a local command", `{"name": "a", "server_config": {"url": "https://mcp.example.test/mcp", "command": "sh"}}`, http.StatusUnprocessableEntity, stdioRefused},
-			{"the stdio transport", `{"name": "a", "server_config": {"url": "https://mcp.example.test/mcp", "transport": "stdio"}}`, http.StatusUnprocessableEntity, stdioRefused},
-			{"a setting nobody knows", `{"name": "a", "server_config": {"url": "https://mcp.example.test/mcp", "proxy": "x"}}`, http.StatusUnprocessableEntity, "Unknown server setting: proxy"},
-			{"a masked key with nothing stored", `{"name": "a", "server_config": {"url": "https://mcp.example.test/mcp", "headers": {"X-Key": "••••6789"}}}`, http.StatusUnprocessableEntity, "Enter the value for the 'X-Key' header again"},
+			{"plain http", with(server("http://mcp.example.test/mcp")), http.StatusBadRequest, "not https"},
+			{"an IP address", with(server("https://93.184.216.34/mcp")), http.StatusBadRequest, "an IP address, not a name"},
+			{"a container's name", with(server("https://litellm/mcp")), http.StatusBadRequest, memberNeedsDomain},
+			{"a name that resolves inside", with(server("https://inside.example.test/mcp")), http.StatusBadRequest, "not public"},
+			{"another port", with(server("https://mcp.example.test:8443/mcp")), http.StatusBadRequest, "port"},
+			{"a local command", with(`{"url": "https://mcp.example.test/mcp", "command": "sh"}`), http.StatusUnprocessableEntity, stdioRefused},
+			{"the stdio transport", with(`{"url": "https://mcp.example.test/mcp", "transport": "stdio", "auth": {"type": "none"}}`), http.StatusUnprocessableEntity, stdioRefused},
+			{"the http alias", with(`{"url": "https://mcp.example.test/mcp", "transport": "http", "auth": {"type": "none"}}`), http.StatusUnprocessableEntity, transportRefused},
+			{"no transport", with(`{"url": "https://mcp.example.test/mcp", "auth": {"type": "none"}}`), http.StatusUnprocessableEntity, transportRefused},
+			{"no authentication", with(`{"url": "https://mcp.example.test/mcp", "transport": "sse"}`), http.StatusUnprocessableEntity, authRequired},
+			{"an unknown authentication", with(`{"url": "https://mcp.example.test/mcp", "transport": "sse", "auth": {"type": "magic"}}`), http.StatusUnprocessableEntity, authKindRefused},
+			{"a header key with no header", with(`{"url": "https://mcp.example.test/mcp", "transport": "sse", "auth": {"type": "header", "value": "k"}}`), http.StatusUnprocessableEntity, authHeaderNeeded},
+			{"a header name with a space", with(`{"url": "https://mcp.example.test/mcp", "transport": "sse", "auth": {"type": "header", "header_name": "X Key", "value": "k"}}`), http.StatusUnprocessableEntity, headerNameBad},
+			{"an empty token", with(`{"url": "https://mcp.example.test/mcp", "transport": "sse", "auth": {"type": "bearer", "token": " "}}`), http.StatusUnprocessableEntity, authTokenRequired},
+			{"an extra header repeating the auth one", with(`{"url": "https://mcp.example.test/mcp", "transport": "sse", "auth": {"type": "bearer", "token": "t"}, "headers": {"authorization": "x"}}`), http.StatusUnprocessableEntity, headerIsAuth},
+			{"a header given twice", with(`{"url": "https://mcp.example.test/mcp", "transport": "sse", "auth": {"type": "none"}, "headers": {"X-A": "1", "x-a": "2"}}`), http.StatusUnprocessableEntity, headerTwice},
+			{"a header on two lines", with(`{"url": "https://mcp.example.test/mcp", "transport": "sse", "auth": {"type": "none"}, "headers": {"X-A": "1\r\nX-B: 2"}}`), http.StatusUnprocessableEntity, headerValueBad},
+			{"a setting nobody knows", with(`{"url": "https://mcp.example.test/mcp", "proxy": "x"}`), http.StatusUnprocessableEntity, "Unknown server setting: proxy"},
+			{"a masked key with nothing stored", with(`{"url": "https://mcp.example.test/mcp", "transport": "sse", "auth": {"type": "none"}, "headers": {"X-Key": "••••6789"}}`), http.StatusUnprocessableEntity, "Enter the value for the 'X-Key' header again"},
 			{"no settings", `{"name": "a"}`, http.StatusUnprocessableEntity, "Field required"},
-			{"a blank name", `{"name": "  ", "server_config": {"url": "https://mcp.example.test/mcp"}}`, http.StatusUnprocessableEntity, "A name is required"},
+			{"a blank name", `{"name": "  ", "server_config": ` + server("https://mcp.example.test/mcp") + `}`, http.StatusUnprocessableEntity, "A name is required"},
 		} {
 			status, answered := w.as(alice, http.MethodPost, ServersPath, refused.body)
 			if status != refused.status || !strings.Contains(answered, refused.says) {
@@ -256,15 +325,31 @@ func TestAddingAnMCPServer(t *testing.T) {
 		}
 	})
 
+	t.Run("an OAuth server is saved with its typed client, secret sealed", func(t *testing.T) {
+		status, answered := w.as(alice, http.MethodPost, ServersPath, `{"name": "Files", "server_config": {
+ "url": "https://files.example.test/mcp", "transport": "sse",
+ "auth": {"type": "oauth", "client_id": "typed-client", "client_secret": "fake-client-secret-0001"}}}`)
+		if status != http.StatusCreated {
+			t.Fatalf("answered %d %s", status, answered)
+		}
+		want := `"auth":{"type":"oauth","client_id":"typed-client","client_secret":"••••0001","dynamic_registration":false,"authorization_server":null,"authorized":false}`
+		if !strings.Contains(answered, want) {
+			t.Errorf("answered %s", answered)
+		}
+		if raw := string(w.rawConfig(idOf(t, answered))); strings.Contains(raw, "fake-client-secret") {
+			t.Errorf("the client secret is stored in the clear: %s", raw)
+		}
+	})
+
 	t.Run("an administrator's server is a site server, held to the site's hosts", func(t *testing.T) {
 		testpostgres.Exec(t, w.pool, `UPDATE "user" SET is_superuser = true WHERE id = '`+alice+`'`)
 		status, answered := w.as(alice, http.MethodPost, ServersPath,
-			`{"name": "Elsewhere", "server_config": {"url": "https://mcp.example.test/mcp"}}`)
+			`{"name": "Elsewhere", "server_config": `+server("https://mcp.example.test/mcp")+`}`)
 		if status != http.StatusBadRequest || !strings.Contains(answered, "not one this server may reach") {
 			t.Errorf("a host off the list answered %d %s", status, answered)
 		}
 		status, answered = w.as(alice, http.MethodPost, ServersPath,
-			`{"name": "Site search", "server_config": {"url": "https://mcp.site.example/mcp"}}`)
+			`{"name": "Site search", "server_config": `+server("https://mcp.site.example/mcp")+`}`)
 		if status != http.StatusCreated {
 			t.Fatalf("a host on the list answered %d %s", status, answered)
 		}
@@ -276,18 +361,18 @@ func TestAddingAnMCPServer(t *testing.T) {
 			ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`)
 		t.Cleanup(func() { testpostgres.Exec(t, w.pool, `DELETE FROM site_settings WHERE key = 'mcp_allowed_hosts'`) })
 		if status, answered = w.as(alice, http.MethodPost, ServersPath,
-			`{"name": "Elsewhere", "server_config": {"url": "https://mcp.example.test/mcp"}}`); status != http.StatusCreated {
+			`{"name": "Elsewhere", "server_config": `+server("https://mcp.example.test/mcp")+`}`); status != http.StatusCreated {
 			t.Errorf("a host on the saved list answered %d %s", status, answered)
 		}
 		_, policy := w.as(alice, http.MethodGet, ServerPolicyPath, "")
-		if policy != `{"can_add":true,"allow_list_applies":true}` {
+		if policy != `{"can_add":true,"allow_list_applies":true,"oauth_available":true}` {
 			t.Errorf("an administrator's policy is %s", policy)
 		}
-		if _, policy = w.as(bob, http.MethodGet, ServerPolicyPath, ""); policy != `{"can_add":true,"allow_list_applies":false}` {
+		if _, policy = w.as(bob, http.MethodGet, ServerPolicyPath, ""); policy != `{"can_add":true,"allow_list_applies":false,"oauth_available":true}` {
 			t.Errorf("a person's policy is %s", policy)
 		}
 		w.caller = principal.Principal{UserID: bob, Method: principal.MethodPersonalAccessToken}
-		if _, policy = w.send(http.MethodGet, ServerPolicyPath, ""); policy != `{"can_add":false,"allow_list_applies":false}` {
+		if _, policy = w.send(http.MethodGet, ServerPolicyPath, ""); policy != `{"can_add":false,"allow_list_applies":false,"oauth_available":true}` {
 			t.Errorf("an API key's policy is %s", policy)
 		}
 	})
@@ -296,24 +381,26 @@ func TestAddingAnMCPServer(t *testing.T) {
 func TestChangingAnMCPServer(t *testing.T) {
 	w := newConnectorWrites(t)
 	const alice = testpostgres.Alice
-	// A saved server with everything an edit must leave alone or clear.
-	testpostgres.Exec(t, w.pool, `
-INSERT INTO search_source_connectors (id, user_id, name, connector_type, config) VALUES
- (1, '`+alice+`', 'Search', 'MCP_CONNECTOR',
-   '{"server_config": {"url": "https://mcp.example.test/mcp?api_key=fake-query-key-0123456789&mode=fast",
-                       "headers": {"Authorization": "Bearer fake-header-key-0123456789"}, "transport": "streamable-http"},
-     "server_origin": "member", "trusted_tools": ["search"], "auth_expired": true,
-     "cached_tools": {"tools": [{"name": "search"}]}}'),
- (2, '`+alice+`', 'Other', 'MCP_CONNECTOR', '{"server_config": {"url": "https://other.example.test/mcp"}, "server_origin": "member"}');`)
-	one := strings.Replace(ServerPath, "{connector_id}", "1", 1)
-	generic := strings.Replace(OnePath, "{connector_id}", "1", 1)
+	// A saved server, with everything an edit must leave alone or clear.
+	_, answered := w.as(alice, http.MethodPost, ServersPath, `{"name": "Search", "server_config": {
+ "url": "https://mcp.example.test/mcp?api_key=fake-query-key-0123456789&mode=fast", "transport": "streamable-http",
+ "auth": {"type": "bearer", "token": "fake-header-key-0123456789"}}}`)
+	id := idOf(t, answered)
+	if _, other := w.as(alice, http.MethodPost, ServersPath, `{"name": "Other", "server_config": `+server("https://other.example.test/mcp")+`}`); idOf(t, other) == 0 {
+		t.Fatal("no second server")
+	}
+	testpostgres.Exec(t, w.pool, `UPDATE search_source_connectors SET config = config || '{"kept": ["search"], "auth_expired": true,
+ "cached_tools": {"tools": [{"name": "search"}]}}'::jsonb WHERE id = `+strconv.FormatInt(id, 10))
+	sealedBefore, _ := w.opened(alice, id)
+	one := strings.Replace(ServerPath, "{connector_id}", strconv.FormatInt(id, 10), 1)
+	generic := strings.Replace(OnePath, "{connector_id}", strconv.FormatInt(id, 10), 1)
 
 	t.Run("a rename alone keeps everything else", func(t *testing.T) {
 		status, answered := w.as(alice, http.MethodPut, one, `{"name": "Web search"}`)
 		if status != http.StatusOK || !strings.Contains(answered, `"name":"Web search"`) {
 			t.Fatalf("answered %d %s", status, answered)
 		}
-		stored := w.config(1)
+		stored := w.config(id)
 		if stored["auth_expired"] != true || stored["cached_tools"] == nil {
 			t.Errorf("a rename touched the config: %v", stored)
 		}
@@ -322,35 +409,37 @@ INSERT INTO search_source_connectors (id, user_id, name, connector_type, config)
 		}
 	})
 
-	t.Run("the form's masked keys stand for the stored ones, through the page's own route", func(t *testing.T) {
+	t.Run("the form's masked values stand for the stored ones, sealed as they were", func(t *testing.T) {
 		w.tools.accounts = nil
-		// What the settings page sends: the config it read, key masked,
-		// with one header added.
+		// What the settings page sends: the server as it read it, masks and
+		// all, the transport changed and one header added.
 		status, answered := w.as(alice, http.MethodPut, generic, `{"name": "Web search", "config": {
- "server_config": {"url": "https://mcp.example.test/mcp?api_key=%E2%80%A2%E2%80%A2%E2%80%A2%E2%80%A26789&mode=slow",
-                   "headers": {"authorization": "••••6789", "X-Team": "reading"}, "transport": "http"},
- "server_origin": "site", "trusted_tools": [], "auth_expired": false}}`)
+ "server_config": {"url": "https://mcp.example.test/mcp?api_key=••••6789&mode=fast", "transport": "sse",
+                   "auth": {"type": "bearer", "token": "••••6789"}, "headers": {"X-Team": "reading"}},
+ "server_origin": "site", "auth_expired": false}}`)
 		if status != http.StatusOK {
 			t.Fatalf("answered %d %s", status, answered)
 		}
-		stored := w.config(1)
-		server := stored["server_config"].(map[string]any)
-		headers := server["headers"].(map[string]any)
-		if headers["authorization"] != "Bearer fake-header-key-0123456789" || headers["X-Team"] != "reading" {
-			t.Errorf("headers stored as %v", headers)
+		stored, target := w.opened(alice, id)
+		if target.Headers["Authorization"] != "Bearer fake-header-key-0123456789" || target.Headers["X-Team"] != "reading" ||
+			target.Address != "https://mcp.example.test/mcp?api_key=fake-query-key-0123456789&mode=fast" || stored.Transport != mcpserver.SSE {
+			t.Errorf("opened %+v, stored %+v", target, stored)
 		}
-		if server["url"] != "https://mcp.example.test/mcp?api_key=fake-query-key-0123456789&mode=slow" || server["transport"] != "http" {
-			t.Errorf("settings stored as %v", server)
+		// Kept means copied sealed, not opened and sealed again.
+		if stored.Auth.Secret.Sealed != sealedBefore.Auth.Secret.Sealed || stored.URLSealed != sealedBefore.URLSealed {
+			t.Error("a kept secret was sealed again")
 		}
-		// The request's origin and trusted list are not what is stored.
-		if stored["server_origin"] != "member" || len(stored["trusted_tools"].([]any)) != 1 {
-			t.Errorf("the request changed what only the server decides: %v", stored)
+		config := w.config(id)
+		// The request's origin is not what is stored, and what else the
+		// config held is kept.
+		if config["server_origin"] != "member" || len(config["kept"].([]any)) != 1 {
+			t.Errorf("the request changed what only the server decides: %v", config)
 		}
 		// New settings: the old address's flag and tool list are gone.
-		if _, kept := stored["auth_expired"]; kept {
+		if _, kept := config["auth_expired"]; kept {
 			t.Error("auth_expired survived new settings")
 		}
-		if _, kept := stored["cached_tools"]; kept {
+		if _, kept := config["cached_tools"]; kept {
 			t.Error("the old address's tool list survived new settings")
 		}
 		if !slices.Equal(w.tools.accounts, []string{alice}) {
@@ -360,18 +449,21 @@ INSERT INTO search_source_connectors (id, user_id, name, connector_type, config)
 
 	t.Run("a masked key does not follow the server to another host", func(t *testing.T) {
 		before := w.estate(alice)
-		status, answered := w.as(alice, http.MethodPut, one,
-			`{"server_config": {"url": "https://collector.example.test/mcp", "headers": {"authorization": "••••6789"}}}`)
-		if status != http.StatusUnprocessableEntity || !strings.Contains(answered, "header again") {
-			t.Errorf("answered %d %s", status, answered)
-		}
-		status, answered = w.as(alice, http.MethodPut, one,
-			`{"server_config": {"url": "https://collector.example.test/mcp?api_key=••••6789"}}`)
-		if status != http.StatusUnprocessableEntity || !strings.Contains(answered, keyAgainInAddress) {
-			t.Errorf("answered %d %s", status, answered)
+		for body, says := range map[string]string{
+			`{"server_config": {"url": "https://collector.example.test/mcp", "transport": "sse", "auth": {"type": "bearer", "token": "••••6789"}}}`:         keyAgain,
+			`{"server_config": {"url": "https://collector.example.test/mcp", "transport": "sse", "auth": {"type": "none"}, "headers": {"X-Team": "••••"}}}`: "header again",
+			`{"server_config": {"url": "https://collector.example.test/mcp?api_key=••••6789", "transport": "sse", "auth": {"type": "none"}}}`:               keyAgainInAddress,
+			// The same host, but the address edited around its masked key.
+			`{"server_config": {"url": "https://mcp.example.test/v2?api_key=••••6789", "transport": "sse", "auth": {"type": "none"}}}`: keyAgainInAddress,
+			// The same host, but the token moved into a header.
+			`{"server_config": {"url": "https://mcp.example.test/mcp?api_key=••••6789&mode=fast", "transport": "sse", "auth": {"type": "header", "header_name": "X-Key", "value": "••••6789"}}}`: keyAgain,
+		} {
+			if status, answered := w.as(alice, http.MethodPut, one, body); status != http.StatusUnprocessableEntity || !strings.Contains(answered, says) {
+				t.Errorf("%s: answered %d %s", body, status, answered)
+			}
 		}
 		// A config key no read shows is refused by name.
-		status, answered = w.as(alice, http.MethodPut, generic, `{"config": {"cached_tools": {"tools": []}}}`)
+		status, answered := w.as(alice, http.MethodPut, generic, `{"config": {"cached_tools": {"tools": []}}}`)
 		if status != http.StatusBadRequest || !strings.Contains(answered, "cached_tools") {
 			t.Errorf("answered %d %s", status, answered)
 		}
@@ -382,13 +474,16 @@ INSERT INTO search_source_connectors (id, user_id, name, connector_type, config)
 
 	t.Run("testing a saved server uses its stored key and reaches only its own host", func(t *testing.T) {
 		status, answered := w.as(alice, http.MethodPost, ServerTestPath,
-			`{"url": "https://mcp.example.test/mcp", "headers": {"authorization": "••••6789"}, "connector_id": 1}`)
+			`{"url": "https://mcp.example.test/mcp?api_key=••••6789&mode=fast", "transport": "sse", "auth": {"type": "bearer", "token": "••••6789"},
+			  "connector_id": `+strconv.FormatInt(id, 10)+`}`)
 		want := `{"status":"success","message":"Connected successfully. Found 1 tools.","tools":[{"name":"search","description":"Search the web","input_schema":{"type":"object","properties":{"q":{"type":"string"}}}}]}`
 		if status != http.StatusOK || answered != want {
 			t.Fatalf("answered %d %s", status, answered)
 		}
-		if w.probe.headers["authorization"] != "Bearer fake-header-key-0123456789" || !slices.Equal(w.probe.hosts, []string{"mcp.example.test"}) {
-			t.Errorf("the probe was given headers %v and hosts %v", w.probe.headers, w.probe.hosts)
+		if w.probe.headers["Authorization"] != "Bearer fake-header-key-0123456789" || w.probe.transport != mcpserver.SSE ||
+			w.probe.address != "https://mcp.example.test/mcp?api_key=fake-query-key-0123456789&mode=fast" ||
+			!slices.Equal(w.probe.hosts, []string{"mcp.example.test"}) {
+			t.Errorf("the probe was given %s over %s with headers %v and hosts %v", w.probe.address, w.probe.transport, w.probe.headers, w.probe.hosts)
 		}
 	})
 
@@ -396,8 +491,8 @@ INSERT INTO search_source_connectors (id, user_id, name, connector_type, config)
 		generic := `{"status":"error","message":"` + testFailed + `","tools":[]}`
 		w.probe.calls = 0
 		for name, body := range map[string]string{
-			"a masked key and nothing saved": `{"url": "https://mcp.example.test/mcp", "headers": {"X-Key": "••••6789"}}`,
-			"a container's name":             `{"url": "https://litellm/mcp"}`,
+			"a masked key and nothing saved": `{"url": "https://mcp.example.test/mcp", "transport": "sse", "auth": {"type": "none"}, "headers": {"X-Key": "••••6789"}}`,
+			"a container's name":             server("https://litellm/mcp"),
 		} {
 			if status, answered := w.as(alice, http.MethodPost, ServerTestPath, body); status != http.StatusOK || answered != generic {
 				t.Errorf("%s: answered %d %s", name, status, answered)
@@ -406,12 +501,18 @@ INSERT INTO search_source_connectors (id, user_id, name, connector_type, config)
 		if w.probe.calls != 0 {
 			t.Error("a refused test still connected")
 		}
+		// An OAuth server is tested only with a sign-in.
+		signIn := `{"status":"error","message":"` + testNeedsSignIn + `","tools":[]}`
+		if status, answered := w.as(alice, http.MethodPost, ServerTestPath,
+			`{"url": "https://files.example.test/mcp", "transport": "sse", "auth": {"type": "oauth"}}`); status != http.StatusOK || answered != signIn {
+			t.Errorf("an OAuth server before its sign-in: %d %s", status, answered)
+		}
 		w.probe.fail = true
-		if status, answered := w.as(alice, http.MethodPost, ServerTestPath, `{"url": "https://mcp.example.test/mcp"}`); status != http.StatusOK || answered != generic {
+		if status, answered := w.as(alice, http.MethodPost, ServerTestPath, server("https://mcp.example.test/mcp")); status != http.StatusOK || answered != generic {
 			t.Errorf("a server that does not answer: %d %s", status, answered)
 		}
 		w.caller = principal.Principal{UserID: alice, Method: principal.MethodAgent}
-		if status, _ := w.send(http.MethodPost, ServerTestPath, `{"url": "https://mcp.example.test/mcp"}`); status != http.StatusForbidden {
+		if status, _ := w.send(http.MethodPost, ServerTestPath, server("https://mcp.example.test/mcp")); status != http.StatusForbidden {
 			t.Errorf("an agent's test answered %d, want 403", status)
 		}
 	})

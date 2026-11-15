@@ -5,24 +5,36 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"unicode/utf8"
 
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/pythonjson"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/mcptools"
+	"git.danvics.com/danvics/soloclef/soloclef_connectors/mcpserver"
+	"git.danvics.com/danvics/soloclef/soloclef_connectors/sealedsecret"
 )
 
 // This file is what a person may say about an MCP server and what is done
-// with it before a row is written: read the settings strictly, put back
-// the keys the form only ever saw masked, and decide where the server may
-// be. Creating, editing and testing a server all pass through it, so the
-// three cannot disagree about what a server is.
-
-// serverSettings is an MCP server as the form describes it: a remote
-// address, the headers that carry its key, and how to speak to it.
-type serverSettings struct {
-	Address   string            `json:"url"`
-	Headers   map[string]string `json:"headers"`
-	Transport string            `json:"transport"`
-}
+// with it before a row is written: read the form strictly, seal its secrets
+// (a mask sent back keeps the stored secret, sealed as it is), and decide
+// where the server may be. Creating, editing and testing a server all pass
+// through it, so the three cannot disagree about what a server is.
+//
+// The form is the "Add MCP server" form's fields, one for one:
+//
+//	{
+//	  "url": "https://mcp.example.com/mcp",
+//	  "transport": "streamable-http" | "sse",
+//	  "auth": {"type": "none"}
+//	        | {"type": "header", "header_name": "X-API-Key", "value": "…"}
+//	        | {"type": "bearer", "token": "…"}
+//	        | {"type": "oauth", "client_id": "…", "client_secret": "…"},
+//	  "headers": {"X-Extra": "…"}
+//	}
+//
+// What is stored is mcpserver.Stored: every secret sealed under the owner,
+// each with its mask, and the address sealed when its query carries a key.
+// What a read shows is publicServer (server_public.go): the same shape with
+// masks for values.
 
 // What the settings are refused with. Each is a sentence for the person at
 // the form.
@@ -30,10 +42,22 @@ const (
 	stdioRefused      = "Local (stdio) MCP servers are not supported. Use a remote server URL."
 	addressRequired   = "A server URL is required"
 	headersNotText    = "Each header needs a name and a text value"
-	transportRefused  = "The transport must be streamable-http, http or sse"
+	headerNameBad     = "A header name may hold letters, digits and - _ . ! # $ % & ' * + ^ ` | ~ only"
+	headerTwice       = "Each header may be given once"
+	headerValueBad    = "A header value must be text on one line"
+	tooManyHeaders    = "At most 20 extra headers"
+	headerIsAuth      = "Remove the extra header that repeats the authentication header"
+	transportRefused  = "The transport must be streamable-http or sse"
+	authRequired      = "Choose how the server is signed in to: none, an API key header, a bearer token or OAuth"
+	authKindRefused   = "The authentication must be none, header, bearer or oauth"
+	authKeyRequired   = "Enter the API key"
+	authHeaderNeeded  = "Enter the header the API key goes in"
+	authTokenRequired = "Enter the bearer token"
 	settingsUnstored  = "These settings contain a character that cannot be saved"
 	memberNeedsDomain = "Use the server's public address (a full domain name)"
 	keyAgainInAddress = "Enter the key in the server URL again"
+	keyAgain          = "Enter the API key or token again"
+	clientSecretAgain = "Enter the client secret again"
 	nameTaken         = "You already have an MCP server with this name"
 	connectionTaken   = "You already have a connection with this name"
 	serverUneditable  = "This MCP server's stored settings cannot be edited. Remove it and add it again."
@@ -41,79 +65,192 @@ const (
 	settingsNotObject = "The server settings must be an object"
 )
 
-// transportDefault is what a form that names no transport means.
-const transportDefault = "streamable-http"
-
-// remoteTransports are the three spellings of "a remote server".
-var remoteTransports = map[string]bool{"streamable-http": true, "http": true, "sse": true}
+// The bounds of a form: generous for any real server, small enough that a
+// row stays a row.
+const (
+	mostHeaders    = 20
+	mostValueBytes = 8 << 10
+)
 
 // readServerSettings reads the settings out of a request, or says in a
-// sentence why they are refused.
-//
-// It is strict: a key it does not know is refused by name, so a typo is
-// not silently a server without its header. Two things are let through and
-// dropped, because clients in use send them: the three fields of a local
-// (stdio) server when they are empty, and a `name`.
-func readServerSettings(body *pythonjson.Object) (serverSettings, string) {
-	settings := serverSettings{Headers: map[string]string{}, Transport: transportDefault}
+// sentence why they are refused. It is strict: a key it does not know is
+// refused by name, so a typo is not silently a server without its header.
+func readServerSettings(body *pythonjson.Object) (mcpserver.Settings, string) {
+	settings := mcpserver.Settings{Headers: map[string]string{}}
+	authSeen := false
 	for _, key := range body.Keys() {
 		value, _ := body.Get(key)
 		switch key {
 		case "url":
 			address, isText := value.(string)
 			if !isText || strings.TrimSpace(address) == "" {
-				return serverSettings{}, addressRequired
+				return mcpserver.Settings{}, addressRequired
 			}
 			settings.Address = strings.TrimSpace(address)
+		case "transport":
+			transport, isText := value.(string)
+			switch {
+			case isText && transport == "stdio":
+				return mcpserver.Settings{}, stdioRefused
+			case !isText || (transport != mcpserver.StreamableHTTP && transport != mcpserver.SSE):
+				return mcpserver.Settings{}, transportRefused
+			}
+			settings.Transport = transport
+		case "auth":
+			auth, refusal := readAuth(value)
+			if refusal != "" {
+				return mcpserver.Settings{}, refusal
+			}
+			settings.Auth, authSeen = auth, true
 		case "headers":
 			if value == nil {
 				continue
 			}
 			headers, isObject := value.(*pythonjson.Object)
 			if !isObject {
-				return serverSettings{}, headersNotText
+				return mcpserver.Settings{}, headersNotText
+			}
+			if headers.Len() > mostHeaders {
+				return mcpserver.Settings{}, tooManyHeaders
 			}
 			for _, name := range headers.Keys() {
-				held, _ := headers.Get(name)
-				text, isText := held.(string)
-				if !isText || strings.TrimSpace(name) == "" {
-					return serverSettings{}, headersNotText
+				text, isText := headers.GetOrNil(name).(string)
+				if !isText {
+					return mcpserver.Settings{}, headersNotText
+				}
+				if refusal := checkHeader(name, text); refusal != "" {
+					return mcpserver.Settings{}, refusal
+				}
+				for seen := range settings.Headers {
+					if strings.EqualFold(seen, name) {
+						return mcpserver.Settings{}, headerTwice
+					}
 				}
 				settings.Headers[name] = text
 			}
-		case "transport":
-			transport, isText := value.(string)
-			if isText && transport == "stdio" {
-				return serverSettings{}, stdioRefused
-			}
-			if !isText || !remoteTransports[transport] {
-				return serverSettings{}, transportRefused
-			}
-			settings.Transport = transport
 		case "command", "args", "env":
 			// A local server is a command run inside this process's
-			// container. Empty, the field is an old form's blank.
-			if !isEmptyServerField(value) {
-				return serverSettings{}, stdioRefused
-			}
-		case "name":
+			// container.
+			return mcpserver.Settings{}, stdioRefused
 		default:
-			return serverSettings{}, "Unknown server setting: " + printable(key)
+			return mcpserver.Settings{}, "Unknown server setting: " + printable(key)
 		}
 	}
-	if settings.Address == "" {
-		return serverSettings{}, addressRequired
+	switch {
+	case settings.Address == "":
+		return mcpserver.Settings{}, addressRequired
+	case settings.Transport == "":
+		return mcpserver.Settings{}, transportRefused
+	case !authSeen:
+		return mcpserver.Settings{}, authRequired
+	case cannotBeStored(settings.Address):
+		return mcpserver.Settings{}, settingsUnstored
 	}
-	// Text the column takes and cannot give back (public_config.go).
-	if cannotBeStored(settings.Address) {
-		return serverSettings{}, settingsUnstored
+	// The authentication's own header may not be given twice: which of the
+	// two would be sent would depend on map order.
+	authHeader := settings.Auth.HeaderName
+	if settings.Auth.Kind == mcpserver.AuthBearer || settings.Auth.Kind == mcpserver.AuthOAuth {
+		authHeader = "Authorization"
 	}
-	for name, value := range settings.Headers {
-		if cannotBeStored(name) || cannotBeStored(value) {
-			return serverSettings{}, settingsUnstored
+	for name := range settings.Headers {
+		if authHeader != "" && strings.EqualFold(name, authHeader) {
+			return mcpserver.Settings{}, headerIsAuth
 		}
 	}
 	return settings, ""
+}
+
+// readAuth reads the `auth` object.
+func readAuth(value any) (mcpserver.Auth, string) {
+	object, isObject := value.(*pythonjson.Object)
+	if !isObject {
+		return mcpserver.Auth{}, authRequired
+	}
+	text := func(key string) (string, string) {
+		held, present := object.Get(key)
+		if !present || held == nil {
+			return "", ""
+		}
+		value, isText := held.(string)
+		if !isText {
+			return "", "The '" + key + "' setting must be text"
+		}
+		if cannotBeStored(value) || strings.ContainsAny(value, "\r\n") || len(value) > mostValueBytes {
+			return "", headerValueBad
+		}
+		return strings.TrimSpace(value), ""
+	}
+	kind, refusal := text("type")
+	if refusal != "" {
+		return mcpserver.Auth{}, refusal
+	}
+	allowed := map[string]bool{"type": true}
+	auth := mcpserver.Auth{Kind: mcpserver.AuthKind(kind)}
+	switch auth.Kind {
+	case mcpserver.AuthNone:
+	case mcpserver.AuthHeader:
+		allowed["header_name"], allowed["value"] = true, true
+		name, refusal := text("header_name")
+		if refusal != "" {
+			return mcpserver.Auth{}, refusal
+		}
+		if name == "" {
+			return mcpserver.Auth{}, authHeaderNeeded
+		}
+		if !mcpserver.HeaderNameValid(name) {
+			return mcpserver.Auth{}, headerNameBad
+		}
+		secret, refusal := text("value")
+		if refusal != "" {
+			return mcpserver.Auth{}, refusal
+		}
+		if secret == "" {
+			return mcpserver.Auth{}, authKeyRequired
+		}
+		auth.HeaderName, auth.Secret = name, secret
+	case mcpserver.AuthBearer:
+		allowed["token"] = true
+		token, refusal := text("token")
+		if refusal != "" {
+			return mcpserver.Auth{}, refusal
+		}
+		if token == "" {
+			return mcpserver.Auth{}, authTokenRequired
+		}
+		auth.Secret = token
+	case mcpserver.AuthOAuth:
+		allowed["client_id"], allowed["client_secret"] = true, true
+		id, refusal := text("client_id")
+		if refusal != "" {
+			return mcpserver.Auth{}, refusal
+		}
+		secret, refusal := text("client_secret")
+		if refusal != "" {
+			return mcpserver.Auth{}, refusal
+		}
+		auth.ClientID, auth.ClientSecret = id, secret
+	default:
+		return mcpserver.Auth{}, authKindRefused
+	}
+	for _, key := range object.Keys() {
+		if !allowed[key] {
+			return mcpserver.Auth{}, "Unknown authentication setting: " + printable(key)
+		}
+	}
+	return auth, ""
+}
+
+// checkHeader is one extra header's refusal, or "".
+func checkHeader(name, value string) string {
+	switch {
+	case strings.TrimSpace(name) == "":
+		return headersNotText
+	case !mcpserver.HeaderNameValid(name):
+		return headerNameBad
+	case cannotBeStored(value) || strings.ContainsAny(value, "\r\n") || len(value) > mostValueBytes || !utf8.ValidString(value):
+		return headerValueBad
+	}
+	return ""
 }
 
 // printable is a key as it may be repeated in a refusal: cut short, and
@@ -131,125 +268,45 @@ func printable(key string) string {
 	return out.String()
 }
 
-// isMasked reports whether a value is one this package's reads produced
-// (secrets.go): the four bullets, with or without the last four characters.
-func isMasked(value string) bool {
-	return strings.HasPrefix(value, mask)
-}
-
-// storedServer is the settings a server's row holds now, read for one
-// purpose: to stand in for the values an edit sent back masked.
-type storedServer struct {
-	address string
-	headers map[string]string
-}
-
-// storedServerOf reads them from a row's config. A row without readable
-// settings has none, and then no masked value can be restored.
-func storedServerOf(connection Connection) storedServer {
-	stored := storedServer{headers: map[string]string{}}
+// storedServerOf is the stored settings of a server's row, opening
+// nothing. found is false for a row whose settings are not the sealed form
+// (a damaged row): no mask can stand for anything in it.
+func storedServerOf(connection Connection) (mcpserver.Stored, bool) {
 	config, isObject := connection.Config.(*pythonjson.Object)
 	if !isObject {
-		return stored
+		return mcpserver.Stored{}, false
 	}
-	server, isObject := config.GetOrNil("server_config").(*pythonjson.Object)
-	if !isObject {
-		return stored
+	server, present := config.Get("server_config")
+	if !present {
+		return mcpserver.Stored{}, false
 	}
-	stored.address, _ = server.GetOrNil("url").(string)
-	if headers, isObject := server.GetOrNil("headers").(*pythonjson.Object); isObject {
-		for _, name := range headers.Keys() {
-			if text, isText := headers.GetOrNil(name).(string); isText {
-				stored.headers[name] = text
-			}
-		}
+	raw, err := pythonjson.Marshal(server)
+	if err != nil {
+		return mcpserver.Stored{}, false
 	}
-	return stored
+	stored, err := mcpserver.Parse(raw)
+	return stored, err == nil
 }
 
-// restoreMasked puts the stored value back wherever the request carries a
-// masked one, or says which value has to be typed again.
-//
-// A read never shows a key, so a form that was opened on a saved server
-// holds bullets where the key is, and saving it sends them back. They stand
-// for the stored key on one condition: the edit still points at the same
-// host. Without it a person could point a saved server at a host of their
-// choosing and have the stored key sent there. For a server that is not
-// saved yet (stored is nil) nothing can be restored, and a masked value is
-// refused.
-func restoreMasked(settings serverSettings, stored *storedServer) (serverSettings, string) {
-	sameHost := stored != nil && mcptools.Host(settings.Address) != "" &&
-		mcptools.Host(settings.Address) == mcptools.Host(stored.address)
-
-	restored := serverSettings{Address: settings.Address, Transport: settings.Transport,
-		Headers: make(map[string]string, len(settings.Headers))}
-	for name, value := range settings.Headers {
-		if !isMasked(value) {
-			restored.Headers[name] = value
-			continue
+// sealSettings is the stored form of a person's settings: their secrets
+// sealed, and every mask standing for the secret stored under it in
+// previous (nil for a server not saved yet). refusal is the sentence for a
+// mask that stands for nothing.
+func sealSettings(seal sealedsecret.Seal, ownerID string, settings mcpserver.Settings, previous *mcpserver.Stored) (stored mcpserver.Stored, refusal string, err error) {
+	stored, err = mcpserver.Build(seal, ownerID, settings, previous)
+	var masked *mcpserver.Refusal
+	if errors.As(err, &masked) {
+		switch masked.Part {
+		case "header":
+			return mcpserver.Stored{}, "Enter the value for the '" + printable(masked.Field) + "' header again", nil
+		case "url":
+			return mcpserver.Stored{}, keyAgainInAddress, nil
+		case "client_secret":
+			return mcpserver.Stored{}, clientSecretAgain, nil
 		}
-		held, found := "", false
-		if sameHost {
-			// Header names are not case-sensitive, and a form may have
-			// tidied the spelling.
-			for storedName, storedValue := range stored.headers {
-				if strings.EqualFold(storedName, name) {
-					held, found = storedValue, true
-					break
-				}
-			}
-		}
-		if !found {
-			return serverSettings{}, "Enter the value for the '" + printable(name) + "' header again"
-		}
-		restored.Headers[name] = held
+		return mcpserver.Stored{}, keyAgain, nil
 	}
-
-	// The same for a key carried in the address's query string.
-	parts, err := urlSplit(settings.Address)
-	if err != nil {
-		// Not an address at all; the destination check says so in its own
-		// words.
-		return restored, ""
-	}
-	pairs := parseQuery(parts.query)
-	anyMasked := false
-	for _, pair := range pairs {
-		anyMasked = anyMasked || isMasked(pair.value)
-	}
-	if !anyMasked {
-		return restored, ""
-	}
-	if !sameHost {
-		return serverSettings{}, keyAgainInAddress
-	}
-	storedParts, err := urlSplit(stored.address)
-	if err != nil {
-		return serverSettings{}, keyAgainInAddress
-	}
-	storedValues := map[string]string{}
-	for _, pair := range parseQuery(storedParts.query) {
-		if _, seen := storedValues[pair.name]; !seen {
-			storedValues[pair.name] = pair.value
-		}
-	}
-	for index, pair := range pairs {
-		if !isMasked(pair.value) {
-			continue
-		}
-		held, found := storedValues[pair.name]
-		if !found {
-			return serverSettings{}, "Enter the '" + printable(pair.name) + "' URL value again"
-		}
-		pairs[index].value = held
-	}
-	query, err := encodeQuery(pairs)
-	if err != nil {
-		return serverSettings{}, keyAgainInAddress
-	}
-	parts.query = query
-	restored.Address = urlUnsplit(parts)
-	return restored, ""
+	return stored, "", err
 }
 
 // Destinations decides whether an MCP server may be saved at an address:
@@ -276,6 +333,9 @@ type ServerPolicy struct {
 	// that can be saved can be called.
 	SiteHostsWhenUnset []string
 	Destinations       Destinations
+	// Seal seals a server's secrets before they are stored, and opens them
+	// for a test (sealedsecret under the MCP server purpose).
+	Seal sealedsecret.Seal
 }
 
 // Standing reads what the policy decides from.
@@ -305,6 +365,15 @@ func (p ServerPolicy) originForNew(ctx context.Context, userID string) (string, 
 	return mcptools.OriginMember, nil
 }
 
+// siteHosts is the site's allowed hosts as they stand now.
+func (p ServerPolicy) siteHosts(ctx context.Context) ([]string, error) {
+	stored, err := p.Standing.SiteAllowedHosts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return mcptools.SiteHosts(stored, p.SiteHostsWhenUnset), nil
+}
+
 // hostsFor is the hosts a server of this origin at this address may reach.
 // The refusal is the one case with its own sentence: a member's server
 // that is not named by a public domain.
@@ -316,11 +385,22 @@ func (p ServerPolicy) hostsFor(ctx context.Context, origin, address string) (hos
 		}
 		return hosts, "", nil
 	}
-	stored, err := p.Standing.SiteAllowedHosts(ctx)
-	if err != nil {
-		return nil, "", err
+	site, err := p.siteHosts(ctx)
+	return site, "", err
+}
+
+// oauthHosts is the rule each OAuth address of a server of this origin is
+// held to: the very rule its connections are (a person's server reaches
+// each address's own public host; a site server the site's list).
+func (p ServerPolicy) oauthHosts(ctx context.Context, origin string) (mcptools.HostsFor, error) {
+	if origin == mcptools.OriginMember {
+		return mcptools.OAuthHosts(origin, nil), nil
 	}
-	return mcptools.SiteHosts(stored, p.SiteHostsWhenUnset), "", nil
+	site, err := p.siteHosts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return mcptools.OAuthHosts(origin, site), nil
 }
 
 // admit is the destination check at save time. refusal is a sentence for
@@ -354,6 +434,6 @@ func originOf(connection Connection) string {
 }
 
 // serverColumn is the stored form of a server's settings.
-func serverColumn(settings serverSettings) ([]byte, error) {
-	return json.Marshal(settings)
+func serverColumn(stored mcpserver.Stored) ([]byte, error) {
+	return json.Marshal(stored)
 }

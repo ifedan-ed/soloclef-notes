@@ -48,7 +48,20 @@ type Database interface {
 // ascending. A file that does not start with a number is a build error
 // here and not a migration silently left out.
 func Expected() ([]int64, error) {
-	return versionsIn(migrations.Files)
+	versions, err := versionsIn(migrations.Files)
+	if err != nil {
+		return nil, err
+	}
+	// The coded migrations share the sequence (migrations.CodedMigrations);
+	// a build that left them out would call a database that ran them ahead.
+	for _, coded := range migrations.CodedMigrations {
+		if slices.Contains(versions, coded.Version) {
+			return nil, fmt.Errorf("schemaversion: a SQL file and a coded migration are both numbered %d", coded.Version)
+		}
+		versions = append(versions, coded.Version)
+	}
+	slices.Sort(versions)
+	return versions, nil
 }
 
 func versionsIn(files fs.FS) ([]int64, error) {

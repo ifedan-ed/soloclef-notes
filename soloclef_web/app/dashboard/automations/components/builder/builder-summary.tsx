@@ -8,8 +8,7 @@ interface BuilderSummaryProps {
 }
 
 /**
- * Live, read-only mirror of what will be created. Mirrors the layout of the
- * chat ``AutomationDraftPreview`` so the two creation paths feel consistent.
+ * Live, read-only mirror of what will be created.
  */
 export function BuilderSummary({ form }: BuilderSummaryProps) {
 	const automationName = form.name.trim() || "Untitled automation";

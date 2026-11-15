@@ -17,6 +17,7 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/pythonjson"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/requestbody"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/requestcontext"
+	"git.danvics.com/danvics/soloclef/soloclef_connectors/mcpserver"
 )
 
 // ServerWrites are the two writes of an MCP server's own settings.
@@ -148,9 +149,13 @@ func (r ServerCreateRoute) serve(ctx huma.Context) {
 	}
 
 	settings, refusal := readServerSettings(incoming)
+	var stored mcpserver.Stored
 	if refusal == "" {
 		// Nothing is stored yet, so a masked value stands for nothing.
-		settings, refusal = restoreMasked(settings, nil)
+		if stored, refusal, err = sealSettings(r.Policy.Seal, caller.UserID, settings, nil); err != nil {
+			failed.caught("could not seal the server's settings", err)
+			return
+		}
 	}
 	if refusal != "" {
 		r.Errors.Write(response, http.StatusUnprocessableEntity, refusal, requestID)
@@ -174,9 +179,9 @@ func (r ServerCreateRoute) serve(ctx huma.Context) {
 	// The origin is written here, from the caller's standing, and no
 	// request can name it.
 	column, err := json.Marshal(struct {
-		Server serverSettings `json:"server_config"`
-		Origin string         `json:"server_origin"`
-	}{settings, origin})
+		Server mcpserver.Stored `json:"server_config"`
+		Origin string           `json:"server_origin"`
+	}{stored, origin})
 	if err != nil {
 		failed.caught("could not encode the server's config", err)
 		return
@@ -218,7 +223,7 @@ func readServerConfigField(body *pythonjson.Object, problems []errorenvelope.Fai
 // answerServer renders an MCP server as its reads do, key masked, and
 // sends it.
 func answerServer(failed failures, response http.ResponseWriter, status int, server Connection) {
-	masked, err := shownServer(server)
+	masked, err := publicServer(server)
 	if err != nil {
 		failed.caught(rowRefused, err)
 		return
@@ -251,15 +256,24 @@ type refusedEdit struct {
 // must be told.
 //
 // The stored settings are read from the row the caller was just shown to
-// own and the write is one statement that sets one key, so trusted tools
-// added while the form was open are kept (queries.sql, UpdateServer).
+// own and the write is one statement that sets one key, so whatever else
+// the config gained while the form was open is kept (queries.sql,
+// UpdateServer).
 func (e serverEditor) apply(ctx context.Context, ownerID string, row Connection, name *string, incoming *pythonjson.Object) (updated *Connection, refused *refusedEdit, err error) {
 	var column []byte
 	if incoming != nil {
 		settings, refusal := readServerSettings(incoming)
+		var stored mcpserver.Stored
 		if refusal == "" {
-			stored := storedServerOf(row)
-			settings, refusal = restoreMasked(settings, &stored)
+			// A row whose stored settings cannot be read has no secret a
+			// mask could stand for; every one must be typed again.
+			var previous *mcpserver.Stored
+			if held, found := storedServerOf(row); found {
+				previous = &held
+			}
+			if stored, refusal, err = sealSettings(e.Policy.Seal, ownerID, settings, previous); err != nil {
+				return nil, nil, err
+			}
 		}
 		if refusal != "" {
 			return nil, &refusedEdit{http.StatusUnprocessableEntity, refusal}, nil
@@ -272,7 +286,7 @@ func (e serverEditor) apply(ctx context.Context, ownerID string, row Connection,
 		if refusal != "" {
 			return nil, &refusedEdit{http.StatusBadRequest, refusal}, nil
 		}
-		if column, err = serverColumn(settings); err != nil {
+		if column, err = serverColumn(stored); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -295,7 +309,7 @@ func (e serverEditor) apply(ctx context.Context, ownerID string, row Connection,
 // a server's name, its settings, or both. A field left out is left alone.
 //
 // A masked value sent back stands for the stored key while the address
-// still names the same host (server_settings.go, restoreMasked). New
+// still names the same host (server_settings.go, sealSettings). New
 // settings clear the "enter the key again" flag and the tool list the old
 // address answered with.
 type ServerUpdateRoute struct {

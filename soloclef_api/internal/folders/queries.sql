@@ -102,17 +102,6 @@ WHERE id = sqlc.arg('folder_id') AND user_id = sqlc.arg('user_id');
 UPDATE folders SET position = sqlc.arg('position'), updated_at = sqlc.arg('updated_at')
 WHERE id = sqlc.arg('folder_id') AND user_id = sqlc.arg('user_id');
 
--- name: ClearWatchedFlag :execrows
--- Stop keeping a folder in step with a folder on someone's computer. Only
--- the one key is written, so every other value in the metadata keeps its own
--- text, and only a folder that is watched is touched: asking twice changes
--- nothing the second time, `updated_at` included.
-UPDATE folders
-SET metadata = jsonb_set(metadata, '{watched}', 'false'::jsonb),
-    updated_at = sqlc.arg('updated_at')
-WHERE id = sqlc.arg('folder_id') AND user_id = sqlc.arg('user_id')
-  AND metadata -> 'watched' = 'true'::jsonb;
-
 -- name: FolderSubtreeIDs :many
 -- The folder and everything under it, the folder itself first.
 WITH RECURSIVE subtree AS (

@@ -38,12 +38,7 @@ export const cacheKeys = {
 			["logs", "with-query-params", ...stableEntries(queries)] as const,
 	},
 	modelConnections: {
-		// "own" keeps this key from being a prefix of the three below, so
-		// invalidating the account's connections does not refetch the shared ones.
-		all: () => ["model-connections", "own"] as const,
-		global: () => ["model-connections", "global"] as const,
-		globalConfigStatus: () => ["model-connections", "global-config-status"] as const,
-		providers: () => ["model-connections", "providers"] as const,
+		all: () => ["model-connections"] as const,
 		roles: () => ["model-roles"] as const,
 		setupStatus: () => ["llm-setup-status"] as const,
 	},
@@ -52,6 +47,9 @@ export const cacheKeys = {
 	// The model of one of the account's other jobs ("quick", "studio"), also
 	// a proxy model name (features/model-choice).
 	modelChoice: (job: string) => ["model-choice", job] as const,
+	// Every tool the chat can use and which of them ask first
+	// (features/agent-permissions); not the chat's tool picker, agentTools.
+	agentPermissions: () => ["agent-permissions", "tools"] as const,
 	auth: {
 		user: ["auth", "user"] as const,
 	},
@@ -60,7 +58,15 @@ export const cacheKeys = {
 		// The account's settings: chat instructions, citations, API access.
 		settings: () => ["user", "settings"] as const,
 		memory: () => ["user", "memory"] as const,
+		// Which kinds of push the phone app gets, and quiet hours.
+		pushPreferences: () => ["user", "push-preferences"] as const,
+		// Whether the account has a password (which password form to show).
+		passwordState: () => ["user", "password-state"] as const,
+		// Everywhere the account is signed in.
+		devices: () => ["user", "devices"] as const,
 	},
+	// How this server lets people sign in (features/sign-in-options).
+	signInOptions: () => ["sign-in-options"] as const,
 	agentTools: {
 		all: () => ["agent-tools"] as const,
 	},
@@ -77,28 +83,19 @@ export const cacheKeys = {
 				["connectors", "google-drive", connectorId, "folders", parentId] as const,
 		},
 	},
-	publicChat: {
-		byToken: (shareToken: string) => ["public-chat", shareToken] as const,
+	publicOutput: {
+		byToken: (shareToken: string) => ["public-output", shareToken] as const,
 	},
 	github: {
 		repoStars: (username: string, repo: string) =>
 			["github", "repo-stars", username, repo] as const,
 	},
-	liveNotebookLinks: {
-		all: ["live-notebook-links"] as const,
-		list: ["live-notebook-links", "list"] as const,
-		byNotebook: (notebookId: number) => ["live-notebook-links", "notebook", notebookId] as const,
-	},
-	publicNotebook: {
-		byToken: (shareToken: string) => ["public-notebook", shareToken] as const,
-	},
-	publicChatSnapshots: {
-		all: ["public-chat-snapshots"] as const,
-		list: ["public-chat-snapshots", "list"] as const,
+	publicLinks: {
+		all: ["public-links"] as const,
+		list: ["public-links", "list"] as const,
 	},
 	prompts: {
 		all: () => ["prompts"] as const,
-		public: () => ["prompts", "public"] as const,
 	},
 	notifications: {
 		search: (search: string, tab: string) => ["notifications", "search", search, tab] as const,

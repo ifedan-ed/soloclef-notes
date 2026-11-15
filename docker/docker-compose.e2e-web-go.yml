@@ -24,9 +24,10 @@
 #   - the public pages' example address and contact, which the suite reads
 #     back, and memory caps sized for a test host.
 #
-# The web app, zero-cache, the MCP server and Caddy are the Go stack's own
-# services, run here as a deployment runs them. The sandbox server is not
-# started: both sandbox switches are off in the settings.
+# zero-cache, the MCP server and Caddy (which serves the web app's files)
+# are the Go stack's own services, run here as a deployment runs them. The
+# sandbox service is not started: the sandbox switch is off in the
+# settings.
 #
 # Nothing here can touch the live site or another test: the project is
 # soloclefgo-e2e (the script names it; the boot test's is soloclefgo-boot),
@@ -119,11 +120,14 @@ services:
           - oauth2.googleapis.com
           - www.googleapis.com
 
-  # The Go stack's own three, held to what a test host can spare.
+  # The Go stack's own, held to what a test host can spare.
   zero-cache:
     mem_limit: 2g
 
-  frontend:
+  # The deployment's Caddy, with the web app's files in it, and with this
+  # stack's Caddyfile over its own: the same routes and the three test-only
+  # prefixes.
+  proxy:
     build:
       # The public pages' own address and contact. Example values, never a
       # real server's: the suite reads them back
@@ -136,11 +140,6 @@ services:
         # here so that the password-reset spec can make its own accounts.
         NEXT_PUBLIC_SIGNUPS_OPEN: ""
         NEXT_PUBLIC_OIDC_ALLOW_SIGNUP: ""
-    mem_limit: 2g
-
-  # The deployment's Caddy, with this stack's Caddyfile over its own: the
-  # same routes and the three test-only prefixes.
-  proxy:
     volumes:
       - ./e2e-web-go/Caddyfile:/etc/caddy/Caddyfile:ro
     mem_limit: 256m
@@ -158,8 +157,8 @@ networks:
   # The stack's own network, with no route out (see the top of the file).
   default:
     internal: true
-  # The API and the worker join it in every stack; here it has no server on
-  # it and, like `default`, no route out.
+  # The API and the worker join it in every stack; here it has no service
+  # on it and, like `default`, no route out.
   sandbox:
     internal: true
   # Where the published port lands. Only Caddy is on it.

@@ -1,10 +1,11 @@
 // Package pagereader is the chat's page reader: the tool that reads the web
 // pages at addresses the model chose.
 //
-// It sends a request to an address the model chose, so it is offered as
-// tool.AlwaysAsk: a person approves every call, and no trust list or
-// earlier "always allow" waives that. One approval says nothing about the
-// next address.
+// It sends a request to an address the model chose, so it is declared
+// tool.AlwaysAsk: one approval says nothing about the next address, and an
+// automation's unattended run never reads a page. In a chat the person's own
+// "ask first" marks decide instead (assembly, policy); a person who marks it
+// approves every call.
 //
 // # Design
 //
@@ -245,7 +246,6 @@ func (r *Reader) Tool() tool.Tool {
 	return tool.Tool{
 		Name: ToolName,
 		Description: "Read web pages. Give the full addresses of up to " + strconv.Itoa(r.settings.MaxPages) + " pages in one call; they are read side by side. " +
-			"The user is asked to approve every call. " +
 			"Returns each page's text as Markdown under a line that gives its label [n], its address and whether it was read. " +
 			"Cite a page by writing its [n] right after the claim it supports. " +
 			"A page that could not be read says why; do not guess what it holds. " +

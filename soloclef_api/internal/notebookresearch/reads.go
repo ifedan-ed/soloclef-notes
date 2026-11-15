@@ -227,8 +227,21 @@ func (r *Reads) read(ctx context.Context, documentID int64, userID string, about
 				learned:  map[string]any{"fetched": true, "read_from": "pubmed_central"},
 			}
 		}
-		// Not open, or PMC did not answer: the paper's page is read
-		// instead, which is what a paper outside PMC gets anyway.
+		// Not open, or PMC did not answer: its abstract is read instead,
+		// which is what a paper outside PMC gets anyway.
+	}
+	if about.Paper != nil && about.Paper.PMID != "" {
+		// A PubMed paper's text, when its body is not open, is its
+		// abstract, from PubMed's own record and whole. Its PubMed page is
+		// not read: the page is drawn by script, so the reader found no
+		// text there and the source said "not read" over a stored snippet
+		// cut to a thousand characters, although the abstract was there to
+		// have.
+		text, problem := r.pubmedAbstract(ctx, about.Paper.PMID, title)
+		if problem != "" {
+			return fallbackText(title, about, problem)
+		}
+		return text
 	}
 	if address := addressToRead(about); address != "" {
 		var kept *storedPDF
@@ -275,6 +288,12 @@ func (r *Reads) read(ctx context.Context, documentID int64, userID string, about
 			problem = "The page has no readable text."
 		}
 	}
+	return fallbackText(title, about, problem)
+}
+
+// fallbackText is a source that could not be read: its title and the
+// search's snippet, saying why there is no more.
+func fallbackText(title string, about imported, problem string) readText {
 	parts := []string{"# " + title}
 	if about.Snippet != "" {
 		parts = append(parts, about.Snippet)
@@ -286,6 +305,33 @@ func (r *Reads) read(ctx context.Context, documentID int64, userID string, about
 		markdown: strings.Join(parts, "\n\n"),
 		learned:  map[string]any{"fetched": false, "fetch_problem": problem},
 	}
+}
+
+// pubmedAbstract is a PubMed paper's record as the source's text: its
+// title, byline and whole abstract, or why there is none.
+func (r *Reads) pubmedAbstract(ctx context.Context, pmid, title string) (readText, string) {
+	papers, err := r.papers.PubMedByID(ctx, []string{pmid}, nil, nil)
+	if err != nil {
+		return readText{}, "PubMed could not be reached to read the abstract. Import it again to read it."
+	}
+	for _, paper := range papers {
+		if paper.PMID != pmid {
+			continue
+		}
+		if strings.TrimSpace(paper.Abstract) == "" {
+			return readText{}, "PubMed has no abstract for this paper, and its full text is not open."
+		}
+		parts := []string{"# " + title}
+		if meta := paper.Meta(); meta != "" {
+			parts = append(parts, meta)
+		}
+		parts = append(parts, "## Abstract", paper.Abstract, paper.URL)
+		return readText{
+			markdown: strings.Join(parts, "\n\n"),
+			learned:  map[string]any{"fetched": true, "read_from": "pubmed_abstract"},
+		}, ""
+	}
+	return readText{}, "PubMed has no record of this paper."
 }
 
 // addressToRead is where an import's text is read from. An arXiv paper is

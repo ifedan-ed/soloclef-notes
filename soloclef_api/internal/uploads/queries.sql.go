@@ -181,28 +181,6 @@ func (q *Queries) LockUploadNamed(ctx context.Context, arg LockUploadNamedParams
 	return i, err
 }
 
-const markFolderWatched = `-- name: MarkFolderWatched :exec
-UPDATE folders
-SET metadata = COALESCE(metadata, '{}'::jsonb) || $1::jsonb,
-    updated_at = now()
-WHERE id = $2 AND user_id = $3
-`
-
-type MarkFolderWatchedParams struct {
-	Metadata []byte
-	ID       int64
-	UserID   string
-}
-
-// The top folder of an uploaded folder says so: the desktop app lists the
-// folders it keeps in step by this marker, and reads the parser its files
-// were sent to from it. The keys are merged over whatever the folder
-// already carries, and `updated_at` moves because the folder was synced.
-func (q *Queries) MarkFolderWatched(ctx context.Context, arg MarkFolderWatchedParams) error {
-	_, err := q.db.Exec(ctx, markFolderWatched, arg.Metadata, arg.ID, arg.UserID)
-	return err
-}
-
 const nextDocumentID = `-- name: NextDocumentID :one
 SELECT nextval('public.documents_id_seq')::bigint
 `
@@ -284,8 +262,7 @@ type TouchUnchangedFolderFileParams struct {
 // A file of an uploaded folder whose bytes are the ones the document
 // already holds. Nothing is indexed again, but two things are recorded:
 // when it was last seen (`mtime` and the rest of this upload's metadata,
-// merged over the old keys), which is what the folder sync's "which files
-// changed" check reads, and the folder it is in now. `updated_at` is left
+// merged over the old keys), and the folder it is in now. `updated_at` is left
 // alone: the document did not change.
 func (q *Queries) TouchUnchangedFolderFile(ctx context.Context, arg TouchUnchangedFolderFileParams) error {
 	_, err := q.db.Exec(ctx, touchUnchangedFolderFile,

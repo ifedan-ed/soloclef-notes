@@ -25,6 +25,18 @@ export function parseRetrievalScopeCookie(
 	}
 }
 
+/**
+ * The account's saved scope, read from the browser's cookie. The cookie
+ * names the account it was saved by, so a second person signing in on the
+ * same browser starts from the default rather than from the first one's
+ * choice; with no account known yet, nothing is trusted.
+ */
+export function readRetrievalScopeCookie(userId: string | undefined): RetrievalScope {
+	if (typeof document === "undefined" || !userId) return DEFAULT_RETRIEVAL_SCOPE;
+	const match = document.cookie.match(new RegExp(`(?:^|; )${RETRIEVAL_SCOPE_COOKIE}=([^;]*)`));
+	return parseRetrievalScopeCookie(match?.[1], userId);
+}
+
 export function persistRetrievalScopeCookie(
 	userId: string | undefined,
 	scope: RetrievalScope

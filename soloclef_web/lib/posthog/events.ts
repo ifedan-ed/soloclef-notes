@@ -231,20 +231,6 @@ export function trackConnectorSetupFailure(connectorType: string, error?: string
 }
 
 // ============================================
-// FEATURE USAGE EVENTS
-// ============================================
-
-export function trackDesktopDownloadClicked(options: {
-	os: string;
-	placement: "sidebar_collapsed" | "sidebar_expanded";
-}) {
-	safeCapture("desktop_download_clicked", {
-		os: options.os,
-		placement: options.placement,
-	});
-}
-
-// ============================================
 // INDEXING EVENTS (intent/UX; indexing outcome is server-side)
 // ============================================
 
@@ -346,41 +332,6 @@ export function trackAutomationTriggerRemoveFailed(props: {
 	safeCapture("automation_trigger_remove_failed", compact(props));
 }
 
-interface AutomationChatDecisionProps {
-	edited?: boolean;
-	task_count?: number;
-	trigger_type?: string;
-	/** The proxy name of the model picked on the card; absent for the account's own. */
-	chat_model?: string;
-}
-
-export function trackAutomationChatApproved(props: AutomationChatDecisionProps) {
-	safeCapture("automation_chat_approved", compact(props));
-}
-
-export function trackAutomationChatRejected() {
-	safeCapture("automation_chat_rejected", {});
-}
-
-export function trackAutomationChatDraftEdited() {
-	safeCapture("automation_chat_draft_edited", {});
-}
-
-export function trackAutomationChatCreateSucceeded(props: {
-	automation_id: number;
-	name?: string;
-}) {
-	safeCapture("automation_chat_create_succeeded", compact(props));
-}
-
-export function trackAutomationChatCreateFailed(props: {
-	reason: "invalid" | "error";
-	issue_count?: number;
-	message?: string;
-}) {
-	safeCapture("automation_chat_create_failed", compact(props));
-}
-
 // ============================================
 // USER IDENTIFICATION
 // ============================================
@@ -388,11 +339,6 @@ export function trackAutomationChatCreateFailed(props: {
 /**
  * Identify a user for PostHog analytics.
  * Call this after successful authentication.
- *
- * In the Electron desktop app the same call is mirrored into the
- * main-process PostHog client so desktop-only events (e.g.
- * `desktop_quick_ask_opened`, `desktop_autocomplete_accepted`) are
- * attributed to the logged-in user rather than an anonymous machine ID.
  */
 export function identifyUser(userId: string, properties?: Record<string, unknown>) {
 	try {
@@ -400,32 +346,15 @@ export function identifyUser(userId: string, properties?: Record<string, unknown
 	} catch {
 		// Silently ignore – ad-blockers may break posthog
 	}
-
-	try {
-		if (typeof window !== "undefined" && window.electronAPI?.analyticsIdentify) {
-			void window.electronAPI.analyticsIdentify(userId, properties);
-		}
-	} catch {
-		// IPC errors must never break the app
-	}
 }
 
 /**
- * Reset user identity (call on logout). Mirrors the reset into the
- * Electron main process when running inside the desktop app.
+ * Reset user identity (call on logout).
  */
 export function resetUser() {
 	try {
 		posthog.reset();
 	} catch {
 		// Silently ignore – ad-blockers may break posthog
-	}
-
-	try {
-		if (typeof window !== "undefined" && window.electronAPI?.analyticsReset) {
-			void window.electronAPI.analyticsReset();
-		}
-	} catch {
-		// IPC errors must never break the app
 	}
 }

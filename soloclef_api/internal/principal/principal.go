@@ -25,6 +25,13 @@ const (
 type Principal struct {
 	UserID string
 	Method Method
+	// SessionID is the sign-in a session's access token names (its `sid`,
+	// the refresh-token family the gate just found live); empty for an API
+	// key or an agent. A route that acts on "every sign-in but this one"
+	// (a password change, internal/signin) reads it here rather than parsing
+	// the token a second time and perhaps reading a different one than the
+	// gate accepted.
+	SessionID string
 }
 
 // IsGated reports whether the caller is a program acting for the account (an

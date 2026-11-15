@@ -35,8 +35,8 @@ const (
 	// and before its ToolResult, whether or not the model streamed it.
 	ToolCallReady
 
-	// ToolResult is the outcome of one call: CallID, Tool, the text the model
-	// will be shown in Text, and IsError.
+	// ToolResult is the outcome of one call: CallID, Tool, the call's Args,
+	// the text the model will be shown in Text, and IsError.
 	ToolResult
 
 	// Notice is something a tool said about its own work while it ran, for

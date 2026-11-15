@@ -20,22 +20,21 @@ func TestTheStatementsOverARealDatabase(t *testing.T) {
 	pool := testpostgres.Open(t, databaseVariable)
 	ctx := context.Background()
 	const alice, bob = testpostgres.Alice, testpostgres.Bob
-	// Alice has shared two chats and one studio output; two of the links
-	// were made in the same instant. Bob has shared one chat. The copies
-	// hold every kind of title: text, none, a number, and a copy that is
-	// not an object at all.
+	// Alice has shared three outputs; two of the links were made in the
+	// same instant. Bob has shared one. The copies hold every kind of
+	// title: text, none, a number, and a copy that is not an object at all.
 	testpostgres.Exec(t, pool, `
-INSERT INTO new_chat_threads (id, user_id, title) VALUES
- (300, '`+alice+`', 'A chat of hers'), (301, '`+alice+`', ''), (302, '`+bob+`', 'A chat of his');
-INSERT INTO notebooks (id, user_id, title) VALUES (7, '`+alice+`', 'A notebook');
+INSERT INTO notebooks (id, user_id, title) VALUES (7, '`+alice+`', 'A notebook'), (8, '`+bob+`', 'His notebook');
 INSERT INTO notebook_outputs (id, notebook_id, user_id, kind, title) VALUES
- (40, 7, '`+alice+`', 'flashcards', 'A deck');
-INSERT INTO public_chat_snapshots (id, user_id, thread_id, notebook_output_id, share_token,
-                                   content_hash, snapshot_data, message_ids, expires_at, created_at) VALUES
- (500, '`+alice+`', 300,  NULL, 'tok-500', 'h-500', '{"title": "Frozen title"}', '{1,2,3}', NULL, '2026-03-01 00:00:05+00'),
- (501, '`+alice+`', 301,  NULL, 'tok-501', 'h-501', '{"title": 7}',              '{4}',     '2026-01-01 00:00:00+00', '2026-03-01 00:00:02+00'),
- (502, '`+alice+`', NULL, 40,   'tok-502', 'h-502', '["not", "an", "object"]',   '{}',      NULL, '2026-03-01 00:00:02+00'),
- (503, '`+bob+`',   302,  NULL, 'tok-503', 'h-503', '{}',                        '{9}',     NULL, '2026-03-01 00:00:09+00');`)
+ (40, 7, '`+alice+`', 'flashcards', 'A deck'),
+ (41, 7, '`+alice+`', 'report', ''),
+ (42, 8, '`+bob+`', 'mindmap', 'A map of his');
+INSERT INTO output_public_links (id, user_id, notebook_output_id, share_token,
+                                 content_hash, snapshot_data, expires_at, created_at) VALUES
+ (500, '`+alice+`', 40, 'tok-500', 'h-500', '{"title": "Frozen title"}', NULL, '2026-03-01 00:00:05+00'),
+ (501, '`+alice+`', 41, 'tok-501', 'h-501', '{"title": 7}',              '2026-01-01 00:00:00+00', '2026-03-01 00:00:02+00'),
+ (502, '`+alice+`', 40, 'tok-502', 'h-502', '["not", "an", "object"]',   NULL, '2026-03-01 00:00:02+00'),
+ (503, '`+bob+`',   42, 'tok-503', 'h-503', '{}',                        NULL, '2026-03-01 00:00:09+00');`)
 	store := Store{Pool: pool}
 
 	t.Run("the list is its owner's, newest first, by id within a tie", func(t *testing.T) {
@@ -46,28 +45,27 @@ INSERT INTO public_chat_snapshots (id, user_id, thread_id, notebook_output_id, s
 		if links[0].ID != 500 || links[1].ID != 502 || links[2].ID != 501 {
 			t.Errorf("listed in the order %d, %d, %d", links[0].ID, links[1].ID, links[2].ID)
 		}
-		if links[0].Title() != "Frozen title" || links[0].Messages != 3 || links[0].OwnerID != alice ||
-			links[0].ThreadID == nil || *links[0].ThreadID != 300 || links[0].NotebookID != nil {
-			t.Errorf("the shared chat reads %+v", links[0])
+		if links[0].Title() != "Frozen title" || links[0].OwnerID != alice || links[0].NotebookID != 7 {
+			t.Errorf("the first link reads %+v", links[0])
 		}
-		// A copy that is not an object, for an output: no title of its own
-		// and no thread, and the notebook the output belongs to.
-		if links[1].Title() != "Untitled" || links[1].NotebookID == nil || *links[1].NotebookID != 7 || links[1].Messages != 0 {
-			t.Errorf("the shared output reads %+v", links[1])
+		// A copy that is not an object has no title of its own: the
+		// output's is listed.
+		if links[1].Title() != "A deck" || links[1].NotebookID != 7 {
+			t.Errorf("the second link reads %+v", links[1])
 		}
-		// A title that is a number is no title, and the chat's own is empty.
+		// A title that is a number is no title, and the output's own is empty.
 		if links[2].Title() != "Untitled" || links[2].ExpiresAt == nil {
 			t.Errorf("the lapsed link reads %+v", links[2])
 		}
 		his, err := store.Links(ctx, bob)
-		if err != nil || len(his) != 1 || his[0].ID != 503 || his[0].Title() != "A chat of his" {
+		if err != nil || len(his) != 1 || his[0].ID != 503 || his[0].Title() != "A map of his" {
 			t.Errorf("the other account lists %+v, %v", his, err)
 		}
 	})
 
 	t.Run("a revoke removes the owner's link and nobody else's", func(t *testing.T) {
 		count := func() (left int) {
-			if err := pool.QueryRow(ctx, "SELECT count(*) FROM public_chat_snapshots").Scan(&left); err != nil {
+			if err := pool.QueryRow(ctx, "SELECT count(*) FROM output_public_links").Scan(&left); err != nil {
 				t.Fatal(err)
 			}
 			return left

@@ -98,14 +98,18 @@ func TestEveryKindOfferedIsOneThatIsMade(t *testing.T) {
 	}
 	for _, k := range kinds {
 		text, err := instructions.Run(context.Background(), toolCall(`{"artifact_type":"`+k.name+`"}`))
-		if _, built := documentFormats[k.name]; built {
+		if format, built := documentFormats[k.name]; built && !format.drawn {
 			// Saved by save_artifact from a path, after verify_artifact:
 			// the note that follows the skill says so, with the format.
 			if err != nil || !strings.HasPrefix(text, "The "+k.name+" skill.") || !strings.Contains(text, SaveTool+`(format="`+k.name+`"`) ||
 				!strings.Contains(text, VerifyTool) || !strings.Contains(saveParameters, `"`+k.name+`"`) || contentField[k.name] != "" || finishers[k.name] != "" || k.instructions != "" {
 				t.Errorf("%s: instructions %q, %v", k.name, text, err)
 			}
-		} else if err != nil || text != k.instructions || text == "" {
+		} else if format.drawn && (err != nil || text != k.instructions || !strings.Contains(text, `format "`+k.name+`"`) || !strings.Contains(saveParameters, `"deck"`)) {
+			// Drawn here from content the model writes: instructions of
+			// this package's own, saved with save_artifact's deck.
+			t.Errorf("%s: instructions %q, %v", k.name, text, err)
+		} else if !built && (err != nil || text != k.instructions || text == "") {
 			t.Errorf("%s: instructions %q, %v", k.name, text, err)
 		}
 		// The instructions name the tool that finishes the kind, and that
@@ -114,7 +118,7 @@ func TestEveryKindOfferedIsOneThatIsMade(t *testing.T) {
 		if !own {
 			finisher = SaveTool
 		}
-		if _, built := documentFormats[k.name]; built {
+		if format, built := documentFormats[k.name]; built && !format.drawn {
 			// Checked above.
 		} else if own {
 			// A kind with a tool of its own is not also one of
@@ -140,7 +144,13 @@ func TestEveryKindOfferedIsOneThatIsMade(t *testing.T) {
 			t.Errorf("%s is both made and refused", k.name)
 		}
 	}
-	if len(contentField) != len(kinds)-len(finishers)-len(documentFormats) {
+	inSandbox := 0
+	for _, format := range documentFormats {
+		if !format.drawn {
+			inSandbox++
+		}
+	}
+	if len(contentField) != len(kinds)-len(finishers)-inSandbox {
 		t.Errorf("save_artifact takes %d formats for %d kinds", len(contentField), len(kinds))
 	}
 	// The main agent is told what to hand over as one phrase, and is told
@@ -152,7 +162,7 @@ func TestEveryKindOfferedIsOneThatIsMade(t *testing.T) {
 	}
 
 	// Every tool the nested agent is given is one a provider accepts.
-	for _, built := range []tool.Tool{instructions, s.saveTool(owner), s.podcastTool(owner), s.imageTool(owner), s.videoTool(owner),
+	for _, built := range []tool.Tool{instructions, s.saveTool(owner), s.podcastTool(owner), s.videoTool(owner),
 		s.executeTool(owner), s.readFileTool(owner), s.verifyTool(owner)} {
 		if err := built.Validate(); err != nil {
 			t.Error(err)

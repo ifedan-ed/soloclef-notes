@@ -18,7 +18,7 @@ func TestTheAnswerOffersExactlyWhatTheSettingsServe(t *testing.T) {
 	}{
 		{"password only, nothing else switched on", Settings{},
 			`{"service":"soloclef","password":true,"forgot_password":false,"sign_up":false,"sso":null}`},
-		{"mail and sign-up on", Settings{SMTPEnabled: true, SignupAllowed: true},
+		{"mail and sign-up on", Settings{SendsResetMail: true, SignupAllowed: true},
 			`{"service":"soloclef","password":true,"forgot_password":true,"sign_up":true,"sso":null}`},
 		{"single sign-on the app may use, in the server's words", Settings{OIDCEnabled: true, ButtonLabel: "Continue with Example SSO", DisplayName: "Example SSO", AppRedirects: []string{"soloclef-dev://auth", AppReturn}},
 			`{"service":"soloclef","password":true,"forgot_password":false,"sign_up":false,"sso":{"label":"Continue with Example SSO","name":"Example SSO","app":true}}`},

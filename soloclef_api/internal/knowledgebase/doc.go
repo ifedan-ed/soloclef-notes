@@ -11,9 +11,9 @@
 // The main agent hands a task ("save these notes under Pharmacology", "move
 // the lecture notes into Term 2") to a nested run with the tools of
 // specialist.go: three that read the tree (list, find, read) and nine that
-// change it. Writing, editing, renaming and moving ask first (tool.Ask, which
-// the account's "always allow" rules can waive); deleting asks every time
-// (tool.AlwaysAsk). A change to a note's text, and an undo that puts text
+// change it. Writing, editing, renaming and moving are declared tool.Ask and
+// deleting tool.AlwaysAsk; in a chat the person's own "ask first" marks
+// decide instead, so each runs unless marked (assembly, policy). A change to a note's text, and an undo that puts text
 // back, re-indexes the note through the indexing worker's index_document job,
 // after its commit. A rename or a move queues nothing: the index holds a
 // note's passages and its owner, and every search reads the title and the

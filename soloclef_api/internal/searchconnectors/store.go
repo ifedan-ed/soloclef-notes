@@ -2,13 +2,10 @@ package searchconnectors
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-
-	"git.danvics.com/danvics/soloclef/soloclef_api/internal/database"
 )
 
 // Store is this package's statements over the pool (queries.sql). Every
@@ -106,74 +103,22 @@ func (s Store) SetEnabled(ctx context.Context, ownerID string, connectorID int64
 	return one(ConnectionOfOwnerRow(row), err)
 }
 
-func (s Store) DeleteServer(ctx context.Context, ownerID string, connectorID int64) (bool, error) {
-	deleted, err := New(s.Pool).DeleteServer(ctx, DeleteServerParams{ID: connectorID, UserID: ownerID})
-	return deleted > 0, err
+// DeleteServer removes the owner's MCP server and answers the config it
+// held; nil is "not found".
+func (s Store) DeleteServer(ctx context.Context, ownerID string, connectorID int64) ([]byte, error) {
+	config, err := New(s.Pool).DeleteServer(ctx, DeleteServerParams{ID: connectorID, UserID: ownerID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	return config, err
 }
 
-// errConfigNotAnObject is a server whose config cannot take a key. Nothing
-// this application writes makes one; it is refused and not repaired, because
-// replacing the config would throw the server's address and key away.
-var errConfigNotAnObject = errors.New("searchconnectors: the server's config is not an object")
-
-// EditTrustedTools is the read, the decision and the write of one edit, in
-// one transaction with the row locked from the read on. Two edits made at
-// once therefore queue, and the second decides from the list the first
-// wrote. Reading the whole config, changing it in memory and writing it back
-// (what this used to do) lost one of two such edits.
-func (s Store) EditTrustedTools(ctx context.Context, ownerID string, connectorID int64,
-	edit func(trusted []string) ([]string, bool)) (trusted []string, stored, found bool, err error) {
-	type outcome struct {
-		trusted       []string
-		stored, found bool
-	}
-	result, err := database.Write(ctx, s.Pool,
-		func(ctx context.Context, tx pgx.Tx, _ *database.Effects) (outcome, error) {
-			queries := New(tx)
-			raw, err := queries.LockTrustedTools(ctx, LockTrustedToolsParams{ID: connectorID, UserID: ownerID})
-			if errors.Is(err, pgx.ErrNoRows) {
-				return outcome{}, nil
-			}
-			if err != nil {
-				return outcome{}, err
-			}
-			next, changed := edit(storedToolNames(raw))
-			if !changed {
-				return outcome{trusted: next, found: true}, nil
-			}
-			text, err := json.Marshal(next)
-			if err != nil {
-				return outcome{}, err
-			}
-			written, err := queries.StoreTrustedTools(ctx, StoreTrustedToolsParams{
-				TrustedTools: text, ID: connectorID, UserID: ownerID,
-			})
-			if err != nil {
-				return outcome{}, err
-			}
-			if written == 0 {
-				return outcome{}, errConfigNotAnObject
-			}
-			return outcome{trusted: next, stored: true, found: true}, nil
-		})
-	return result.trusted, result.stored, result.found, err
-}
-
-// storedToolNames reads the stored list leniently: a list that is absent,
-// null or not a list is no names, and an entry that is not a string is not a
-// name. The edit then writes a clean list in its place.
-func storedToolNames(raw []byte) []string {
-	names := []string{}
-	var listed []any
-	if json.Unmarshal(raw, &listed) != nil {
-		return names
-	}
-	for _, item := range listed {
-		if name, isText := item.(string); isText {
-			names = append(names, name)
-		}
-	}
-	return names
+// StoreSignIn is SignInWrites': a finished OAuth sign-in.
+func (s Store) StoreSignIn(ctx context.Context, ownerID string, connectorID int64, serverURL string, oauth []byte) (bool, error) {
+	written, err := New(s.Pool).StoreServerSignIn(ctx, StoreServerSignInParams{
+		Oauth: oauth, ID: connectorID, UserID: ownerID, ServerUrl: serverURL,
+	})
+	return written == 1, err
 }
 
 func (s Store) MarkDocumentsDeleting(ctx context.Context, ownerID string, connectorID int64) error {

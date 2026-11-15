@@ -8,7 +8,6 @@ import {
 import { useAtomValue } from "jotai";
 import {
 	CheckIcon,
-	ClipboardPaste,
 	CopyIcon,
 	Dot,
 	DownloadIcon,
@@ -20,10 +19,7 @@ import {
 import dynamic from "next/dynamic";
 import type { FC } from "react";
 import { useMemo, useState } from "react";
-import {
-	globalModelConnectionsAtom,
-	modelConnectionsAtom,
-} from "@/atoms/model-connections/model-connections-query.atoms";
+import { modelConnectionsAtom } from "@/atoms/model-connections/model-connections-query.atoms";
 import {
 	CitationMetadataProvider,
 	useAllCitationMetadata,
@@ -35,6 +31,7 @@ import {
 	useTokenUsage,
 } from "@/components/assistant-ui/token-usage-context";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
+import { CitationNumbersProvider } from "@/components/citations/citation-numbers-context";
 import type { SerializableCitation } from "@/components/tool-ui/citation";
 import { LegacyDeliverableToolUI } from "@/components/tool-ui/legacy-deliverable";
 import {
@@ -52,19 +49,16 @@ import {
 import { DropdownMenuLabel } from "@/components/ui/dropdown-menu";
 import { withArtifactAnchor } from "@/features/chat-artifacts";
 import { InterleavedMessageParts } from "@/features/chat-messages/timeline";
+import { useAnswerTexts } from "@/features/markdown-copy/use-answer-texts";
+import { useMarkdownCopy } from "@/features/markdown-copy/use-markdown-copy";
 import { NotebookFollowups } from "@/features/notebooks/ui/chat/notebook-followups";
 import { SaveToNoteButton } from "@/features/notebooks/ui/save-to-note-button";
 import { useMediaQuery } from "@/hooks/use-media-query";
-import { useElectronAPI } from "@/hooks/use-platform";
+import { isStreamedMessage } from "@/lib/chat/stream-engine/streamed-message";
 import { formatMessageTimestamp } from "@/lib/format-date";
 import { getProviderIcon } from "@/lib/provider-icons";
 import { tryGetHostname } from "@/lib/url";
-import { cn, copyToClipboard } from "@/lib/utils";
-
-// Captured once at module load — survives client-side navigations that strip the query param.
-const IS_QUICK_ASSIST_WINDOW =
-	typeof window !== "undefined" &&
-	new URLSearchParams(window.location.search).get("quickAssist") === "true";
+import { cn } from "@/lib/utils";
 
 // Dynamically import tool UI components to avoid loading them in main bundle
 const SaveArtifactToolUI = dynamic(
@@ -81,17 +75,17 @@ const GeneratePodcastToolUI = dynamic(
 		})),
 	{ ssr: false }
 );
-const GenerateVideoPresentationToolUI = dynamic(
-	() =>
-		import("@/components/tool-ui/video-presentation").then((m) => ({
-			default: m.GenerateVideoPresentationToolUI,
-		})),
-	{ ssr: false }
-);
 const EnqueueDeliverableJobToolUI = dynamic(
 	() =>
 		import("@/components/tool-ui/deliverable-job").then((m) => ({
 			default: m.EnqueueDeliverableJobToolUI,
+		})),
+	{ ssr: false }
+);
+const AddSourcesToolUI = dynamic(
+	() =>
+		import("@/features/add-sources/ui/add-sources-card").then((m) => ({
+			default: m.AddSourcesToolUI,
 		})),
 	{ ssr: false }
 );
@@ -102,9 +96,31 @@ const PageReaderToolUI = dynamic(
 		})),
 	{ ssr: false }
 );
+const MailDraftToolUI = dynamic(
+	() =>
+		import("@/features/mail-draft-confirm/ui/mail-draft-card").then((m) => ({
+			default: m.MailDraftToolUI,
+		})),
+	{ ssr: false }
+);
+const CreateAutomationToolUI = dynamic(
+	() =>
+		import("@/components/tool-ui/automation").then((m) => ({
+			default: m.CreateAutomationToolUI,
+		})),
+	{ ssr: false }
+);
+// Saved messages only: images are no longer made, but chats from before keep showing theirs.
 const GenerateImageToolUI = dynamic(
 	() =>
 		import("@/components/tool-ui/generate-image").then((m) => ({ default: m.GenerateImageToolUI })),
+	{ ssr: false }
+);
+const DrawFigureToolUI = dynamic(
+	() =>
+		import("@/features/figures/ui/figure-card").then((m) => ({
+			default: m.DrawFigureToolUI,
+		})),
 	{ ssr: false }
 );
 function useCitationsFromMetadata(): SerializableCitation[] {
@@ -302,23 +318,19 @@ const MessageInfoDropdown: FC<{ chatTurnId: string | null | undefined }> = ({ ch
 	const createdAt = useAuiState(({ message }) => message?.createdAt);
 	const usage = useTokenUsage(messageId);
 
-	const { data: globalConnections = [] } = useAtomValue(globalModelConnectionsAtom);
-	const { data: localConnections = [] } = useAtomValue(modelConnectionsAtom);
+	// The account's own connections name their models; a model of the site's
+	// proxy is named by what the turn stored, or by its id.
+	const { data: connections = [] } = useAtomValue(modelConnectionsAtom);
 
 	const modelConnectionByKey = useMemo(() => {
-		const map = new Map<
-			string,
-			{ name: string; provider: string; modelId: string; shared: boolean }
-		>();
-		// Shared models last, so their friendly names win over a raw id.
-		for (const connection of [...localConnections, ...globalConnections]) {
+		const map = new Map<string, { name: string; provider: string; modelId: string }>();
+		for (const connection of connections) {
 			for (const model of connection.models) {
 				const normalizedModelId = normalizeUsageModelKey(model.model_id);
 				const entry = {
 					name: model.display_name || model.model_id,
 					provider: connection.provider,
 					modelId: model.model_id,
-					shared: connection.scope === "global",
 				};
 				map.set(model.model_id, entry);
 				map.set(normalizedModelId, entry);
@@ -326,7 +338,7 @@ const MessageInfoDropdown: FC<{ chatTurnId: string | null | undefined }> = ({ ch
 			}
 		}
 		return map;
-	}, [globalConnections, localConnections]);
+	}, [connections]);
 
 	const resolveModel = (modelKey: string, counts: TokenUsageModelBreakdown) => {
 		const normalizedKey = normalizeUsageModelKey(counts.model_id || counts.model || modelKey);
@@ -338,11 +350,7 @@ const MessageInfoDropdown: FC<{ chatTurnId: string | null | undefined }> = ({ ch
 		const provider =
 			counts.provider || connectionModel?.provider || inferProviderFromModelKey(normalizedKey);
 		const modelId = counts.model_id || connectionModel?.modelId || modelKey;
-		// A shared model is shown under today's name, not the one stored with an
-		// older message, so a rename reaches past answers too.
-		const sharedName = connectionModel?.shared ? connectionModel.name : null;
-		const name =
-			sharedName || counts.display_name || connectionModel?.name || humanizeModelId(modelId);
+		const name = counts.display_name || connectionModel?.name || humanizeModelId(modelId);
 		return {
 			name,
 			modelId,
@@ -437,39 +445,59 @@ const BODY_TOOLS = {
 	generate_report: LegacyDeliverableToolUI,
 	generate_resume: LegacyDeliverableToolUI,
 	generate_podcast: withArtifactAnchor(GeneratePodcastToolUI),
-	generate_video_presentation: withArtifactAnchor(GenerateVideoPresentationToolUI),
 	enqueue_deliverable_job: withArtifactAnchor(EnqueueDeliverableJobToolUI),
+	// Pictures of messages saved before figures replaced images.
 	display_image: withArtifactAnchor(GenerateImageToolUI),
 	generate_image: withArtifactAnchor(GenerateImageToolUI),
+	// A chart or diagram drawn in the answer; not a deliverable, but part of what it says.
+	draw_figure: DrawFigureToolUI,
 	// Not a deliverable, but what the answer rests on: the pages it read.
 	web_crawl: PageReaderToolUI,
+	// Not a deliverable either: the drafted email, and the only place it can be sent from.
+	draft_email: MailDraftToolUI,
+	// Nor this: an automation the chat drafted, and the only place it is created from.
+	create_automation: CreateAutomationToolUI,
+	// What the chat added to the notebook's sources, each opening there.
+	add_sources: AddSourcesToolUI,
 } as const;
 
 const AssistantMessageInner: FC = () => {
 	const isMobile = !useMediaQuery("(min-width: 768px)");
+	const texts = useAnswerTexts();
+	// While this answer streams its citations are still the model's "[3]"
+	// labels; they are drawn as chips numbered by the same rule, so nothing
+	// renumbers when the saved answer replaces the streamed one.
+	const streaming = useAuiState(
+		({ message, thread }) =>
+			isStreamedMessage(message.metadata) ||
+			message.status?.type === "running" ||
+			(thread.isRunning && message.isLast)
+	);
 
 	return (
-		<CitationMetadataProvider>
-			<div className="aui-assistant-message-content wrap-break-word px-2 text-foreground leading-relaxed">
-				<InterleavedMessageParts bodyTools={BODY_TOOLS} />
-				<MessageError />
-			</div>
-
-			<MessageTimestamp className="ml-2 mt-2" />
-
-			{isMobile && (
-				<div className="ml-2 mt-2">
-					<MobileCitationDrawer />
+		<CitationNumbersProvider texts={texts} labels={streaming}>
+			<CitationMetadataProvider>
+				<div className="aui-assistant-message-content wrap-break-word px-2 text-foreground leading-relaxed">
+					<InterleavedMessageParts bodyTools={BODY_TOOLS} />
+					<MessageError />
 				</div>
-			)}
 
-			<div className="aui-assistant-message-footer mt-3 mb-5 ml-2 h-6">
-				<div className="h-full opacity-100 transition-opacity">
-					<AssistantActionBar />
+				<MessageTimestamp className="ml-2 mt-2" />
+
+				{isMobile && (
+					<div className="ml-2 mt-2">
+						<MobileCitationDrawer />
+					</div>
+				)}
+
+				<div className="aui-assistant-message-footer mt-3 mb-5 ml-2 h-6">
+					<div className="h-full opacity-100 transition-opacity">
+						<AssistantActionBar />
+					</div>
 				</div>
-			</div>
-			<NotebookFollowups />
-		</CitationMetadataProvider>
+				<NotebookFollowups />
+			</CitationMetadataProvider>
+		</CitationNumbersProvider>
 	);
 };
 
@@ -484,9 +512,8 @@ export const AssistantMessage: FC = () => (
 
 const AssistantActionBar: FC = () => {
 	const isLast = useAuiState((s) => s.message.isLast);
-	const content = useAuiState((s) => s.message.content);
+	const texts = useAnswerTexts();
 	const [copiedAnswer, setCopiedAnswer] = useState(false);
-	const api = useElectronAPI();
 	// Surface the persisted ``chat_turn_id`` so the per-turn revert
 	// affordance can scope to just this message's actions. Streamed
 	// turns get their id once the assistant message is hydrated/finalised.
@@ -495,31 +522,16 @@ const AssistantActionBar: FC = () => {
 		return meta?.custom?.chatTurnId ?? null;
 	});
 
-	const isQuickAssist = !!api?.replaceText && IS_QUICK_ASSIST_WINDOW;
-	const answerText = Array.isArray(content)
-		? content
-				.filter(
-					(part): part is { type: "text"; text: string } =>
-						part.type === "text" && typeof part.text === "string"
-				)
-				.map((part) => part.text)
-				.join("\n\n")
-		: "";
+	const answerText = texts.join("\n\n");
+	// Copy keeps the formatting (html and clean plain text) and turns the
+	// citations into the numbers on screen, with the sources listed after.
+	const answerCopy = useMarkdownCopy(texts);
 	const copyAnswer = async () => {
-		if (!(await copyToClipboard(answerText))) return;
+		if (!(await answerCopy.copy())) return;
 		setCopiedAnswer(true);
 		window.setTimeout(() => setCopiedAnswer(false), 1500);
 	};
-	const downloadAnswer = () => {
-		const url = URL.createObjectURL(
-			new Blob([answerText], { type: "text/markdown;charset=utf-8" })
-		);
-		const anchor = document.createElement("a");
-		anchor.href = url;
-		anchor.download = "response.md";
-		anchor.click();
-		URL.revokeObjectURL(url);
-	};
+	const downloadAnswer = () => void answerCopy.download("response.md");
 
 	return (
 		<ActionBarPrimitive.Root
@@ -528,12 +540,19 @@ const AssistantActionBar: FC = () => {
 			autohideFloat="single-branch"
 			className="aui-assistant-action-bar-root -ml-1 col-start-3 row-start-2 flex gap-1 text-muted-foreground md:data-floating:absolute md:data-floating:rounded-md md:data-floating:p-1 [&>button]:opacity-100 md:[&>button]:opacity-[var(--aui-button-opacity,1)]"
 		>
-			<TooltipIconButton tooltip="Copy answer" onClick={copyAnswer} disabled={!answerText}>
+			<TooltipIconButton
+				tooltip="Copy answer"
+				onClick={copyAnswer}
+				onPointerEnter={answerCopy.prefetch}
+				onFocus={answerCopy.prefetch}
+				disabled={!answerText}
+			>
 				{copiedAnswer ? <CheckIcon /> : <CopyIcon />}
 			</TooltipIconButton>
 			<TooltipIconButton
 				tooltip="Download answer as Markdown"
 				onClick={downloadAnswer}
+				onPointerEnter={answerCopy.prefetch}
 				disabled={!answerText}
 			>
 				<DownloadIcon />
@@ -545,16 +564,6 @@ const AssistantActionBar: FC = () => {
 						<RefreshCwIcon />
 					</TooltipIconButton>
 				</ActionBarPrimitive.Reload>
-			)}
-			{isQuickAssist && (
-				<TooltipIconButton
-					tooltip="Paste back into source app"
-					onClick={() => {
-						api?.replaceText(answerText);
-					}}
-				>
-					<ClipboardPaste />
-				</TooltipIconButton>
 			)}
 			<MessageInfoDropdown chatTurnId={chatTurnId} />
 		</ActionBarPrimitive.Root>

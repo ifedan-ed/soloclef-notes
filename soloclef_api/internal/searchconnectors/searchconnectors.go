@@ -14,8 +14,9 @@
 //	GET    /api/v1/connectors/mcp/{connector_id}                     one of them
 //	PUT    /api/v1/connectors/mcp/{connector_id}                     change one's name or settings
 //	DELETE /api/v1/connectors/mcp/{connector_id}                     remove one
-//	POST   /api/v1/connectors/mcp/{connector_id}/trust-tool          let a tool run without asking
-//	POST   /api/v1/connectors/mcp/{connector_id}/untrust-tool        make it ask again
+//	POST   /api/v1/connectors/mcp/oauth/discover                     does a server offer an OAuth sign-in
+//	POST   /api/v1/connectors/mcp/{connector_id}/oauth/start         sign in to a saved server
+//	GET    /api/v1/connectors/mcp/oauth/callback                     the authorization server's way back
 //
 // # Whose a connection is
 //
@@ -34,9 +35,12 @@
 // credential is in the row's `config` column, a `jsonb` document, and how it
 // is held there depends on the type:
 //
-//   - an MCP server's key is stored **in the clear**, in
-//     `server_config.headers` or in `server_config.url`. Every read masks it
-//     (secrets.go), for every caller, the person who typed it included.
+//   - an MCP server's secrets are sealed (soloclef_connectors/mcpserver):
+//     each header value, an address that carries a key, an OAuth client
+//     secret and the OAuth tokens, AES-256-GCM bound to the owner, each
+//     with its mask beside it. A read shows the masks (server_public.go)
+//     and opens nothing; the secrets are opened only where a connection to
+//     the server is made (the chat, a test, a sign-in).
 //   - a mailbox's password or Microsoft token is Fernet ciphertext under
 //     `accounts[]`. Every read reduces each account to nine public fields
 //     (mailboxes.go), so not even the ciphertext leaves.
@@ -51,8 +55,9 @@
 // The tests store invented credentials and refuse an answer in which one
 // came back.
 //
-// Nothing in the reads decrypts, encrypts or compares a credential. The
-// mask is string work and the reductions are a choice of keys. The one
+// Nothing in the reads decrypts or compares a credential: the masks were
+// computed when each secret was sealed and the reductions are a choice of
+// keys. The one
 // route that opens a stored credential is the connection's removal, and it
 // does not do it here: it hands the stored settings to a Revoker
 // (internal/connectionrevocation), which opens the token only to end it at
@@ -73,12 +78,12 @@
 // # Every change to an account's MCP servers moves a counter
 //
 // The chat caches MCP tool definitions per account and drops them when a
-// counter in Valkey moves (soloclef_assistant/mcptools). Adding a server, editing
-// one, removing one, switching one on or off and editing its trusted tools
-// each move the account's counter after the change commits (tool_changes.go, which also
+// counter in Valkey moves (soloclef_assistant/mcptools). Adding a server,
+// editing one, removing one and switching one on or off each move the
+// account's counter after the change commits (tool_changes.go, which also
 // says what happens when it cannot). What a call may do is read from the row
 // at each call, so a cached definition is never acted on with a stale
-// address, key or trusted list.
+// address or key.
 //
 // # What is easy to read past
 //
@@ -102,8 +107,6 @@ const (
 	// to a wildcard, so neither is ever read as a server's id.
 	ServerTestPath   = "/api/v1/connectors/mcp/test"
 	ServerPolicyPath = "/api/v1/connectors/mcp/policy"
-	TrustPath        = "/api/v1/connectors/mcp/{connector_id}/trust-tool"
-	UntrustPath      = "/api/v1/connectors/mcp/{connector_id}/untrust-tool"
 	serverTypeTag    = "MCP_CONNECTOR"
 	mailboxType      = "EMAIL_IMAP_CONNECTOR"
 )
@@ -112,9 +115,7 @@ const (
 const (
 	connectorAbsent = "Connector not found"
 	serverAbsent    = "MCP connector not found"
-	toolAlwaysAsk   = "Tools that open web addresses always ask before running"
 	sessionRequired = "This action requires an interactive session"
-	toolUnstorable  = "This tool name contains a character that cannot be saved"
 )
 
 // BodyRoutes is every route of this package that reads a small JSON body
@@ -124,13 +125,13 @@ const (
 // never reach it.
 func BodyRoutes() []string {
 	return []string{
-		"POST " + TrustPath,
-		"POST " + UntrustPath,
 		"PUT " + EnabledPath,
 		"POST " + ServersPath,
 		"PUT " + ServerPath,
 		"POST " + ServerTestPath,
 		"POST " + ListPath,
 		"PUT " + OnePath,
+		"POST " + OAuthDiscoverPath,
+		"POST " + OAuthStartPath,
 	}
 }

@@ -1,15 +1,11 @@
-import { AutomationEditContent } from "./automation-edit-content";
+import { STATIC_PLACEHOLDER } from "@/lib/routing/dynamic-segments";
+import { AutomationRoute } from "../automation-route";
 
-export default async function AutomationEditPage({
-	params,
-}: {
-	params: Promise<{ automation_id: string }>;
-}) {
-	const { automation_id } = await params;
+// One file for every automation's editor, served at /dashboard/automations/<id>/edit.
+export function generateStaticParams() {
+	return [{ automation_id: STATIC_PLACEHOLDER }];
+}
 
-	return (
-		<div className="w-full space-y-6">
-			<AutomationEditContent automationId={Number(automation_id)} />
-		</div>
-	);
+export default function AutomationEditPage() {
+	return <AutomationRoute edit />;
 }

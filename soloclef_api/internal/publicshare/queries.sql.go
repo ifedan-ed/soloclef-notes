@@ -10,71 +10,15 @@ import (
 	"time"
 )
 
-const copyMessages = `-- name: CopyMessages :execrows
-INSERT INTO new_chat_messages (thread_id, role, content, created_at)
-SELECT $1::bigint,
-       upper(m.entry ->> 'role')::newchatmessagerole,
-       CASE WHEN jsonb_typeof(m.entry -> 'content') = 'array' THEN m.entry -> 'content' ELSE '[]'::jsonb END,
-       $2::timestamptz + m.position * interval '1 microsecond'
-FROM public_chat_snapshots s
-CROSS JOIN LATERAL jsonb_array_elements(
-    CASE WHEN jsonb_typeof(s.snapshot_data -> 'messages') = 'array'
-         THEN s.snapshot_data -> 'messages' ELSE '[]'::jsonb END
-) WITH ORDINALITY AS m(entry, position)
-WHERE s.id = $3
-  AND upper(m.entry ->> 'role') IN ('USER', 'ASSISTANT', 'SYSTEM')
-ORDER BY m.position
-`
-
-type CopyMessagesParams struct {
-	ThreadID   int64
-	MadeAt     time.Time
-	SnapshotID int64
-}
-
-// Every message of the frozen copy into the new thread, in one statement.
-// The copy holds only what the public page shows (text and the public
-// cards), so that is all a copy can carry. Each message is stamped a
-// microsecond after the one before it, because messages are read back in
-// (created_at, id) order and one shared instant would leave the order to
-// the ids alone. No author is written: the people who wrote the original
-// are not the caller, and their ids are not in the copy.
-func (q *Queries) CopyMessages(ctx context.Context, arg CopyMessagesParams) (int64, error) {
-	result, err := q.db.Exec(ctx, copyMessages, arg.ThreadID, arg.MadeAt, arg.SnapshotID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const createEarlierChatsNotebook = `-- name: CreateEarlierChatsNotebook :one
-INSERT INTO notebooks (user_id, title, icon)
-VALUES ($1, $2, $3)
-RETURNING id
-`
-
-type CreateEarlierChatsNotebookParams struct {
-	UserID string
-	Title  string
-	Icon   *string
-}
-
-func (q *Queries) CreateEarlierChatsNotebook(ctx context.Context, arg CreateEarlierChatsNotebookParams) (int64, error) {
-	row := q.db.QueryRow(ctx, createEarlierChatsNotebook, arg.UserID, arg.Title, arg.Icon)
-	var id int64
-	err := row.Scan(&id)
-	return id, err
-}
-
 const dropExpiredOutputLinks = `-- name: DropExpiredOutputLinks :exec
-DELETE FROM public_chat_snapshots
+DELETE FROM output_public_links
 WHERE notebook_output_id = $1 AND user_id = $2
   AND content_hash = $3
   AND expires_at IS NOT NULL AND expires_at <= $4::timestamptz
 `
 
 type DropExpiredOutputLinksParams struct {
-	OutputID    *int64
+	OutputID    int64
 	UserID      string
 	ContentHash string
 	Now         time.Time
@@ -92,114 +36,17 @@ func (q *Queries) DropExpiredOutputLinks(ctx context.Context, arg DropExpiredOut
 	return err
 }
 
-const earlierChatsNotebook = `-- name: EarlierChatsNotebook :one
-SELECT n.id
-FROM notebooks n
-JOIN notebook_earlier_chats e ON e.notebook_id = n.id AND e.user_id = n.user_id
-WHERE n.user_id = $1
-ORDER BY n.id
-LIMIT 1
-`
-
-// The caller's notebook for chats that began outside one. It is found by
-// the chats filed in it and not by its title, which its owner may change.
-func (q *Queries) EarlierChatsNotebook(ctx context.Context, userID string) (int64, error) {
-	row := q.db.QueryRow(ctx, earlierChatsNotebook, userID)
-	var id int64
-	err := row.Scan(&id)
-	return id, err
-}
-
-const fileEarlierChat = `-- name: FileEarlierChat :exec
-INSERT INTO notebook_earlier_chats (thread_id, notebook_id, user_id)
-VALUES ($1, $2, $3)
-`
-
-type FileEarlierChatParams struct {
-	ThreadID   int64
-	NotebookID int64
-	UserID     string
-}
-
-func (q *Queries) FileEarlierChat(ctx context.Context, arg FileEarlierChatParams) error {
-	_, err := q.db.Exec(ctx, fileEarlierChat, arg.ThreadID, arg.NotebookID, arg.UserID)
-	return err
-}
-
-const frozenMedia = `-- name: FrozenMedia :one
-SELECT (snapshot_data -> 'podcasts')::jsonb AS podcasts,
-       (snapshot_data -> 'video_presentations')::jsonb AS presentations
-FROM public_chat_snapshots
-WHERE share_token = $1
-  AND (expires_at IS NULL OR expires_at > $2::timestamptz)
-`
-
-type FrozenMediaParams struct {
-	ShareToken string
-	Now        time.Time
-}
-
-type FrozenMediaRow struct {
-	Podcasts      []byte
-	Presentations []byte
-}
-
-// The podcasts and the presentations frozen into a live link, and nothing
-// else of its copy: the messages can be megabytes and no route here reads
-// them.
-// owner: through the share token.
-func (q *Queries) FrozenMedia(ctx context.Context, arg FrozenMediaParams) (FrozenMediaRow, error) {
-	row := q.db.QueryRow(ctx, frozenMedia, arg.ShareToken, arg.Now)
-	var i FrozenMediaRow
-	err := row.Scan(&i.Podcasts, &i.Presentations)
-	return i, err
-}
-
-const insertCopiedThread = `-- name: InsertCopiedThread :one
-INSERT INTO new_chat_threads (user_id, title, notebook_id, cloned_from_thread_id, cloned_from_snapshot_id,
-                              cloned_at, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5,
-        $6::timestamptz, $6::timestamptz, $6::timestamptz)
-RETURNING id
-`
-
-type InsertCopiedThreadParams struct {
-	UserID         string
-	Title          string
-	NotebookID     *int64
-	SourceThreadID *int64
-	SnapshotID     *int64
-	MadeAt         time.Time
-}
-
-// The copy: the caller's own thread, in the caller's own notebook (the
-// (notebook_id, user_id) foreign key refuses any other), recording which
-// link it came from.
-func (q *Queries) InsertCopiedThread(ctx context.Context, arg InsertCopiedThreadParams) (int64, error) {
-	row := q.db.QueryRow(ctx, insertCopiedThread,
-		arg.UserID,
-		arg.Title,
-		arg.NotebookID,
-		arg.SourceThreadID,
-		arg.SnapshotID,
-		arg.MadeAt,
-	)
-	var id int64
-	err := row.Scan(&id)
-	return id, err
-}
-
 const insertOutputLink = `-- name: InsertOutputLink :one
-INSERT INTO public_chat_snapshots (user_id, notebook_output_id, share_token, content_hash,
-                                   snapshot_data, message_ids, expires_at)
+INSERT INTO output_public_links (user_id, notebook_output_id, share_token, content_hash,
+                                 snapshot_data, expires_at)
 VALUES ($1, $2, $3, $4,
-        $5, '{}', $6)
+        $5, $6)
 RETURNING id, share_token, expires_at
 `
 
 type InsertOutputLinkParams struct {
 	UserID       string
-	OutputID     *int64
+	OutputID     int64
 	ShareToken   string
 	ContentHash  string
 	SnapshotData []byte
@@ -226,47 +73,6 @@ func (q *Queries) InsertOutputLink(ctx context.Context, arg InsertOutputLinkPara
 	return i, err
 }
 
-const linkToCopy = `-- name: LinkToCopy :one
-SELECT id, thread_id,
-       left(COALESCE(NULLIF(snapshot_data ->> 'title', ''), 'Copied chat'), 500)::text AS title
-FROM public_chat_snapshots
-WHERE share_token = $1
-  AND (expires_at IS NULL OR expires_at > $2::timestamptz)
-`
-
-type LinkToCopyParams struct {
-	ShareToken string
-	Now        time.Time
-}
-
-type LinkToCopyRow struct {
-	ID       int64
-	ThreadID *int64
-	Title    string
-}
-
-// The live link a copy is made from. `thread_id` is NULL for a link to a
-// Studio output, which cannot be copied.
-// owner: through the share token; whoever holds it may copy.
-func (q *Queries) LinkToCopy(ctx context.Context, arg LinkToCopyParams) (LinkToCopyRow, error) {
-	row := q.db.QueryRow(ctx, linkToCopy, arg.ShareToken, arg.Now)
-	var i LinkToCopyRow
-	err := row.Scan(&i.ID, &i.ThreadID, &i.Title)
-	return i, err
-}
-
-const lockAccountCopies = `-- name: LockAccountCopies :exec
-SELECT pg_advisory_xact_lock(hashtextextended('publicshare.clone:' || $1::text, 0))
-`
-
-// One copy at a time for an account, for as long as the transaction lasts:
-// two first copies would otherwise each find no "Earlier chats" notebook
-// and each make one.
-func (q *Queries) LockAccountCopies(ctx context.Context, userID string) error {
-	_, err := q.db.Exec(ctx, lockAccountCopies, userID)
-	return err
-}
-
 const outputToShare = `-- name: OutputToShare :one
 SELECT o.id, o.title, o.kind,
        a.id AS artifact_id, a.format AS artifact_format, a.generation AS artifact_generation,
@@ -274,7 +80,7 @@ SELECT o.id, o.title, o.kind,
 FROM notebook_outputs o
 LEFT JOIN podcast_runs p ON p.id = o.podcast_id AND p.user_id = o.user_id AND p.status = 'ready'
 LEFT JOIN deliverable_jobs j ON j.id = o.deliverable_job_id AND j.user_id = o.user_id AND j.status = 'ready'
-LEFT JOIN artifacts a ON a.id = COALESCE(p.artifact_id, j.artifact_id) AND a.user_id = o.user_id
+LEFT JOIN artifacts a ON a.id = COALESCE(p.artifact_id, j.artifact_id, o.artifact_id) AND a.user_id = o.user_id
 LEFT JOIN documents d ON d.id = a.document_id AND d.user_id = a.user_id
 WHERE o.id = $1 AND o.notebook_id = $2 AND o.user_id = $3
 FOR UPDATE OF o
@@ -300,6 +106,7 @@ type OutputToShareRow struct {
 // its link is written so that two shares of it at once make one link. The
 // run and the artifact are joined only when they are the caller's and the
 // run is ready, so an unfinished output answers with no artifact.
+// Or the artifact a notebook's chat made, which has no run to be ready.
 func (q *Queries) OutputToShare(ctx context.Context, arg OutputToShareParams) (OutputToShareRow, error) {
 	row := q.db.QueryRow(ctx, outputToShare, arg.OutputID, arg.NotebookID, arg.UserID)
 	var i OutputToShareRow
@@ -312,6 +119,41 @@ func (q *Queries) OutputToShare(ctx context.Context, arg OutputToShareParams) (O
 		&i.ArtifactGeneration,
 		&i.Markdown,
 	)
+	return i, err
+}
+
+const pageLink = `-- name: PageLink :one
+
+SELECT expires_at, created_at, snapshot_data
+FROM output_public_links
+WHERE share_token = $1
+`
+
+type PageLinkRow struct {
+	ExpiresAt    *time.Time
+	CreatedAt    time.Time
+	SnapshotData []byte
+}
+
+// The statements behind a Studio output's public link: the page and the
+// files a stranger holding the token reads, and the owner's create.
+//
+// The public statements name no caller: there is none. Each starts at the
+// share token instead, and reaches an artifact only when three things hold
+// together: the link has not expired, the link's own list (`artifact_ids`)
+// names the artifact, and the artifact belongs to the account that made the
+// link. The third is what makes a wrong id in a list harmless.
+//
+// No statement selects more than its route sends or needs to find the bytes.
+// The link a page shows. The expiry is read rather than filtered on, so
+// the page can tell an expired link (410) from one that is gone (404).
+// `user_id` and `notebook_output_id` are not selected: the page never sends
+// them, and a column that is not read cannot be sent by a later edit.
+// owner: through the share token. Whoever holds it may read.
+func (q *Queries) PageLink(ctx context.Context, shareToken string) (PageLinkRow, error) {
+	row := q.db.QueryRow(ctx, pageLink, shareToken)
+	var i PageLinkRow
+	err := row.Scan(&i.ExpiresAt, &i.CreatedAt, &i.SnapshotData)
 	return i, err
 }
 
@@ -342,13 +184,13 @@ func (q *Queries) PrimaryFileSummary(ctx context.Context, arg PrimaryFileSummary
 }
 
 const renewOutputLink = `-- name: RenewOutputLink :one
-UPDATE public_chat_snapshots link
+UPDATE output_public_links link
 SET expires_at = $1,
     snapshot_data = jsonb_set(
         jsonb_set(snapshot_data, '{title}', to_jsonb($2::text)),
         '{output,title}', to_jsonb($2::text))
 WHERE link.id = (
-    SELECT same.id FROM public_chat_snapshots same
+    SELECT same.id FROM output_public_links same
     WHERE same.notebook_output_id = $3 AND same.user_id = $4
       AND same.content_hash = $5
     ORDER BY same.id LIMIT 1)
@@ -358,7 +200,7 @@ RETURNING link.id, link.share_token, link.expires_at
 type RenewOutputLinkParams struct {
 	ExpiresAt   *time.Time
 	Title       string
-	OutputID    *int64
+	OutputID    int64
 	UserID      string
 	ContentHash string
 }
@@ -384,17 +226,60 @@ func (q *Queries) RenewOutputLink(ctx context.Context, arg RenewOutputLinkParams
 	return i, err
 }
 
+const sharedArtifactFiles = `-- name: SharedArtifactFiles :one
+SELECT a.generation,
+       COALESCE((
+           SELECT jsonb_agg(jsonb_build_object(
+                      'file_id', f.id, 'role', f.role, 'filename', f.original_filename,
+                      'mime_type', f.mime_type, 'size_bytes', f.size_bytes)
+                  ORDER BY f.role = 'primary' DESC, f.id)
+           FROM artifact_files f
+           WHERE f.artifact_id = a.id
+       ), '[]'::jsonb)::jsonb AS files
+FROM output_public_links l
+JOIN artifacts a ON a.user_id = l.user_id
+WHERE l.share_token = $1
+  AND (l.expires_at IS NULL OR l.expires_at > $2::timestamptz)
+  AND a.id = $3::bigint
+  AND jsonb_typeof(l.snapshot_data -> 'artifact_ids') = 'array'
+  AND l.snapshot_data -> 'artifact_ids' @> to_jsonb($3::bigint)
+`
+
+type SharedArtifactFilesParams struct {
+	ShareToken string
+	Now        time.Time
+	ArtifactID int64
+}
+
+type SharedArtifactFilesRow struct {
+	Generation int64
+	Files      []byte
+}
+
+// The shared artifact's generation and every one of its files, main file
+// first and then by id, in one round trip. Its files are read as they are
+// now and not as they were when the link was made, so an output made again
+// after it was shared shows its new files. No storage key and no checksum:
+// the page has no use for them.
+// owner: through the share token; the artifact must be the link owner's.
+func (q *Queries) SharedArtifactFiles(ctx context.Context, arg SharedArtifactFilesParams) (SharedArtifactFilesRow, error) {
+	row := q.db.QueryRow(ctx, sharedArtifactFiles, arg.ShareToken, arg.Now, arg.ArtifactID)
+	var i SharedArtifactFilesRow
+	err := row.Scan(&i.Generation, &i.Files)
+	return i, err
+}
+
 const sharedFile = `-- name: SharedFile :one
 SELECT f.storage_backend, f.storage_key, f.original_filename, f.mime_type, f.checksum_sha256
-FROM public_chat_snapshots s
-JOIN artifacts a ON a.user_id = s.user_id
+FROM output_public_links l
+JOIN artifacts a ON a.user_id = l.user_id
 JOIN artifact_files f ON f.artifact_id = a.id
-WHERE s.share_token = $1
-  AND (s.expires_at IS NULL OR s.expires_at > $2::timestamptz)
+WHERE l.share_token = $1
+  AND (l.expires_at IS NULL OR l.expires_at > $2::timestamptz)
   AND a.id = $3::bigint
   AND f.id = $4::bigint
-  AND jsonb_typeof(s.snapshot_data -> 'artifact_ids') = 'array'
-  AND s.snapshot_data -> 'artifact_ids' @> to_jsonb($3::bigint)
+  AND jsonb_typeof(l.snapshot_data -> 'artifact_ids') = 'array'
+  AND l.snapshot_data -> 'artifact_ids' @> to_jsonb($3::bigint)
 `
 
 type SharedFileParams struct {
@@ -434,16 +319,15 @@ func (q *Queries) SharedFile(ctx context.Context, arg SharedFileParams) (SharedF
 }
 
 const sharedPrimaryFile = `-- name: SharedPrimaryFile :one
-
 SELECT f.storage_backend, f.storage_key, f.original_filename, f.mime_type, f.checksum_sha256
-FROM public_chat_snapshots s
-JOIN artifacts a ON a.user_id = s.user_id
+FROM output_public_links l
+JOIN artifacts a ON a.user_id = l.user_id
 JOIN artifact_files f ON f.artifact_id = a.id AND f.role = 'primary'
-WHERE s.share_token = $1
-  AND (s.expires_at IS NULL OR s.expires_at > $2::timestamptz)
+WHERE l.share_token = $1
+  AND (l.expires_at IS NULL OR l.expires_at > $2::timestamptz)
   AND a.id = $3::bigint
-  AND jsonb_typeof(s.snapshot_data -> 'artifact_ids') = 'array'
-  AND s.snapshot_data -> 'artifact_ids' @> to_jsonb($3::bigint)
+  AND jsonb_typeof(l.snapshot_data -> 'artifact_ids') = 'array'
+  AND l.snapshot_data -> 'artifact_ids' @> to_jsonb($3::bigint)
 `
 
 type SharedPrimaryFileParams struct {
@@ -460,17 +344,6 @@ type SharedPrimaryFileRow struct {
 	ChecksumSha256   string
 }
 
-// The statements behind a public share link's files, the copy of a shared
-// chat, and the link to a Studio output.
-//
-// The public statements name no caller: there is none. Each starts at the
-// share token instead, and reaches an artifact only when three things hold
-// together: the link has not expired, the link's own list (`artifact_ids`)
-// names the artifact, and the artifact belongs to the account that made the
-// link. The third is not in the Python and is what makes a wrong id in a
-// list harmless.
-//
-// No statement selects more than its route sends or needs to find the bytes.
 // The main file of an artifact the link shares.
 // owner: through the share token; the artifact must be the link owner's.
 func (q *Queries) SharedPrimaryFile(ctx context.Context, arg SharedPrimaryFileParams) (SharedPrimaryFileRow, error) {
@@ -484,32 +357,4 @@ func (q *Queries) SharedPrimaryFile(ctx context.Context, arg SharedPrimaryFilePa
 		&i.ChecksumSha256,
 	)
 	return i, err
-}
-
-const sharedVideoSlides = `-- name: SharedVideoSlides :one
-SELECT (a.metadata -> 'slides')::jsonb AS slides
-FROM public_chat_snapshots s
-JOIN artifacts a ON a.user_id = s.user_id
-WHERE s.share_token = $1
-  AND (s.expires_at IS NULL OR s.expires_at > $2::timestamptz)
-  AND a.id = $3::bigint
-  AND a.format = 'video'
-  AND jsonb_typeof(s.snapshot_data -> 'artifact_ids') = 'array'
-  AND s.snapshot_data -> 'artifact_ids' @> to_jsonb($3::bigint)
-`
-
-type SharedVideoSlidesParams struct {
-	ShareToken string
-	Now        time.Time
-	ArtifactID int64
-}
-
-// The slides of a video artifact the link shares, for one slide's audio.
-// Only that key of the metadata is read; the scene code stays in the row.
-// owner: through the share token; the artifact must be the link owner's.
-func (q *Queries) SharedVideoSlides(ctx context.Context, arg SharedVideoSlidesParams) ([]byte, error) {
-	row := q.db.QueryRow(ctx, sharedVideoSlides, arg.ShareToken, arg.Now, arg.ArtifactID)
-	var slides []byte
-	err := row.Scan(&slides)
-	return slides, err
 }

@@ -6,13 +6,14 @@
 #
 # This file is the whole site, and nothing else is needed to run it: the API
 # with the chat in it, the indexer, the parser service, the worker, the four
-# stores they keep things in, the web app with its live sync (zero-cache),
-# the MCP server agents connect to, Caddy in front of all of them, and, when
-# a deployment switches it on, the sandbox server reports and videos are
-# built in. MinIO is the file store here, by default and with no other
-# choice offered: FILE_STORAGE_BACKEND is s3 for every service that reads or
-# writes a file. The one thing outside it is the model proxy (LiteLLM),
-# which every model call goes through and which runs on its own network.
+# stores they keep things in, the web app's live sync (zero-cache), the MCP
+# server agents connect to, Caddy in front of all of them serving the web
+# app's static files, and, when a deployment switches it on, the sandbox
+# service reports, workbooks and pages are built in. MinIO is the file store here, by
+# default and with no other choice offered: FILE_STORAGE_BACKEND is s3 for
+# every service that reads or writes a file. The one thing outside it is the
+# model proxy (LiteLLM), which every model call goes through and which runs
+# on its own network.
 #
 # What it must never do is touch another stack on the same host, and four
 # things keep it from doing so:
@@ -34,7 +35,7 @@
 #     in by the one door (proxy-go/routes.caddy).
 #
 # One thing is shared with whatever else runs on the host, and it is the
-# sandbox server's Docker: the opensandbox service below says what that
+# sandbox service's Docker: the sandboxd service below says what that
 # means and why it is switched off unless a deployment asks for it.
 #
 # Settings. Every `${NAME:?}` below is required: Compose stops and names the
@@ -82,24 +83,13 @@ x-valkey-url: &valkey-url redis://${COMPOSE_PROJECT_NAME}-valkey-1:6379/0
 x-qdrant-url: &qdrant-url http://${COMPOSE_PROJECT_NAME}-qdrant-1:6333
 x-api-url: &api-url http://${COMPOSE_PROJECT_NAME}-api-1:8080
 
-# The sandbox server, as the API and the worker reach it, and the file its
-# key is in as they read it: the copy the server makes in the sandbox_key
-# volume when it starts (the opensandbox service says why it is a copy). One
+# The sandbox service, as the API and the worker reach it, and the file its
+# key is in as they read it: the copy the service makes in the sandbox_key
+# volume when it starts (the sandboxd service says why it is a copy). One
 # anchor each, so the chat, an automation's run and a video cannot be
-# pointed at different servers or keys.
-x-sandbox-url: &sandbox-url http://${COMPOSE_PROJECT_NAME}-opensandbox-1:8080
+# pointed at different services or keys.
+x-sandbox-url: &sandbox-url http://${COMPOSE_PROJECT_NAME}-sandboxd-1:8080
 x-sandbox-key-file: &sandbox-key-file /run/sandbox-key/api_key
-
-# The stack's name on every sandbox it makes and in every lookup of one
-# (soloclef_studio/sandbox, "One stack's sandboxes"). The server finds
-# sandboxes among every container on its Docker, and a thread's or a job's
-# label is its id, which every stack counts from one; so this label is what
-# keeps a stack from finding, renewing, counting or removing another's. It
-# is the project's name, a fact of the stack and not a choice: a second copy
-# run under another project (-p soloclefgo-boot) has sandboxes of its own,
-# and a container without the label is never touched.
-# One anchor, so the chat, an automation's run and a video agree on it.
-x-sandbox-stack: &sandbox-stack ${COMPOSE_PROJECT_NAME}
 
 # The sandbox image, this stack's own build of docker/sandbox (the
 # sandbox-image service), so the sandboxes run what this checkout says and
@@ -308,8 +298,13 @@ services:
       # itself (soloclef_schema/cmd/migrate/settings.go), as the API does.
       SOLOCLEF_MIGRATE_DATABASE_URL: postgres://${SOLOCLEF_GO_POSTGRES_USER:?}@${COMPOSE_PROJECT_NAME}-postgres-1:5432/${SOLOCLEF_GO_POSTGRES_DB:?}?sslmode=disable
       SOLOCLEF_MIGRATE_DATABASE_PASSWORD_FILE: ${SOLOCLEF_GO_POSTGRES_PASSWORD_FILE:?}
+      # The services' own secret file: migration 00012 seals the MCP and web
+      # search credentials that were stored in the clear with the key the
+      # API and the worker open them with. No other migration reads it.
+      SOLOCLEF_MIGRATE_SECRET_KEY_FILE: ${SOLOCLEF_GO_SESSION_SECRET_FILE:?}
     secrets:
       - postgres_password
+      - session_secret
     depends_on:
       postgres:
         condition: service_healthy
@@ -475,8 +470,9 @@ services:
   # The Go worker (soloclef_worker/cmd/worker): consumes the default queue
   # and its heavy sibling and runs every job on them in Go (internal/jobs):
   # the podcast, a notebook's name, a folder's and an account's removal, and
-  # the video (rendered in a sandbox when the deployment has one, refused at
-  # once when it has not). One static binary and ffmpeg, in an Alpine image.
+  # the video (a narrated deck it draws itself: frames by resvg, joined by
+  # ffmpeg, no sandbox; refused at once when switched off). One static
+  # binary, ffmpeg and resvg, in an Alpine image.
   #
   # Its beat schedules nothing (SOLOCLEF_WORKER_BEAT is false, and not a
   # setting): no job runs on a timer (internal/beat/schedule.go says why
@@ -514,6 +510,16 @@ services:
       SOLOCLEF_WORKER_QUEUE_CONCURRENCY: ${SOLOCLEF_GO_CELERY_DEFAULT_QUEUE:?}=${SOLOCLEF_GO_WORKER_CONCURRENCY:?},${SOLOCLEF_GO_CELERY_DEFAULT_QUEUE:?}.heavy=${SOLOCLEF_GO_WORKER_HEAVY_CONCURRENCY:?}
       SOLOCLEF_WORKER_BEAT: "false"
       SOLOCLEF_WORKER_METRICS_ADDR: ":9464"
+      # How long a stop waits for the work in flight before cutting it off
+      # (internal/broker, ShutdownGrace). Fifteen minutes, from the videos
+      # this site has made (deliverable_jobs, 2026-11-14): the longest that
+      # was finished ran 887 seconds from its claim, the 90th percentile
+      # 765; a video cut off is made again from the start, narration and
+      # all. A stop with nothing running ends at once, and a podcast cut off
+      # carries on from its voiced lines, so the bound only matters while a
+      # video is being made. stop_grace_period below is this plus the
+      # hand-back (10s) plus room; change the two together.
+      SOLOCLEF_WORKER_SHUTDOWN_GRACE: 15m
       # What the worker publishes itself is routed from the default queue,
       # as the API routes: the tick that republishes a queued video whose
       # message was lost (internal/jobreconcile), and those videos.
@@ -567,30 +573,42 @@ services:
 
       # Videos (internal/videojob). The switch is required and is exactly
       # true or false: false marks every queued video failed at once, with
-      # a reason, for a deployment with no sandbox server. The settings under
-      # it are read only when it is true, and then every one is required by
-      # the worker (the narration's style excepted), so here they need only
-      # be present. The server is this stack's own (the opensandbox service,
-      # below), so where it is, where its key is, the stack's label and the
-      # image are facts written here, as the API's are: switching the switch
-      # on is what starts the server.
+      # a reason. The settings under it are read only when it is true, and
+      # then every one is required by the worker (the narration's style
+      # excepted), so here they need only be present. A video needs no
+      # sandbox: the worker draws its frames with the image's resvg and
+      # joins them with its ffmpeg.
       SOLOCLEF_WORKER_VIDEO_ENABLED: ${SOLOCLEF_WORKER_VIDEO_ENABLED:?}
-      SOLOCLEF_WORKER_VIDEO_SANDBOX_STACK: *sandbox-stack
-      SOLOCLEF_WORKER_VIDEO_SANDBOX_URL: *sandbox-url
-      SOLOCLEF_WORKER_VIDEO_SANDBOX_API_KEY_FILE: *sandbox-key-file
-      SOLOCLEF_WORKER_VIDEO_SANDBOX_IMAGE: *sandbox-image
-      SOLOCLEF_WORKER_VIDEO_SANDBOX_CPU: ${SOLOCLEF_WORKER_VIDEO_SANDBOX_CPU?}
-      SOLOCLEF_WORKER_VIDEO_SANDBOX_MEMORY: ${SOLOCLEF_WORKER_VIDEO_SANDBOX_MEMORY?}
-      SOLOCLEF_WORKER_VIDEO_SANDBOX_IDLE_TTL: ${SOLOCLEF_WORKER_VIDEO_SANDBOX_IDLE_TTL?}
-      SOLOCLEF_WORKER_VIDEO_SANDBOX_COMMAND_TIMEOUT: ${SOLOCLEF_WORKER_VIDEO_SANDBOX_COMMAND_TIMEOUT?}
+      SOLOCLEF_WORKER_VIDEO_RESVG: ${SOLOCLEF_WORKER_VIDEO_RESVG?}
+      SOLOCLEF_WORKER_VIDEO_FRAME_WORKERS: ${SOLOCLEF_WORKER_VIDEO_FRAME_WORKERS?}
       SOLOCLEF_WORKER_VIDEO_RENDER_TIMEOUT: ${SOLOCLEF_WORKER_VIDEO_RENDER_TIMEOUT?}
-      SOLOCLEF_WORKER_VIDEO_RENDER_MODE: ${SOLOCLEF_WORKER_VIDEO_RENDER_MODE?}
-      SOLOCLEF_WORKER_VIDEO_RENDER_CONCURRENCY: ${SOLOCLEF_WORKER_VIDEO_RENDER_CONCURRENCY?}
-      SOLOCLEF_WORKER_VIDEO_FRAMES_PER_SEGMENT: ${SOLOCLEF_WORKER_VIDEO_FRAMES_PER_SEGMENT?}
-      SOLOCLEF_WORKER_VIDEO_FRAME_TIMEOUT: ${SOLOCLEF_WORKER_VIDEO_FRAME_TIMEOUT?}
       SOLOCLEF_WORKER_VIDEO_MAX_RENDERS: ${SOLOCLEF_WORKER_VIDEO_MAX_RENDERS?}
       SOLOCLEF_WORKER_VIDEO_NARRATION_VOICE: ${SOLOCLEF_WORKER_VIDEO_NARRATION_VOICE?}
       SOLOCLEF_WORKER_VIDEO_NARRATION_INSTRUCTIONS: ${SOLOCLEF_WORKER_VIDEO_NARRATION_INSTRUCTIONS?}
+      # Phone pushes (internal/pushdelivery): the switch, the address phones
+      # are set to (the API's own public address, which a push names), and
+      # Expo's access token, which is optional on purpose: absent or empty
+      # means Expo's enhanced push security is off.
+      SOLOCLEF_WORKER_PUSH_ENABLED: ${SOLOCLEF_WORKER_PUSH_ENABLED:?}
+      SOLOCLEF_WORKER_PUBLIC_URL: ${SOLOCLEF_API_PUBLIC_URL:?}
+      SOLOCLEF_WORKER_EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN-}
+      # iPhones are pushed straight through Apple (soloclef_notify/apns). The
+      # five are set together or all left empty, which the worker checks:
+      # empty is a worker with no Apple key, whose iPhones on Apple tokens
+      # are not pushed (it says so at start). The key file is the apns_key
+      # secret below, at /run/secrets/apns_key. Each must be in the
+      # settings file, empty or not, so a line left out is a mistake Compose
+      # names rather than an Apple key quietly switched off.
+      SOLOCLEF_WORKER_APNS_KEY_FILE: ${SOLOCLEF_WORKER_APNS_KEY_FILE?}
+      SOLOCLEF_WORKER_APNS_KEY_ID: ${SOLOCLEF_WORKER_APNS_KEY_ID?}
+      SOLOCLEF_WORKER_APNS_TEAM_ID: ${SOLOCLEF_WORKER_APNS_TEAM_ID?}
+      SOLOCLEF_WORKER_APNS_TOPIC: ${SOLOCLEF_WORKER_APNS_TOPIC?}
+      SOLOCLEF_WORKER_APNS_ENVIRONMENT: ${SOLOCLEF_WORKER_APNS_ENVIRONMENT?}
+      # "Soloclef 1.2.0 is out" to iPhones on an older app
+      # (internal/appupdate): the iPhone app's bundle id, which the worker
+      # asks the App Store about once a day; empty for no check. Read only
+      # with pushes on. The line must be in the settings file, empty or not.
+      SOLOCLEF_WORKER_APP_STORE_BUNDLE_ID: ${SOLOCLEF_WORKER_APP_STORE_BUNDLE_ID?}
       # Automations: saved agent tasks the worker runs on a schedule, on a
       # document arriving in a folder, or by hand. Exactly true or false.
       # False, a run that is asked for is ended at once with a reason, no
@@ -637,18 +655,20 @@ services:
       # Nextcloud files on with the chat's own tools: optional
       # (present-but-empty allowed), and empty offers a run no such tools.
       SOLOCLEF_WORKER_AUTOMATIONS_NEXTCLOUD_BASE_URL: ${SOLOCLEF_API_NEXTCLOUD_BASE_URL?}
-      # The two picture models (the vision one reads a drawn infographic
-      # back) and a new podcast's voices, each optional.
-      SOLOCLEF_WORKER_AUTOMATIONS_IMAGE_MODEL: ${SOLOCLEF_API_CHAT_IMAGE_MODEL?}
+      # The vision model (a fetched file's pictures) and a new podcast's
+      # voices, each optional.
       SOLOCLEF_WORKER_AUTOMATIONS_VISION_MODEL: ${SOLOCLEF_API_CHAT_VISION_MODEL?}
+      # What an infographic's PNG is drawn with: the image's own resvg and
+      # figures-go's fonts (soloclef_worker/Dockerfile), named here rather
+      # than in the env file because the image decides where they are.
+      SOLOCLEF_WORKER_AUTOMATIONS_FIGURES_RESVG: /usr/local/bin/resvg
+      SOLOCLEF_WORKER_AUTOMATIONS_FIGURES_FONT_DIR: /usr/local/share/figures/fonts
       SOLOCLEF_WORKER_AUTOMATIONS_TTS_PODCAST_VOICES: ${SOLOCLEF_API_TTS_PODCAST_VOICES?}
       # The sandbox a run builds reports, slides, spreadsheets and pages
-      # in: the API's switch and its settings, on the same server.
+      # in: the API's switch and its settings, on the same service.
       SOLOCLEF_WORKER_AUTOMATIONS_SANDBOX_ENABLED: ${SOLOCLEF_API_SANDBOX_ENABLED:?}
-      SOLOCLEF_WORKER_AUTOMATIONS_SANDBOX_STACK: *sandbox-stack
       SOLOCLEF_WORKER_AUTOMATIONS_SANDBOX_URL: *sandbox-url
       SOLOCLEF_WORKER_AUTOMATIONS_SANDBOX_API_KEY_FILE: *sandbox-key-file
-      SOLOCLEF_WORKER_AUTOMATIONS_SANDBOX_IMAGE: *sandbox-image
       SOLOCLEF_WORKER_AUTOMATIONS_SANDBOX_CPU: ${SOLOCLEF_API_SANDBOX_CPU?}
       SOLOCLEF_WORKER_AUTOMATIONS_SANDBOX_MEMORY: ${SOLOCLEF_API_SANDBOX_MEMORY?}
       SOLOCLEF_WORKER_AUTOMATIONS_SANDBOX_IDLE_TTL_SECONDS: ${SOLOCLEF_API_SANDBOX_IDLE_TTL_SECONDS?}
@@ -681,10 +701,14 @@ services:
       - litellm_key
       - s3_access_key
       - s3_secret_key
+      # Apple's push key, read once at start when SOLOCLEF_WORKER_APNS_KEY_FILE
+      # names it. Compose cannot mount a secret on a condition, so it is
+      # mounted always; a deployment without APNs points it at /dev/null.
+      - apns_key
     volumes:
       - podcast_work:/var/lib/soloclef-worker/podcasts
-      # The sandbox server's key, read only when a video or an automation's
-      # sandbox is switched on (the opensandbox service says why a volume).
+      # The sandbox service's key, read only when an automation's sandbox is
+      # switched on (the sandboxd service says why a volume).
       - sandbox_key:/run/sandbox-key:ro
     networks:
       - default
@@ -704,9 +728,9 @@ services:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
-      # Only when it runs (required: false): with both sandbox switches off
+      # Only when it runs (required: false): with the sandbox switched off
       # the service is not part of the stack at all.
-      opensandbox:
+      sandboxd:
         condition: service_healthy
         required: false
     # It serves its metrics only once every start-up check has passed, so
@@ -718,9 +742,10 @@ services:
       timeout: 3s
       retries: 12
       start_period: 10s
-    # Longer than the worker's own shutdown grace (30s), so its shutdown is
-    # what ends a job rather than SIGKILL landing in the middle of one.
-    stop_grace_period: 60s
+    # Longer than the worker's shutdown grace (15m, above) and its hand-back
+    # (10s), so its own shutdown is what ends a job, giving a cut-off video
+    # back to the queue, rather than SIGKILL landing in the middle of one.
+    stop_grace_period: 16m
     restart: unless-stopped
     logging: *logging
 
@@ -871,29 +896,27 @@ services:
       SOLOCLEF_API_CHAT_MAX_STEPS: ${SOLOCLEF_API_CHAT_MAX_STEPS:?}
       SOLOCLEF_API_CHAT_MAX_TURN_SECONDS: ${SOLOCLEF_API_CHAT_MAX_TURN_SECONDS:?}
 
-      # The two picture models, each optional (present-but-empty allowed):
-      # the one that draws images and infographics, and the one that looks
-      # at pictures (a photo attached to a question, an upload's pictures,
-      # a drawn infographic read back). Empty, that ability is off and a
-      # person who asks is told so. What the sandbox builds is measured,
-      # never looked at, so neither is needed for it.
-      SOLOCLEF_API_CHAT_IMAGE_MODEL: ${SOLOCLEF_API_CHAT_IMAGE_MODEL?}
+      # The model that looks at pictures (a photo attached to a question,
+      # an upload's pictures), optional (present-but-empty allowed): empty,
+      # that ability is off for an account that chose none. Nothing is
+      # drawn by a model: figures and infographics are drawn by code.
       SOLOCLEF_API_CHAT_VISION_MODEL: ${SOLOCLEF_API_CHAT_VISION_MODEL?}
+      # What an infographic's PNG is drawn with: the image's own resvg and
+      # figures-go's fonts (soloclef_api/Dockerfile), named here rather
+      # than in the env file because the image decides where they are.
+      SOLOCLEF_API_FIGURES_RESVG: /usr/local/bin/resvg
+      SOLOCLEF_API_FIGURES_FONT_DIR: /usr/local/share/figures/fonts
       # The sandbox reports, slides, spreadsheets and pages are built in:
-      # this stack's OpenSandbox server (the opensandbox service, below). The
+      # this stack's sandbox service (the sandboxd service, below). The
       # switch is required and is exactly true or false, and it is also what
-      # starts the server. The settings under it are read only when it is
+      # starts the service. The settings under it are read only when it is
       # true, and then every one is required by the API, so here they need
-      # only be present. The
-      # server's address, its key's file, the stack's label and the image
-      # are the stack's facts, not settings: switching it on takes the
-      # switch and the one key file the opensandbox service names, and
-      # nothing else.
+      # only be present. The service's address and its key's file are the
+      # stack's facts, not settings: switching it on takes the switch and
+      # the one key file the sandboxd service names, and nothing else.
       SOLOCLEF_API_SANDBOX_ENABLED: ${SOLOCLEF_API_SANDBOX_ENABLED:?}
-      SOLOCLEF_API_SANDBOX_STACK: *sandbox-stack
       SOLOCLEF_API_SANDBOX_URL: *sandbox-url
       SOLOCLEF_API_SANDBOX_API_KEY_FILE: *sandbox-key-file
-      SOLOCLEF_API_SANDBOX_IMAGE: *sandbox-image
       SOLOCLEF_API_SANDBOX_CPU: ${SOLOCLEF_API_SANDBOX_CPU?}
       SOLOCLEF_API_SANDBOX_MEMORY: ${SOLOCLEF_API_SANDBOX_MEMORY?}
       SOLOCLEF_API_SANDBOX_IDLE_TTL_SECONDS: ${SOLOCLEF_API_SANDBOX_IDLE_TTL_SECONDS?}
@@ -952,6 +975,14 @@ services:
       SOLOCLEF_API_MICROSOFT_MAIL_CLIENT_SECRET_FILE: ${SOLOCLEF_API_MICROSOFT_MAIL_CLIENT_SECRET_FILE?}
       SOLOCLEF_API_MICROSOFT_MAIL_TENANT: ${SOLOCLEF_API_MICROSOFT_MAIL_TENANT?}
       SOLOCLEF_API_MICROSOFT_MAIL_REDIRECT_URI: ${SOLOCLEF_API_MICROSOFT_MAIL_REDIRECT_URI?}
+      SOLOCLEF_API_JMAP_MAIL_CLIENT_ID: ${SOLOCLEF_API_JMAP_MAIL_CLIENT_ID?}
+      SOLOCLEF_API_JMAP_MAIL_REDIRECT_URI: ${SOLOCLEF_API_JMAP_MAIL_REDIRECT_URI?}
+
+      # Signing in to an MCP server with OAuth (internal/searchconnectors,
+      # oauth_routes.go): this API's own callback as the world reaches it,
+      # https://<site>/api/v1/connectors/mcp/oauth/callback. Empty, the
+      # form offers no OAuth sign-in.
+      SOLOCLEF_API_MCP_OAUTH_REDIRECT_URI: ${SOLOCLEF_API_MCP_OAUTH_REDIRECT_URI?}
     secrets:
       - postgres_password
       - session_secret
@@ -959,8 +990,8 @@ services:
       - s3_access_key
       - s3_secret_key
     volumes:
-      # The sandbox server's key, read only when the sandbox is switched on
-      # (the opensandbox service says why it is a volume and not a secret).
+      # The sandbox service's key, read only when the sandbox is switched on
+      # (the sandboxd service says why it is a volume and not a secret).
       - sandbox_key:/run/sandbox-key:ro
     networks:
       - default
@@ -979,9 +1010,9 @@ services:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
-      # Only when it runs (required: false): with both sandbox switches off
+      # Only when it runs (required: false): with the sandbox switched off
       # the service is not part of the stack at all.
-      opensandbox:
+      sandboxd:
         condition: service_healthy
         required: false
     # The image has no shell and no curl; the binary asks itself
@@ -993,33 +1024,43 @@ services:
       timeout: 5s
       retries: 12
       start_period: 10s
-    # Longer than SOLOCLEF_API_SHUTDOWN_GRACE_SECONDS has any reason to be:
-    # on a stop, running chat turns save what they have before the process
-    # exits, and SIGKILL must not arrive while they do.
-    stop_grace_period: 60s
+    # A stop drains: the API goes on answering while Studio jobs and chat
+    # answers in flight finish, for up to five minutes (workDrain,
+    # soloclef_api/cmd/api/drain.go, which says why five), then stops what
+    # is left (a Studio job is queued again for the next process, an answer
+    # is saved as far as it got; about ten seconds) and closes the listener
+    # (SOLOCLEF_API_SHUTDOWN_GRACE_SECONDS). Six minutes covers all three
+    # with room, so SIGKILL never lands while they write. A stop with
+    # nothing in flight ends at once.
+    stop_grace_period: 6m
     restart: unless-stopped
     logging: *logging
 
-  # ── The sandbox server ────────────────────────────────────────────────────
+  # ── The sandbox service ───────────────────────────────────────────────────
 
-  # OpenSandbox: where the code
-  # a model wrote is run, so that a report, a deck, a workbook, a page or a
-  # video is built by real libraries and never in the API's or the worker's
-  # own process. Each sandbox is a container of its own on the host's
-  # Docker, started beside this stack's containers (not inside them), from
-  # the image the settings name, with an egress sidecar that denies it the
-  # network (soloclef_studio/sandbox asks for that on every create). The
-  # API and the worker reach a sandbox only through this server's proxy.
+  # sandboxd (soloclef_sandboxd): where the code a model wrote is run, so
+  # that a report, a Word document, a workbook or a page is built by real
+  # libraries and never in the API's or the worker's own process (and where
+  # LibreOffice draws a slide deck's preview; the deck itself, and every
+  # video, is drawn by the services' own code). Each
+  # sandbox is a container of its own on the host's Docker, started beside
+  # this stack's containers (not inside them), from the sandbox image below,
+  # with no network at all, a read-only root whose only writable places are
+  # memory-backed and sized, no capabilities, no new privileges, and hard
+  # CPU, memory and process limits (soloclef_sandboxd/sandboxes/spec.go says
+  # why each). Commands and files go in and out by `docker exec`: a sandbox
+  # publishes no port and has none to reach. The API and the worker reach
+  # the service only, over the sandbox network, with its key.
   #
-  # Switched on by the two switches and by nothing else. The service has two
-  # profiles made from them, sandbox-<SOLOCLEF_API_SANDBOX_ENABLED> and
-  # sandbox-<SOLOCLEF_WORKER_VIDEO_ENABLED>, and the settings switch on one
-  # profile, sandbox-true (COMPOSE_PROFILES). So the server is started when
-  # either switch is true, and with both false it is not part of the stack:
+  # Switched on by SOLOCLEF_API_SANDBOX_ENABLED and by nothing else. The
+  # service's profile is made from it, sandbox-<SOLOCLEF_API_SANDBOX_ENABLED>,
+  # and the settings switch on one profile, sandbox-true (COMPOSE_PROFILES).
+  # So the service is started when the switch is true, and with it false it
+  # is not part of the stack:
   # a deployment that builds nothing in a sandbox has no container holding
   # the Docker socket, and no key file to make.
   #
-  # The Docker socket. Starting containers is this server's job, and Docker
+  # The Docker socket. Starting containers is this service's job, and Docker
   # has no narrower grant than its socket: whoever can start a container can
   # start one that mounts the host's disk, so this container can do what
   # root on the host can, and no setting here changes that (`:ro` on a
@@ -1030,110 +1071,100 @@ services:
   #     API and the worker: nothing else in the stack can reach it, and it
   #     cannot reach the database or the other stores;
   #   - every request to it must carry its key;
-  #   - it runs with no Linux capabilities, no new privileges, a read-only
-  #     root filesystem and caps on memory and processes. It needs none of
-  #     what was taken: it is root only to open the socket, which root owns;
-  #   - its configuration is opensandbox/sandbox.toml (mounted read-only,
-  #     and it says why each line is there): a sandbox may
-  #     mount no host path, loses the dangerous capabilities, has its
-  #     processes capped, and has its port published only in a band kept
-  #     out of the host's ephemeral range.
+  #   - it is one static binary on an empty image, run with no Linux
+  #     capabilities, no new privileges, a read-only root filesystem and
+  #     caps on memory and processes. It is root only to open the socket,
+  #     which root owns;
+  #   - it can make only one kind of container: the image below, confined as
+  #     spec.go says. A caller chooses the size within that, never the
+  #     image, a mount, a network or a capability.
   #
-  # What it shares with the host. A sandbox server finds sandboxes by their
-  # labels among ALL the containers on its Docker, its own and any other
-  # server's, and threads and jobs are labelled by their ids, which every
-  # stack counts from one. So every sandbox this stack makes also carries
-  # the stack's own label (x-sandbox-stack, at the top) and every lookup
-  # asks for it: two stacks on one host never find, renew, count or remove
-  # each other's sandboxes.
+  # What it shares with the host. Every sandbox carries the stack's name
+  # (SOLOCLEF_SANDBOXD_STACK, the project's) and the service looks at no
+  # container without it: two stacks on one host (a test copy beside the
+  # real one) never find, count or remove each other's sandboxes. When it
+  # restarts it takes back this stack's running sandboxes from their labels,
+  # so a chat keeps its files; it keeps no other record.
   #
   # The key. It is the one file a deployment adds to switch the sandbox on:
-  # sandbox_api_key, in the secrets directory, any long random string
-  # (openssl rand -hex 32). The server reads it from its secret and, as it
-  # starts, puts a copy in the sandbox_key volume, which the API and the
-  # worker mount read-only. A copy, because Compose cannot mount a secret on
-  # a condition: mounted straight into the API and the worker, the file
-  # would have to exist on every deployment, the ones with the sandbox off
-  # too. This way only the service that exists when the sandbox is on reads
-  # it. The API and the worker wait for the server to be healthy, which is
-  # after the copy is in place; a new key takes a restart of all three.
-  # The sandbox image, built from docker/sandbox (the Remotion harness, the
-  # document libraries, LibreOffice, the skills and the fonts) and tagged
+  # sandbox_api_key, in the secrets directory, any random string of at least
+  # 32 characters (openssl rand -hex 32). The service reads it from its
+  # secret and, as it starts, puts a copy in the sandbox_key volume, which
+  # the API and the worker mount read-only. A copy, because Compose cannot
+  # mount a secret on a condition: mounted straight into the API and the
+  # worker, the file would have to exist on every deployment, the ones with
+  # the sandbox off too. This way only the service that exists when the
+  # sandbox is on reads it. The API and the worker wait for the service to
+  # be healthy, which is after the copy is in place; a new key takes a
+  # restart of all three.
+  # The sandbox image, built from docker/sandbox (the document libraries,
+  # LibreOffice, the skills and the fonts) and tagged
   # under this project (x-sandbox-image, at the top), so it is this
   # checkout's and never another stack's sandbox image, which
   # `down --rmi` here cannot remove. It is an image and not a
-  # service: no replica ever runs; the sandbox server starts containers from
-  # it. Built with the stack (`up --build`) when a sandbox switch is on,
-  # under the server's own profiles. Compose labels every image it builds
-  # with the project and service, and a sandbox inherits them, so this
-  # stack's sandboxes say they are this project's (Compose itself never
-  # acts on them: it looks only at containers it made, which carry its
-  # "oneoff" label too, and a sandbox does not).
+  # service: no replica ever runs; the sandbox service starts containers
+  # from it, by name each time, so a rebuilt image is used from the next
+  # sandbox on without restarting anything. Built with the stack
+  # (`up --build`) when the sandbox switch is on, under the service's own
+  # profile. Compose labels every image it builds with the project and
+  # service, and a sandbox inherits them; Compose itself never acts on
+  # them (it looks only at containers it made, which carry its "oneoff"
+  # label too, and a sandbox does not).
   sandbox-image:
     image: *sandbox-image
     build:
       context: ./sandbox
     profiles:
       - sandbox-${SOLOCLEF_API_SANDBOX_ENABLED:?}
-      - sandbox-${SOLOCLEF_WORKER_VIDEO_ENABLED:?}
     deploy:
       replicas: 0
 
-  opensandbox:
-    image: opensandbox/server:v0.2.2
+  sandboxd:
+    image: ${COMPOSE_PROJECT_NAME}-sandboxd:local
+    build:
+      context: ../soloclef_sandboxd
+      target: production
     profiles:
       - sandbox-${SOLOCLEF_API_SANDBOX_ENABLED:?}
-      - sandbox-${SOLOCLEF_WORKER_VIDEO_ENABLED:?}
-    # The server takes its key as a value in the environment and cannot read
-    # a file, so it is exported here from the mounted secret, as the
-    # indexer's database URL is, and never appears in `docker inspect`. The
-    # copy is written beside its final name and renamed over it, so a
-    # reader never sees half a key, and a copy left read-only by the last
-    # start is replaced rather than written into.
-    entrypoint: ["/bin/sh", "-ec"]
-    command:
-      - |
-        cp /run/secrets/sandbox_api_key /run/sandbox-key/.api_key.new
-        chmod 0444 /run/sandbox-key/.api_key.new
-        mv -f /run/sandbox-key/.api_key.new /run/sandbox-key/api_key
-        export OPENSANDBOX_SERVER_API_KEY="$$(cat /run/secrets/sandbox_api_key)"
-        exec opensandbox-server --config /etc/opensandbox/config.toml
+    environment:
+      # Every one is a fact of this stack, not a choice; the service
+      # requires all of them and has no defaults.
+      SOLOCLEF_SANDBOXD_STACK: ${COMPOSE_PROJECT_NAME}
+      SOLOCLEF_SANDBOXD_IMAGE: *sandbox-image
+      # Facts of the sandbox image (docker/sandbox). PATH puts first the
+      # Python that carries the document libraries (the Dockerfile pins
+      # 3.12 for them; the image's own entrypoint, which a sandbox does not
+      # run, would have chosen it at start), then Node 22 for the docx
+      # library the Word skill may use, then the image's own. Commands run as the image's
+      # unprivileged user, uid 1000 ("ubuntu"), never as root.
+      SOLOCLEF_SANDBOXD_PATH: /opt/python/versions/cpython-3.12-linux-x86_64-gnu/bin:/opt/node/v22.2.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      SOLOCLEF_SANDBOXD_USER: "1000:1000"
+      SOLOCLEF_SANDBOXD_LISTEN: ":8080"
+      SOLOCLEF_SANDBOXD_DOCKER_SOCKET: /var/run/docker.sock
+      SOLOCLEF_SANDBOXD_KEY_FILE: /run/secrets/sandbox_api_key
+      SOLOCLEF_SANDBOXD_KEY_COPY: *sandbox-key-file
     secrets:
       - sandbox_api_key
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./opensandbox/sandbox.toml:/etc/opensandbox/config.toml:ro
-      # Its record of the sandboxes it made (sandbox.toml, [store]).
-      - opensandbox_data:/data
       - sandbox_key:/run/sandbox-key
-    # sandbox.toml names the host as host.docker.internal: a sandbox's port
-    # is published on the host, and the server's proxy reaches it there.
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
     read_only: true
-    tmpfs:
-      - /tmp
-    # The server itself is small. The sandboxes' own limits are the
-    # SANDBOX_CPU and SANDBOX_MEMORY settings, not this.
-    mem_limit: 512m
-    memswap_limit: 512m
-    pids_limit: 256
+    # The service itself is small (a few MiB). The sandboxes' own limits
+    # are the SANDBOX_CPU and SANDBOX_MEMORY settings, not this.
+    mem_limit: 128m
+    memswap_limit: 128m
+    pids_limit: 128
     networks:
       - sandbox
-    # The image has no curl or wget; Python is on the path.
     healthcheck:
-      test:
-        - CMD
-        - python
-        - -c
-        - import urllib.request; urllib.request.urlopen("http://127.0.0.1:8080/health", timeout=3)
+      test: ["CMD", "/sandboxd", "health"]
       interval: 5s
       timeout: 5s
       retries: 12
-      start_period: 15s
+      start_period: 5s
     restart: unless-stopped
     logging: *logging
 
@@ -1142,9 +1173,9 @@ services:
   # The web app's live sync. It follows Postgres by logical replication (the
   # publication zero_publication, which the schema's first migration
   # creates; Postgres above is started with wal_level=logical for it), keeps
-  # a replica of the published rows, and asks the web app's query and
-  # mutate routes which rows an account may see and change. The browser
-  # reaches it through Caddy at /zero.
+  # a replica of the published rows, and asks the API which rows an account
+  # may see (ZERO_QUERY_URL below). The browser reaches it through Caddy at
+  # /zero.
   #
   # It takes its database as a URL in the environment and cannot read a
   # password file, so the URL is put together here from the mounted secret,
@@ -1180,13 +1211,16 @@ services:
       ZERO_AUTO_RESET: "true"
       # Left to itself zero-cache starts one sync process per CPU but one.
       ZERO_NUM_SYNC_WORKERS: ${SOLOCLEF_GO_ZERO_SYNC_WORKERS:?}
-      ZERO_QUERY_URL: http://${COMPOSE_PROJECT_NAME}-frontend-1:3000/api/zero/query
-      ZERO_MUTATE_URL: http://${COMPOSE_PROJECT_NAME}-frontend-1:3000/api/zero/mutate
-      # The web app's routes know a person by their session cookie.
+      # The API builds each synced query for the person asking
+      # (soloclef_api/internal/zerosync), on a path Caddy never routes to it,
+      # so only this network reaches it. There is no mutate URL: the web
+      # app writes through the API, never through Zero.
+      ZERO_QUERY_URL: http://${COMPOSE_PROJECT_NAME}-api-1:8080/internal/zero/query
+      # The API knows a person by their session cookie.
       ZERO_QUERY_FORWARD_COOKIES: "true"
       # How often an open connection's cookie is checked again through
-      # /api/zero/query (which asks the API's /users/me, so the gate's
-      # sign-in check). A browser signed out from elsewhere -- the devices
+      # the query URL (the API's credential gate, so the same sign-in
+      # check as every API call). A browser signed out from elsewhere -- the devices
       # list, signing out everywhere, a new password -- has every new query
       # and every API call refused at once; this bounds how long an already
       # open connection keeps receiving updates to a minute, not zero-cache's
@@ -1212,58 +1246,6 @@ services:
       start_period: 600s
     # It flushes its replica and its connections on a stop.
     stop_grace_period: 60s
-    restart: unless-stopped
-    logging: *logging
-
-  # The web app (soloclef_web), built from this checkout. The browser gets
-  # its pages through Caddy; its server-side code (the zero query and mutate
-  # routes, the routes that pass a request on) calls the API by its
-  # container's name.
-  #
-  # Next.js writes its NEXT_PUBLIC_ values into the pages when the image is
-  # built, so those are build arguments, from the API's own settings: the
-  # site's address and contact, whether single sign-on is offered and by
-  # whom, and whether people may sign up. Change one of those settings and
-  # rebuild this image, or the pages say the old thing.
-  frontend:
-    image: ${COMPOSE_PROJECT_NAME}-frontend:local
-    build:
-      context: ../soloclef_web
-      dockerfile: Dockerfile
-      target: runner
-      args:
-        NEXT_PUBLIC_SITE_URL: ${SOLOCLEF_API_PUBLIC_URL:?}
-        NEXT_PUBLIC_SUPPORT_EMAIL: ${SOLOCLEF_API_SUPPORT_EMAIL?}
-        NEXT_PUBLIC_OIDC_ENABLED: ${SOLOCLEF_API_OIDC_ENABLED:?}
-        NEXT_PUBLIC_OIDC_BUTTON_LABEL: ${SOLOCLEF_WEB_SSO_BUTTON_LABEL?}
-        # The docs name the provider by the host of this address.
-        NEXT_PUBLIC_OIDC_DISCOVERY_URL: ${SOLOCLEF_API_OIDC_ISSUER?}
-        # The API's one switch for both: the sign-up form, and a first
-        # single sign-on with an address no account has.
-        NEXT_PUBLIC_OIDC_ALLOW_SIGNUP: ${SOLOCLEF_API_SIGNUP_ALLOWED:?}
-        NEXT_PUBLIC_SIGNUPS_OPEN: ${SOLOCLEF_API_SIGNUP_ALLOWED:?}
-    environment:
-      DEPLOYMENT_MODE: self-hosted
-      SOLOCLEF_BACKEND_INTERNAL_URL: *api-url
-      # The sign-in page's button, read at run time: the API's switch, so
-      # the button is there exactly when the API answers it.
-      OIDC_ENABLED: ${SOLOCLEF_API_OIDC_ENABLED:?}
-      OIDC_BUTTON_LABEL: ${SOLOCLEF_WEB_SSO_BUTTON_LABEL?}
-    depends_on:
-      api:
-        condition: service_healthy
-    # The image has Node and nothing to probe with; the sign-in page is a
-    # page every visitor can load, so it answering is the app serving.
-    healthcheck:
-      test:
-        - CMD
-        - node
-        - -e
-        - 'fetch("http://127.0.0.1:3000/login").then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))'
-      interval: 5s
-      timeout: 5s
-      retries: 12
-      start_period: 20s
     restart: unless-stopped
     logging: *logging
 
@@ -1301,13 +1283,39 @@ services:
     logging: *logging
 
   # Caddy: the site's one door, and the stack's one published port. It
-  # routes by path (proxy-go/routes.caddy). It speaks plain HTTP: TLS is the
+  # routes by path (proxy-go/routes.caddy) and serves the web app itself:
+  # the image is Caddy with the web app's static files in it, built from
+  # soloclef_web (its Dockerfile's `site` stage, where Node builds the files;
+  # nothing runs Node here). It speaks plain HTTP: TLS is the
   # front proxy's or the tunnel's in front of it, and the headers that say
   # so (X-Forwarded-Proto, which decides whether a session cookie is
   # Secure, and X-Forwarded-For) are believed only from the addresses
   # SOLOCLEF_GO_TRUSTED_PROXIES names.
+  #
+  # Next.js writes its NEXT_PUBLIC_ values into the files when the image is
+  # built, so those are build arguments, from the API's own settings: the
+  # site's address and contact, whether the docs describe single sign-on
+  # and by whom, and whether people may sign up. Change one of those
+  # settings and rebuild this image, or the pages say the old thing. (The
+  # contact page's address is also asked of the API in the browser, so an
+  # address set later shows without a rebuild.)
   proxy:
-    image: caddy:2-alpine
+    image: ${COMPOSE_PROJECT_NAME}-proxy:local
+    build:
+      context: ../soloclef_web
+      dockerfile: Dockerfile
+      target: site
+      args:
+        NEXT_PUBLIC_SITE_URL: ${SOLOCLEF_API_PUBLIC_URL:?}
+        NEXT_PUBLIC_SUPPORT_EMAIL: ${SOLOCLEF_API_SUPPORT_EMAIL?}
+        NEXT_PUBLIC_OIDC_ENABLED: ${SOLOCLEF_API_OIDC_ENABLED:?}
+        NEXT_PUBLIC_OIDC_BUTTON_LABEL: ${SOLOCLEF_WEB_SSO_BUTTON_LABEL?}
+        # The docs name the provider by the host of this address.
+        NEXT_PUBLIC_OIDC_DISCOVERY_URL: ${SOLOCLEF_API_OIDC_ISSUER?}
+        # The API's one switch for both: the sign-up form, and a first
+        # single sign-on with an address no account has.
+        NEXT_PUBLIC_OIDC_ALLOW_SIGNUP: ${SOLOCLEF_API_SIGNUP_ALLOWED:?}
+        NEXT_PUBLIC_SIGNUPS_OPEN: ${SOLOCLEF_API_SIGNUP_ALLOWED:?}
     environment:
       # Every route names its upstream by container ({$SOLOCLEF_STACK}-api-1).
       SOLOCLEF_STACK: ${COMPOSE_PROJECT_NAME}
@@ -1320,13 +1328,14 @@ services:
     volumes:
       - ./proxy-go/Caddyfile:/etc/caddy/Caddyfile:ro
       - ./proxy-go/routes.caddy:/etc/caddy/routes.caddy:ro
+      # Earlier builds' hashed files, so a tab opened before a deploy still
+      # loads its code after it (soloclef_web/site-image/kept-assets.sh).
+      - site_assets:/var/lib/site-assets
     # Started, not healthy: Caddy answers 502 for an upstream that is not
     # up yet, and the site's door should not stay shut because, say, the
     # MCP server is slow to start.
     depends_on:
       api:
-        condition: service_started
-      frontend:
         condition: service_started
       zero-cache:
         condition: service_started
@@ -1361,10 +1370,18 @@ secrets:
     file: ${SOLOCLEF_GO_SECRETS_DIR:?}/s3_access_key
   s3_secret_key:
     file: ${SOLOCLEF_GO_SECRETS_DIR:?}/s3_secret_key
-  # Read only by the sandbox server, which exists only when a sandbox switch
-  # is on: with both off the file need not exist (the opensandbox service).
+  # Read only by the sandbox service, which exists only when a sandbox switch
+  # is on: with both off the file need not exist (the sandboxd service).
   sandbox_api_key:
     file: ${SOLOCLEF_GO_SECRETS_DIR:?}/sandbox_api_key
+  # Apple's .p8 push key, read only by the worker. Its own setting, not a
+  # file in SOLOCLEF_GO_SECRETS_DIR: a deployment without APNs has no key,
+  # and Compose refuses a secret whose file is not there, so it says
+  # /dev/null in so many words. Like every secret here it is mounted as it
+  # is on the host, so the file must be readable by the worker's user
+  # (10003): mode 0444, in a directory only the operator can enter.
+  apns_key:
+    file: ${SOLOCLEF_GO_APNS_KEY_SOURCE:?}
 
 # One volume a store, each this project's own (soloclefgo_postgres_data and
 # so on). `docker compose -p soloclefgo ... down` keeps them; `down -v`
@@ -1379,11 +1396,13 @@ volumes:
   podcast_work:
   # zero-cache's replica of the published rows.
   zero_data:
-  # The sandbox server's record of the sandboxes it made.
-  opensandbox_data:
-  # The copy of the sandbox server's key the API and the worker read; empty
+  # The copy of the sandbox service's key the API and the worker read; empty
   # while the sandbox is off.
   sandbox_key:
+  # The web app's /_next/static files of every build live in the last 14
+  # days (20 builds at most), for tabs opened before a deploy. Safe to delete: open tabs then
+  # reload once when they next load code.
+  site_assets:
 
 networks:
   # The stack's own, created and removed with it.
@@ -1394,7 +1413,9 @@ networks:
   model:
     external: true
     name: ${SOLOCLEF_GO_MODEL_NETWORK:?}
-  # The sandbox server and the two services that call it, and nothing else,
-  # so nothing else can reach the container that holds the Docker socket.
-  # Not internal: the server reaches each sandbox at the host's address.
-  sandbox: {}
+  # The sandbox service and the two services that call it, and nothing
+  # else, so nothing else can reach the container that holds the Docker
+  # socket. Internal: the service talks to Docker on its socket and to
+  # nothing over a network, so the network has no route out.
+  sandbox:
+    internal: true

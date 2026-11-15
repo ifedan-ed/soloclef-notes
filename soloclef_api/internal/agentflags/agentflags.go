@@ -8,13 +8,14 @@
 // The Python route answered twenty-four booleans, one per middleware of its
 // agent stack, of which the web app read four. Most of those middlewares do
 // not exist in this tier, and a flag that says "on" for something that is
-// not there is a promise nobody keeps. This route answers the five a client
+// not there is a promise nobody keeps. This route answers the three a client
 // reads, each from what this tier really does:
 //
-//   - disable_new_agent_stack and enable_permission are the deployment's own
-//     settings, the same two that decide whether the permission-rule routes
-//     answer (internal/agentrules), so the settings page and those routes
-//     can never disagree.
+//   - disable_new_agent_stack is the deployment's own setting.
+//   - There is no enable_permission. The "ask first" marks are read by the
+//     chat on every deployment and listed by routes that are always served
+//     (internal/agentrules), so a flag for them could only hide the way to
+//     change them.
 //   - enable_action_log and enable_revert_route are true, and are constants
 //     here, not settings: the chat's knowledge-base specialist records every
 //     change it makes, in the change's own transaction, and the undo routes
@@ -22,7 +23,6 @@
 //     setting that switched either off would only hide a working undo. With
 //     them the web app shows the undo on each change's card and under each
 //     turn that made one.
-//   - enable_desktop_local_filesystem is false: there is no desktop app.
 package agentflags
 
 import (
@@ -50,21 +50,16 @@ type Route struct {
 	// Disabled is the deployment's kill-switch for the agent's optional
 	// features (SOLOCLEF_DISABLE_NEW_AGENT_STACK).
 	Disabled bool
-	// PermissionEnabled says the permission rules are served
-	// (SOLOCLEF_ENABLE_PERMISSION).
-	PermissionEnabled bool
-	Errors            errorenvelope.Writer
-	Logger            *slog.Logger
+	Errors   errorenvelope.Writer
+	Logger   *slog.Logger
 }
 
 // flags is the answer. The field names are the web app's contract
 // (soloclef_web/lib/apis/agent-flags-api.service.ts).
 type flags struct {
-	Disabled        bool `json:"disable_new_agent_stack"`
-	Permission      bool `json:"enable_permission"`
-	ActionLog       bool `json:"enable_action_log"`
-	RevertRoute     bool `json:"enable_revert_route"`
-	LocalFilesystem bool `json:"enable_desktop_local_filesystem"`
+	Disabled    bool `json:"disable_new_agent_stack"`
+	ActionLog   bool `json:"enable_action_log"`
+	RevertRoute bool `json:"enable_revert_route"`
 }
 
 // Register mounts the route.
@@ -87,7 +82,7 @@ func (r Route) Register(api huma.API) {
 			// It changes only with a restart; a client may keep it a while.
 			response.Header().Set("Cache-Control", "private, max-age=300")
 			response.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(response).Encode(flags{Disabled: r.Disabled, Permission: r.PermissionEnabled, ActionLog: true, RevertRoute: true})
+			_ = json.NewEncoder(response).Encode(flags{Disabled: r.Disabled, ActionLog: true, RevertRoute: true})
 		}}, nil
 	})
 }

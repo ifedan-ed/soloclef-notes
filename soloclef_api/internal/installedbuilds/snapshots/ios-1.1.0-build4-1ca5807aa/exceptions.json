@@ -1,0 +1,20 @@
+[
+ {
+  "operation": "POST /api/v1/connectors/mcp",
+  "status": 422,
+  "why": "the bundle sends an MCP server's settings without the sign-in choice (`auth`) the server requires since 2026-11-13, and transport \"http\" where the server takes \"streamable-http\", so adding, editing and testing a server are refused 422 with the sentence the sheet shows; the update sends the choice that matches the old behaviour (a saved server's own auth, an Authorization: Bearer header as a bearer token, otherwise none)",
+  "fixed_by": "929cedba5"
+ },
+ {
+  "operation": "PUT /api/v1/connectors/mcp/{connector_id}",
+  "status": 422,
+  "why": "the bundle sends an MCP server's settings without the sign-in choice (`auth`) the server requires since 2026-11-13, and transport \"http\" where the server takes \"streamable-http\", so adding, editing and testing a server are refused 422 with the sentence the sheet shows; the update sends the choice that matches the old behaviour (a saved server's own auth, an Authorization: Bearer header as a bearer token, otherwise none)",
+  "fixed_by": "929cedba5"
+ },
+ {
+  "operation": "POST /api/v1/connectors/mcp/test",
+  "status": 422,
+  "why": "the bundle sends an MCP server's settings without the sign-in choice (`auth`) the server requires since 2026-11-13, and transport \"http\" where the server takes \"streamable-http\", so adding, editing and testing a server are refused 422 with the sentence the sheet shows; the update sends the choice that matches the old behaviour (a saved server's own auth, an Authorization: Bearer header as a bearer token, otherwise none)",
+  "fixed_by": "929cedba5"
+ }
+]

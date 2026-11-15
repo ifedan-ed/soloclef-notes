@@ -9,7 +9,6 @@ import {
 	closeDocumentViewerAtom,
 	documentViewerAtom,
 } from "@/atoms/documents/document-viewer.atom";
-import { closeEditorPanelAtom, editorPanelAtom } from "@/atoms/editor/editor-panel.atom";
 import {
 	type RightPanelTab,
 	rightPanelCollapsedAtom,
@@ -22,14 +21,6 @@ import {
 import { artifactsPanelOpenAtom, closeArtifactsPanelAtom } from "@/features/chat-artifacts";
 import { closeHitlEditPanelAtom, hitlEditPanelAtom } from "@/features/chat-messages/hitl";
 import { useMediaQuery } from "@/hooks/use-media-query";
-
-const EditorPanelContent = dynamic(
-	() =>
-		import("@/components/editor-panel/editor-panel").then((m) => ({
-			default: m.EditorPanelContent,
-		})),
-	{ ssr: false, loading: () => null }
-);
 
 const DocumentViewerContent = dynamic(
 	() =>
@@ -81,7 +72,6 @@ export interface RightPanelLayout {
 	effectiveTab: RightPanelTab;
 	documentOpen: boolean;
 	artifactOpen: boolean;
-	editorOpen: boolean;
 	hitlEditOpen: boolean;
 	citationOpen: boolean;
 	artifactsOpen: boolean;
@@ -92,7 +82,6 @@ export function useRightPanelLayout(): RightPanelLayout {
 	const collapsed = useAtomValue(rightPanelCollapsedAtom);
 	const artifactState = useAtomValue(artifactPanelAtom);
 	const documentState = useAtomValue(documentViewerAtom);
-	const editorState = useAtomValue(editorPanelAtom);
 	const hitlEditState = useAtomValue(hitlEditPanelAtom);
 	const citationState = useAtomValue(citationPanelAtom);
 	const artifactsPanelOpen = useAtomValue(artifactsPanelOpenAtom);
@@ -100,16 +89,12 @@ export function useRightPanelLayout(): RightPanelLayout {
 	const artifactsOpen = supportsArtifactPanel && artifactsPanelOpen;
 	const artifactOpen = supportsArtifactPanel && artifactState.isOpen && !!artifactState.artifactId;
 	const documentOpen = supportsArtifactPanel && documentState.isOpen && !!documentState.documentId;
-	const editorOpen =
-		editorState.isOpen &&
-		(editorState.kind === "memory" ? !!editorState.memoryScope : !!editorState.localFilePath);
 	const hitlEditOpen = hitlEditState.isOpen && !!hitlEditState.onSave;
 	const citationOpen = citationState.isOpen && citationState.chunkId != null;
 	const openByTab: Record<RightPanelTab, boolean> = {
 		none: false,
 		document: documentOpen,
 		artifact: artifactOpen,
-		editor: editorOpen,
 		"hitl-edit": hitlEditOpen,
 		citation: citationOpen,
 		artifacts: artifactsOpen,
@@ -122,7 +107,6 @@ export function useRightPanelLayout(): RightPanelLayout {
 		effectiveTab: resolveEffectiveTab(activeTab, openByTab),
 		documentOpen,
 		artifactOpen,
-		editorOpen,
 		hitlEditOpen,
 		citationOpen,
 		artifactsOpen,
@@ -138,7 +122,6 @@ const PANEL_CONTENT_TRANSITION = { duration: 0.15, ease: [0.4, 0, 0.2, 1] } as c
 const TAB_FALLBACK_ORDER: RightPanelTab[] = [
 	"hitl-edit",
 	"citation",
-	"editor",
 	"document",
 	"artifact",
 	"artifacts",
@@ -157,8 +140,6 @@ export function RightPanel({ layout }: RightPanelProps) {
 	const closeArtifact = useSetAtom(closeArtifactPanelAtom);
 	const documentState = useAtomValue(documentViewerAtom);
 	const closeDocument = useSetAtom(closeDocumentViewerAtom);
-	const editorState = useAtomValue(editorPanelAtom);
-	const closeEditor = useSetAtom(closeEditorPanelAtom);
 	const hitlEditState = useAtomValue(hitlEditPanelAtom);
 	const closeHitlEdit = useSetAtom(closeHitlEditPanelAtom);
 	const citationState = useAtomValue(citationPanelAtom);
@@ -170,29 +151,19 @@ export function RightPanel({ layout }: RightPanelProps) {
 		effectiveTab,
 		artifactOpen,
 		documentOpen,
-		editorOpen,
 		hitlEditOpen,
 		citationOpen,
 		artifactsOpen,
 	} = layout;
 
 	useEffect(() => {
-		if (
-			!artifactOpen &&
-			!documentOpen &&
-			!editorOpen &&
-			!hitlEditOpen &&
-			!citationOpen &&
-			!artifactsOpen
-		)
-			return;
+		if (!artifactOpen && !documentOpen && !hitlEditOpen && !citationOpen && !artifactsOpen) return;
 		const handleKeyDown = (e: KeyboardEvent) => {
 			if (e.key === "Escape") {
 				if (documentOpen) closeDocument();
 				else if (artifactOpen) closeArtifact();
 				else if (hitlEditOpen) closeHitlEdit();
 				else if (citationOpen) closeCitation();
-				else if (editorOpen) closeEditor();
 				else if (artifactsOpen) closeArtifacts();
 			}
 		};
@@ -201,13 +172,11 @@ export function RightPanel({ layout }: RightPanelProps) {
 	}, [
 		artifactOpen,
 		documentOpen,
-		editorOpen,
 		hitlEditOpen,
 		citationOpen,
 		artifactsOpen,
 		closeArtifact,
 		closeDocument,
-		closeEditor,
 		closeHitlEdit,
 		closeCitation,
 		closeArtifacts,
@@ -243,17 +212,6 @@ export function RightPanel({ layout }: RightPanelProps) {
 										initialPage={documentState.initialPage}
 										highlightText={documentState.highlightText}
 										onClose={closeDocument}
-									/>
-								</div>
-							)}
-							{effectiveTab === "editor" && editorOpen && (
-								<div className="flex h-full min-w-0 flex-col">
-									<EditorPanelContent
-										kind={editorState.kind}
-										localFilePath={editorState.localFilePath ?? undefined}
-										memoryScope={editorState.memoryScope ?? undefined}
-										title={editorState.title}
-										onClose={closeEditor}
 									/>
 								</div>
 							)}

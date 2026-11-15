@@ -27,8 +27,8 @@ func TestIsDefaultTitle(t *testing.T) {
 		{"Tide tables", false},
 	}
 	for _, c := range cases {
-		if got := isDefaultTitle(c.title); got != c.want {
-			t.Errorf("isDefaultTitle(%q) = %v, want %v", c.title, got, c.want)
+		if got := IsDefaultTitle(c.title); got != c.want {
+			t.Errorf("IsDefaultTitle(%q) = %v, want %v", c.title, got, c.want)
 		}
 	}
 }

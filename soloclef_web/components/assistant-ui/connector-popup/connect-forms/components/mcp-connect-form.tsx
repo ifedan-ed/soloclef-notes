@@ -1,134 +1,42 @@
 "use client";
 
-import { CheckCircle2, ChevronDown, ChevronUp, Info, Loader2, XCircle } from "lucide-react";
-import { type FC, useEffect, useRef, useState } from "react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Info } from "lucide-react";
+import { type FC, useState } from "react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { EnumConnectorName } from "@/contracts/enums/connector";
+import { useMcpPolicy } from "@/features/mcp-server-form/hooks/use-mcp-policy";
+import { useStartOAuth } from "@/features/mcp-server-form/hooks/use-start-oauth";
+import { emptyServerForm } from "@/features/mcp-server-form/model/server-form-state";
+import {
+	McpServerForm,
+	type ServerSubmission,
+} from "@/features/mcp-server-form/ui/mcp-server-form";
 import { connectorsApiService } from "@/lib/apis/connectors-api.service";
 import { mcpAddressRule } from "@/lib/mcp/server-origin";
-import {
-	extractServerName,
-	type MCPConnectionTestResult,
-	parseMCPConfig,
-	testMCPConnection,
-} from "../../utils/mcp-config-validator";
+import { cacheKeys } from "@/lib/query-client/cache-keys";
+import { queryClient } from "@/lib/query-client/client";
 import type { ConnectFormProps } from "..";
 
+/**
+ * "Add MCP server": the shared server form, submitted by the add view's
+ * footer button (form id "mcp-connect-form").
+ *
+ * A server signed in to with a key is created through the dialog's own
+ * create flow, as before. One signed in to with OAuth is created here and the
+ * person is sent straight to its sign-in: that flow leaves the page, and the
+ * sign-in needs the new server's id, which the dialog's flow does not hand
+ * back.
+ */
 export const MCPConnectForm: FC<ConnectFormProps> = ({ onSubmit, isSubmitting }) => {
-	const isSubmittingRef = useRef(false);
-	const [configJson, setConfigJson] = useState("");
-	const [jsonError, setJsonError] = useState<string | null>(null);
-	const [isTesting, setIsTesting] = useState(false);
-	const [showDetails, setShowDetails] = useState(false);
-	const [testResult, setTestResult] = useState<MCPConnectionTestResult | null>(null);
+	const policy = useMcpPolicy();
+	const { start, starting } = useStartOAuth();
+	const [creating, setCreating] = useState(false);
+	const canAdd = policy?.can_add !== false;
 
-	// A person adds their own servers (any public https address, their own
-	// key); an administrator's server is a shared one and must be on the
-	// allowed list. The server enforces both.
-	const [canAdd, setCanAdd] = useState<boolean | null>(null);
-	const [allowListApplies, setAllowListApplies] = useState(false);
-	useEffect(() => {
-		let cancelled = false;
-		connectorsApiService
-			.getMCPPolicy()
-			.then((policy) => {
-				if (cancelled) return;
-				setCanAdd(Boolean(policy?.can_add));
-				setAllowListApplies(Boolean(policy?.allow_list_applies));
-			})
-			.catch(() => {
-				if (!cancelled) setCanAdd(null);
-			});
-		return () => {
-			cancelled = true;
-		};
-	}, []);
-
-	// Example config: a remote (https) server. Local stdio servers are not supported.
-	const DEFAULT_HTTP_CONFIG = JSON.stringify(
-		{
-			name: "My Remote MCP Server",
-			url: "https://mcp.example.com/mcp",
-			headers: {
-				Authorization: "Bearer your_api_key_here",
-			},
-			transport: "streamable-http",
-		},
-		null,
-		2
-	);
-
-	const DEFAULT_CONFIG = DEFAULT_HTTP_CONFIG;
-
-	const parseConfig = () => {
-		const result = parseMCPConfig(configJson);
-		if (result.error) {
-			setJsonError(result.error);
-		} else {
-			setJsonError(null);
-		}
-		return result.config;
-	};
-
-	const handleConfigChange = (value: string) => {
-		setConfigJson(value);
-
-		// Clear previous error
-		if (jsonError) {
-			setJsonError(null);
-		}
-
-		// Validate immediately to show errors as user types (with debouncing via parseMCPConfig cache)
-		if (value.trim()) {
-			const result = parseMCPConfig(value);
-			if (result.error) {
-				setJsonError(result.error);
-			}
-		}
-	};
-
-	const handleTestConnection = async () => {
-		const serverConfig = parseConfig();
-		if (!serverConfig) {
-			setTestResult({
-				status: "error",
-				message: jsonError || "Invalid configuration",
-				tools: [],
-			});
-			return;
-		}
-
-		setIsTesting(true);
-		setTestResult(null);
-
-		const result = await testMCPConnection(serverConfig);
-		setTestResult(result);
-		setIsTesting(false);
-	};
-
-	const handleSubmit = async (e: React.FormEvent) => {
-		e.preventDefault();
-
-		// Prevent multiple submissions
-		if (isSubmittingRef.current || isSubmitting) {
-			return;
-		}
-
-		const serverConfig = parseConfig();
-		if (!serverConfig) {
-			return;
-		}
-
-		// Extract server name from config if provided
-		const serverName = extractServerName(configJson);
-
-		isSubmittingRef.current = true;
-		try {
+	const submit = async ({ name, serverConfig }: ServerSubmission) => {
+		if (serverConfig.auth.type !== "oauth") {
 			await onSubmit({
-				name: serverName,
+				name,
 				connector_type: EnumConnectorName.MCP_CONNECTOR,
 				config: { server_config: serverConfig },
 				is_indexable: false,
@@ -138,162 +46,52 @@ export const MCPConnectForm: FC<ConnectFormProps> = ({ onSubmit, isSubmitting })
 				indexing_frequency_minutes: null,
 				next_scheduled_at: null,
 			});
+			return;
+		}
+		setCreating(true);
+		try {
+			const created = await connectorsApiService.createMCPConnector({
+				data: { name, server_config: serverConfig },
+			});
+			void queryClient.invalidateQueries({ queryKey: cacheKeys.connectors.all() });
+			const refusal = await start(created.id);
+			if (refusal) {
+				throw new Error(
+					`The server is saved, but its sign-in could not start: ${refusal} Sign in from the server's settings.`
+				);
+			}
 		} finally {
-			isSubmittingRef.current = false;
+			setCreating(false);
 		}
 	};
 
 	return (
-		<div className="space-y-6 pb-6">
+		<div className="flex flex-col gap-6 pb-6">
 			<Alert>
 				<Info />
 				<AlertDescription>
-					Connect to a remote Model Context Protocol server. Each MCP server is added as a separate
-					connector.
+					Connect a remote Model Context Protocol server. Its tools become available in your chats;
+					each server is its own connector.
 				</AlertDescription>
 			</Alert>
-			{canAdd === false && (
+			{!canAdd && (
 				<Alert className="border-amber-500/50 bg-amber-500/10">
 					<Info />
 					<AlertDescription>
-						Adding MCP servers is switched off for your account. You can still use the servers
-						already connected in chats.
+						Adding MCP servers is switched off for your account. Servers already connected still
+						work in chats.
 					</AlertDescription>
 				</Alert>
 			)}
-
-			<form id="mcp-connect-form" onSubmit={handleSubmit} className="space-y-6">
-				<div className="rounded-xl border border-border bg-slate-400/5 dark:bg-white/5 p-4 sm:p-6 space-y-4">
-					<div className="space-y-2">
-						<div className="flex items-center justify-between flex-wrap gap-2">
-							<Label htmlFor="config">MCP Server Configuration (JSON)</Label>
-							{!configJson && (
-								<Button
-									type="button"
-									variant="ghost"
-									size="sm"
-									className="h-6 px-2 text-xs text-muted-foreground hover:text-accent-foreground"
-									onClick={() => handleConfigChange(DEFAULT_HTTP_CONFIG)}
-								>
-									Example
-								</Button>
-							)}
-						</div>
-						<Textarea
-							id="config"
-							value={configJson}
-							onChange={(e) => handleConfigChange(e.target.value)}
-							onKeyDown={(e) => {
-								if (e.key === "Tab") {
-									e.preventDefault();
-									const target = e.target as HTMLTextAreaElement;
-									const start = target.selectionStart;
-									const end = target.selectionEnd;
-									const indent = "  "; // 2 spaces for JSON
-									const newValue =
-										configJson.substring(0, start) + indent + configJson.substring(end);
-									handleConfigChange(newValue);
-									// Set cursor position after the inserted tab
-									requestAnimationFrame(() => {
-										target.selectionStart = target.selectionEnd = start + indent.length;
-									});
-								}
-							}}
-							placeholder={DEFAULT_CONFIG}
-							rows={16}
-							className={`font-mono text-xs ${jsonError ? "border-red-500" : ""}`}
-						/>
-						{jsonError && <p className="text-xs text-red-500">JSON Error: {jsonError}</p>}
-						<p className="text-[10px] sm:text-xs text-muted-foreground">
-							{`Paste a single remote MCP server configuration: name, url (https, ${mcpAddressRule(
-								allowListApplies
-							)}), headers with your own key (optional), transport (optional).`}
-						</p>
-					</div>
-
-					{/* Test Connection */}
-					<div className="pt-4">
-						<Button
-							type="button"
-							onClick={handleTestConnection}
-							disabled={isTesting || canAdd === false}
-							variant="secondary"
-							className="w-full h-8 text-[13px] px-3 font-medium bg-white text-slate-700 hover:bg-accent hover:text-accent-foreground border-0 shadow-xs dark:bg-secondary dark:text-secondary-foreground"
-						>
-							{isTesting ? (
-								<>
-									<Loader2 className="h-3.5 w-3.5 animate-spin" />
-									Testing Connection...
-								</>
-							) : (
-								"Test Connection"
-							)}
-						</Button>
-					</div>
-
-					{/* Test Result */}
-					{testResult && (
-						<Alert
-							className={
-								testResult.status === "success"
-									? "border-green-500/50 bg-green-500/10"
-									: "border-red-500/50 bg-red-500/10"
-							}
-						>
-							{testResult.status === "success" ? (
-								<CheckCircle2 className="h-4 w-4 text-green-600" />
-							) : (
-								<XCircle className="h-4 w-4 text-red-600" />
-							)}
-							<div className="col-start-2 flex items-center justify-between">
-								<AlertTitle className="text-sm">
-									{testResult.status === "success" ? "Connection Successful" : "Connection Failed"}
-								</AlertTitle>
-								{testResult.tools.length > 0 && (
-									<Button
-										type="button"
-										variant="ghost"
-										size="sm"
-										className="h-6 px-2 self-start sm:self-auto text-xs"
-										onClick={(e) => {
-											e.preventDefault();
-											e.stopPropagation();
-											setShowDetails((prev) => !prev);
-										}}
-									>
-										{showDetails ? (
-											<>
-												<ChevronUp className="h-3 w-3 mr-1" />
-												<span className="hidden sm:inline">Hide Details</span>
-												<span className="sm:hidden">Hide</span>
-											</>
-										) : (
-											<>
-												<ChevronDown className="h-3 w-3 mr-1" />
-												<span className="hidden sm:inline">Show Details</span>
-												<span className="sm:hidden">Show</span>
-											</>
-										)}
-									</Button>
-								)}
-							</div>
-							<AlertDescription className="text-[10px] sm:text-xs mt-1">
-								{testResult.message}
-								{showDetails && testResult.tools.length > 0 && (
-									<div className="mt-3 pt-3 border-t border-green-500/20">
-										<p className="font-semibold mb-2">Available tools:</p>
-										<ul className="list-disc list-inside text-xs space-y-0.5">
-											{testResult.tools.map((tool) => (
-												<li key={tool.name}>{tool.name}</li>
-											))}
-										</ul>
-									</div>
-								)}
-							</AlertDescription>
-						</Alert>
-					)}
-				</div>
-			</form>
+			<McpServerForm
+				formId="mcp-connect-form"
+				initial={emptyServerForm()}
+				addressRule={mcpAddressRule(Boolean(policy?.allow_list_applies))}
+				oauthAvailable={Boolean(policy?.oauth_available)}
+				disabled={!canAdd}
+				submitting={isSubmitting || creating || starting}
+				onSubmit={submit}
+			/>
 		</div>
 	);
 };

@@ -16,6 +16,9 @@ var (
 	ErrKeyRejected = errors.New("websearch: the provider rejected the key")
 	// ErrQuota: the account's plan with the provider is spent or rate limited.
 	ErrQuota = errors.New("websearch: the provider account is out of quota")
+	// ErrUnavailable: the provider could not be reached, was busy, or gave
+	// an answer that could not be read. Nothing is known about the key.
+	ErrUnavailable = errors.New("websearch: the provider could not be reached")
 )
 
 // refusal is a provider's refusal: the sentence the model reads, and which

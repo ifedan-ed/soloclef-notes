@@ -30,11 +30,9 @@ const SHIPPED_DIRS = [
 ];
 const SHIPPED_FILES = [
 	"Dockerfile",
-	"instrumentation.ts",
 	"instrumentation-client.ts",
 	"mdx-components.tsx",
 	"next.config.ts",
-	"proxy.ts",
 	"source.config.ts",
 ];
 const TEXT = /\.(ts|tsx|js|mjs|cjs|json|md|mdx|css|svg|txt|xml|webmanifest|ya?ml|html)$/;

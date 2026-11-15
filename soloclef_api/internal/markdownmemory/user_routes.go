@@ -124,8 +124,7 @@ func (r UserRoutes) serveReset(ctx huma.Context) {
 	if !ok {
 		return
 	}
-	// reset_memory is save_memory with an empty document, which is the whole of
-	// it there too.
+	// A reset is a save of the empty document, which clears it.
 	r.save(ctx, response, requestID, caller.UserID, "")
 }
 
@@ -136,7 +135,9 @@ func (r UserRoutes) save(ctx huma.Context, response http.ResponseWriter, request
 			if err != nil {
 				return Outcome{}, err
 			}
-			outcome := Save(requested, stored)
+			// A person's own text: any text is kept (SaveWrittenByPerson),
+			// where the chat's tool is held to the assistant's format (Save).
+			outcome := SaveWrittenByPerson(requested, stored)
 			if !outcome.Write {
 				return outcome, nil
 			}

@@ -247,23 +247,6 @@ func (m *memory) Reposition(_ context.Context, userID string, folderID int64, po
 	return nil
 }
 
-func (m *memory) ClearWatched(_ context.Context, userID string, folderID int64, at time.Time) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	folder := m.owned(userID, folderID)
-	if folder == nil {
-		return nil
-	}
-	var metadata map[string]any
-	if json.Unmarshal(folder.Metadata, &metadata) != nil || metadata["watched"] != true {
-		return nil
-	}
-	metadata["watched"] = false
-	folder.Metadata, _ = json.Marshal(metadata)
-	folder.UpdatedAt = at
-	return nil
-}
-
 func (m *memory) Documents(_ context.Context, userID string, documentIDs []int64) ([]Document, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

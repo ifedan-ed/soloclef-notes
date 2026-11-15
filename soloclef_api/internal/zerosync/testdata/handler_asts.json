@@ -1,0 +1,358 @@
+{
+ "kind": "QueryResponse",
+ "queries": [
+  {
+   "id": "q0",
+   "name": "notifications.mine",
+   "ast": {
+    "table": "notifications",
+    "where": {
+     "type": "simple",
+     "left": {
+      "type": "column",
+      "name": "user_id"
+     },
+     "right": {
+      "type": "literal",
+      "value": "11111111-2222-3333-4444-555555555555"
+     },
+     "op": "="
+    },
+    "orderBy": [
+     [
+      "created_at",
+      "desc"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "q1",
+   "name": "documents.mine",
+   "ast": {
+    "table": "documents",
+    "where": {
+     "type": "simple",
+     "left": {
+      "type": "column",
+      "name": "user_id"
+     },
+     "right": {
+      "type": "literal",
+      "value": "11111111-2222-3333-4444-555555555555"
+     },
+     "op": "="
+    },
+    "orderBy": [
+     [
+      "created_at",
+      "desc"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "q2",
+   "name": "folders.mine",
+   "ast": {
+    "table": "folders",
+    "where": {
+     "type": "simple",
+     "left": {
+      "type": "column",
+      "name": "user_id"
+     },
+     "right": {
+      "type": "literal",
+      "value": "11111111-2222-3333-4444-555555555555"
+     },
+     "op": "="
+    },
+    "orderBy": [
+     [
+      "position",
+      "asc"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "q3",
+   "name": "connectors.mine",
+   "ast": {
+    "table": "search_source_connectors",
+    "where": {
+     "type": "simple",
+     "left": {
+      "type": "column",
+      "name": "user_id"
+     },
+     "right": {
+      "type": "literal",
+      "value": "11111111-2222-3333-4444-555555555555"
+     },
+     "op": "="
+    },
+    "orderBy": [
+     [
+      "created_at",
+      "desc"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "q4",
+   "name": "messages.byThread",
+   "ast": {
+    "table": "new_chat_messages",
+    "where": {
+     "type": "and",
+     "conditions": [
+      {
+       "type": "simple",
+       "left": {
+        "type": "column",
+        "name": "thread_id"
+       },
+       "right": {
+        "type": "literal",
+        "value": 7
+       },
+       "op": "="
+      },
+      {
+       "type": "correlatedSubquery",
+       "related": {
+        "system": "client",
+        "correlation": {
+         "parentField": [
+          "thread_id"
+         ],
+         "childField": [
+          "id"
+         ]
+        },
+        "subquery": {
+         "table": "new_chat_threads",
+         "alias": "zsubq_thread",
+         "where": {
+          "type": "simple",
+          "left": {
+           "type": "column",
+           "name": "user_id"
+          },
+          "right": {
+           "type": "literal",
+           "value": "11111111-2222-3333-4444-555555555555"
+          },
+          "op": "="
+         }
+        }
+       },
+       "op": "EXISTS"
+      }
+     ]
+    },
+    "orderBy": [
+     [
+      "created_at",
+      "asc"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "q5",
+   "name": "chatSession.byThread",
+   "ast": {
+    "table": "chat_session_state",
+    "where": {
+     "type": "and",
+     "conditions": [
+      {
+       "type": "simple",
+       "left": {
+        "type": "column",
+        "name": "thread_id"
+       },
+       "right": {
+        "type": "literal",
+        "value": 7
+       },
+       "op": "="
+      },
+      {
+       "type": "correlatedSubquery",
+       "related": {
+        "system": "client",
+        "correlation": {
+         "parentField": [
+          "thread_id"
+         ],
+         "childField": [
+          "id"
+         ]
+        },
+        "subquery": {
+         "table": "new_chat_threads",
+         "alias": "zsubq_thread",
+         "where": {
+          "type": "simple",
+          "left": {
+           "type": "column",
+           "name": "user_id"
+          },
+          "right": {
+           "type": "literal",
+           "value": "11111111-2222-3333-4444-555555555555"
+          },
+          "op": "="
+         }
+        }
+       },
+       "op": "EXISTS"
+      }
+     ]
+    },
+    "limit": 1
+   }
+  },
+  {
+   "id": "q6",
+   "name": "automationRuns.byAutomation",
+   "ast": {
+    "table": "automation_runs",
+    "where": {
+     "type": "and",
+     "conditions": [
+      {
+       "type": "simple",
+       "left": {
+        "type": "column",
+        "name": "automation_id"
+       },
+       "right": {
+        "type": "literal",
+        "value": 9
+       },
+       "op": "="
+      },
+      {
+       "type": "correlatedSubquery",
+       "related": {
+        "system": "client",
+        "correlation": {
+         "parentField": [
+          "automation_id"
+         ],
+         "childField": [
+          "id"
+         ]
+        },
+        "subquery": {
+         "table": "automations",
+         "alias": "zsubq_automation",
+         "where": {
+          "type": "simple",
+          "left": {
+           "type": "column",
+           "name": "user_id"
+          },
+          "right": {
+           "type": "literal",
+           "value": "11111111-2222-3333-4444-555555555555"
+          },
+          "op": "="
+         }
+        }
+       },
+       "op": "EXISTS"
+      }
+     ]
+    },
+    "orderBy": [
+     [
+      "created_at",
+      "desc"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "q7",
+   "name": "podcastRuns.byId",
+   "ast": {
+    "table": "podcast_runs",
+    "where": {
+     "type": "and",
+     "conditions": [
+      {
+       "type": "simple",
+       "left": {
+        "type": "column",
+        "name": "id"
+       },
+       "right": {
+        "type": "literal",
+        "value": 3
+       },
+       "op": "="
+      },
+      {
+       "type": "simple",
+       "left": {
+        "type": "column",
+        "name": "user_id"
+       },
+       "right": {
+        "type": "literal",
+        "value": "11111111-2222-3333-4444-555555555555"
+       },
+       "op": "="
+      }
+     ]
+    },
+    "limit": 1
+   }
+  },
+  {
+   "id": "q8",
+   "name": "deliverableJobs.byId",
+   "ast": {
+    "table": "deliverable_jobs",
+    "where": {
+     "type": "and",
+     "conditions": [
+      {
+       "type": "simple",
+       "left": {
+        "type": "column",
+        "name": "id"
+       },
+       "right": {
+        "type": "literal",
+        "value": 4
+       },
+       "op": "="
+      },
+      {
+       "type": "simple",
+       "left": {
+        "type": "column",
+        "name": "user_id"
+       },
+       "right": {
+        "type": "literal",
+        "value": "11111111-2222-3333-4444-555555555555"
+       },
+       "op": "="
+      }
+     ]
+    },
+    "limit": 1
+   }
+  }
+ ],
+ "userID": "11111111-2222-3333-4444-555555555555"
+}

@@ -6,11 +6,16 @@
 //
 //   - Google Drive: the grant's refresh token (or, for a row without one,
 //     its access token). Revoking the refresh token ends the whole grant.
+//
 //   - Nextcloud: the app password the sign-in flow made, which Nextcloud
 //     deletes when asked with that same password.
 //
-// Every other kind is left alone: an MCP server's key is one the person
-// typed and only they can retire, a mailbox password likewise.
+//   - an MCP server signed in to with OAuth: its tokens, revoked at the
+//     authorization server's revocation endpoint (RFC 7009), through the
+//     guard every connection to that server goes through (MCP).
+//
+// Every other kind is left alone: an MCP server's API key is one the
+// person typed and only they can retire, a mailbox password likewise.
 //
 // # Best effort, by design
 //
@@ -53,7 +58,14 @@ import (
 const (
 	GoogleDrive = "GOOGLE_DRIVE_CONNECTOR"
 	Nextcloud   = "NEXTCLOUD_CONNECTOR"
+	MCPServer   = "MCP_CONNECTOR"
 )
+
+// ServerSignOut revokes an MCP server's OAuth sign-in and says, for the
+// log, what happened (mcptools.SignOut).
+type ServerSignOut interface {
+	RevokeServer(ctx context.Context, ownerID string, config []byte) string
+}
 
 // GoogleRevokeURL is Google's OAuth 2.0 token revocation endpoint. It is a
 // fact about Google, not about a deployment, which is why it is a constant
@@ -78,14 +90,18 @@ type Revocation struct {
 	// GoogleURL is where a Google token is revoked: GoogleRevokeURL, except
 	// in a test.
 	GoogleURL string
-	HTTP      *http.Client
-	Logger    *slog.Logger
+	// MCP revokes a removed MCP server's OAuth sign-in. Required.
+	MCP    ServerSignOut
+	HTTP   *http.Client
+	Logger *slog.Logger
 }
 
 // New checks the parts. transport is the process's transport; the client
 // built over it follows no redirect.
-func New(secretKey string, nextcloud *nextcloud.Credentials, transport http.RoundTripper, logger *slog.Logger) (*Revocation, error) {
+func New(secretKey string, nextcloud *nextcloud.Credentials, mcp ServerSignOut, transport http.RoundTripper, logger *slog.Logger) (*Revocation, error) {
 	switch {
+	case mcp == nil:
+		return nil, errors.New("connectionrevocation: nothing to revoke an MCP server's sign-in with")
 	case secretKey == "":
 		return nil, errors.New("connectionrevocation: the secret key that stored tokens are encrypted with is not set")
 	case transport == nil:
@@ -94,7 +110,7 @@ func New(secretKey string, nextcloud *nextcloud.Credentials, transport http.Roun
 		return nil, errors.New("connectionrevocation: no logger")
 	}
 	return &Revocation{
-		SecretKey: secretKey, Nextcloud: nextcloud, GoogleURL: GoogleRevokeURL, Logger: logger,
+		SecretKey: secretKey, Nextcloud: nextcloud, GoogleURL: GoogleRevokeURL, MCP: mcp, Logger: logger,
 		HTTP: &http.Client{
 			Transport: transport,
 			// A reply cannot send the credential anywhere else.
@@ -106,7 +122,7 @@ func New(secretKey string, nextcloud *nextcloud.Credentials, transport http.Roun
 // Revoke ends the credential of a connection of this type with this stored
 // config, if its type has one. It returns when the provider has answered,
 // or after Timeout.
-func (r *Revocation) Revoke(ctx context.Context, connectorID int64, connectorType string, config []byte) {
+func (r *Revocation) Revoke(ctx context.Context, ownerID string, connectorID int64, connectorType string, config []byte) {
 	ctx, done := context.WithTimeout(ctx, Timeout)
 	defer done()
 	var outcome string
@@ -115,6 +131,13 @@ func (r *Revocation) Revoke(ctx context.Context, connectorID int64, connectorTyp
 		outcome = r.google(ctx, config)
 	case Nextcloud:
 		outcome = r.nextcloud(ctx, config)
+	case MCPServer:
+		outcome = r.MCP.RevokeServer(ctx, ownerID, config)
+		if outcome == nothingStored {
+			// Most servers hold an API key, which only its owner retires;
+			// a line per removal would be noise.
+			return
+		}
 	default:
 		return
 	}

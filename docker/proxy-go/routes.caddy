@@ -3,53 +3,294 @@
 # container ({$SOLOCLEF_STACK} is the Compose project), as everywhere in the
 # Go stack.
 #
-# Caddy tries the more specific path first whatever the order here, so
-# /auth/callback reaches the web app and the rest of /auth the API.
+# Two kinds of answer: the API's paths go to the Go services, and every
+# other path is the web app, which is static files in this image (/srv,
+# built by soloclef_web's Dockerfile). Nothing runs Node: what a Next.js
+# server did per request is done here (the pages' headers, the redirects,
+# one file answering for every notebook or link) or by the API.
+#
+# One `route`, so the rules run in the order they are written. Caddy would
+# otherwise sort directives by its own fixed order, in which a catch-all
+# `handle` comes before `reverse_proxy`.
+route {
+	# ── The API ──────────────────────────────────────────────────────────────
 
-# The web app's own page a sign-in comes back to.
-reverse_proxy /auth/callback* {$SOLOCLEF_STACK}-frontend-1:3000
+	# Sign-in, sign-up, password reset and single sign-on, and the account.
+	reverse_proxy /auth/* {$SOLOCLEF_STACK}-api-1:8080 {
+		# The API counts sign-in attempts by CF-Connecting-IP, then X-Real-IP.
+		# Set them here from the client address Caddy trusts (trusted_proxies
+		# in ./Caddyfile), so the limit holds whatever is in front of this
+		# proxy.
+		header_up -CF-Connecting-IP
+		header_up X-Real-IP {client_ip}
+	}
+	reverse_proxy /users/* {$SOLOCLEF_STACK}-api-1:8080 {
+		header_up -CF-Connecting-IP
+		header_up X-Real-IP {client_ip}
+	}
+	# Who a credential is (the API's signin package), for clients that ask
+	# the site rather than the API's own address.
+	reverse_proxy /verify-token {$SOLOCLEF_STACK}-api-1:8080 {
+		header_up -CF-Connecting-IP
+		header_up X-Real-IP {client_ip}
+	}
 
-# Sign-in, sign-up, password reset and single sign-on, and the account.
-reverse_proxy /auth/* {$SOLOCLEF_STACK}-api-1:8080 {
-	# The API counts sign-in attempts by CF-Connecting-IP, then X-Real-IP.
-	# Set them here from the client address Caddy trusts (trusted_proxies in
-	# ./Caddyfile), so the limit holds whatever is in front of this proxy.
-	header_up -CF-Connecting-IP
-	header_up X-Real-IP {client_ip}
+	# Everything else the API serves. flush_interval -1: a chat answer is a
+	# stream, and a proxy that waits for a full buffer turns it into one late
+	# lump.
+	reverse_proxy /api/v1/* {$SOLOCLEF_STACK}-api-1:8080 {
+		flush_interval -1
+		header_up -CF-Connecting-IP
+		header_up X-Real-IP {client_ip}
+	}
+
+	# The live sync. zero-cache takes one path component as its base, so
+	# /zero is passed on as it is.
+	reverse_proxy /zero/* {$SOLOCLEF_STACK}-zero-cache-1:4848
+
+	# The MCP server for agents; it streams, so nothing is buffered. /mcp and
+	# what is under /mcp/ only: a prefix match (/mcp*) would also take the
+	# web app's own pages that begin with the same letters, such as
+	# /mcp-server.
+	reverse_proxy /mcp {$SOLOCLEF_STACK}-mcp-1:8080 {
+		flush_interval -1
+	}
+	reverse_proxy /mcp/* {$SOLOCLEF_STACK}-mcp-1:8080 {
+		flush_interval -1
+	}
+
+	# The MCP server's protected-resource document (RFC 9728), which
+	# claude.ai and ChatGPT read to find where to sign in. Served only when
+	# agent sign-in is set up (SOLOCLEF_API_AGENT_ISSUER); otherwise it
+	# answers 404.
+	reverse_proxy /.well-known/oauth-protected-resource* {$SOLOCLEF_STACK}-mcp-1:8080
+
+	# What a public link shares, for the link page's template below and
+	# nothing else: the API's own public read, with every refusal turned
+	# into an empty answer, so that a revoked or unknown link is a page with
+	# the site's own card, not an error. Its token is the whole of its
+	# authorisation, as on the API's own path.
+	handle_path /__share_card/* {
+		rewrite * /api/v1/public{uri}
+		reverse_proxy {$SOLOCLEF_STACK}-api-1:8080 {
+			# A preview waits this long for the title at most; past it,
+			# the page is served with the site's own card (handle_errors).
+			transport http {
+				response_header_timeout 2500ms
+			}
+			@refused status 3xx 4xx 5xx
+			handle_response @refused {
+				header Content-Type application/json
+				respond "{}" 200
+			}
+		}
+	}
+
+	# ── The web app ──────────────────────────────────────────────────────────
+
+	# Every page's headers. Without them any site could frame the app
+	# (clickjacking: a framed "Delete" or "Make public" under a decoy
+	# button); SameSite=Lax keeps a cross-site frame signed out, but every
+	# host under the same registrable domain is the same site. frame-ancestors
+	# is the standard and X-Frame-Options what older browsers and in-app web
+	# views read. A share link's token is in its path, so a link out of a
+	# page must not hand the whole address on. No script policy: the app's
+	# inline scripts and third parties would need a nonce plan of their own.
+	# The app frames nothing of its own origin but sandboxed srcDoc frames,
+	# so 'self' loses nothing. Set here, after the API's paths, so they are
+	# the pages' and not the API's; an error page below keeps them.
+	# tests/unit/security-headers.test.ts reads this block back.
+	header {
+		Content-Security-Policy "frame-ancestors 'self'"
+		X-Frame-Options "SAMEORIGIN"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+
+	# The signed-in "/": the landing page is for visitors, so a browser with
+	# a session cookie goes straight to its notebooks. Presence is enough:
+	# the notebooks page asks the API, and an expired session lands on
+	# /login from there. The names are the API's session and refresh
+	# cookies. The page's data files (index.txt and /__next.*.txt) are
+	# answered the same way, so a signed-in click on a link to "/" inside the
+	# app lands there too.
+	@signedInHome {
+		path / /index.txt /__next.*
+		header_regexp Cookie (^|;\s*)surfsense_(session|refresh)=
+	}
+	redir @signedInHome /dashboard/notebooks 302
+
+	# Pages that are only a redirect. Each also has a file that redirects in
+	# the browser (components/routing/client-redirect.tsx), for a link
+	# followed inside the app; asked for directly, the answer is here, a
+	# round trip sooner.
+	redir /dashboard /dashboard/notebooks 302
+	redir /dashboard/settings /dashboard/settings/profile 302
+	redir /dashboard/automations /dashboard/settings/automations 302
+
+	# Old docs addresses. The upstream project's docs were versioned
+	# (/docs/legacy/..., /docs/v2) and, before that, sat directly under
+	# /docs; none of those pages describe this app, so their addresses go to
+	# the docs' front page. A renamed page's old address goes to the page
+	# that replaced it. Permanent, as they were.
+	# tests/unit/docs-redirects.test.ts reads these two rules back and
+	# checks them against the docs on disk.
+	@retiredDocs path_regexp ^/docs/(legacy|v2|installation|manual-installation|docker-installation|how-to|connectors|messaging-channels|local-models|observability|testing|code-of-conduct)(/.*)?$
+	redir @retiredDocs /docs 308
+	redir /docs/workspaces-and-sharing /docs/account-and-security 308
+	redir /docs/account-and-sharing /docs/account-and-security 308
+
+	# Files of earlier builds. A tab opened before a deploy asks for its
+	# own build's code as it needs it (pressing play loads the player), and
+	# those names are not in this image. Each build adds its /_next/static
+	# files to the site_assets volume at start, kept 14 days after it
+	# stopped being live, 20 builds at most
+	# (soloclef_web/site-image/kept-assets.sh), and a
+	# /_next/static path this build lacks is served from there. This
+	# build's own files always come from /srv, so a kept copy can never
+	# stand in for one of them; and only /_next/static is looked for there,
+	# whose names are hashes of their contents: a page, its data, or any
+	# file whose name does not change with its contents is always this
+	# build's. Without the volume (an image or a stack from before it) the
+	# path is simply not found, as before.
+	#
+	# Only regular files may be served from there, and this route cannot
+	# check that itself: file_server and the `file` matcher follow
+	# symbolic links and have no setting that refuses them (Caddy 2.11),
+	# so a link planted in the volume would serve what it points to. The
+	# volume is written only by kept-assets.sh, which adds nothing but
+	# regular files and removes anything else it finds there at every keep
+	# and every hourly prune. Nothing else mounts the volume
+	# (docker-compose.go.yml).
+	#
+	# Written before `root * /srv`: Caddy applies only the first `root`
+	# that matches a request (the root directives are one exclusive group),
+	# so the general one must come last.
+	@keptAsset {
+		path /_next/static/*
+		not file {
+			root /srv
+			try_files {path}
+		}
+	}
+	root @keptAsset /var/lib/site-assets/files
+
+	root * /srv
+
+	# Every text file has a Brotli and a gzip copy beside it, made at build
+	# time (soloclef_web/scripts/precompress.ts), which file_server below
+	# sends to a browser that takes one. What has no copy (a public link's
+	# page as the template fills it in, the 404 page) is compressed here as
+	# it goes out. Here, before the template, so the template is filled in
+	# first and its result compressed; and only after the API's paths: a
+	# chat answer is a stream, and an encoder would hold it back.
+	encode zstd gzip
+
+	# A page's data asked for at the page's own address. The app moves
+	# between pages by fetching each page's data file (<page>.txt), but one
+	# kind of prefetch in Next.js 16.2 asks for the page's address with an
+	# `RSC: 1` header instead, as it would of a Next.js server, even in a
+	# static export (next/dist/client/components/segment-cache/cache.js,
+	# fetchSegmentPrefetchesUsingDynamicRequest). Without this it receives
+	# the page's HTML, cannot read it, and the click it was preparing does
+	# nothing. The address keeps its query, so the browser caches the two
+	# apart; Vary below says so as well.
+	@pageDataAtRoot {
+		header RSC 1
+		path /
+	}
+	rewrite @pageDataAtRoot /index.txt
+	@pageData {
+		header RSC 1
+		not path / *.txt
+	}
+	rewrite @pageData {path}.txt
+
+	# A public link's page, with its link preview filled in for that link.
+	# The bot that draws a message's link preview runs no script, so
+	# scripts/share-card-template.ts made public/_.card.html a template whose
+	# title and card tags are written here from /__share_card/<token> above.
+	# [[% %]] are that file's delimiters, chosen so that nothing else in the
+	# page reads as a template. The token's characters are the API's
+	# (URL-safe base64), which also makes it safe in that path.
+	@publicLink path_regexp publicLink ^/public/([A-Za-z0-9_-]+)$
+	rewrite @publicLink /public/_.card.html
+	templates /public/_.card.html {
+		between [[% %]]
+	}
+
+	# One file serves every value of a dynamic page: it was written for the
+	# value "_" (soloclef_web/lib/routing/dynamic-segments.ts), and the page
+	# reads the real one from the address. Its data files, which the app
+	# fetches when it moves to the page (<page>.txt and <page>/__next.*.txt),
+	# are answered the same way, so moving between notebooks in the app
+	# works too.
+	@notebook path_regexp notebook ^/dashboard/notebooks/[^/_.][^/.]*(\.txt|/.*)?$
+	rewrite @notebook /dashboard/notebooks/_{re.notebook.1}
+	@automation path_regexp automation ^/dashboard/automations/[0-9]+(\.txt|/.*)?$
+	rewrite @automation /dashboard/automations/_{re.automation.1}
+	@publicLinkData path_regexp publicLinkData ^/public/[^/_.][^/.]*(\.txt|/.+)$
+	rewrite @publicLinkData /public/_{re.publicLinkData.1}
+	# Every note is the notes page, which reads the open note from the
+	# address: /dashboard/notes/<id> is /dashboard/notes.
+	@note path_regexp note ^/dashboard/notes/[^/_.][^/.]*(\.txt|/.*)?$
+	rewrite @note /dashboard/notes{re.note.1}
+
+	# A page is <path>.html in the export, and a folder's page index.html.
+	try_files {path} {path}.html {path}/index.html
+
+	# How long a browser may keep what it was given. A file under
+	# /_next/static/ is named by a hash of its contents, so it never
+	# changes: kept for a year without asking again. A page, or a page's
+	# data, is asked about every time (no-cache revalidates by ETag, so an
+	# unchanged page costs a 304 and no body), so a new build is seen at
+	# once. Everything else (pictures, icons, the docs index) is kept an
+	# hour.
+	@hashed path /_next/static/*
+	header @hashed Cache-Control "public, max-age=31536000, immutable"
+	@pages path / *.html *.txt /api/search
+	header @pages {
+		Cache-Control "no-cache"
+		Vary "RSC, Accept-Encoding"
+	}
+	@other not path / /_next/static/* *.html *.txt /api/search
+	header @other Cache-Control "public, max-age=3600"
+
+	# The docs search index is a file with no extension; say what it is.
+	header /api/search Content-Type "application/json"
+
+	file_server {
+		precompressed br gzip
+	}
 }
-reverse_proxy /users/* {$SOLOCLEF_STACK}-api-1:8080 {
-	header_up -CF-Connecting-IP
-	header_up X-Real-IP {client_ip}
+
+# When something fails. A path with no file is the app's own 404 page,
+# with the 404 status. A public link whose template could not be filled (the
+# API down or slow) is its page as built, with the site's own card: the link
+# still opens, and the page itself says why if it then cannot load the item.
+# Anything else (a service that is down: a 502 for the API's paths) is the
+# status in plain words, as Caddy would say it, not a page: its caller is
+# the app's code, not a reader.
+handle_errors {
+	root * /srv
+	header Cache-Control "no-cache"
+	@publicLinkFallback path_regexp ^/public/([A-Za-z0-9_-]+|_\.card\.html)$
+	handle @publicLinkFallback {
+		rewrite * /public/_.html
+		file_server {
+			status 200
+			precompressed br gzip
+		}
+	}
+	@notFound expression {err.status_code} == 404
+	handle @notFound {
+		rewrite * /404.html
+		file_server {
+			status 404
+			precompressed br gzip
+		}
+	}
+	handle {
+		respond "{err.status_code} {err.status_text}" {err.status_code}
+	}
 }
-
-# Everything else the API serves. flush_interval -1: a chat answer is a
-# stream, and a proxy that waits for a full buffer turns it into one late
-# lump.
-reverse_proxy /api/v1/* {$SOLOCLEF_STACK}-api-1:8080 {
-	flush_interval -1
-	header_up -CF-Connecting-IP
-	header_up X-Real-IP {client_ip}
-}
-
-# The live sync. zero-cache takes one path component as its base, so /zero
-# is passed on as it is.
-reverse_proxy /zero/* {$SOLOCLEF_STACK}-zero-cache-1:4848
-
-# The MCP server for agents; it streams, so nothing is buffered. /mcp and
-# what is under /mcp/ only: a prefix match (/mcp*) would also take the web
-# app's own pages that begin with the same letters, such as /mcp-server.
-reverse_proxy /mcp {$SOLOCLEF_STACK}-mcp-1:8080 {
-	flush_interval -1
-}
-reverse_proxy /mcp/* {$SOLOCLEF_STACK}-mcp-1:8080 {
-	flush_interval -1
-}
-
-# The MCP server's protected-resource document (RFC 9728), which claude.ai
-# and ChatGPT read to find where to sign in. Served only when agent sign-in
-# is set up (SOLOCLEF_API_AGENT_ISSUER); otherwise it answers 404.
-reverse_proxy /.well-known/oauth-protected-resource* {$SOLOCLEF_STACK}-mcp-1:8080
-
-# The web app: its pages and its own routes (/api/zero/*, /verify-token,
-# /api/search, /api/contact and the rest).
-reverse_proxy /* {$SOLOCLEF_STACK}-frontend-1:3000

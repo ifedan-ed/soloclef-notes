@@ -135,7 +135,7 @@ func (r Routes) turn(ctx huma.Context) {
 		ThreadID: thread.ID, UserID: thread.UserID,
 		Scope: request.Scope, PreferredTool: request.PreferredTool,
 		DocumentIDs: request.DocumentIDs, FolderIDs: request.FolderIDs,
-		DisabledTools: request.DisabledTools,
+		DisabledTools: request.DisabledTools, TimeZone: request.TimeZone,
 	}
 	// Before the agent is built: its search is confined to the notebook's
 	// sources as this leaves them.
@@ -320,19 +320,20 @@ func (r Routes) resume(ctx huma.Context) {
 		r.Errors.WriteValidation(response, answer.requestID, []errorenvelope.Failure{*problem})
 		return
 	}
-	// "Always allow" is remembered before the turn resumes, and only for a
-	// tool that may be: checkAgainstWaiting refused the others. The loop
-	// would also refuse them; this is the same rule held in two places on
+	// "Always allow" means "stop asking": the tool's "ask first" mark is
+	// taken off before the turn resumes, so the rest of this turn and every
+	// later one run it unasked. checkAgainstWaiting refused it where the
+	// loop would not honour it; the same rule is held in two places on
 	// purpose, because one of them writes a row.
 	byID := make(map[string]agent.Approval, len(waiting))
 	for _, w := range waiting {
 		byID[w.CallID] = w
 	}
 	for _, callID := range always {
-		// Through the turn's agent, which knows where each tool's trust is
-		// kept: a connected app's on its connection, the rest in the rules.
-		if err := built.Trust(turnCtx, byID[callID].Tool); err != nil {
-			answer.fail("could not remember an always-allow", err)
+		// Through the turn's agent, which knows how each tool's mark is
+		// kept: a connected app's by its connection, the rest by name.
+		if err := built.StopAsking(turnCtx, byID[callID].Tool); err != nil {
+			answer.fail("could not stop asking about a tool", err)
 			return
 		}
 	}

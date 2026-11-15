@@ -4,7 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/academic"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/addsources"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/assembly"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/automationdrafts"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/mailattachments"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/maildrafts"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -18,6 +23,7 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_agent/uistream"
 	filestore "git.danvics.com/danvics/soloclef/soloclef_filestore"
 
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/automations"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/celeryqueue"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/chat/memory"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/chat/threads"
@@ -29,6 +35,7 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/routeanalytics"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/deliverables"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/ownmodels"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/pagereader"
 	"git.danvics.com/danvics/soloclef/soloclef_ingest/fileread"
 	"git.danvics.com/danvics/soloclef/soloclef_studio/sandbox"
 )
@@ -87,25 +94,19 @@ type Settings struct {
 	MaxSteps int
 	MaxTurn  time.Duration
 
-	// ImageModel is the proxy's name for the model that draws images and
-	// infographics. Empty means this deployment draws none, and a person
-	// who asks for one is told so; no other model is tried.
-	ImageModel string
 	// VisionModel is the proxy's name for the model that looks at pictures
-	// for an account that chose none: a fetched file's pictures, and an
-	// infographic read back to check its text. Empty means neither is
-	// looked at for such an account. A built document is measured, never
-	// looked at (deliverables, layout_rules.go).
+	// for an account that chose none: a fetched file's pictures. Empty
+	// means they are not looked at for such an account. A built document
+	// is measured, never looked at (deliverables, layout_rules.go).
 	VisionModel string
+	// FiguresResvg and FiguresFontDir are what an infographic's PNG is
+	// drawn with: resvg and figures-go's fonts (deliverables.Settings).
+	FiguresResvg, FiguresFontDir string
 	// SandboxEnabled says reports, slides, spreadsheets and interactive
 	// pages are built, in the sandbox Sandbox describes. Off, a person who
 	// asks for one is told it is not available here.
 	SandboxEnabled bool
 	Sandbox        sandbox.Settings
-
-	// FrontendURL is the web app's address, which a public link to a thread
-	// starts with. Optional: without it a link's address is a path.
-	FrontendURL string
 
 	// SecretKey is the deployment's secret key: what the credentials of an
 	// account's mailboxes and Drive grant are sealed with, and so what the
@@ -121,6 +122,10 @@ type Settings struct {
 	// app password is sent to. Optional: without it no chat is offered the
 	// Nextcloud tools.
 	NextcloudURL string
+	// SendsMail says this deployment sends mail (SMTP_ENABLED), the value
+	// the automations routes are given: an automation the chat drafts may
+	// email its result only where saving one that does is accepted.
+	SendsMail bool
 }
 
 func (s Settings) check() error {
@@ -181,6 +186,20 @@ type Deps struct {
 	// attachment, a Drive file or a Nextcloud file is read with in a chat
 	// (assembly.ToolSettings.Parsers).
 	Parsers fileread.Parsers
+	// DraftNotifier is told when a chat leaves a mail draft waiting for its
+	// owner's confirmation (maildrafts.Notifier): where a notification
+	// "a draft is waiting for your confirmation" is raised from.
+	// maildrafts.NoNotifications raises none.
+	DraftNotifier maildrafts.Notifier
+	// FileStore is the tier's file store, which a mail draft's attached
+	// documents and Studio outputs are read from (assembly.ToolDeps).
+	FileStore mailattachments.Stores
+	// Sources makes the import a notebook's chat adds papers and pages to
+	// its sources with (add_sources): the research box's import, built over
+	// the page reader and the scholarly sources this chat builds, so the two
+	// fetch, pace and guard in one way. It is a constructor and not a value
+	// because those are made here (assembly.NewTools).
+	Sources func(pages *pagereader.Reader, papers *academic.Sources) (addsources.Adder, error)
 }
 
 // The choices below are the chat's own, not a deployment's: they are how
@@ -271,6 +290,8 @@ func NewService(ctx context.Context, settings Settings, deps Deps) (*Service, fu
 		return nil, nil, errors.New("chat: the logger is not set")
 	case deps.Lifetime == nil:
 		return nil, nil, errors.New("chat: the lifetime context is not set")
+	case deps.Sources == nil:
+		return nil, nil, errors.New("chat: the import that adds sources is not set")
 	}
 	knowledge := knowledgebase.Writer{Changes: deps.KnowledgeBase}
 	if err := knowledge.Check(); err != nil {
@@ -340,11 +361,17 @@ func NewService(ctx context.Context, settings Settings, deps Deps) (*Service, fu
 		// The names this tier offers beyond the assembly's own, so that a
 		// connected app's tool of the same name is given another.
 		ReservedNames: []string{deliverables.DelegateName, memory.ToolName},
-	}, assembly.ToolDeps{Pool: deps.Pool, HTTP: deps.HTTP, Logger: deps.Logger, Own: own})
+	}, assembly.ToolDeps{Pool: deps.Pool, HTTP: deps.HTTP, Logger: deps.Logger, Own: own,
+		DraftNotifier: deps.DraftNotifier, FileStore: deps.FileStore})
 	if err != nil {
 		return nil, nil, err
 	}
 	searcher, sources, pages, pageTool := tools.Documents, tools.Academic, tools.Pages, tools.PageTool
+	adding, err := deps.Sources(pages, sources)
+	if err != nil {
+		closeTools()
+		return nil, nil, err
+	}
 
 	rows := Store{Pool: deps.Pool}
 	remembering := memory.Writer{Pool: deps.Pool, Logger: deps.Logger}
@@ -357,12 +384,10 @@ func NewService(ctx context.Context, settings Settings, deps Deps) (*Service, fu
 	// the configured one or the type that says this deployment has none.
 	specialist, forgetSandbox, err := deliverables.NewSpecialist(deliverables.Settings{
 		ModelURL: settings.ModelURL, ModelKey: settings.ModelKey,
-		ImageModel: settings.ImageModel, VisionModel: settings.VisionModel,
+		Resvg: settings.FiguresResvg, FigureFonts: settings.FiguresFontDir,
 		SandboxEnabled: settings.SandboxEnabled, Sandbox: settings.Sandbox,
 	}, deliverables.Parts{
 		Pool: deps.Pool, Store: checkpoints, Files: deps.Files, HTTP: deps.HTTP, Voices: deps.Voices, Logger: deps.Logger,
-		// An account's own vision model, for reading an infographic back.
-		Own:          own,
 		PublishVideo: deliverablejobs.PublishVideo(deps.Queue, TurnPath),
 		// The Go indexer's own job, the one a restored version's text is
 		// indexed with.
@@ -374,6 +399,14 @@ func NewService(ctx context.Context, settings Settings, deps Deps) (*Service, fu
 	if err != nil {
 		closeTools()
 		return nil, nil, err
+	}
+	// The chat's automation drafts, checked by the create route's own code
+	// (automations.Checker) over this chat's own model menu: a draft the
+	// card shows is one Create accepts.
+	drafting := &automationdrafts.Tools{
+		Drafts:    automationdrafts.Store{Pool: deps.Pool},
+		Checker:   automations.Checker{Pool: deps.Pool, Models: models, SendsMail: settings.SendsMail},
+		SendsMail: settings.SendsMail, Logger: deps.Logger, Now: time.Now,
 	}
 	assembly := Assembly{
 		Models: models, Store: checkpoints, Rows: rows,
@@ -390,9 +423,13 @@ func NewService(ctx context.Context, settings Settings, deps Deps) (*Service, fu
 		// The specialist that changes the account's documents and folders,
 		// each change asked for and recorded so it can be undone.
 		KnowledgeBase: knowledge,
-		Limits:        Limits{MaxSteps: settings.MaxSteps, MaxParallelTools: maxParallelTools, Continuations: continuations},
-		Now:           time.Now,
-		Brand:         settings.Brand,
+		Automations:   drafting,
+		// What a notebook's chat adds its papers and pages to the notebook
+		// with.
+		Sources: adding,
+		Limits:  Limits{MaxSteps: settings.MaxSteps, MaxParallelTools: maxParallelTools, Continuations: continuations},
+		Now:     time.Now,
+		Brand:   settings.Brand,
 	}
 	if err := assembly.Check(); err != nil {
 		closeTools()
@@ -458,17 +495,16 @@ func NewService(ctx context.Context, settings Settings, deps Deps) (*Service, fu
 			// The conversation first: it is what must not outlive the
 			// thread. The sandbox would expire by itself; removing it now
 			// frees its place in the account's limit.
-			if err := checkpoints.DeleteTree(ctx, agentThread(threadID)); err != nil {
+			if err := forgetConversation(ctx, checkpoints, threadID); err != nil {
 				return err
 			}
 			return forgetSandbox(ctx, threadID)
 		},
-		Tools:       pickerTools(),
-		FrontendURL: settings.FrontendURL,
-		Events:      deps.Events,
-		StopWait:    threadStopWait,
-		Logger:      deps.Logger,
-		Now:         time.Now,
+		Tools:    pickerTools(assembly),
+		Events:   deps.Events,
+		StopWait: threadStopWait,
+		Logger:   deps.Logger,
+		Now:      time.Now,
 	}
 	if err := service.Threads.Check(); err != nil {
 		closeAll()
@@ -482,9 +518,5 @@ func NewService(ctx context.Context, settings Settings, deps Deps) (*Service, fu
 // proxy says they are for. The vision model is not among them: a model that
 // reads pictures is a chat model too.
 func notChat(settings Settings) []string {
-	names := []string{settings.EmbeddingModel}
-	if settings.ImageModel != "" {
-		names = append(names, settings.ImageModel)
-	}
-	return names
+	return []string{settings.EmbeddingModel}
 }

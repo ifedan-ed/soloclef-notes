@@ -29,8 +29,9 @@ test("the engine hands the draft back on every send that never reached the serve
 	const start = engine.indexOf("export async function startNewChat");
 	const end = engine.indexOf("export async function resumeChat");
 	const body = engine.slice(start, end);
-	// Filesystem selection, local-folder guard, thread creation, pre-accept failure.
-	assert.equal((body.match(/restoreDraft\(\);/g) ?? []).length, 4);
+	// Thread creation and the pre-accept failure: the two ways a send can fail
+	// before the server has the message.
+	assert.equal((body.match(/restoreDraft\(\);/g) ?? []).length, 2);
 	const thread = readFileSync(
 		new URL("../../../components/assistant-ui/thread.tsx", import.meta.url),
 		"utf8"

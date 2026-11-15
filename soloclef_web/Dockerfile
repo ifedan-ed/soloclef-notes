@@ -22,7 +22,7 @@ COPY content ./content
 RUN pnpm i --frozen-lockfile
 
 
-# Rebuild the source code only when needed
+# Build the static site.
 FROM base AS builder
 WORKDIR /app
 
@@ -60,8 +60,9 @@ ENV NEXT_PUBLIC_BUILD_COMMIT=${NEXT_PUBLIC_BUILD_COMMIT}
 # links, no contact address, no single sign-on in the docs (lib/brand,
 # lib/sso-settings), and Request access instead of Create an account
 # (lib/signups). Rebuild after changing any of them: Next.js writes every
-# NEXT_PUBLIC_ value into the pages and scripts here, so the running container
-# never reads them. A plain `docker build` without them builds that
+# NEXT_PUBLIC_ value into the pages and scripts here, and the site is static
+# files after that. (The contact page also asks the API for its address in
+# the browser, so an address set later shows without a rebuild.) A plain `docker build` without them builds that
 # unconfigured site, and the build log says so (next.config.ts).
 ARG NEXT_PUBLIC_SITE_URL=""
 ARG NEXT_PUBLIC_SUPPORT_EMAIL=""
@@ -80,44 +81,34 @@ ENV NEXT_PUBLIC_SITE_URL="${NEXT_PUBLIC_SITE_URL}" \
 	NEXT_PUBLIC_OIDC_ALLOW_SIGNUP="${NEXT_PUBLIC_OIDC_ALLOW_SIGNUP}" \
 	NEXT_PUBLIC_SIGNUPS_OPEN="${NEXT_PUBLIC_SIGNUPS_OPEN}"
 
-RUN pnpm run build
+# `next build` writes the static site to out/ (next.config.ts). Then the
+# public link page gets its link-preview copy (scripts/share-card-template.ts
+# says why), and every text file a compressed copy for Caddy to send as it is
+# (scripts/precompress.ts). Node is used here, at build time, and nowhere after.
+#
+# NEXT_PUBLIC_BUILD_ID names this one build, new each time it runs, so a
+# page can tell one deploy from the next (lib/chunk-reload/reload-guard.ts:
+# one reload per build when its code fails to load). Made here rather than
+# passed in: it is not a setting, and a cached layer is the same build.
+RUN NEXT_PUBLIC_BUILD_ID="$(cat /proc/sys/kernel/random/uuid)" pnpm run build \
+	&& pnpm exec tsx scripts/share-card-template.ts out \
+	&& pnpm exec tsx scripts/precompress.ts out
 
-# Dev image: source is bind-mounted and `next dev` compiles it on demand, so
-# edits need no rebuild. Branches off `deps` because node_modules must stay the
-# musl build from this image — the compose file masks the bind mount with an
-# anonymous volume so the host's glibc modules can never leak in.
-# Declared before `runner` so `runner` remains the last (default) build target.
-FROM deps AS dev
-EXPOSE 3000
-# Reconcile the persistent node_modules volume with the bind-mounted lockfile
-# before startup. This is a no-op when dependencies have not changed.
-CMD ["sh", "-c", "CI=true pnpm install --frozen-lockfile && exec pnpm run dev"]
-
-# Production image, copy all the files and run next
-FROM base AS runner
-WORKDIR /app
-
-ENV NODE_ENV=production
-# Uncomment the following line in case you want to disable telemetry during runtime.
-# ENV NEXT_TELEMETRY_DISABLED=1
-
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
-COPY --from=builder /app/public ./public
-
-# Automatically leverage output traces to reduce image size
-# https://nextjs.org/docs/advanced-features/output-file-tracing
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone/app/ ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-
-USER nextjs
-
-EXPOSE 3000
-
-ENV PORT=3000
-
-# server.js is created by next build from the standalone output
-# https://nextjs.org/docs/pages/api-reference/config/next-config-js/output
-ENV HOSTNAME="0.0.0.0"
-CMD ["node", "server.js"]
+# The site: the static files, served by the stack's Caddy, which is this
+# image. docker-compose.go.yml builds its `proxy` service from this stage and
+# mounts docker/proxy-go/Caddyfile and routes.caddy, which say how each
+# address is answered (the pages, their cache headers and security headers,
+# the API's paths). There is no Node.js in it: nothing on the server runs the
+# web app, the browser does.
+FROM caddy:2-alpine AS site
+COPY --from=builder /app/out /srv
+# Earlier builds' hashed files, for tabs opened before a deploy
+# (site-image/kept-assets.sh says how). At start this build's files are
+# added to the site_assets volume, and then, at once and every hour after,
+# the builds that stopped being live more than 14 days ago (and the oldest
+# past the script's MAX_BUILDS) are dropped. That runs beside Caddy, not
+# before it, so the site is up as soon as Caddy is: this build serves its
+# own files from /srv and never waits for the copy. A failure is in the log
+# and costs old tabs a reload, nothing more, so it does not stop the site.
+COPY site-image/kept-assets.sh /usr/local/bin/kept-assets
+CMD ["/bin/sh", "-c", "kept-assets run 14 3600 & exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile"]

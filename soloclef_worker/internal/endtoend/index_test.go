@@ -431,7 +431,7 @@ func TestAMessageOnTheQueueIndexesTheDocument(t *testing.T) {
 	}
 
 	jobs := indexing.NewStatistics()
-	runner, err := indextask.New(s.indexer, jobs.Observe, nil)
+	runner, err := indextask.New(s.indexer, jobs.Observe, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

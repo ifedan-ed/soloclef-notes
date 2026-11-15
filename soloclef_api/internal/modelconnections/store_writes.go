@@ -17,15 +17,6 @@ type StoredCredentials struct {
 	Extra     []byte
 }
 
-// IsAdministrator is whether the account administers the deployment.
-func (s Store) IsAdministrator(ctx context.Context, userID string) (bool, error) {
-	administrator, err := New(s.Pool).AccountIsAdministrator(ctx, userID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return false, nil
-	}
-	return administrator, err
-}
-
 // Create stores a connection and the models picked with it, both or
 // neither, and answers the new connection's id. sealedKey is "" for none;
 // headers is the sealed headers' object to merge into `extra`, or nil.

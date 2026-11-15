@@ -2,7 +2,6 @@ import type { AppendMessage, ThreadMessageLike } from "@assistant-ui/react";
 import { getDefaultStore } from "jotai";
 import type { Dispatch, SetStateAction } from "react";
 import { toast } from "sonner";
-import { agentFlagsAtom } from "@/atoms/agent/agent-flags-query.atom";
 import { disabledToolsAtom } from "@/atoms/agent-tools/agent-tools.atoms";
 import {
 	deriveMentionedPayload,
@@ -33,7 +32,6 @@ import {
 	applyActionLogUpdatedSse,
 	markActionRevertedInCache,
 } from "@/hooks/use-agent-actions-query";
-import { getAgentFilesystemSelection } from "@/lib/agent-filesystem";
 import { authenticatedFetch } from "@/lib/auth-fetch";
 import { parseActivityJournalPart } from "@/lib/chat/activity-journal";
 import { type ChatFlow, classifyChatError } from "@/lib/chat/chat-error-classifier";
@@ -73,6 +71,7 @@ import {
 } from "@/lib/posthog/events";
 import { cacheKeys } from "@/lib/query-client/cache-keys";
 import { queryClient } from "@/lib/query-client/client";
+import { deviceTimeZone } from "../device-time-zone";
 import {
 	computeFallbackTurnCancellingRetryDelay,
 	freshSynthToolCallId,
@@ -82,6 +81,7 @@ import {
 	TOOLS_WITH_UI_ALL,
 } from "./helpers";
 import { chatStreamStore } from "./store";
+import { STREAMED_MESSAGE_METADATA } from "./streamed-message";
 import {
 	newChatRequestBody,
 	regenerateRequestBody,
@@ -370,39 +370,12 @@ export async function startNewChat(ctx: EngineContext, message: AppendMessage): 
 
 	if (!userQuery.trim() && userImages.length === 0) return;
 
-	const localFilesystemEnabled =
-		jotaiStore.get(agentFlagsAtom).data?.enable_desktop_local_filesystem === true;
 	const disabledTools = jotaiStore.get(disabledToolsAtom);
 
-	// Resolve filesystem selection BEFORE any optimistic UI / lazy thread
-	// creation so an unsatisfied "Local Folder" requirement bails cleanly
-	// with nothing to roll back and no thread left stuck "running".
 	// The message never reached the server: give the composer back its text and
 	// the tool chip, which the submit already cleared.
 	const restoreDraft = () =>
 		jotaiStore.set(failedSendDraftAtom, { text: userQuery, tool: preferredTool });
-
-	let selection: Awaited<ReturnType<typeof getAgentFilesystemSelection>>;
-	try {
-		selection = await getAgentFilesystemSelection({ localFilesystemEnabled });
-	} catch (error) {
-		restoreDraft();
-		await handleChatFailure({
-			error: tagPreAcceptSendFailure(error),
-			flow: "new",
-			threadId,
-			assistantMsgId: "no-persist-assistant",
-		});
-		return;
-	}
-	if (
-		selection.filesystem_mode === "desktop_local_folder" &&
-		(!selection.local_filesystem_mounts || selection.local_filesystem_mounts.length === 0)
-	) {
-		restoreDraft();
-		toast.error("Select a local folder before using Local Folder mode.");
-		return;
-	}
 
 	// Lazy thread creation: create thread on first message if it doesn't exist.
 	let currentThreadId = threadId;
@@ -534,12 +507,12 @@ export async function startNewChat(ctx: EngineContext, message: AppendMessage): 
 						threadId: streamThreadId,
 						userQuery,
 						turnToolFields,
-						selection,
 						messageHistory,
 						mentionPayload,
 						mentionedDocuments: allMentionedDocs,
 						disabledTools,
 						userImages,
+						timeZone: deviceTimeZone(),
 					})
 				),
 				signal: controller.signal,
@@ -557,6 +530,7 @@ export async function startNewChat(ctx: EngineContext, message: AppendMessage): 
 				role: "assistant",
 				content: [{ type: "text", text: "" }],
 				createdAt: new Date(),
+				metadata: STREAMED_MESSAGE_METADATA,
 			},
 		]);
 
@@ -814,8 +788,6 @@ export async function resumeChat(ctx: EngineContext, decisions: HitlResponse[]):
 	const controller = new AbortController();
 	chatStreamStore.beginActive(resumeThreadId, controller);
 
-	const localFilesystemEnabled =
-		jotaiStore.get(agentFlagsAtom).data?.enable_desktop_local_filesystem === true;
 	const disabledTools = jotaiStore.get(disabledToolsAtom);
 	const retrievalScope = jotaiStore.get(retrievalScopeAtom);
 
@@ -916,14 +888,11 @@ export async function resumeChat(ctx: EngineContext, decisions: HitlResponse[]):
 	}
 
 	try {
-		const selection = await getAgentFilesystemSelection({ localFilesystemEnabled });
 		const response = await fetchWithTurnCancellingRetry(() =>
 			authenticatedFetch(buildBackendUrl(`/api/v1/threads/${resumeThreadId}/resume`), {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(
-					resumeRequestBody({ retrievalScope, decisions, disabledTools, selection })
-				),
+				body: JSON.stringify(resumeRequestBody({ retrievalScope, decisions, disabledTools })),
 				signal: controller.signal,
 			})
 		);
@@ -1132,8 +1101,6 @@ export async function regenerateChat(
 	chatStreamStore.abortActive();
 
 	const messageDocumentsMap = jotaiStore.get(messageDocumentsMapAtom);
-	const localFilesystemEnabled =
-		jotaiStore.get(agentFlagsAtom).data?.enable_desktop_local_filesystem === true;
 	const disabledTools = jotaiStore.get(disabledToolsAtom);
 	const requestedRetrievalScope = jotaiStore.get(retrievalScopeAtom);
 
@@ -1198,7 +1165,6 @@ export async function regenerateChat(
 			? messageDocumentsMap[sourceUserMessageId]
 			: [];
 	try {
-		const selection = await getAgentFilesystemSelection({ localFilesystemEnabled });
 		const retrievalScope = scopeForMentionKinds(
 			requestedRetrievalScope,
 			sourceMentionedDocs.map((mention) => mention.kind)
@@ -1208,11 +1174,11 @@ export async function regenerateChat(
 			retrievalScope,
 			userQuery: newUserQuery,
 			disabledTools,
-			selection,
 			mentions: sourceMentionedDocs,
 			editedUserImages: isEdit ? (editExtras?.userImages ?? []) : undefined,
 			fromMessageId: editFromPosition?.fromMessageId ?? undefined,
 			revertActions: editFromPosition?.revertActions,
+			timeZone: deviceTimeZone(),
 		});
 		const response = await fetchWithTurnCancellingRetry(() =>
 			authenticatedFetch(getRegenerateUrl(streamThreadId), {
@@ -1247,6 +1213,7 @@ export async function regenerateChat(
 					role: "assistant",
 					content: [{ type: "text", text: "" }],
 					createdAt: new Date(),
+					metadata: STREAMED_MESSAGE_METADATA,
 				},
 			];
 		});

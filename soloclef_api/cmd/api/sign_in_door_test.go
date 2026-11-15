@@ -85,6 +85,17 @@ func TestTheSignInRoutesAreOutsideTheGateAndPasswordsAreLimited(t *testing.T) {
 			t.Errorf("the eleventh POST %s in a minute answered %d", path, got.status)
 		}
 	}
+	// The signed-in password change is behind the gate (a stranger is the
+	// gate's 401) and is counted as an attempt before the gate answers, so it
+	// is no faster a way to guess the current password than the sign-in form.
+	for range 10 {
+		if got := ask(t, server, http.MethodPost, signin.ChangePasswordPath, nil); got.status != http.StatusUnauthorized {
+			t.Fatalf("a password change with no credential answered %d", got.status)
+		}
+	}
+	if got := ask(t, server, http.MethodPost, signin.ChangePasswordPath, nil); got.status != http.StatusTooManyRequests {
+		t.Errorf("the eleventh password change in a minute answered %d", got.status)
+	}
 	// A refresh is not a password attempt and keeps the general limit.
 	if got := ask(t, server, http.MethodPost, signin.RefreshPath, nil); got.status != http.StatusOK {
 		t.Errorf("a refresh after the attempts ran out answered %d", got.status)

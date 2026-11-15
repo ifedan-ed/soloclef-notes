@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronRight, LayoutGrid, Search, X } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	Drawer,
@@ -15,6 +15,7 @@ import { Separator } from "@/components/ui/separator";
 import { EnumConnectorName } from "@/contracts/enums/connector";
 import { getConnectorIcon } from "@/contracts/enums/connectorIcons";
 import type { SearchSourceConnector } from "@/contracts/types/connector.types";
+import { useMcpOAuthReturn } from "@/features/mcp-server-form/hooks/use-mcp-oauth-return";
 import { useConnectorsSync } from "@/hooks/use-connectors-sync";
 import { useEditableConnector } from "@/hooks/use-editable-connector";
 import { useZeroDocumentTypeCounts } from "@/hooks/use-zero-document-type-counts";
@@ -122,6 +123,22 @@ export function ConnectorsSection() {
 		}
 		liveKeyRef.current = liveRowsKey(liveConnectors);
 	}, [liveLoading, liveConnectors]);
+
+	// Back from an MCP server's OAuth sign-in: the list is asked again (the
+	// server is now signed in) and the server's view opens once it is listed.
+	const [returnedServerId, setReturnedServerId] = useState<number | null>(null);
+	const onOAuthReturn = useCallback((connectorId: number | null) => {
+		void queryClient.invalidateQueries({ queryKey: cacheKeys.connectors.all() });
+		setReturnedServerId(connectorId);
+	}, []);
+	useMcpOAuthReturn(onOAuthReturn);
+	useEffect(() => {
+		if (returnedServerId === null) return;
+		const server = connectors.find((c) => c.id === returnedServerId);
+		if (!server) return;
+		setReturnedServerId(null);
+		handleStartEdit(server);
+	}, [returnedServerId, connectors, handleStartEdit]);
 
 	// "Your connectors" rows with live indexing health, plus the shared indexing
 	// controls the flow views reuse (single source of truth via useConnectorRows).

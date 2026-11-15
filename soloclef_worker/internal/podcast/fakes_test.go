@@ -15,6 +15,7 @@ import (
 
 	"git.danvics.com/danvics/soloclef/soloclef_agent/model"
 	"git.danvics.com/danvics/soloclef/soloclef_celery/celery"
+	"git.danvics.com/danvics/soloclef/soloclef_notify/notify"
 
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/speech"
 )
@@ -195,12 +196,13 @@ const twoSpeakerBrief = `{"language":"en","style":"conversational","speakers":[`
 	`"duration":{"min_seconds":120,"max_seconds":300},"focus":null}`
 
 type harness struct {
-	rows    *memoryRows
-	model   *scriptedModel
-	voicer  *countingVoicer
-	indexer *recordingIndexer
-	job     *Job
-	workdir string
+	rows     *memoryRows
+	model    *scriptedModel
+	voicer   *countingVoicer
+	indexer  *recordingIndexer
+	notified *recordingNotifier
+	job      *Job
+	workdir  string
 }
 
 func newHarness(t *testing.T, status string) *harness {
@@ -208,13 +210,15 @@ func newHarness(t *testing.T, status string) *harness {
 	h := &harness{
 		rows: &memoryRows{run: Run{ID: 5, UserID: "owner", Status: status, Title: "Sepsis",
 			Source: "# Sepsis\n\nSepsis is a dysregulated host response.", Spec: []byte(twoSpeakerBrief)}},
-		model:   &scriptedModel{beats: 3},
-		voicer:  &countingVoicer{},
-		indexer: &recordingIndexer{},
-		workdir: t.TempDir(),
+		model:    &scriptedModel{beats: 3},
+		voicer:   &countingVoicer{},
+		indexer:  &recordingIndexer{},
+		notified: &recordingNotifier{},
+		workdir:  t.TempDir(),
 	}
 	h.job = &Job{
 		Rows: h.rows, Models: fakeModels{h.model}, Voicer: h.voicer, Audio: joiningAudio{}, Indexer: h.indexer,
+		Notifier: h.notified,
 		Config: Config{CallTimeout: time.Second, Speech: speech.Service{Roster: speech.OpenAI, Model: "gpt-4o-mini-tts"},
 			Instructions: "Calm.", Concurrency: 4, WorkDirectory: h.workdir, StatusInterval: time.Nanosecond},
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -248,4 +252,23 @@ func (h *harness) workdirIsEmpty(t *testing.T) {
 	if len(entries) != 0 {
 		t.Fatalf("the podcast's working directory was left behind: %v", entries)
 	}
+}
+
+// recordingNotifier keeps every Studio run the job reported.
+type recordingNotifier struct {
+	mu   sync.Mutex
+	runs []notify.StudioRun
+}
+
+func (n *recordingNotifier) StudioFinished(_ context.Context, run notify.StudioRun) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.runs = append(n.runs, run)
+	return nil
+}
+
+func (n *recordingNotifier) reported() []notify.StudioRun {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return append([]notify.StudioRun(nil), n.runs...)
 }

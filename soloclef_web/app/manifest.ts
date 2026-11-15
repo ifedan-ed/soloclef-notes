@@ -2,6 +2,9 @@ import type { MetadataRoute } from "next";
 import { BRAND } from "@/lib/brand";
 
 /** The web app manifest: what a phone shows when the site is added to the home screen. */
+// Written once, at build time, into the static site.
+export const dynamic = "force-static";
+
 export default function manifest(): MetadataRoute.Manifest {
 	return {
 		name: BRAND.name,

@@ -93,9 +93,16 @@ func (a *Agent) parallel(name string) bool {
 //     answered with an error the model can act on. Nothing runs.
 //  2. A delegate runs. Handing over a task is not itself an action in the
 //     world; the delegate's own tools carry their own policies.
-//  3. A tool.Auto tool runs.
-//  4. A tool.AlwaysAsk tool asks. Nothing below is consulted.
-//  5. A tool.Ask tool runs if the user said "always allow" for it earlier in
+//  3. A call its tool's MustAsk picks out asks, under every policy, and an
+//     earlier "always allow" does not waive it. Nothing below is consulted:
+//     neither the person's policy nor trust can run it unasked.
+//  4. With Config.AskFirst set, the person's policy decides every tool:
+//     it runs if the user said "always allow" for it earlier in this turn,
+//     or if AskFirst says the user does not want to be asked first;
+//     otherwise it asks. Nothing below is consulted.
+//  5. A tool.Auto tool runs.
+//  6. A tool.AlwaysAsk tool asks. Nothing below is consulted.
+//  7. A tool.Ask tool runs if the user said "always allow" for it earlier in
 //     this turn, or if Config.Trusted says so now; otherwise it asks.
 func (t *turn) decide(ctx context.Context, c *Call) error {
 	a := t.agent
@@ -114,6 +121,27 @@ func (t *turn) decide(ctx context.Context, c *Call) error {
 	}
 	if !isJSONObject([]byte(c.Args)) {
 		t.finish(c, badArgsText, true)
+		return nil
+	}
+
+	if mustAsk(tl, c) {
+		c.Status = CallAwaitingApproval
+		return nil
+	}
+
+	if a.cfg.AskFirst != nil {
+		asks := !slices.Contains(t.state.TurnTrust, c.Name)
+		if asks {
+			var err error
+			if asks, err = a.cfg.AskFirst(ctx, t.toolCall(c)); err != nil {
+				// As with Trusted below: no answer is neither yes nor no.
+				return fmt.Errorf("agent: ask whether %s asks first: %w", c.Name, err)
+			}
+		}
+		c.Status = CallApproved
+		if asks {
+			c.Status = CallAwaitingApproval
+		}
 		return nil
 	}
 
@@ -148,7 +176,7 @@ func (t *turn) toolCall(c *Call) tool.Call {
 	// own goroutine may still be reporting at that moment.
 	id, name, step := c.ID, c.Name, t.state.Steps
 	return tool.Call{
-		ID: id, Name: name, Args: []byte(c.Args), Thread: t.thread, Answer: c.Answer, Citations: t.cites,
+		ID: id, Name: name, Args: []byte(c.Args), Thread: t.thread, Approved: c.Approved, Answer: c.Answer, Citations: t.cites,
 		Notify: func(kind string, payload any) error {
 			raw, err := json.Marshal(payload)
 			if err != nil {
@@ -163,7 +191,11 @@ func (t *turn) toolCall(c *Call) tool.Call {
 // finish records a call's result and announces it.
 func (t *turn) finish(c *Call, result string, isError bool) {
 	*c = Call{ID: c.ID, Name: c.Name, Args: c.Args, Status: CallDone, Result: result, IsError: isError}
-	t.emit(event.Event{Kind: event.ToolResult, Step: t.state.Steps, CallID: c.ID, Tool: c.Name, Text: result, IsError: isError})
+	// The arguments go with the result: a card drawn from what the call
+	// was asked to do (a figure drawn again from its spec) is drawn when the
+	// result arrives, which may be in a later run than the call's own
+	// ToolCallReady (a turn resumed after a pause).
+	t.emit(event.Event{Kind: event.ToolResult, Step: t.state.Steps, CallID: c.ID, Tool: c.Name, Args: c.Args, Text: result, IsError: isError})
 }
 
 // runGroup runs the calls of one group that are able to run. With one such

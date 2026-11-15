@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { RootProvider } from "fumadocs-ui/provider/next";
 import { Roboto } from "next/font/google";
-import { DesktopUpdateToast } from "@/components/desktop/desktop-update-toast";
 import { AuthCutoverPurge } from "@/components/providers/AuthCutoverPurge";
 import { ClientErrorReporter } from "@/components/providers/ClientErrorReporter";
 import { GlobalLoadingProvider } from "@/components/providers/GlobalLoadingProvider";
@@ -17,7 +16,6 @@ import {
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { LocaleProvider } from "@/contexts/LocaleContext";
-import { PlatformProvider } from "@/contexts/platform-context";
 import { BRAND, metadataBase, siteUrl } from "@/lib/brand";
 import { ReactQueryClientProvider } from "@/lib/query-client/query-client.provider";
 import { cn } from "@/lib/utils";
@@ -120,19 +118,19 @@ export default function RootLayout({
 								defaultTheme="dark"
 								storageKey="surfsense-theme"
 							>
-								<PlatformProvider>
-									<RootProvider>
-										<ReactQueryClientProvider>
-											<AuthCutoverPurge />
-											<ClientErrorReporter />
-											<ZeroProvider>
-												<GlobalLoadingProvider>{children}</GlobalLoadingProvider>
-											</ZeroProvider>
-										</ReactQueryClientProvider>
-										<DesktopUpdateToast />
-										<Toaster />
-									</RootProvider>
-								</PlatformProvider>
+								{/* The docs search reads the index built with the site
+								    (app/api/search/route.ts) and searches it here, in the
+								    browser: there is no server to ask. */}
+								<RootProvider search={{ options: { type: "static" } }}>
+									<ReactQueryClientProvider>
+										<AuthCutoverPurge />
+										<ClientErrorReporter />
+										<ZeroProvider>
+											<GlobalLoadingProvider>{children}</GlobalLoadingProvider>
+										</ZeroProvider>
+									</ReactQueryClientProvider>
+									<Toaster />
+								</RootProvider>
 							</ThemeProvider>
 						</I18nProvider>
 					</LocaleProvider>

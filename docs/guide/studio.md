@@ -1,125 +1,205 @@
 # Studio
 
-Studio turns the notebook's sources into something new. Click an output to
-open its options; the defaults are already chosen, so Generate now makes it
-straight away. Every output
-lets you pick the sources to use, the language, and a focus in your
-own words, with a few suggested ideas to start from (More ideas gives new
-ones).
+Studio turns a notebook's sources into something new: a report, a deck, a
+podcast, a quiz and more. It is the panel on the right of a notebook.
 
-Outputs take a few minutes. You can keep working, and the app can show a
-browser notification when one finishes. Each output lists how it was made:
-View prompt and sources shows the focus and sources it used, and its menu
-names the model that made it (Made with …).
+Click an output to open its options. Good defaults are already chosen, so you
+can press Generate straight away. Every output lets you pick:
+
+- which sources to use;
+- the language;
+- a focus, in your own words, with a few suggested ideas to start from.
+
+An output takes a few minutes. You can keep working meanwhile. When it is
+ready, or if it fails, you get a notification, and a push on your phone if
+you use the app. Studio also offers to show a browser notification when an
+output you started finishes while the tab is in the background.
 
 ![The mind map viewer beside the chat](../images/screens/studio-mindmap.png)
 
-## Reports
+## The outputs
+
+### Report
 
 A written report from your sources.
 
-- Format: Document (a structured text document, as PDF or Word) or
-  Interactive (a page with sections to explore, which can embed the
-  notebook's other outputs).
-- Templates: Learning Overview, Briefing Doc, Study Guide and Blog Post.
-  You can edit a template's instructions and save them as your default.
-- Reports open with a Contents list, and Recommended cards suggest
-  other outputs to add for a section.
-- Select a passage and choose Explain to ask the chat about it.
+- Format: Document, a PDF or Word file, or Interactive, a page with sections
+  to explore that can embed the notebook's other outputs.
+- Templates: Briefing Doc, Study Guide and Blog Post for a document, and
+  Learning Overview for an interactive page. You can edit a template's
+  instructions and save them as your default, or choose no template.
 
-## Mind Map
+A report opens with a contents list. Recommended cards suggest other outputs
+for a section. Select a passage and choose Explain to ask the chat about it.
+
+### Slide Deck
+
+An editable PowerPoint (.pptx) deck.
+
+- Format: Detailed deck, full text made to be read on its own, or Presenter
+  slides, clean slides with talking points in the speaker notes.
+- Length: Short, about 6 slides; Default, about 10; or Long, about 16.
+
+### Data Table
+
+An Excel workbook of the facts in your sources, laid out in rows. For
+example, one row per study with its sample size and main result.
+
+### Mind Map
 
 A map of the main ideas and how they connect. Level of detail: Overview,
 Standard or Detailed. In the viewer you can expand and collapse branches,
-zoom, fit to screen, download as PNG or SVG, and click a topic to ask the chat
-about it.
+zoom, download it as PNG or SVG, and click a topic to ask the chat about it.
 
-## Infographic
+### Infographic
 
-One illustrated image of the key facts and figures.
+A poster of the key facts and figures: a title, a few key numbers, short
+sections, and charts or diagrams where they show something, laid out and drawn
+by the application from your sources.
 
 - Orientation: Landscape, Portrait or Square.
-- Level of detail: Concise, Standard or Detailed.
-- Visual style: Auto-select, or one of ten styles: Sketch Note, Kawaii,
-  Clay, Anime, Editorial, Instructional, Bento Grid, Bricks, Scientific and
-  Professional.
+- Level of detail: Concise, Standard or Detailed: how many sections, points
+  and figures the poster holds.
+- Visual style: Auto-select, or one of Sketch Note, Editorial, Instructional,
+  Bento Grid, Scientific and Professional.
+
+Every word and number on the poster is the text written for it, never
+redrawn by a picture model, and charts place each value exactly. The
+infographic is kept as a PNG and as an SVG that stays sharp at any size.
 
 ![Infographic options](../images/screens/studio-infographic.png)
 
-## Flashcards
+### Flashcards
 
-A study deck, question on one side and answer on the other. Number:
-Fewer, Standard or More. Difficulty: Easy, Medium or Hard. Explain
-sends a card to the chat for a longer explanation.
+A study deck, a question on one side and the answer on the other.
 
-## Quiz
+- Number: Fewer (10), Standard (20) or More (35).
+- Difficulty: Easy, Medium or Hard.
 
-Scored multiple-choice questions with one right answer. Number and
-Difficulty as for flashcards. Once you answer, each option shows why it is
-right or wrong, and Explain takes the question to the chat.
+Explain sends a card to the chat for a longer explanation.
 
-## Slide Deck
+### Quiz
 
-An editable PowerPoint (.pptx) deck. Format: Detailed deck (full text,
-made to be read on its own) or Presenter slides (clean slides with talking
-points in the speaker notes). Length: Short (about 6 slides), Default
-(about 10) or Long (about 16).
+Multiple-choice questions with one right answer, scored as you go.
 
-## Data Table
+- Number: Fewer (5), Standard (10) or More (20).
+- Difficulty: Easy, Medium or Hard.
 
-An Excel workbook of the structured facts in your sources, for example one
-row per study with its sample size and main outcome.
+After you answer, each option says why it is right or wrong. Explain takes
+the question to the chat.
 
-## Audio Overview
+### Audio Overview
 
-A podcast-style conversation about your sources, read aloud with natural
-OpenAI voices.
+A podcast-style conversation about your sources, read aloud.
 
-- Format: Deep Dive (two hosts), Brief (one narrator, a short
-  overview), Critique (an expert review, two voices) or Debate (two
-  hosts arguing different views).
-- Length: Short (1 to 2½ minutes), Default (3 to 5½ minutes) or
-  Long (10 to 30 minutes). A Long episode runs as long as your sources
-  support, up to 30 minutes, and ends sooner for thin material.
+- Format: Deep Dive, two hosts; Brief, one narrator and a short overview;
+  Critique, an expert review in two voices; or Debate, two hosts arguing
+  different views.
+- Length: Short, 1 to 2½ minutes; Default, 3 to 5½ minutes; or Long, 10 to
+  30 minutes. A long episode ends sooner if your sources are thin.
 
-There is no voice to choose: the voices are cast for each episode. The app
-reads the topic and the format and gives each host a distinct voice that
-suits it. By default Marin narrates, and Marin and Cedar host.
-
-Audio plays in the app, with a transcript.
+Each speaker gets a different voice. Audio plays in Studio with a transcript.
 
 ![Audio Overview options](../images/screens/studio-audio.png)
 
-## Video Overview
+### Video Overview
 
-A narrated, animated explainer video, read by one narrator.
+A narrated, animated explainer video.
 
-- Format: Explainer (a full overview, as long as the material needs)
-  or Short (about a minute).
-- Visual style: Auto-select, Classic, Whiteboard, Playful, Dark, Minimal,
-  or Custom, a look you describe.
+- Format: Explainer, a full overview of 6 to 16 scenes, or Short, about a
+  minute. No video runs over 10 minutes.
+- Choose visual style: Auto-select, Classic, Whiteboard, Playful, Dark,
+  Minimal, or Custom, a look you describe.
+
+## Layout checks
+
+Reports, decks and other documents are checked before they are saved. Every
+page is drawn and measured:
+
+- every word stays on the page, and no two words overlap;
+- on slides, each box's text fits inside its box, text from different boxes
+  doesn't overlap, and no line, shape or picture covers text;
+- on slides, text is at least 12 point, and at least 16 point in a body of
+  three or more paragraphs;
+- on slides, text has enough contrast with what is behind it;
+- documents have no blank pages, and every font is embedded.
+
+Slides, in decks and in videos, are fitted as they are drawn. Text is sized to
+its place, never below what can be read across a room: a figure never smaller
+than a slide's title, a body of text never under 16 point. When a slide's text
+doesn't fit, the slide is laid out another way before anything is shortened:
+
+- figures go two to a row, then one to a row with each figure beside its
+  label;
+- a timeline's events take turns above and below the line;
+- a diagram's stages go on two rows, and a cycle's cards are widened or set
+  out as a loop;
+- a comparison's first column narrows to give its cells more room;
+- a bar chart's values get a wider column.
+
+A word wider than the whole line, such as a long web address, is broken where
+a line may break inside a word: after a slash, a hyphen or a dash. Words are
+never hyphenated at a syllable. Text that still doesn't fit goes back to the
+model with the slide, the field, the word and the room there is, and the model
+rewrites it. A video's deck gets up to two of these rounds; if it still doesn't
+fit, the video fails and says which slide and which word.
+
+Whatever fails a check is fixed before the file is saved, and while that
+happens the output shows Fixing issues. If it cannot be fixed in time, the
+output fails and says why, and you can try again. A file that failed a check
+is never saved.
 
 ## Managing outputs
 
-Each output's menu has Open (once it is ready), Try again (if it failed
-or was cancelled), Rename and Delete. Deleting an output also deletes
-its file.
+What a notebook's chat makes is listed here too, beside what you made in
+Studio, and is managed in the same way.
+
+Each output's menu has Open, Try again for one that failed, Rename and
+Delete. It also names the model that made it, as Made with …. View prompt
+and sources shows the focus and the sources it was made from.
+
+The viewer has Download for every output but flashcards and quizzes, and
+Expand to full window.
+
+Deleting an output deletes its file and ends its public link.
+
+A failed output's notification also has Try again, which makes it once more
+with the same options.
 
 ## Sharing an output
 
-You can share a finished output with Share publicly in its viewer. It
-makes a read-only copy that anyone with the link can open without
-signing in, until the link expires (after 7 days by default, 30 days or never)
-or is revoked. The link opens the output in the same viewer you see. See
-[Settings and sharing](workspaces-and-sharing.md#public-links).
+Only Studio outputs can be shared. Chats, notebooks and sources cannot.
 
-## Which model writes outputs
+Choose Share publicly in an output's viewer; for an audio overview, it is
+the globe button beside the title in Studio's player. In the phone app,
+Share publicly is in every output's menu. Pick how long the link lasts:
+7 days, which is the default, 30 days, or never. Then copy the link.
 
-Settings → Models → Studio outputs model chooses the model that
-writes every output: the recommended model and its fallback, Auto (the
-same as the chat model), or a model and fallback for each output type. If the model fails, the fallback gets one more
-try. The model used is shown as Made with …, with (fallback) when the
-fallback made it.
+Anyone with the link can open the output without signing in, in the same
+viewer you see. Visitors can explore a mind map, study flashcards and take a
+quiz; their answers stay in their own browser. Nothing else goes with it: not
+your sources, your focus, the chat, or the notebook.
 
-Your [instructions](workspaces-and-sharing.md#instructions) also shape every
-output's tone, audience, format and length.
+Settings, Public links lists every link you have made, with Copy link, Open
+link and Revoke. Revoking stops a link at once. An expired link stays in the
+list, marked Expired, until you revoke it. Sharing the same output again
+gives the same link while it is still valid.
+
+## Which model makes outputs
+
+Settings, Models, Studio outputs model chooses the model that writes every
+output. It is your chat model unless you pick another. If the model fails,
+the output fails and says so: no other model is tried behind your back.
+
+Your [instructions](memory-and-instructions.md#instructions) also shape every
+output's tone, audience and length.
+
+## What the server must offer
+
+Some outputs need parts the server's administrator switches on:
+
+- reports, slide decks and data tables need the server's sandboxes;
+- video overviews need video rendering.
+
+If one is missing, asking for that output says it isn't available on this
+server.

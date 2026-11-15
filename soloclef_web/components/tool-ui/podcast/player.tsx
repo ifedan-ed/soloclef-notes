@@ -1,8 +1,6 @@
 "use client";
 
-import { useParams, usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { z } from "zod";
 import { TextShimmerLoader } from "@/components/prompt-kit/loader";
 import { Audio } from "@/components/tool-ui/audio";
 import {
@@ -13,17 +11,13 @@ import {
 } from "@/components/ui/accordion";
 import { artifactManifestQueryOptions } from "@/features/artifacts/api/artifact-queries";
 import type { ArtifactManifest } from "@/features/artifacts/model/artifact";
+import { publicFilePath } from "@/features/public-sharing/lib/public-link-url";
 import { baseApiService } from "@/lib/apis/base-api.service";
 import { podcastsApiService } from "@/lib/apis/podcasts-api.service";
 import { authenticatedFetch } from "@/lib/auth-fetch";
 import { buildBackendUrl } from "@/lib/env-config";
 import { queryClient } from "@/lib/query-client/client";
 import { speakerLabel } from "./schema";
-
-// Public snapshots predate the transcript.turns shape and keep their own.
-const publicPodcastDetailsSchema = z.object({
-	podcast_transcript: z.array(z.object({ speaker_id: z.number(), dialog: z.string() })).nullish(),
-});
 
 interface TranscriptLine {
 	// Transcripts are immutable once fetched, so a turn's position identifies it.
@@ -101,28 +95,28 @@ async function loadFromArtifact(
 /**
  * Streams the rendered episode and shows its transcript.
  *
- * Prefer ``artifactId``; ``podcastId`` is the only path for public shares
- * and podcasts with no Artifact. A shared Studio output passes
- * its text as ``transcriptMarkdown``, the transcript the owner's player reads
- * from the artifact.
+ * The owner's player reads the artifact (``artifactId``). A shared Studio
+ * output's page passes its link's ``shared`` token and text instead: the
+ * audio comes from the link's own file route and the transcript from the
+ * text frozen into the link, because a visitor has no session to read the
+ * artifact with. Passed explicitly rather than guessed from the address, so
+ * no owner page can ever take the public path.
  */
 export function PodcastPlayer({
 	podcastId,
 	artifactId,
 	title,
 	durationMs,
-	transcriptMarkdown,
+	shared,
 }: {
 	podcastId?: number;
 	artifactId?: number;
 	title: string;
 	durationMs?: number;
-	transcriptMarkdown?: string;
+	shared?: { token: string; transcriptMarkdown: string };
 }) {
-	const params = useParams();
-	const pathname = usePathname();
-	const isPublicRoute = pathname?.startsWith("/public/");
-	const shareToken = isPublicRoute && typeof params?.token === "string" ? params.token : null;
+	const shareToken = shared?.token ?? null;
+	const transcriptMarkdown = shared?.transcriptMarkdown ?? "";
 
 	const [audioSrc, setAudioSrc] = useState<string | null>(null);
 	const [transcriptLines, setTranscriptLines] = useState<TranscriptLine[] | null>(null);
@@ -156,33 +150,9 @@ export function PodcastPlayer({
 				let lines: TranscriptLine[] = [];
 
 				if (shareToken) {
-					// Artifact route when available; legacy per-podcast stream for
-					// snapshots predating the backfill.
-					const audioUrl =
-						artifactId != null
-							? `/api/v1/public/${shareToken}/artifacts/${artifactId}/content`
-							: podcastId != null
-								? `/api/v1/public/${shareToken}/podcasts/${podcastId}/stream`
-								: null;
-					if (!audioUrl) throw new Error("Podcast identity missing for shared chat");
-					const [blob, details] = await Promise.all([
-						baseApiService.getBlob(audioUrl),
-						podcastId != null
-							? baseApiService.get(`/api/v1/public/${shareToken}/podcasts/${podcastId}`)
-							: Promise.resolve(null),
-					]);
-					audioBlob = blob;
-					const parsed = details ? publicPodcastDetailsSchema.safeParse(details) : null;
-					lines = (parsed?.success ? (parsed.data.podcast_transcript ?? []) : []).map(
-						(entry, turn) => ({
-							key: `turn-${turn}`,
-							label: `Speaker ${entry.speaker_id + 1}`,
-							text: entry.dialog,
-						})
-					);
-					if (lines.length === 0 && transcriptMarkdown) {
-						lines = linesFromMarkdown(transcriptMarkdown);
-					}
+					if (artifactId == null) throw new Error("Podcast identity missing");
+					audioBlob = await baseApiService.getBlob(publicFilePath(shareToken, artifactId));
+					lines = linesFromMarkdown(transcriptMarkdown);
 				} else if (artifactId != null) {
 					({ audioBlob, lines } = await loadFromArtifact(artifactId, podcastId, controller.signal));
 				} else {

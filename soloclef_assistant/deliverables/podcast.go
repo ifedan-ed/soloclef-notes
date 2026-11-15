@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/voices"
+	"git.danvics.com/danvics/soloclef/soloclef_studio/notebookoutput"
 )
 
 // A podcast is not saved the way the other kinds are. The specialist does
@@ -139,7 +140,13 @@ func (s PodcastStore) Create(ctx context.Context, owner Owner, title, source str
 			// and inserted nothing: the thread is gone or is not theirs.
 			return errors.New("deliverables: the podcast's thread is not one of its account's")
 		}
-		return err
+		if err != nil {
+			return err
+		}
+		// Listed in the notebook's Studio with the podcast, in its
+		// transaction, when a notebook's chat opened it (Owner.NotebookID).
+		return notebookoutput.Podcast(ctx, tx, notebookoutput.Place{UserID: owner.UserID, NotebookID: owner.NotebookID, ThreadID: owner.ThreadID},
+			id, title)
 	})
 	return id, err
 }

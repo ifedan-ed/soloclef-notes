@@ -258,7 +258,7 @@ func notes(policy tool.Approval, ran *atomic.Int64) tool.Tool {
 
 const resumePath = "/api/v1/threads/1/resume"
 
-// A tool that asks first pauses the turn; the decision resumes it.
+// A tool marked "ask first" pauses the turn; the decision resumes it.
 func TestAToolThatAsksFirstPausesTheTurnAndADecisionResumesIt(t *testing.T) {
 	var ran atomic.Int64
 	script := modeltest.NewScript(
@@ -266,6 +266,7 @@ func TestAToolThatAsksFirstPausesTheTurnAndADecisionResumesIt(t *testing.T) {
 		modeltest.Reply{Text: "Noted."},
 	)
 	a := newApp(t, script, []tool.Tool{notes(tool.Ask, &ran)})
+	a.rows.mark(ada, "write_note")
 	frames, done := a.ask(ada, turnBody)
 	if !done || ran.Load() != 0 {
 		t.Fatalf("done=%v ran=%d: the tool ran before it was approved", done, ran.Load())
@@ -357,6 +358,7 @@ func TestARejectionAndAnEdit(t *testing.T) {
 		modeltest.Reply{Text: "One was not written."},
 	)
 	a := newApp(t, script, []tool.Tool{notes(tool.Ask, &ran)})
+	a.rows.mark(ada, "write_note")
 	page := readAll(t, first(a.ask(ada, turnBody)))
 	if len(page.interrupts) != 2 || page.interrupts[0]["tool_call_id"] != "w1" || page.interrupts[1]["tool_call_id"] != "w2" {
 		t.Fatalf("interrupts = %v", page.interrupts)
@@ -378,9 +380,10 @@ func TestARejectionAndAnEdit(t *testing.T) {
 	}
 }
 
-// "Always allow" is remembered as a row, read again at every call: the same
-// tool then runs unasked, and stops doing so the moment the row is removed.
-func TestAlwaysAllowIsReadFreshOnEveryCall(t *testing.T) {
+// "Always allow" on a card takes the tool's "ask first" mark off, and the
+// marks are read again at every call: the tool then runs unasked, and asks
+// again the moment the person marks it again.
+func TestAlwaysAllowTakesTheMarkOffAndMarksAreReadOnEveryCall(t *testing.T) {
 	var ran atomic.Int64
 	script := modeltest.NewScript(
 		modeltest.Reply{Calls: call("w1", "write_note", `{"n":1}`)}, modeltest.Reply{Text: "First."},
@@ -388,41 +391,40 @@ func TestAlwaysAllowIsReadFreshOnEveryCall(t *testing.T) {
 		modeltest.Reply{Calls: call("w3", "write_note", `{"n":3}`)},
 	)
 	a := newApp(t, script, []tool.Tool{notes(tool.Ask, &ran)})
+	a.rows.mark(ada, "write_note")
+	a.rows.mark(ben, "write_note")
 	a.ask(ada, turnBody)
 	response := a.request(ada, http.MethodPost, resumePath, `{"decisions":[{"type":"approve_always","tool_call_id":"w1"}]}`)
 	readFrames(t, response.Body)
 	response.Body.Close()
-	if !a.rows.trust[trustKey(ada, "write_note")] {
-		t.Fatal("always-allow was not remembered")
+	if a.rows.marked(ada, "write_note") {
+		t.Fatal("always-allow did not take the mark off")
+	}
+	// Ada's answer is Ada's and nobody else's: Ben's mark stands.
+	if !a.rows.marked(ben, "write_note") {
+		t.Fatal("one person's always-allow took another's mark off")
 	}
 
 	// A later turn: the tool runs without asking.
 	page := readAll(t, first(a.ask(ada, turnBody)))
 	if len(page.interrupts) != 0 || ran.Load() != 2 {
-		t.Fatalf("a trusted tool asked again: interrupts %v, ran %d", page.interrupts, ran.Load())
+		t.Fatalf("an unmarked tool asked: interrupts %v, ran %d", page.interrupts, ran.Load())
 	}
 
-	// Ada's trust is Ada's and nobody else's. (Checked on the row, which
-	// is per account.)
-	if a.rows.trust[trustKey(ben, "write_note")] {
-		t.Fatal("one person's always-allow was given to another")
-	}
-
-	// The rule is removed in settings. Nothing is restarted or
-	// invalidated; the next call asks.
-	a.rows.mu.Lock()
-	delete(a.rows.trust, trustKey(ada, "write_note"))
-	a.rows.mu.Unlock()
+	// Marked again in settings. Nothing is restarted or invalidated; the
+	// next call asks.
+	a.rows.mark(ada, "write_note")
 	page = readAll(t, first(a.ask(ada, turnBody)))
 	if len(page.interrupts) != 1 || ran.Load() != 2 {
-		t.Fatalf("a tool whose trust was removed ran unasked: interrupts %v, ran %d", page.interrupts, ran.Load())
+		t.Fatalf("a marked tool ran unasked: interrupts %v, ran %d", page.interrupts, ran.Load())
 	}
 }
 
-// A tool that must always ask cannot be allowed for good: the button is not
-// offered, an "always" answer is refused and writes nothing, and a trust row
-// that exists anyway is not consulted.
-func TestAnAlwaysAskToolCanNeverBeAutoAllowed(t *testing.T) {
+// The person's marks are the whole policy: a tool that declares it asks
+// every time runs unasked when it is not marked, and when it is marked its
+// card offers "always allow", because stopping the questions is always the
+// person's to choose.
+func TestEveryToolRunsUnaskedUnlessMarked(t *testing.T) {
 	var ran atomic.Int64
 	fetch := notes(tool.AlwaysAsk, &ran)
 	fetch.Name = "fetch_page"
@@ -431,38 +433,20 @@ func TestAnAlwaysAskToolCanNeverBeAutoAllowed(t *testing.T) {
 		modeltest.Reply{Calls: call("f2", "fetch_page", `{"url":"https://example.org/2"}`)},
 	)
 	a := newApp(t, script, []tool.Tool{fetch})
-	// A row that should not exist, as an old version or a hand edit might
-	// have left: it must change nothing.
-	a.rows.trust[trustKey(ada, "fetch_page")] = true
 
 	page := readAll(t, first(a.ask(ada, turnBody)))
-	if len(page.interrupts) != 1 || ran.Load() != 0 {
-		t.Fatalf("an always-ask tool ran on a trust row: interrupts %v, ran %d", page.interrupts, ran.Load())
+	if len(page.interrupts) != 0 || ran.Load() != 1 {
+		t.Fatalf("an unmarked tool asked: interrupts %v, ran %d", page.interrupts, ran.Load())
 	}
-	allowed, _ := json.Marshal(page.interrupts[0]["review_configs"])
-	if strings.Contains(string(allowed), "approve_always") {
-		t.Fatalf("always-allow was offered for an always-ask tool: %s", allowed)
-	}
-	delete(a.rows.trust, trustKey(ada, "fetch_page"))
 
-	refused := a.call(ada, http.MethodPost, resumePath, `{"decisions":[{"type":"approve_always","tool_call_id":"f1"}]}`)
-	if refused.status != http.StatusUnprocessableEntity || !strings.Contains(refused.raw, "asks every time") {
-		t.Fatalf("always-allow for an always-ask tool: %d %s", refused.status, refused.raw)
-	}
-	if len(a.rows.trust) != 0 || ran.Load() != 0 || len(a.rows.assistant(1)) != 1 {
-		t.Fatalf("a refused decision changed something: trust %v, ran %d", a.rows.trust, ran.Load())
-	}
-	// The refusal left the turn waiting and the thread free: a plain
-	// approval still works, and the next call asks again.
-	response := a.request(ada, http.MethodPost, resumePath, `{"decisions":[{"type":"approve","tool_call_id":"f1"}]}`)
-	readFrames(t, response.Body)
-	response.Body.Close()
-	if ran.Load() != 1 {
-		t.Fatalf("ran %d", ran.Load())
-	}
+	a.rows.mark(ada, "fetch_page")
 	page = readAll(t, first(a.ask(ada, turnBody)))
 	if len(page.interrupts) != 1 || ran.Load() != 1 {
-		t.Fatalf("the second call of an always-ask tool did not ask: %v, ran %d", page.interrupts, ran.Load())
+		t.Fatalf("a marked tool ran unasked: interrupts %v, ran %d", page.interrupts, ran.Load())
+	}
+	allowed, _ := json.Marshal(page.interrupts[0]["review_configs"])
+	if !strings.Contains(string(allowed), "approve_always") {
+		t.Fatalf("always-allow was not offered for a marked tool: %s", allowed)
 	}
 }
 
@@ -472,6 +456,7 @@ func TestDecisionsMustAnswerExactlyWhatIsWaiting(t *testing.T) {
 	script := modeltest.NewScript(modeltest.Reply{Calls: []model.ToolCall{
 		{ID: "w1", Name: "write_note", Args: `{}`}, {ID: "w2", Name: "write_note", Args: `{}`}}})
 	a := newApp(t, script, []tool.Tool{notes(tool.Ask, &ran)})
+	a.rows.mark(ada, "write_note")
 	a.ask(ada, turnBody)
 	for name, c := range map[string]struct{ body, says string }{
 		"no id, which once meant 'by position'":  {`{"decisions":[{"type":"approve"},{"type":"approve"}]}`, "does not say which action"},
@@ -691,6 +676,7 @@ func TestAnotherAccountsThreadIsNotFoundOnEveryRoute(t *testing.T) {
 		modeltest.Reply{Text: "Noted."},
 	)
 	a := newApp(t, script, []tool.Tool{notes(tool.Ask, &ran)})
+	a.rows.mark(ada, "write_note")
 	if page := readAll(t, first(a.ask(ada, turnBody))); len(page.interrupts) != 1 {
 		t.Fatalf("the turn did not pause: %+v", page)
 	}
@@ -714,13 +700,13 @@ func TestAnotherAccountsThreadIsNotFoundOnEveryRoute(t *testing.T) {
 			}
 		}
 	}
-	// Nothing ran, nothing was written, nothing was trusted, no agent was
+	// Nothing ran, nothing was written, no mark was taken off, no agent was
 	// built for them, and the turn still waits for Ada.
 	if rowsAfter, _ := json.Marshal(a.rows.thread(1)); string(rowsAfter) != string(rowsBefore) {
 		t.Errorf("the thread's rows changed:\n%s\nwere\n%s", rowsAfter, rowsBefore)
 	}
-	if ran.Load() != 0 || len(a.rows.trust) != 0 || len(a.assembly.builds) != builds {
-		t.Errorf("ran %d, trust %v, %d agents built for strangers", ran.Load(), a.rows.trust, len(a.assembly.builds)-builds)
+	if ran.Load() != 0 || !a.rows.marked(ada, "write_note") || len(a.assembly.builds) != builds {
+		t.Errorf("ran %d, marked %v, %d agents built for strangers", ran.Load(), a.rows.marked(ada, "write_note"), len(a.assembly.builds)-builds)
 	}
 	waiting := a.call(ada, http.MethodGet, "/api/v1/threads/1/pending-interrupts", "")
 	if list, _ := waiting.body["pending_interrupts"].([]any); len(list) != 1 {

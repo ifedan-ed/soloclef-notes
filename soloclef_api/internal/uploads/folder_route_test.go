@@ -26,8 +26,6 @@ type tree struct {
 	nextID int64
 	// byPath is folder ids by "{user_id}:name/name/…".
 	byPath map[string]int64
-	// watched is the parser a top folder was marked with.
-	watched map[int64]string
 	// recordErr fails the transaction.
 	recordErr error
 }
@@ -89,7 +87,6 @@ func (f *tree) RecordFolder(_ context.Context, batch FolderBatch) (FolderRecorde
 	} else {
 		rootPath = batch.UserID + ":" + batch.FolderName
 		recorded.RootFolderID = f.ensure(rootPath)
-		f.watched[recorded.RootFolderID] = batch.Parser
 	}
 	for index, file := range batch.Files {
 		folder := recorded.RootFolderID
@@ -189,7 +186,7 @@ func TestAFolderBecomesDocumentsInTheFoldersTheirPathsName(t *testing.T) {
 		t.Fatalf("status %d: %s", got.status, got.message)
 	}
 
-	// The four fields the web and desktop apps read, by name.
+	// The four fields the web app reads, by name.
 	var read struct {
 		Message      *string `json:"message"`
 		Status       *string `json:"status"`
@@ -207,11 +204,10 @@ func TestAFolderBecomesDocumentsInTheFoldersTheirPathsName(t *testing.T) {
 		t.Errorf("answer %+v", got.answer)
 	}
 
-	// The top folder is found by the folder's name and marked as kept in
-	// step, with the parser its files were sent to.
+	// The top folder is found by the folder's name.
 	root := s.tree.byPath[callerID+":Thesis"]
-	if root == 0 || root != got.answer.RootFolderID || s.tree.watched[root] != "datalab" {
-		t.Fatalf("the top folder is %d (answered %d), marked %q", root, got.answer.RootFolderID, s.tree.watched[root])
+	if root == 0 || root != got.answer.RootFolderID {
+		t.Fatalf("the top folder is %d (answered %d)", root, got.answer.RootFolderID)
 	}
 	// Each file is a pending folder document, named by its last path part,
 	// in the folder its path names, under a folder file's identity, with

@@ -149,6 +149,19 @@ func TestAPathIsReadFromTheTreeAndNeverSpins(t *testing.T) {
 	}
 }
 
+// The names the settings page lists are the tools the specialist offers, in
+// its order, so a tool added here cannot be missing from the page.
+func TestToolNamesAreTheToolsOffered(t *testing.T) {
+	tools := Changes{}.tools(owner{userID: "u", threadID: 1})
+	offered := make([]string, len(tools))
+	for i, tl := range tools {
+		offered[i] = tl.Name
+	}
+	if got, want := strings.Join(ToolNames(), " "), strings.Join(offered, " "); got != want {
+		t.Errorf("ToolNames = %s\nthe tools offered = %s", got, want)
+	}
+}
+
 // What is asked for is what is changed: writes ask first, deletes ask every
 // time, reads never ask; and no change runs beside another.
 func TestEveryChangeAsksAndDeletesAlwaysAsk(t *testing.T) {

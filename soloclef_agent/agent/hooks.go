@@ -21,9 +21,10 @@ import (
 //   - Changing what the model is shown without storing it (a memory block,
 //     attached documents, trimming old tool results) is Config.Prepare: one
 //     function, because there is one conversation to prepare.
-//   - Deciding whether a call needs a person is a tool's Approval and
-//     Config.Trusted, because that order of checks is a security property
-//     and must not depend on how hooks happen to be stacked.
+//   - Deciding whether a call needs a person is a tool's MustAsk, then
+//     Config.AskFirst, or a tool's Approval and Config.Trusted, because that order of checks is a
+//     security property and must not depend on how hooks happen to be
+//     stacked.
 //   - Retrying a failed request belongs to the endpoint, not the turn, and
 //     is model.WithRetry around the model.
 //

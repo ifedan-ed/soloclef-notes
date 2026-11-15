@@ -10,8 +10,8 @@ import {
 import type { SearchSourceConnector } from "@/contracts/types/connector.types";
 import { cacheKeys } from "@/lib/query-client/cache-keys";
 
-// An MCP server's config changes outside its edit view (a tool trusted from
-// a chat, a revoke in another tab), and such a change never reached a view
+// An MCP server's config changes outside its edit view (a sign-in finished,
+// an edit in another tab), and such a change never reached a view
 // opened on the cached list row. The view asks the server for its own copy
 // when it opens and after a change.
 
@@ -36,8 +36,13 @@ function connector(fields: Partial<SearchSourceConnector> = {}): SearchSourceCon
 }
 
 const MASKED = {
-	server_config: { url: "https://mcp.example.org", headers: { Authorization: "••••abcd" } },
-	trusted_tools: ["search"],
+	server_config: {
+		url: "https://mcp.example.org",
+		transport: "streamable-http",
+		auth: { type: "bearer", token: "••••abcd" },
+		headers: {},
+	},
+	server_origin: "member",
 };
 
 test("an MCP server's view waits for the server's copy instead of opening empty", () => {

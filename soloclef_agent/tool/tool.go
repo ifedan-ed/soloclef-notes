@@ -13,10 +13,12 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_agent/citation"
 )
 
-// Approval says whether a person must agree before a tool runs. It has no
-// usable zero value: a tool that forgot to say is refused when the agent is
-// built, because the safe reading (ask) and the convenient one (run) are both
-// wrong for half the tools, and a guess here is a tool running unasked.
+// Approval says whether a person must agree before a tool runs, when the run
+// has no policy of a person's own (agent.Config.AskFirst, which replaces it
+// whole). It has no usable zero value: a tool that forgot to say is refused
+// when the agent is built, because the safe reading (ask) and the convenient
+// one (run) are both wrong for half the tools, and a guess here is a tool
+// running unasked.
 type Approval uint8
 
 const (
@@ -48,6 +50,25 @@ type Tool struct {
 	Parameters json.RawMessage
 
 	Approval Approval
+
+	// MustAsk, when set, picks out the calls of this tool that a person must
+	// approve whatever policy the run is under: the person's own marks
+	// (agent.Config.AskFirst) and an unattended run's trust (Trusted) alike.
+	// "Always allow" is refused for such a call, so each one asks.
+	//
+	// It is for a tool whose calls differ in what they can do by their
+	// arguments, where one Approval for the whole tool is wrong for half of
+	// them: adding a paper by its id goes to a fixed index in a fixed shape,
+	// adding a web page sends a request to an address the model chose. A
+	// call it does not pick out is decided by the policy as any other.
+	//
+	// It is asked once, when the call is decided, with the arguments as the
+	// model wrote them; a person who edits them while approving has
+	// approved what they wrote. It must be fast and must not fail: it reads
+	// the arguments and nothing else. Arguments it cannot read are not
+	// picked out, because the call will fail in Run on the same arguments
+	// without doing anything.
+	MustAsk func(args json.RawMessage) bool
 
 	// Parallel says the tool is safe to run at the same time as other calls
 	// of the same batch: it reads, or its writes cannot collide. Calls that
@@ -82,6 +103,14 @@ type Call struct {
 
 	// Thread is the thread the calling agent is running on.
 	Thread string
+
+	// Approved says a person approved this very call (approve, or approve
+	// with edited arguments). It is false for a call that ran without
+	// asking, under any policy. A tool whose calls a person must approve
+	// (Tool.MustAsk) checks it before doing what needed the approval, so
+	// that what it does never rests on the two of them agreeing about the
+	// arguments: a call that was not asked about is refused there too.
+	Approved bool
 
 	// Answer is nil the first time a call runs. It is set when the tool
 	// returned AskUser on an earlier run of this same call and a person has now

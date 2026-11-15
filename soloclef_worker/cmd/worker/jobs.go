@@ -16,9 +16,11 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_celery/produce"
 	"git.danvics.com/danvics/soloclef/soloclef_celery/routing"
 	"git.danvics.com/danvics/soloclef/soloclef_filestore"
-	"git.danvics.com/danvics/soloclef/soloclef_studio/sandbox"
+	"git.danvics.com/danvics/soloclef/soloclef_notify/notify"
+	"git.danvics.com/danvics/soloclef/soloclef_studio/deckrender"
 
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/accounterasure"
+	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/appupdate"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/audiofile"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/broker"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/documentremoval"
@@ -30,6 +32,7 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/llm"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/notebookname"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/podcast"
+	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/pushdelivery"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/speech"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/videojob"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/workerconfig"
@@ -68,9 +71,6 @@ const (
 	videoKeepAlive      = time.Minute
 	videoStaleAfter     = 10 * time.Minute
 	videoTakeovers      = 2
-	// The scenes may be repaired twice, across the build, the layout
-	// check of their stills and the MP4's checks together.
-	videoRepairs = 2
 
 	// A removal that a store did not answer is tried three times, five and
 	// then ten seconds apart, before the job gives up and leaves the folder
@@ -101,9 +101,11 @@ const (
 	refusalDeadline = time.Minute
 	// A tick is one statement and a few publishes.
 	reconcileDeadline = time.Minute
-	// A ten-minute video with its repairs took the Python worker over an
-	// hour end to end; its Celery limit was two hours, kept here.
-	videoDeadline = 2 * time.Hour
+	// A ten-minute video is one model call or three, its narration, and a
+	// few minutes of drawing and joining (SOLOCLEF_WORKER_VIDEO_RENDER_TIMEOUT
+	// bounds those); half an hour leaves room for a slow model and a busy
+	// speech service. The Remotion render it replaced was given two hours.
+	videoDeadline = 30 * time.Minute
 )
 
 // proxyHTTP is the client every proxy call is made with. The whole of a
@@ -135,6 +137,9 @@ type built struct {
 	// runs automations also starts; nil on a deployment that switched
 	// automations off.
 	automations *automationParts
+	// appUpdate is the App Store update check, seeded the same way; nil on
+	// a deployment with pushes off or no App Store listing.
+	appUpdate *appupdate.Job
 }
 
 // reconciler builds the job that republishes queued jobs whose message was
@@ -215,12 +220,40 @@ func table(settings workerconfig.Config, pool *pgxpool.Pool, rdb redis.Universal
 	}
 	removal := documentremoval.Removal{Pool: pool, Vectors: vectors, Files: files}
 
+	// The one notification step, which every job here that finishes work
+	// for a person calls, and the jobs that push what it wrote
+	// (internal/pushdelivery). Its messages go on the default queue.
+	push, err := pushdelivery.LoadConfig(os.Getenv)
+	if err != nil {
+		return nil, err
+	}
+	notices, err := pushdelivery.Producer(rdb, settings.DefaultQueue)
+	if err != nil {
+		return nil, err
+	}
+	notifier, err := pushdelivery.Notifier(pool, notices, log)
+	if err != nil {
+		return nil, err
+	}
+	pushJobs, err := pushdelivery.Jobs(push, pool, rdb, notices, log)
+	if err != nil {
+		return nil, err
+	}
+	// "Soloclef 1.2.0 is out" to iPhones on an older app, through the same
+	// notifier (internal/appupdate).
+	updateJobs, appUpdate, err := appUpdateJobs(settings, push, pool, rdb, notifier, log)
+	if err != nil {
+		return nil, err
+	}
+	pushJobs = append(pushJobs, updateJobs...)
+
 	podcasts := &podcast.Job{
-		Rows:    podcast.Store{Pool: pool, Files: writer},
-		Models:  writers,
-		Voicer:  voicer,
-		Audio:   tools,
-		Indexer: indexer,
+		Rows:     podcast.Store{Pool: pool, Files: writer},
+		Models:   writers,
+		Voicer:   voicer,
+		Audio:    tools,
+		Indexer:  indexer,
+		Notifier: notifier,
 		Config: podcast.Config{
 			CallTimeout: settings.CallTimeout, Speech: settings.Speech, Instructions: settings.SpeechInstructions,
 			Concurrency: settings.SpeechConcurrency, WorkDirectory: settings.PodcastWorkDirectory,
@@ -236,7 +269,7 @@ func table(settings workerconfig.Config, pool *pgxpool.Pool, rdb redis.Universal
 		return nil, err
 	}
 
-	video, err := videoJob(settings, pool, writer, voicer, tools, indexer, writers, log)
+	video, err := videoJob(settings, pool, writer, voicer, tools, indexer, writers, notifier, log)
 	if err != nil {
 		return nil, err
 	}
@@ -251,7 +284,7 @@ func table(settings workerconfig.Config, pool *pgxpool.Pool, rdb redis.Universal
 		return nil, err
 	}
 
-	automation, automations, err := automationJobs(settings, pool, rdb, writer, indexer, log)
+	automation, automations, err := automationJobs(settings, pool, rdb, files, writer, indexer, notifier, log)
 	if err != nil {
 		return nil, err
 	}
@@ -265,46 +298,51 @@ func table(settings workerconfig.Config, pool *pgxpool.Pool, rdb redis.Universal
 			Run: (&accounterasure.Job{Eraser: removal, Attempts: removalAttempts, Backoff: removalBackoff}).Run},
 		video,
 		jobs.Job{Task: jobreconcile.Task, Deadline: reconcileDeadline, Run: reconcile.Run},
-	}, append(drive, automation...)...)...)
+	}, append(append(drive, automation...), pushJobs...)...)...)
 	if err != nil {
 		if automations != nil {
 			automations.close()
 		}
 		return nil, fmt.Errorf("the job table: %w", err)
 	}
-	return &built{Table: registered, reconciler: reconcile, driveTick: driveTick, automations: automations}, nil
+	return &built{Table: registered, reconciler: reconcile, driveTick: driveTick, automations: automations, appUpdate: appUpdate}, nil
 }
 
 // videoJob is the video render, or, on a deployment that switched it off,
 // the job that tells each queued video so at once.
 func videoJob(settings workerconfig.Config, pool *pgxpool.Pool, writer filestore.Writer, voicer speech.Client,
-	tools audiofile.Tools, indexer *indexrequest.Publisher, writers llm.Writers, log *slog.Logger) (jobs.Job, error) {
+	tools audiofile.Tools, indexer *indexrequest.Publisher, writers llm.Writers, notifier *notify.Notifier, log *slog.Logger) (jobs.Job, error) {
 	video, err := videojob.LoadConfig(os.Getenv, settings.Speech)
 	if err != nil {
 		return jobs.Job{}, err
 	}
 	if !video.Enabled {
-		return jobs.Job{Task: videojob.Task, Deadline: refusalDeadline, Run: videojob.Refusal{Pool: pool}.Run}, nil
+		return jobs.Job{Task: videojob.Task, Deadline: refusalDeadline, Run: videojob.Refusal{Pool: pool, Notifier: notifier}.Run}, nil
 	}
-	// The sandbox client bounds every call by its context; a render's
-	// stream is read for as long as the render runs.
-	boxes, err := sandbox.New(video.Sandbox, &http.Client{})
+	// The frames are drawn in the slide fonts, written once into a folder
+	// of the process's own that lives as long as it does.
+	fonts, err := os.MkdirTemp("", "soloclef-slide-fonts-*")
+	if err != nil {
+		return jobs.Job{}, err
+	}
+	raster, err := deckrender.NewRasteriser(video.Resvg, fonts)
 	if err != nil {
 		return jobs.Job{}, err
 	}
 	job := &videojob.Job{
-		Rows:      videojob.Store{Pool: pool},
-		Sandboxes: videojob.SandboxClient{Client: boxes},
-		Models:    writers,
-		Voicer:    voicer,
-		Audio:     tools,
-		Files:     writer,
-		Indexer:   indexer,
-		Config:    video,
+		Rows:     videojob.Store{Pool: pool},
+		Raster:   raster,
+		Models:   writers,
+		Voicer:   voicer,
+		Audio:    tools,
+		Files:    writer,
+		Indexer:  indexer,
+		Notifier: notifier,
+		Config:   video,
 		Timing: videojob.Timing{
 			CallTimeout: settings.CallTimeout, StatusInterval: videoStatusInterval, KeepAlive: videoKeepAlive,
-			Claim:        videojob.ClaimRules{StaleAfter: videoStaleAfter, MaxTakeovers: videoTakeovers},
-			RepairCycles: videoRepairs, NarrationConcurrency: settings.SpeechConcurrency,
+			Claim:                videojob.ClaimRules{StaleAfter: videoStaleAfter, MaxTakeovers: videoTakeovers},
+			NarrationConcurrency: settings.SpeechConcurrency,
 		},
 		Log: log,
 	}

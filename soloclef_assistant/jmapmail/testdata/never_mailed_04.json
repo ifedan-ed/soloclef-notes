@@ -1,0 +1,43 @@
+{
+  "status": 200,
+  "body": {
+    "methodResponses": [
+      [
+        "Email/query",
+        {
+          "accountId": "c",
+          "queryState": "sam",
+          "canCalculateChanges": true,
+          "position": 0,
+          "ids": [
+            "eaaaaab"
+          ]
+        },
+        "q0"
+      ],
+      [
+        "Email/query",
+        {
+          "accountId": "c",
+          "queryState": "sam",
+          "canCalculateChanges": true,
+          "position": 0,
+          "ids": []
+        },
+        "q1"
+      ],
+      [
+        "Email/query",
+        {
+          "accountId": "c",
+          "queryState": "sam",
+          "canCalculateChanges": true,
+          "position": 0,
+          "ids": []
+        },
+        "q2"
+      ]
+    ],
+    "sessionState": "e8a8b15b"
+  }
+}

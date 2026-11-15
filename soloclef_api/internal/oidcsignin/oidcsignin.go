@@ -99,8 +99,14 @@ func Public() []string {
 	}
 }
 
+// Gated is the routes that need a session: the phone app's confirmation of
+// its own sign-in through the provider (app_confirm.go).
+func Gated() []string {
+	return []string{http.MethodPost + " " + AppConfirmPath}
+}
+
 // Served is every route of the package.
-func Served() []string { return Public() }
+func Served() []string { return append(Public(), Gated()...) }
 
 // The codes a refused sign-in carries to the sign-in page, which words each
 // one (soloclef_web/lib/auth-errors.ts; the two lists are kept in step).
@@ -209,6 +215,7 @@ func (r Routes) Register(api huma.API) {
 	signin.Mount(api, http.MethodGet, CallbackPath, "oidc-callback", "Finish a single sign-on", r.callback)
 	signin.Mount(api, http.MethodGet, AppStartPath, "oidc-app-start", "Send the phone app's browser sheet to single sign-on", r.appStart)
 	signin.Mount(api, http.MethodPost, AppExchangePath, "oidc-app-exchange", "The phone app's session for its one-time code", r.appExchange)
+	signin.Mount(api, http.MethodPost, AppConfirmPath, "oidc-app-confirm", "Confirm the phone app's own sign-in through single sign-on", r.appConfirm)
 }
 
 func (r Routes) now() time.Time {
@@ -274,7 +281,7 @@ func (r Routes) callback(response http.ResponseWriter, request *http.Request) {
 	// The cookies are set only now, when nothing is left that can refuse:
 	// a refused sign-in must leave the browser exactly as signed out as it
 	// was.
-	if _, err := r.Sessions.StartWebSession(response, request, userID); err != nil {
+	if _, err := r.Sessions.StartWebSession(response, request, userID, signin.ProvedBySSO); err != nil {
 		r.toSignInPage(response, request, err)
 		return
 	}

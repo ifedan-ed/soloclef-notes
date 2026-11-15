@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { publicLinkFailure } from "@/features/public-sharing/lib/public-link-failure";
 import { publicFilePath, publicLinkUrl } from "@/features/public-sharing/lib/public-link-url";
+import { publicLinkListSchema } from "@/features/public-sharing/model/public-link";
 import {
 	DEFAULT_EXPIRY,
 	EXPIRY_CHOICES,
@@ -32,4 +33,37 @@ test("an expired link and a revoked one are told apart", () => {
 test("links and files point at the public routes", () => {
 	assert.equal(publicLinkUrl("https://notes.example/", "tok"), "https://notes.example/public/tok");
 	assert.equal(publicFilePath("tok", 5), "/api/v1/public/tok/artifacts/5/content");
+});
+
+test("Settings › Public links reads the server's list as output links", () => {
+	// The server's row, every key it sends: the list keeps names from when
+	// chats could be shared (`snapshots`, `thread_title`), and reads only what it shows.
+	const listed = publicLinkListSchema.parse({
+		snapshots: [
+			{
+				id: 4,
+				share_token: "tok",
+				public_url: "https://notes.example/public/tok",
+				created_at: "2026-11-13T09:00:00Z",
+				expires_at: null,
+				is_expired: false,
+				kind: "output",
+				message_count: 0,
+				thread_id: null,
+				thread_title: "Planets flashcards",
+				notebook_id: 9,
+				created_by_user_id: "u",
+			},
+		],
+	});
+	assert.deepEqual(listed.snapshots, [
+		{
+			id: 4,
+			share_token: "tok",
+			created_at: "2026-11-13T09:00:00Z",
+			expires_at: null,
+			is_expired: false,
+			thread_title: "Planets flashcards",
+		},
+	]);
 });

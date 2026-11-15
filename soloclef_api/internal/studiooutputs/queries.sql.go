@@ -33,6 +33,7 @@ UPDATE deliverable_jobs SET
     phase = CASE WHEN status = 'queued' THEN 'cancelled' ELSE 'cancelling' END,
     failure_code = CASE WHEN status = 'queued' THEN 'cancelled' ELSE failure_code END,
     finished_at = CASE WHEN status = 'queued' THEN $1::timestamptz ELSE finished_at END,
+    request = CASE WHEN status = 'queued' THEN request - 'task' ELSE request END,
     cancel_requested_at = $1::timestamptz,
     updated_at = $1::timestamptz
 WHERE id = $2 AND user_id = $3 AND status IN ('queued', 'running')
@@ -47,6 +48,11 @@ type CancelQueuedJobParams struct {
 
 // A job no worker has taken is cancelled outright; one being worked on is
 // asked to stop (the worker reads `cancelling`). Answers the job's artifact.
+// A job cancelled outright loses its stored task (a Studio output's
+// `request -> 'task'`): it is a copy of the person's sources and their
+// words, kept only while the job may still be made, and a cancelled job
+// never is. One asked to stop keeps it until its run ends, which removes
+// it then (studiogenerate's FinishJob and ReleaseJob).
 func (q *Queries) CancelQueuedJob(ctx context.Context, arg CancelQueuedJobParams) (*int64, error) {
 	row := q.db.QueryRow(ctx, cancelQueuedJob, arg.Now, arg.ID, arg.UserID)
 	var artifact_id *int64
@@ -57,7 +63,7 @@ func (q *Queries) CancelQueuedJob(ctx context.Context, arg CancelQueuedJobParams
 const deleteOutput = `-- name: DeleteOutput :one
 DELETE FROM notebook_outputs
 WHERE id = $1 AND notebook_id = $2 AND user_id = $3
-RETURNING podcast_id, deliverable_job_id
+RETURNING podcast_id, deliverable_job_id, artifact_id
 `
 
 type DeleteOutputParams struct {
@@ -69,14 +75,15 @@ type DeleteOutputParams struct {
 type DeleteOutputRow struct {
 	PodcastID        *int64
 	DeliverableJobID *int64
+	ArtifactID       *int64
 }
 
 // The output, removed, answering the runs it pointed at so the delete can
-// stop them and remove what they made.
+// stop them and remove what they made, or the artifact a chat made.
 func (q *Queries) DeleteOutput(ctx context.Context, arg DeleteOutputParams) (DeleteOutputRow, error) {
 	row := q.db.QueryRow(ctx, deleteOutput, arg.ID, arg.NotebookID, arg.UserID)
 	var i DeleteOutputRow
-	err := row.Scan(&i.PodcastID, &i.DeliverableJobID)
+	err := row.Scan(&i.PodcastID, &i.DeliverableJobID, &i.ArtifactID)
 	return i, err
 }
 
@@ -143,11 +150,12 @@ SELECT o.id, o.kind, o.title, o.options, o.source_document_ids, o.generated_by, 
        to_jsonb(p.status) AS podcast_status, p.duration_seconds AS podcast_duration, p.artifact_id AS podcast_artifact,
        to_jsonb(j.status) AS job_status, j.phase AS job_phase, j.progress AS job_progress,
        j.failure_code AS job_failure, j.artifact_id AS job_artifact,
+       o.artifact_id AS made_artifact,
        a.format AS artifact_format, a.metadata AS artifact_metadata
 FROM notebook_outputs o
 LEFT JOIN podcast_runs p ON p.id = o.podcast_id AND p.user_id = o.user_id
 LEFT JOIN deliverable_jobs j ON j.id = o.deliverable_job_id AND j.user_id = o.user_id
-LEFT JOIN artifacts a ON a.id = COALESCE(p.artifact_id, j.artifact_id) AND a.user_id = o.user_id
+LEFT JOIN artifacts a ON a.id = COALESCE(p.artifact_id, j.artifact_id, o.artifact_id) AND a.user_id = o.user_id
 WHERE o.notebook_id = $1 AND o.user_id = $2
   AND ($3::bigint = 0 OR o.id = $3::bigint)
 ORDER BY o.created_at DESC, o.id DESC
@@ -175,15 +183,18 @@ type OutputsRow struct {
 	JobProgress       *int64
 	JobFailure        *string
 	JobArtifact       *int64
+	MadeArtifact      *int64
 	ArtifactFormat    *string
 	ArtifactMetadata  []byte
 }
 
 // A notebook's outputs, newest first, each with the state of the run making
-// it, read from the run itself so the list never drifts from the truth.
+// it, read from the run itself so the list never drifts from the truth. An
+// output a notebook's chat made with no run points at its artifact instead.
 // `only_id` narrows the list to one output (0 is every output). A run's
 // status is read as jsonb because the joins are outer: a missing run is
 // SQL NULL, which a text column of the generated row could not hold.
+// The artifact the run made, or the one a chat made with no run (made_artifact).
 func (q *Queries) Outputs(ctx context.Context, arg OutputsParams) ([]OutputsRow, error) {
 	rows, err := q.db.Query(ctx, outputs, arg.NotebookID, arg.UserID, arg.OnlyID)
 	if err != nil {
@@ -209,6 +220,7 @@ func (q *Queries) Outputs(ctx context.Context, arg OutputsParams) ([]OutputsRow,
 			&i.JobProgress,
 			&i.JobFailure,
 			&i.JobArtifact,
+			&i.MadeArtifact,
 			&i.ArtifactFormat,
 			&i.ArtifactMetadata,
 		); err != nil {

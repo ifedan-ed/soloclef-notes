@@ -198,10 +198,11 @@ for (const [viewportName, device] of [
 		});
 
 		test("settings and logs", async ({ page }) => {
-			// The account's one settings page; the admin-only sections send
-			// anyone else to Profile, which still has the Settings heading.
+			// The account's one settings page, every section of it.
 			const pages: [string, string][] = [
 				["settings/profile", "Settings"],
+				// Reads only on opening: the password state and the devices list.
+				["settings/security", "Settings"],
 				["settings/appearance", "Settings"],
 				["settings/api-key", "Settings"],
 				["settings/models", "Settings"],
@@ -211,7 +212,6 @@ for (const [viewportName, device] of [
 				["settings/connectors", "Settings"],
 				["settings/automations", "Settings"],
 				["settings/public-links", "Settings"],
-				["settings/community-prompts", "Settings"],
 				["settings/agent-permissions", "Settings"],
 				["logs", "Task Logs"],
 			];

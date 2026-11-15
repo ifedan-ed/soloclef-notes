@@ -246,8 +246,8 @@ func TestAnUnexpandedRepresentationIsRefused(t *testing.T) {
 		}
 	}
 	// Through the tool: refused, saying why, and nothing is stored.
-	_, l, tools := built(t, "/workspace/deck.pptx", nil)
-	_, err := runTool(t, tools[SaveTool], `{"format":"pptx","title":"Apollo 11","path":"/workspace/deck.pptx","markdown_representation":"$(cat /workspace/md_rep.md)"}`)
+	_, l, tools := built(t, "/workspace/report.docx", nil)
+	_, err := runTool(t, tools[SaveTool], `{"format":"docx","title":"Apollo 11","path":"/workspace/report.docx","markdown_representation":"$(cat /workspace/md_rep.md)"}`)
 	if err == nil || !strings.Contains(err.Error(), "a shell expression or a file path") || len(l.created) != 0 {
 		t.Errorf("%v, stored %d", err, len(l.created))
 	}

@@ -150,3 +150,17 @@ FROM automations AS a
 WHERE r.id = sqlc.arg(id) AND r.automation_id = a.id
   AND a.id = sqlc.arg(automation_id) AND a.user_id = sqlc.arg(user_id)
   AND r.status IN ('pending', 'running');
+
+-- name: LockDraft :one
+-- The chat draft a create names, as its owner's, locked until the
+-- transaction that creates the automation ends: two presses of Create on
+-- one draft queue here, and the second finds it already created.
+SELECT status FROM automation_drafts
+WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id)
+FOR UPDATE;
+
+-- name: MarkDraftCreated :exec
+-- The draft became this automation, in the transaction that saved it.
+UPDATE automation_drafts
+SET status = 'created', automation_id = sqlc.arg(automation_id), updated_at = now()
+WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id);

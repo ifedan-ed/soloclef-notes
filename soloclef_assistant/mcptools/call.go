@@ -18,6 +18,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"git.danvics.com/danvics/soloclef/soloclef_agent/tool"
+	"git.danvics.com/danvics/soloclef/soloclef_connectors/mcpserver"
 )
 
 // link is one open connection to one server.
@@ -68,7 +69,7 @@ func fingerprint(where target) [sha256.Size]byte {
 	}
 	slices.Sort(names)
 	digest := sha256.New()
-	fmt.Fprintf(digest, "%d:%s", len(where.address), where.address)
+	fmt.Fprintf(digest, "%d:%s|%s", len(where.address), where.address, where.transport)
 	for _, name := range names {
 		fmt.Fprintf(digest, "|%d:%s=%d:%s", len(name), name, len(where.headers[name]), where.headers[name])
 	}
@@ -89,7 +90,7 @@ func (s *Source) open(ctx context.Context, where target, hosts []string) (*link,
 	// rule and its dialer stay exactly as the guard made them.
 	guarded := *client
 	guarded.Transport = carried
-	session, err := s.client.Connect(ctx, &mcp.StreamableClientTransport{
+	var transport mcp.Transport = &mcp.StreamableClientTransport{
 		Endpoint:   strings.TrimSpace(where.address),
 		HTTPClient: &guarded,
 		// The standalone stream is how a server speaks first: to say its
@@ -97,7 +98,13 @@ func (s *Source) open(ctx context.Context, where target, hosts []string) (*link,
 		// asks and is answered, and declared no capability a server could
 		// call on, so the extra connection would carry nothing.
 		DisableStandaloneSSE: true,
-	}, &mcp.ClientSessionOptions{ProtocolVersion: protocolVersion})
+	}
+	if where.transport == mcpserver.SSE {
+		// The older transport, which some servers still speak only: one
+		// event stream down, posts up to the address it names.
+		transport = &mcp.SSEClientTransport{Endpoint: strings.TrimSpace(where.address), HTTPClient: &guarded}
+	}
+	session, err := s.client.Connect(ctx, transport, &mcp.ClientSessionOptions{ProtocolVersion: protocolVersion})
 	if err != nil {
 		client.CloseIdleConnections()
 		if carried.unauthorized.Load() {
@@ -172,8 +179,7 @@ func (s *Source) discover(ctx context.Context, userID string, row Connection, wh
 	if info != nil && info.ServerInfo != nil {
 		serverName, serverVersion = info.ServerInfo.Name, info.ServerInfo.Version
 	}
-	transport := "streamable-http"
-	cached, err := writeCached(s.siftForStore(found), serverName, serverVersion, transport, s.now())
+	cached, err := writeCached(s.siftForStore(found), serverName, serverVersion, where.transport, s.now())
 	if err == nil {
 		err = s.rows.StoreDefinitions(ctx, userID, row.ID, cached)
 	}
@@ -234,7 +240,10 @@ const (
 	unavailable = "this MCP tool is not available"
 	unreachable = "the MCP server could not be reached"
 	keyRefused  = "the MCP server refused its key; it has to be entered again in the user's connections"
-	ended       = "this turn has ended"
+	// signInNeeded: an OAuth server whose sign-in has ended (revoked,
+	// expired past renewal, or never made).
+	signInNeeded = "the MCP server's sign-in has ended; the user has to sign in to it again in their connections"
+	ended        = "this turn has ended"
 )
 
 // run is a tool's Run: one call, bounded by Limits.Call.
@@ -270,7 +279,10 @@ func (t *Set) call(ctx context.Context, entry *offered, arguments json.RawMessag
 	if row == nil {
 		return "", errors.New(gone)
 	}
-	where, err := readTarget(row.Config)
+	where, err := source.target(ctx, t.userID, *row)
+	if errors.Is(err, errSignInNeeded) {
+		return "", errors.New(signInNeeded)
+	}
 	if err != nil {
 		source.logger.WarnContext(ctx, "mcptools: a call was not made", "connector_id", entry.connectorID, "reason", err.Error())
 		return "", errors.New(unavailable)

@@ -79,8 +79,10 @@ function ArtifactImage({ result }: { result: GenerateImageResult }) {
 }
 
 /**
- * Tool UI for generate_image — renders the generated image directly
- * from the tool result directly.
+ * The picture of a `generate_image` or `display_image` call in a chat saved
+ * before pictures were drawn as figures (features/figures). Nothing makes
+ * these any more; the card stays so old chats keep showing what they made,
+ * loaded from the saved artifact by its id.
  */
 export const GenerateImageToolUI = ({
 	args,

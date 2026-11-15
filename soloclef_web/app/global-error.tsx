@@ -6,6 +6,7 @@ import { useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { buildReportMailto } from "@/lib/brand/report";
 import { useSupportEmail } from "@/lib/brand/use-support-email";
+import { useReloadOnChunkError } from "@/lib/chunk-reload/use-reload-on-chunk-error";
 import { reportClientError } from "@/lib/client-error-report";
 import { detectEnvironment } from "@/lib/env-config";
 
@@ -35,13 +36,27 @@ export default function GlobalError({
 	error: Error & { digest?: string };
 	reset: () => void;
 }) {
+	// The root layout's own code failing to load: reload into the new build
+	// (lib/chunk-reload) rather than show this page.
+	const reloading = useReloadOnChunkError(error, "global-error");
+
 	useEffect(() => {
+		if (reloading) return;
 		reportClientError("global-error", error);
 		posthog.captureException(error);
-	}, [error]);
+	}, [error, reloading]);
 
 	const supportEmail = useSupportEmail();
 	const issueUrl = useMemo(() => buildBasicIssueUrl(error, supportEmail), [error, supportEmail]);
+
+	if (reloading) {
+		// This replaces the whole document, so it must still be one.
+		return (
+			<html lang="en">
+				<body />
+			</html>
+		);
+	}
 
 	return (
 		<html lang="en">

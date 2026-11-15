@@ -9,7 +9,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/database"
-	"git.danvics.com/danvics/soloclef/soloclef_api/internal/folders"
 )
 
 // Store is this slice's statements over the pool.
@@ -263,25 +262,6 @@ func (s Store) TypeCountsOf(ctx context.Context, userID string) ([]TypeCount, er
 		counts = append(counts, TypeCount{DocumentType: row.DocumentType, Count: row.Documents})
 	}
 	return counts, nil
-}
-
-// WatchedFoldersOf is the account's top-level folders marked as watched, in
-// id order.
-func (s Store) WatchedFoldersOf(ctx context.Context, userID string) ([]folders.Folder, error) {
-	rows, err := New(s.Pool).WatchedFoldersOfOwner(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	watched := make([]folders.Folder, 0, len(rows))
-	for _, row := range rows {
-		// Field by field, not a conversion: the folder type is another
-		// package's and may grow a field this statement does not select.
-		watched = append(watched, folders.Folder{
-			ID: row.ID, Name: row.Name, Position: row.Position, ParentID: row.ParentID,
-			CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, Metadata: row.Metadata,
-		})
-	}
-	return watched, nil
 }
 
 // RecentTitles is the account's documents, most recently updated first.

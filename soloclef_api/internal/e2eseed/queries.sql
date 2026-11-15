@@ -15,10 +15,7 @@ VALUES (sqlc.arg(user_id), sqlc.arg(type), sqlc.arg(title), sqlc.arg(message), s
 RETURNING id;
 
 -- name: ExpireSnapshotLink :execrows
-UPDATE public_chat_snapshots SET expires_at = sqlc.arg(expired_at)::timestamptz WHERE id = sqlc.arg(id);
-
--- name: ExpireNotebookLink :execrows
-UPDATE notebook_public_links SET expires_at = sqlc.arg(expired_at)::timestamptz WHERE id = sqlc.arg(id);
+UPDATE output_public_links SET expires_at = sqlc.arg(expired_at)::timestamptz WHERE id = sqlc.arg(id);
 
 -- name: NotebookOwner :one
 SELECT user_id FROM notebooks WHERE id = sqlc.arg(id);
@@ -110,3 +107,21 @@ RETURNING id;
 -- name: SeedNotebookSource :exec
 INSERT INTO notebook_sources (notebook_id, user_id, document_id)
 VALUES (sqlc.arg(notebook_id), sqlc.arg(user_id), sqlc.arg(document_id));
+
+-- name: SeedJMAPMailbox :one
+-- A JMAP mailbox that can send, for a waiting draft to be from. Its
+-- credentials are not a sealed secret: nothing in the suite signs in to
+-- it, and a card that asks it whether a recipient was mailed before is
+-- told it could not be reached, which the card shows as a point to tick.
+-- Seeding it twice for one owner is the same mailbox.
+INSERT INTO jmap_mail_accounts (user_id, label, server_url, username, auth, credentials, can_send)
+VALUES (sqlc.arg(user_id), sqlc.arg(label), 'https://mail.e2e.invalid', sqlc.arg(username), 'app_password', 'not-a-sealed-secret', true)
+ON CONFLICT (user_id, server_url, username) DO UPDATE SET label = EXCLUDED.label
+RETURNING id;
+
+-- name: SeedMailDraft :one
+-- A draft waiting for its owner, stored as the send guard stores one
+-- (soloclef_assistant/maildrafts): the canonical message and its hash.
+INSERT INTO mail_drafts (user_id, provider, jmap_account_id, message, content_hash, expires_at)
+VALUES (sqlc.arg(user_id), 'jmap', sqlc.arg(jmap_account_id), sqlc.arg(message)::jsonb, sqlc.arg(content_hash), sqlc.arg(expires_at))
+RETURNING id;

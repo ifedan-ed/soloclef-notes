@@ -255,8 +255,8 @@ func renderFindings(r rendering, format documentFormat, expectedPages int) []str
 func (s Specialist) verifyTool(owner Owner) tool.Tool {
 	return tool.Tool{
 		Name:        VerifyTool,
-		Description: "Check a file built in the sandbox before it is saved: its structure, how it renders, and for a pdf, docx or pptx where its text is drawn (on the page, over no other text; for a deck also inside its box, crossed by no line, hidden by no shape, at least 12 pt with bodies at least 16 pt, and in WCAG contrast with its ground). It answers status \"verified\", or \"failed\" with every finding to fix. Only a verified file can be saved, and changing the file afterwards means verifying it again.",
-		Parameters:  json.RawMessage(`{"type":"object","properties":{"path":{"type":"string","description":"The file's absolute path in the sandbox."},"format":{"type":"string","enum":["pdf","docx","pptx","xlsx","html"]}},"required":["path","format"]}`),
+		Description: "Check a file built in the sandbox before it is saved: its structure, how it renders, and for a pdf or docx where its text is drawn (on the page, over no other text). It answers status \"verified\", or \"failed\" with every finding to fix. Only a verified file can be saved, and changing the file afterwards means verifying it again.",
+		Parameters:  json.RawMessage(`{"type":"object","properties":{"path":{"type":"string","description":"The file's absolute path in the sandbox."},"format":{"type":"string","enum":["pdf","docx","xlsx","html"]}},"required":["path","format"]}`),
 		Approval:    tool.Auto,
 		Run: func(ctx context.Context, call tool.Call) (string, error) {
 			var args struct {
@@ -268,6 +268,9 @@ func (s Specialist) verifyTool(owner Owner) tool.Tool {
 			}
 			name := strings.ToLower(strings.TrimSpace(args.Format))
 			format, known := documentFormats[name]
+			if known && format.drawn {
+				return "", errors.New("a slide deck is not built in the sandbox or verified as a file: save its content with " + SaveTool + "(format \"pptx\", title, deck), which draws and checks it")
+			}
 			if !known {
 				return "", fmt.Errorf("format %q is not checked by %s; the formats that are: %s", args.Format, VerifyTool, documentFormatNames)
 			}
@@ -527,6 +530,7 @@ func (s Specialist) saveDocument(ctx context.Context, owner Owner, toolCallID st
 			return "", ctx.Err()
 		}
 		s.Saver.Logger.ErrorContext(ctx, "a built document could not be saved", "error", err.Error(), "user_id", owner.UserID, "format", args.Format)
+		s.Failures.note(FailureStorage, err)
 		return "", errors.New("the artifact could not be saved because of a storage error; it was not saved")
 	}
 	// One pass stores one artifact; the preview's directory has done its

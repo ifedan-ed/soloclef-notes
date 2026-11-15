@@ -1,21 +1,38 @@
 // Package mailtools is the chat's tools for the asker's own mail: which
-// mailboxes they have connected, a mailbox's folders, a search, and one
-// message read.
+// mailboxes they have connected (IMAP, Microsoft, and JMAP on a Stalwart
+// server), a mailbox's folders, a search, one message or a whole thread
+// read, and a draft for a JMAP mailbox that may send.
 //
-// # Read-only
+// # Read-only, and drafts
 //
-// Nothing here can send, delete, move or flag mail. That is not a rule
-// the tools apply: the client they read with (imapmail) has no command
-// that changes a mailbox, opens every folder read-only and never marks a
-// message as read.
+// Nothing here can send, delete, move, flag, forward or reply-all, and no
+// tool exists for any of it. The IMAP client (imapmail) has no command that
+// changes a mailbox, opens every folder read-only and never marks a
+// message as read; the JMAP reads (jmapmail) are /get and /query calls.
+//
+// The one thing beyond reading is draft_email: it stores a draft with the
+// send guard (maildrafts) and nothing more. A draft may carry files the
+// person asked to send (attach.go): their documents, Studio outputs, or an
+// attachment of a message read, to forward. The draft is shown on a card,
+// and only the person, pressing Send there, can send it; the guard binds
+// that press to the exact content shown. A draft made because an email
+// said so is still only a draft on a card, and a reply's recipients who
+// were not on the message replied to are flagged on it.
 //
 // # Asking first
 //
-// The three tools that connect to a mail server ask the person first
-// (tool.Ask): reading someone's mail is theirs to allow, per call or with
-// "always allow". Listing the connected mailboxes does not ask: it reads
-// the account's own rows and shows their labels and addresses, which the
-// settings page shows the same person.
+// The tools that connect to a mail server to read are declared tool.Ask:
+// reading someone's mail is theirs to allow, which is what an automation's
+// unattended run goes by. In a chat the person's own "ask first" marks
+// decide instead (assembly, policy), and every tool runs unless marked.
+// Listing the connected mailboxes is declared tool.Auto: it reads the
+// account's own rows and shows their labels and addresses, which the
+// settings page shows the same person. draft_email is tool.Auto too: it
+// sends nothing and changes nothing in the mailbox, and the card it makes
+// is itself the question, asked every time, with the message in it. So no
+// "ask first" mark applies to it (assembly's cardIsTheQuestion) and the
+// settings page does not offer one: a prompt before the card would only ask
+// whether to show the person their question.
 //
 // # Whose mail
 //
@@ -32,9 +49,11 @@
 //
 // # Citations
 //
-// A message has no address a reader could open, so results carry no [n]
-// labels: the prompt has the model name the sender, subject and date in
-// its answer instead.
+// A message is cited the way a web page is: every message a search lists
+// or a read returns carries a [n] label from the turn's registry. It has no
+// address a reader could open, so its chip shows the sender, subject and
+// day instead (cite.MailSource; citations.go says how one message keeps one
+// number across a search and a read).
 package mailtools
 
 import (
@@ -47,6 +66,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/imapmail"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/jmapaccounts"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/jmapmail"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/maildrafts"
 	"git.danvics.com/danvics/soloclef/soloclef_ingest/fileread"
 )
 
@@ -57,10 +79,14 @@ const (
 	ListFoldersTool  = "list_email_folders"
 	SearchTool       = "search_emails"
 	ReadTool         = "read_email"
+	ThreadTool       = "read_email_thread"
+	DraftTool        = "draft_email"
 )
 
 // Names is every tool of this package, in the order they are offered.
-func Names() []string { return []string{ListAccountsTool, ListFoldersTool, SearchTool, ReadTool} }
+func Names() []string {
+	return []string{ListAccountsTool, ListFoldersTool, SearchTool, ReadTool, ThreadTool, DraftTool}
+}
 
 // Rows is an account's mailboxes in the database.
 type Rows interface {
@@ -125,12 +151,36 @@ type Files interface {
 	Read(ctx context.Context, userID, connectionParser string, file fileread.File) (fileread.Text, error)
 }
 
+// JMAPMail reads the account's JMAP mailboxes (jmapaccounts.Mail).
+type JMAPMail interface {
+	Accounts(ctx context.Context, ownerID string) ([]jmapaccounts.Account, error)
+	Folders(ctx context.Context, ownerID, accountID string) ([]jmapmail.Mailbox, error)
+	Search(ctx context.Context, ownerID, accountID, folder string, query jmapmail.Query) ([]jmapmail.Summary, bool, error)
+	Read(ctx context.Context, ownerID, accountID, messageID string) (jmapmail.Email, error)
+	Thread(ctx context.Context, ownerID, accountID, messageID string) ([]jmapmail.Email, bool, error)
+	Download(ctx context.Context, ownerID, accountID string, attachment jmapmail.Attachment, most int64) ([]byte, error)
+	// Limits is what the mailbox's server accepts of a message's files.
+	Limits(ctx context.Context, ownerID, accountID string) (jmapaccounts.Limits, error)
+	// Sender is the identity a draft from the mailbox is written from.
+	Sender(ctx context.Context, ownerID, accountID string) (jmapmail.Identity, error)
+}
+
+// Drafts stores a draft with the send guard (maildrafts.Guard). It is the
+// only thing the mail tools can write, and it sends nothing.
+type Drafts interface {
+	Create(ctx context.Context, ownerID, provider string, message maildrafts.Message, replaces string) (maildrafts.Created, error)
+}
+
 // Tools makes the mail tools for a turn.
 type Tools struct {
 	Rows   Rows
 	Mail   Mail
 	SignIn SignIn
+	JMAP   JMAPMail
+	Drafts Drafts
 	Files  Files
+	// Attachments finds the files a draft carries.
+	Attachments Attachments
 	// SearchTimeout bounds one search across all of an account's
 	// mailboxes: each mailbox is its own conversation with its own limit,
 	// and this is the limit on waiting for the slowest of them.
@@ -140,8 +190,9 @@ type Tools struct {
 
 // Check reports what is missing. Called once at start-up.
 func (t *Tools) Check() error {
-	if t.Rows == nil || t.Mail == nil || t.SignIn == nil || t.Files == nil || t.SearchTimeout <= 0 || t.Logger == nil {
-		return errors.New("mailtools: Rows, Mail, SignIn, Files, SearchTimeout and Logger are all required")
+	if t.Rows == nil || t.Mail == nil || t.SignIn == nil || t.JMAP == nil || t.Drafts == nil || t.Files == nil ||
+		t.Attachments == nil || t.SearchTimeout <= 0 || t.Logger == nil {
+		return errors.New("mailtools: Rows, Mail, SignIn, JMAP, Drafts, Files, Attachments, SearchTimeout and Logger are all required")
 	}
 	return nil
 }
@@ -151,5 +202,9 @@ func (t *Tools) Check() error {
 // does not mention mail.
 func (t *Tools) Connected(ctx context.Context, userID string) (bool, error) {
 	records, err := t.Rows.Mailboxes(ctx, userID)
-	return len(records) > 0, err
+	if err != nil || len(records) > 0 {
+		return len(records) > 0, err
+	}
+	accounts, err := t.JMAP.Accounts(ctx, userID)
+	return len(accounts) > 0, err
 }

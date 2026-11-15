@@ -6,12 +6,12 @@
 //
 //	POST /__e2e__/auth/token                              a session token for an account
 //	POST /__e2e__/notifications                           rows in an account's inbox
-//	POST /__e2e__/public-links/{snapshot_id}/expire       make an output's or chat's link expired
-//	POST /__e2e__/public-links/notebook/{link_id}/expire  make a notebook's link expired
+//	POST /__e2e__/public-links/{snapshot_id}/expire       make an output's link expired
 //	GET  /__e2e__/mail/last?to=                           the newest mail to an address
 //	POST /__e2e__/seed/studio-output                      a studio output: ready, running or failed
 //	POST /__e2e__/seed/complete-output                    finish an output the app queued
 //	POST /__e2e__/seed/source-pdf                         a PDF source with a chunk on page 2
+//	POST /__e2e__/seed/mail-draft                         a mail draft waiting for its owner
 //
 // # They are never in production
 //
@@ -63,14 +63,14 @@ import (
 
 // The paths.
 const (
-	TokenPath              = "/__e2e__/auth/token"
-	NotificationsPath      = "/__e2e__/notifications"
-	ExpireSnapshotPath     = "/__e2e__/public-links/{snapshot_id}/expire"
-	ExpireNotebookLinkPath = "/__e2e__/public-links/notebook/{link_id}/expire"
-	LastMailPath           = "/__e2e__/mail/last"
-	SeedOutputPath         = "/__e2e__/seed/studio-output"
-	CompleteOutputPath     = "/__e2e__/seed/complete-output"
-	SeedSourcePath         = "/__e2e__/seed/source-pdf"
+	TokenPath          = "/__e2e__/auth/token"
+	NotificationsPath  = "/__e2e__/notifications"
+	ExpireSnapshotPath = "/__e2e__/public-links/{snapshot_id}/expire"
+	LastMailPath       = "/__e2e__/mail/last"
+	SeedOutputPath     = "/__e2e__/seed/studio-output"
+	CompleteOutputPath = "/__e2e__/seed/complete-output"
+	SeedSourcePath     = "/__e2e__/seed/source-pdf"
+	SeedMailDraftPath  = "/__e2e__/seed/mail-draft"
 )
 
 // SecretHeader carries the stack's seed secret.
@@ -84,7 +84,7 @@ const minSecretChars = 16
 // or an interactive report's page.
 const maxBodyBytes = 1 << 20
 
-// Routes is the eight routes.
+// Routes is the nine routes.
 type Routes struct {
 	Pool *pgxpool.Pool
 	// Files is the stack's own file store, written as the product writes it.
@@ -132,11 +132,11 @@ func Public() []string {
 		http.MethodPost + " " + TokenPath,
 		http.MethodPost + " " + NotificationsPath,
 		http.MethodPost + " " + ExpireSnapshotPath,
-		http.MethodPost + " " + ExpireNotebookLinkPath,
 		http.MethodGet + " " + LastMailPath,
 		http.MethodPost + " " + SeedOutputPath,
 		http.MethodPost + " " + CompleteOutputPath,
 		http.MethodPost + " " + SeedSourcePath,
+		http.MethodPost + " " + SeedMailDraftPath,
 	}
 }
 
@@ -148,13 +148,11 @@ func (r Routes) Register(api huma.API) {
 	mount[struct {
 		SnapshotID string `path:"snapshot_id"`
 	}](api, r, http.MethodPost, ExpireSnapshotPath, "e2e-expire-snapshot-link", r.expireSnapshot)
-	mount[struct {
-		LinkID string `path:"link_id"`
-	}](api, r, http.MethodPost, ExpireNotebookLinkPath, "e2e-expire-notebook-link", r.expireNotebookLink)
 	mount[struct{}](api, r, http.MethodGet, LastMailPath, "e2e-last-mail", r.lastMail)
 	mount[struct{}](api, r, http.MethodPost, SeedOutputPath, "e2e-seed-output", r.seedOutput)
 	mount[struct{}](api, r, http.MethodPost, CompleteOutputPath, "e2e-complete-output", r.completeOutput)
 	mount[struct{}](api, r, http.MethodPost, SeedSourcePath, "e2e-seed-source", r.seedSource)
+	mount[struct{}](api, r, http.MethodPost, SeedMailDraftPath, "e2e-seed-mail-draft", r.seedMailDraft)
 	r.Logger.Warn("the end-to-end test routes are mounted under /__e2e__: this stack hands out sessions and seeds rows to anyone holding its seed secret, and must not be a production one")
 }
 

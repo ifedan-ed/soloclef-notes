@@ -243,7 +243,7 @@ func newSitePaced(t testing.TB, limits parserchoice.Limits, stall, serverTimeout
 		Parsers: parsers, Limits: limits, Stall: stall, Logger: logger,
 	}.Register(api)
 	// The folder upload beside it, over the same database, store and queue.
-	s.tree = &tree{rows: held, nextID: 500, byPath: map[string]int64{}, watched: map[int64]string{}}
+	s.tree = &tree{rows: held, nextID: 500, byPath: map[string]int64{}}
 	FolderRoute{
 		Rows: s.tree, Files: store, Indexing: s.queue, Vision: s.vision,
 		Parsers: parsers, Limits: limits, Stall: stall, Logger: logger,

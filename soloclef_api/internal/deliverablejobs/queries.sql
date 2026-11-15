@@ -12,11 +12,17 @@ WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id);
 -- A job no worker has taken is cancelled outright; one being worked on is
 -- asked to stop, which its worker reads. A job that has already made its
 -- artifact is finishing and is not stopped half-saved.
+-- A job cancelled outright loses its stored task (a Studio output's
+-- `request -> 'task'`): it is a copy of the person's sources and their
+-- words, kept only while the job may still be made, and a cancelled job
+-- never is. One asked to stop keeps it until its run ends, which removes
+-- it then (studiogenerate's FinishJob and ReleaseJob).
 UPDATE deliverable_jobs SET
     status = CASE WHEN status = 'queued' THEN 'cancelled'::deliverable_job_status ELSE 'cancelling'::deliverable_job_status END,
     phase = CASE WHEN status = 'queued' THEN 'cancelled' ELSE 'cancelling' END,
     failure_code = CASE WHEN status = 'queued' THEN 'cancelled' ELSE failure_code END,
     finished_at = CASE WHEN status = 'queued' THEN sqlc.arg(now)::timestamptz ELSE finished_at END,
+    request = CASE WHEN status = 'queued' THEN request - 'task' ELSE request END,
     cancel_requested_at = sqlc.arg(now)::timestamptz,
     updated_at = sqlc.arg(now)::timestamptz
 WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id)

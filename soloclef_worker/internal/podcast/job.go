@@ -45,6 +45,7 @@ import (
 
 	"git.danvics.com/danvics/soloclef/soloclef_agent/model"
 	"git.danvics.com/danvics/soloclef/soloclef_celery/celery"
+	"git.danvics.com/danvics/soloclef/soloclef_notify/notify"
 
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/broker"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/llm"
@@ -74,6 +75,12 @@ type Audio interface {
 // Indexer asks for an artifact's document to be made searchable.
 type Indexer interface {
 	Index(ctx context.Context, documentID int64) error
+}
+
+// Notifier tells the podcast's owner it is ready or failed
+// (soloclef_notify/notify): an inbox row, and a push if they allow it.
+type Notifier interface {
+	StudioFinished(ctx context.Context, run notify.StudioRun) error
 }
 
 // Config is the job's own settings.
@@ -106,14 +113,17 @@ type Job struct {
 	Voicer  Voicer
 	Audio   Audio
 	Indexer Indexer
-	Config  Config
-	Log     *slog.Logger
+	// Notifier is told when a podcast is ready or has failed; never when
+	// it was cancelled or moved on, which the person did themselves.
+	Notifier Notifier
+	Config   Config
+	Log      *slog.Logger
 }
 
 // Check reports what is missing. Called once at start-up.
 func (j *Job) Check() error {
 	switch {
-	case j.Rows == nil || j.Models == nil || j.Voicer == nil || j.Audio == nil || j.Indexer == nil || j.Log == nil:
+	case j.Rows == nil || j.Models == nil || j.Voicer == nil || j.Audio == nil || j.Indexer == nil || j.Notifier == nil || j.Log == nil:
 		return errors.New("podcast: a dependency is missing")
 	case j.Config.CallTimeout <= 0 || j.Config.Concurrency < 1 || j.Config.StatusInterval <= 0:
 		return errors.New("podcast: the call timeout, the concurrency and the status interval must all be set")
@@ -217,6 +227,7 @@ func (j *Job) conclude(ctx context.Context, log *slog.Logger, run Run, workdir s
 	}
 	defer os.RemoveAll(workdir)
 	if err == nil {
+		j.notify(ctx, log, run, "")
 		return nil
 	}
 	reason := otherFailed
@@ -235,7 +246,20 @@ func (j *Job) conclude(ctx context.Context, log *slog.Logger, run Run, workdir s
 	if markErr := j.Rows.Fail(markCtx, run.ID, run.UserID, reason); markErr != nil {
 		return fmt.Errorf("%w; and the podcast could not be marked failed: %w", err, markErr)
 	}
+	j.notify(ctx, log, run, reason)
 	return err
+}
+
+// notify tells the owner how the podcast ended: ready when reason is "",
+// failed with it otherwise. A notification that cannot be written is
+// logged and the podcast's own ending stands; it has a context of its own
+// because the job's may be the deadline that just ended it.
+func (j *Job) notify(ctx context.Context, log *slog.Logger, run Run, reason string) {
+	settle, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+	defer cancel()
+	if err := j.Notifier.StudioFinished(settle, notify.StudioRun{UserID: run.UserID, PodcastID: run.ID, Failed: reason != "", Reason: reason}); err != nil {
+		log.Error("the podcast's notification could not be written", "error", err.Error())
+	}
 }
 
 func (j *Job) draftThenRender(ctx context.Context, log *slog.Logger, run Run, workdir string) error {
@@ -273,6 +297,12 @@ func (j *Job) draftThenRender(ctx context.Context, log *slog.Logger, run Run, wo
 // draft writes the transcript beat by beat. Each beat's lines are voiced
 // while the next beat is written, into the cache the render reads, so the
 // render mostly joins.
+// draftFixes is how many rounds of correction an outline or one segment's
+// turns get: one. Each is a short reply with few parts and rules a model
+// keeps once it is shown what it broke, so a second round has not been
+// needed; a reply still wrong after one fails the draft with the reason.
+const draftFixes = 1
+
 func (j *Job) draft(ctx context.Context, log *slog.Logger, run Run, brief Brief, voices *voices, watch *watch) (Transcript, error) {
 	name, err := j.Models.StudioModel(ctx, run.UserID)
 	if err != nil {
@@ -284,7 +314,7 @@ func (j *Job) draft(ctx context.Context, log *slog.Logger, run Run, brief Brief,
 	}
 	source := sourceBlock(run.Source)
 
-	plan, err := llm.AskJSON(ctx, writer, j.Config.CallTimeout, []model.Message{
+	plan, err := llm.AskJSON(ctx, writer, j.Config.CallTimeout, draftFixes, []model.Message{
 		{Role: model.RoleSystem, Content: outlinePrompt(brief)},
 		{Role: model.RoleUser, Content: source},
 	}, readOutline)
@@ -311,7 +341,7 @@ func (j *Job) draft(ctx context.Context, log *slog.Logger, run Run, brief Brief,
 		if err := watch.still(ctx); err != nil {
 			return Transcript{}, err
 		}
-		drafted, err := llm.AskJSON(ctx, writer, j.Config.CallTimeout, []model.Message{
+		drafted, err := llm.AskJSON(ctx, writer, j.Config.CallTimeout, draftFixes, []model.Message{
 			{Role: model.RoleSystem, Content: segmentPrompt(brief, beat, index+1, len(plan.Segments), recap(brief, turns))},
 			{Role: model.RoleUser, Content: source},
 		}, readTurns)

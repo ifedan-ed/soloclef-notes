@@ -20,8 +20,11 @@ import (
 //	DELETE /auth/devices/{session_id}  sign one device out
 //	POST   /auth/jwt/logout-all        sign every device out, this one too
 //
-// A device is a sign-in: one refresh-token family (refresh_tokens.go). The
-// phone app marks its own row by the session_id its sign-in answered.
+// A device is a sign-in: one refresh-token family (refresh_tokens.go). Each
+// row says whether it is the caller's own sign-in (`current`): the website
+// cannot tell otherwise, as its session lives in HttpOnly cookies its script
+// never reads. The phone app may still match the session_id its sign-in
+// answered; both say the same.
 //
 // All three are a person's own decisions about their sessions, so they take
 // an interactive session only, never an API key or an agent's token: a
@@ -49,29 +52,40 @@ type deviceRead struct {
 	SignedInAt  time.Time `json:"signed_in_at"`
 	LastUsedAt  time.Time `json:"last_used_at"`
 	ExpiresAt   time.Time `json:"expires_at"`
+	// Current is the sign-in this request was made with: "This browser" on
+	// the website, which must not offer to sign itself out by mistake.
+	Current bool `json:"current"`
 }
 
 // sessionCaller is the caller of a devices route, or false with the refusal
 // written.
 func (r Routes) sessionCaller(response http.ResponseWriter, request *http.Request) (string, bool) {
+	caller, ok := r.sessionPrincipal(response, request)
+	return caller.UserID, ok
+}
+
+// sessionPrincipal is sessionCaller's caller whole, for a route that also
+// needs to know which of the account's sign-ins is asking.
+func (r Routes) sessionPrincipal(response http.ResponseWriter, request *http.Request) (principal.Principal, bool) {
 	caller, ok := principal.FromContext(request.Context())
 	if !ok {
 		r.fail(response, request, "a devices route ran without an authenticated caller", nil)
-		return "", false
+		return principal.Principal{}, false
 	}
 	if !caller.IsSession() {
 		r.refuse(response, request, http.StatusForbidden, sessionRequired)
-		return "", false
+		return principal.Principal{}, false
 	}
-	return caller.UserID, true
+	return caller, true
 }
 
 // devices lists the account's live sign-ins, newest use first.
 func (r Routes) devices(response http.ResponseWriter, request *http.Request) {
-	userID, ok := r.sessionCaller(response, request)
+	caller, ok := r.sessionPrincipal(response, request)
 	if !ok {
 		return
 	}
+	userID := caller.UserID
 	rows, err := New(r.Pool).SignedInDevices(request.Context(), SignedInDevicesParams{UserID: userID, Now: r.now()})
 	if err != nil {
 		r.fail(response, request, "could not list the signed-in devices", err)
@@ -82,6 +96,9 @@ func (r Routes) devices(response http.ResponseWriter, request *http.Request) {
 		list = append(list, deviceRead{
 			SessionID: row.FamilyID, Kind: row.Kind, DeviceLabel: row.DeviceLabel,
 			SignedInAt: row.SignedInAt.UTC(), LastUsedAt: row.LastUsedAt.UTC(), ExpiresAt: row.ExpiresAt.UTC(),
+			// A session token always names its sign-in (the gate refuses one
+			// that names none), so an empty id matches no row.
+			Current: caller.SessionID != "" && row.FamilyID == caller.SessionID,
 		})
 	}
 	send(response, http.StatusOK, list)

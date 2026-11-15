@@ -2,13 +2,13 @@
  * This server's single sign-on as its public pages describe it: whether there
  * is one, the button's name, where it lives and whom it makes accounts for.
  *
- * The docs are prerendered, so these are the build's values:
+ * The site is static files, so these are the build's values, for the docs
+ * and the sign-in page's button alike:
  * docker-compose.go.yml passes SOLOCLEF_API_OIDC_ENABLED,
  * SOLOCLEF_WEB_SSO_BUTTON_LABEL, SOLOCLEF_API_OIDC_ISSUER and
  * SOLOCLEF_API_SIGNUP_ALLOWED from docker/.env.go as the NEXT_PUBLIC_OIDC_*
  * build args below, the same settings the API reads at start. Change one,
- * rebuild the frontend. The login page's own button
- * reads OIDC_ENABLED and OIDC_BUTTON_LABEL at runtime (runtime-config).
+ * rebuild the web app (the proxy image).
  */
 
 /** The button's name when OIDC_BUTTON_LABEL is unset. */

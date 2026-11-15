@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"git.danvics.com/danvics/soloclef/soloclef_celery/celery"
+	"git.danvics.com/danvics/soloclef/soloclef_notify/notify"
 
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/broker"
 )
@@ -21,6 +22,10 @@ func TestAnApprovedBriefBecomesAKeptEpisode(t *testing.T) {
 	}
 	if h.rows.run.Status != statusReady || h.rows.delivered == nil {
 		t.Fatalf("the podcast is %q and delivered=%v", h.rows.run.Status, h.rows.delivered != nil)
+	}
+	// Its owner is told it is ready, once.
+	if got := h.notified.reported(); len(got) != 1 || got[0] != (notify.StudioRun{UserID: "owner", PodcastID: 5}) {
+		t.Errorf("notified %+v", got)
 	}
 	transcript := h.transcript(t)
 	// Three beats of two lines; the line given to slot 9 was dropped.
@@ -88,6 +93,10 @@ func TestACancelDuringTheDraftIsNotOverwritten(t *testing.T) {
 	if h.model.calls > 2 {
 		t.Fatalf("drafting went on for %d calls after the cancel", h.model.calls-2)
 	}
+	// The person cancelled it; nobody needs telling.
+	if got := h.notified.reported(); len(got) != 0 {
+		t.Errorf("a cancel notified %+v", got)
+	}
 	h.workdirIsEmpty(t)
 }
 
@@ -151,6 +160,10 @@ func TestAFailedDraftTellsThePersonInPlainWords(t *testing.T) {
 	}
 	if h.rows.run.Status != "failed" || h.rows.reason != draftFailed {
 		t.Fatalf("the podcast is %q with %q", h.rows.run.Status, h.rows.reason)
+	}
+	// Told it failed, with the same plain words the page shows.
+	if got := h.notified.reported(); len(got) != 1 || !got[0].Failed || got[0].Reason != draftFailed || got[0].PodcastID != 5 {
+		t.Errorf("notified %+v", got)
 	}
 	h.workdirIsEmpty(t)
 }

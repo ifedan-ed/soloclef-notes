@@ -15,7 +15,7 @@ import {
 	type PercentRect,
 	pageToOpen,
 } from "@/features/file-viewers/pdf-cited-text";
-import { authenticatedFetch, getAuthHeaders } from "@/lib/auth-fetch";
+import { authenticatedFetch } from "@/lib/auth-fetch";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 	"pdfjs-dist/build/pdf.worker.min.mjs",
@@ -266,7 +266,6 @@ export function PdfViewer({
 					source = {
 						url: pdfUrl,
 						withCredentials: true,
-						httpHeaders: getAuthHeaders(),
 						rangeChunkSize: RANGE_CHUNK_BYTES,
 						disableAutoFetch: true,
 						disableStream: true,

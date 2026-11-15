@@ -9,6 +9,6 @@ export const folderTable = table("folders")
 		userId: string().from("user_id"),
 		createdAt: number().from("created_at"),
 		updatedAt: number().from("updated_at"),
-		metadata: json<Record<string, unknown>>().optional().from("metadata"),
+		metadata: json().optional().from("metadata"),
 	})
 	.primaryKey("id");

@@ -1,6 +1,6 @@
 /**
- * Notifications deleted somewhere else (another tab, the phone, an administrator
- * withdrawing an announcement) leave the open inbox.
+ * Notifications deleted somewhere else (another tab, the phone) leave the open
+ * inbox.
  *
  * Zero syncs every one of the user's notifications (zero/queries/inbox.ts has no
  * window or limit), so once its result is complete, an item it no longer has

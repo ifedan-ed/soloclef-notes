@@ -9,7 +9,7 @@ import (
 // `parse_qsl(query_string.decode("latin-1"), keep_blank_values=True)`, put
 // into a dict so that the last value of a name is the one a route sees.
 //
-// The four reads beside this file (reads.go) use it instead of net/url, because
+// The three reads beside this file (reads.go) use it instead of net/url, because
 // net/url reads three things differently and one of these routes writes a
 // query value back into its answer (`Invalid document id: …`), where every
 // difference is visible:

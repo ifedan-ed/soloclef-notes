@@ -4,6 +4,7 @@ import { join } from "node:path";
 import test from "node:test";
 import {
 	INFOGRAPHIC_STYLES,
+	isInfographicStyle,
 	STUDIO_TILES,
 	VIDEO_STYLES,
 } from "@/features/notebooks/lib/studio-catalog";
@@ -93,8 +94,8 @@ test("the infographic dialog preselects Auto and sends the chosen style", () => 
 	const defaults = buildStudioRequest(initialDialogState("infographic", [1, 2, 3]), ctx);
 	assert.equal(defaults.style, "auto");
 	const state = initialDialogState("infographic", [1, 2, 3]);
-	state.options.style = "clay";
-	assert.equal(buildStudioRequest(state, ctx).style, "clay");
+	state.options.style = "editorial";
+	assert.equal(buildStudioRequest(state, ctx).style, "editorial");
 	state.options.style = "photoreal";
 	assert.equal(buildStudioRequest(state, ctx).style, "auto");
 });
@@ -106,12 +107,31 @@ test("every infographic style card has its bundled rocket preview", () => {
 	assert.ok(group);
 	assert.equal(group.presentation, "gallery");
 	assert.equal(group.previewShape, "square");
-	assert.equal(INFOGRAPHIC_STYLES.length, 11);
+	// The poster renderer's looks, in the order the gallery shows them; the
+	// image-model looks (kawaii, clay, anime, bricks) are gone, with no alias.
+	assert.deepEqual(
+		[...INFOGRAPHIC_STYLES],
+		[
+			"auto",
+			"sketch-note",
+			"editorial",
+			"instructional",
+			"bento-grid",
+			"scientific",
+			"professional",
+		]
+	);
 	for (const style of INFOGRAPHIC_STYLES) {
 		const preview: string | undefined = group.previews?.[style];
 		assert.equal(preview, `/infographic-styles/${style}.webp`);
 		assert.ok(existsSync(join(process.cwd(), "public", preview ?? "")), `${style} preview`);
 	}
+});
+
+test("an infographic is named by its style only while that style exists", () => {
+	assert.equal(isInfographicStyle("bento-grid"), true);
+	assert.equal(isInfographicStyle("kawaii"), false);
+	assert.equal(isInfographicStyle(undefined), false);
 });
 
 test("the infographic dialog sends orientation, style and level of detail", () => {

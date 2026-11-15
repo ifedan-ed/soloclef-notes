@@ -1,3 +1,9 @@
+import { DRAW_FIGURE_TOOL, parseFigureCard } from "@/features/figures/figure-card";
+import { ADD_SOURCES_TOOL, parseAddSourcesCard } from "@/features/add-sources/add-sources-card";
+import {
+	DRAFT_EMAIL_TOOL,
+	parseDraftCardPayload,
+} from "@/features/mail-draft-confirm/lib/draft-card-payload";
 import { PAGE_READER_TOOL, parsePageReaderCard } from "@/features/page-reader/page-reader-card";
 import {
 	type ActivityData,
@@ -64,6 +70,16 @@ export function isBodyTool(part: TracePartLike, bodyToolNames: ReadonlySet<strin
 	// one. Waiting for approval, running, or failed as a whole, it is a step
 	// in the trace like any other process tool.
 	if (part.toolName === PAGE_READER_TOOL) return parsePageReaderCard(part.result) !== null;
+	// A drafted email has its card once the call has ended with a draft;
+	// while it runs, or when it failed, it is a step like any other.
+	if (part.toolName === DRAFT_EMAIL_TOOL) return parseDraftCardPayload(part.result) !== null;
+	// A figure is drawn in the answer once it has one. While it is being
+	// drawn, or when the server refused it (the model then corrects and calls
+	// again, or answers in words), it is a step like any other.
+	if (part.toolName === DRAW_FIGURE_TOOL) return parseFigureCard(part.result) !== null;
+	// Sources added have their card once the call has ended with its list;
+	// waiting for approval or running, it is a step like any other.
+	if (part.toolName === ADD_SOURCES_TOOL) return parseAddSourcesCard(part.result) !== null;
 	if (part.toolName !== "save_artifact") return true;
 	if (typeof part.result !== "object" || part.result === null) return false;
 	const result = part.result as Record<string, unknown>;

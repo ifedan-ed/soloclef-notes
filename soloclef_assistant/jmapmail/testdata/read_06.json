@@ -1,0 +1,20 @@
+{
+  "status": 200,
+  "body": {
+    "methodResponses": [
+      [
+        "Email/get",
+        {
+          "accountId": "d",
+          "state": "say",
+          "list": [],
+          "notFound": [
+            "no-such-message"
+          ]
+        },
+        "r"
+      ]
+    ],
+    "sessionState": "3f4a7bc7"
+  }
+}

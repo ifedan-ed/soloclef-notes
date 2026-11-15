@@ -25,10 +25,3 @@ export const localExpandedFolderKeysAtom = atomWithStorage<string[]>(
  * null means no folder is being renamed.
  */
 export const renamingFolderIdAtom = atom<number | null>(null);
-
-/**
- * Bumped whenever a folder is (un)watched outside DocumentRightPanel (e.g. the
- * sidebar-footer "Watch Local Folder" button) so the tree re-reads Electron's
- * watched-folder list and shows the sync badge without a reload.
- */
-export const watchedFoldersRefreshAtom = atom(0);

@@ -10,21 +10,15 @@ import {
 	connectionUpdateRequest,
 	type EndpointModelPreviewRequest,
 	endpointModelPreviewRequest,
-	type GlobalLlmConfigStatus,
-	globalLlmConfigStatus,
 	type LlmSetupStatus,
 	llmSetupStatus,
 	type ModelPreviewRead,
-	type ModelPreviewRequest,
-	type ModelProviderRead,
 	type ModelRead,
 	type ModelsBulkUpdateRequest,
 	type ModelTestPreviewRequest,
 	type ModelUpdateRequest,
 	modelListResponse,
 	modelPreviewListResponse,
-	modelPreviewRequest,
-	modelProviderListResponse,
 	modelRead,
 	modelsBulkUpdateRequest,
 	modelTestPreviewRequest,
@@ -36,25 +30,12 @@ import { ValidationError } from "../error";
 import { baseApiService } from "./base-api.service";
 
 class ModelConnectionsApiService {
-	getGlobalConnections = async (): Promise<ConnectionRead[]> => {
-		return baseApiService.get(`/api/v1/global-model-connections`, connectionListResponse);
-	};
-
-	getGlobalLlmConfigStatus = async (): Promise<GlobalLlmConfigStatus> => {
-		return baseApiService.get(`/api/v1/global-llm-config-status`, globalLlmConfigStatus);
-	};
-
 	// Whether the signed-in account has a chat model it can use.
 	getLlmSetupStatus = async (): Promise<LlmSetupStatus> => {
 		return baseApiService.get(`/api/v1/users/me/llm-setup-status`, llmSetupStatus);
 	};
 
-	getModelProviders = async (): Promise<ModelProviderRead[]> => {
-		return baseApiService.get(`/api/v1/model-providers`, modelProviderListResponse);
-	};
-
-	// The signed-in account's own connections (the shared ones are
-	// getGlobalConnections).
+	// The signed-in account's own connections.
 	getConnections = async (): Promise<ConnectionRead[]> => {
 		return baseApiService.get(`/api/v1/model-connections`, connectionListResponse);
 	};
@@ -94,18 +75,11 @@ class ModelConnectionsApiService {
 		return baseApiService.post(`/api/v1/model-connections/${id}/discover`, modelListResponse);
 	};
 
-	// A provider's models before a connection is made. A catalogue request
-	// (just the provider) is parsed by the catalogue's schema, which drops
-	// any key or address, because the catalogue does not depend on them. An
-	// endpoint's request carries the address, key and headers its own
-	// GET /models is asked with (model-listing.ts, previewRequestFor).
-	previewModels = async (
-		request: ModelPreviewRequest | EndpointModelPreviewRequest
-	): Promise<ModelPreviewRead[]> => {
-		const parsed =
-			"base_url" in request
-				? endpointModelPreviewRequest.safeParse(request)
-				: modelPreviewRequest.safeParse(request);
+	// An endpoint's models before a connection is made: the request carries
+	// the address, key and headers its own GET /models is asked with
+	// (model-listing.ts, previewRequestFor).
+	previewModels = async (request: EndpointModelPreviewRequest): Promise<ModelPreviewRead[]> => {
+		const parsed = endpointModelPreviewRequest.safeParse(request);
 		if (!parsed.success) {
 			throw new ValidationError(parsed.error.issues.map((issue) => issue.message).join(", "));
 		}

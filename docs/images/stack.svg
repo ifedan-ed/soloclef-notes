@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 400" width="800" height="400" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="13">
+  <rect width="800" height="400" rx="12" fill="#ffffff"/>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
+    </marker>
+    <style>
+      .box{fill:#ffffff;stroke:#cbd5e1;stroke-width:1.2}
+      .grp{fill:#eef6ff;stroke:#93c5fd;stroke-width:1.2}
+      .dgrp{fill:#f5f3ff;stroke:#c4b5fd;stroke-width:1.2}
+      .ext{fill:#fff7ed;stroke:#fdba74;stroke-width:1.2}
+      .t{fill:#0f172a;font-weight:600}
+      .s{fill:#475569;font-size:11.5px}
+      .g{fill:#1e3a8a;font-size:11.5px;font-weight:600;letter-spacing:.3px}
+      .l{stroke:#64748b;stroke-width:1.3;fill:none;marker-end:url(#a)}
+    </style>
+  </defs>
+
+  <!-- clients -->
+  <rect class="box" x="20" y="40" width="150" height="50" rx="8"/>
+  <text class="t" x="95" y="62" text-anchor="middle">Browser</text>
+  <text class="s" x="95" y="79" text-anchor="middle">web app</text>
+  <rect class="box" x="20" y="105" width="150" height="50" rx="8"/>
+  <text class="t" x="95" y="127" text-anchor="middle">Phone app</text>
+  <text class="s" x="95" y="144" text-anchor="middle">iPhone and Android</text>
+  <rect class="box" x="20" y="170" width="150" height="50" rx="8"/>
+  <text class="t" x="95" y="192" text-anchor="middle">AI agents</text>
+  <text class="s" x="95" y="209" text-anchor="middle">over MCP</text>
+
+  <!-- proxy -->
+  <rect class="box" x="205" y="105" width="100" height="50" rx="8"/>
+  <text class="t" x="255" y="127" text-anchor="middle">Proxy</text>
+  <text class="s" x="255" y="144" text-anchor="middle">Caddy</text>
+  <path class="l" d="M170 65 C190 65 188 118 203 122"/>
+  <path class="l" d="M170 130 L203 130"/>
+  <path class="l" d="M170 195 C190 195 188 142 203 138"/>
+
+  <!-- Soloclef services -->
+  <rect class="grp" x="340" y="24" width="220" height="214" rx="10"/>
+  <text class="g" x="356" y="44">SOLOCLEF</text>
+  <rect class="box" x="356" y="54" width="188" height="50" rx="8"/>
+  <text class="t" x="450" y="76" text-anchor="middle">API</text>
+  <text class="s" x="450" y="93" text-anchor="middle">chat, sign-in, uploads, Studio</text>
+  <rect class="box" x="356" y="114" width="188" height="50" rx="8"/>
+  <text class="t" x="450" y="136" text-anchor="middle">MCP server</text>
+  <text class="s" x="450" y="153" text-anchor="middle">for agents</text>
+  <rect class="box" x="356" y="174" width="188" height="50" rx="8"/>
+  <text class="t" x="450" y="196" text-anchor="middle">Worker and indexer</text>
+  <text class="s" x="450" y="213" text-anchor="middle">jobs, parsing, embedding</text>
+  <path class="l" d="M305 130 L338 130"/>
+
+  <!-- helpers -->
+  <rect class="box" x="356" y="268" width="188" height="50" rx="8"/>
+  <text class="t" x="450" y="290" text-anchor="middle">Parse service</text>
+  <text class="s" x="450" y="307" text-anchor="middle">reads PDF and Office files</text>
+  <rect class="box" x="356" y="328" width="188" height="50" rx="8"/>
+  <text class="t" x="450" y="350" text-anchor="middle">Sandboxes</text>
+  <text class="s" x="450" y="367" text-anchor="middle">build reports, workbooks, pages</text>
+  <path class="l" d="M340 200 C318 200 318 293 354 293"/>
+  <path class="l" d="M340 210 C310 210 310 353 354 353"/>
+
+  <!-- data -->
+  <rect class="dgrp" x="600" y="24" width="180" height="214" rx="10"/>
+  <text class="g" x="616" y="44" style="fill:#4c1d95">DATA</text>
+  <rect class="box" x="616" y="54" width="148" height="38" rx="8"/>
+  <text class="t" x="690" y="78" text-anchor="middle">Postgres</text>
+  <rect class="box" x="616" y="99" width="148" height="38" rx="8"/>
+  <text class="t" x="690" y="123" text-anchor="middle">Qdrant</text>
+  <rect class="box" x="616" y="144" width="148" height="38" rx="8"/>
+  <text class="t" x="690" y="168" text-anchor="middle">Valkey</text>
+  <rect class="box" x="616" y="189" width="148" height="38" rx="8"/>
+  <text class="t" x="690" y="213" text-anchor="middle">MinIO (files)</text>
+  <path class="l" d="M560 131 L598 131"/>
+
+  <!-- models -->
+  <rect class="ext" x="616" y="300" width="148" height="56" rx="8"/>
+  <text class="t" x="690" y="324" text-anchor="middle">LiteLLM</text>
+  <text class="s" x="690" y="342" text-anchor="middle">your models</text>
+  <path class="l" d="M560 220 C595 220 600 318 614 322"/>
+</svg>

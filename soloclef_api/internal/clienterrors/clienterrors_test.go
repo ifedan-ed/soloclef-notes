@@ -142,6 +142,40 @@ func TestACrashReportBecomesOneBoundedLogLine(t *testing.T) {
 	}
 }
 
+// A page that reloaded itself past a chunk that failed to load says so, and
+// the line carries the mark; an ordinary crash carries none.
+func TestARecoveredReportIsMarkedAsRecovered(t *testing.T) {
+	var log bytes.Buffer
+	api := humago.New(http.NewServeMux(), huma.DefaultConfig("test", "0"))
+	Route{Budget: &counts{hits: map[string]int64{}}, Errors: errorenvelope.Writer{}, Logger: slog.New(slog.NewJSONHandler(&log, nil))}.Register(api)
+	for _, body := range []string{
+		`{"kind":"error-boundary","name":"ChunkLoadError","message":"Failed to load chunk /_next/static/chunks/a.js","recovered_by_reload":true}`,
+		`{"kind":"error-boundary","name":"TypeError","message":"x is undefined"}`,
+	} {
+		request := httptest.NewRequest(http.MethodPost, Path, strings.NewReader(body))
+		request = request.WithContext(principal.WithPrincipal(request.Context(), principal.Principal{UserID: alice, Method: principal.MethodSession}))
+		recorder := httptest.NewRecorder()
+		api.Adapter().ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusNoContent {
+			t.Fatalf("a report answered %d %s", recorder.Code, recorder.Body.String())
+		}
+	}
+	lines := strings.Split(strings.TrimSpace(log.String()), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("two reports wrote %d lines", len(lines))
+	}
+	var recovered, crashed map[string]any
+	if json.Unmarshal([]byte(lines[0]), &recovered) != nil || json.Unmarshal([]byte(lines[1]), &crashed) != nil {
+		t.Fatalf("the lines are not JSON: %s", log.String())
+	}
+	if recovered["recovered_by_reload"] != true || recovered["name"] != "ChunkLoadError" {
+		t.Errorf("the recovered report reads %v", recovered)
+	}
+	if _, marked := crashed["recovered_by_reload"]; marked {
+		t.Errorf("an ordinary crash is marked as recovered: %v", crashed)
+	}
+}
+
 func TestTheBudgetsStopALoopingPageAndACrowd(t *testing.T) {
 	var log bytes.Buffer
 	budget := &counts{hits: map[string]int64{}}

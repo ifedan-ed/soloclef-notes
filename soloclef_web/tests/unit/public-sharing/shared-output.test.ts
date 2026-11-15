@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { PublicSharedOutput } from "@/contracts/types/public-chat.types";
-import { getPublicChatResponse } from "@/contracts/types/public-chat.types";
 import { resolveArtifactRenderer } from "@/features/artifacts/lib/artifact-resolution";
 import { selectPrimaryArtifactFile } from "@/features/artifacts/lib/artifact-selectors";
 import { ArtifactManifestSchema } from "@/features/artifacts/model/artifact";
@@ -10,6 +8,10 @@ import {
 	publicLinkMetadata,
 	summarizePublicLink,
 } from "@/features/public-sharing/lib/public-link-metadata";
+import {
+	type PublicSharedOutput,
+	publicOutputPage,
+} from "@/features/public-sharing/model/public-output";
 import {
 	sharedOutputManifest,
 	sharedOutputViewer,
@@ -116,9 +118,20 @@ test("the page's answer carries the files and still parses without them", () => 
 		output: deck,
 		expires_at: null,
 	};
-	assert.equal(getPublicChatResponse.parse(page).output?.files?.length, 2);
+	assert.equal(publicOutputPage.parse(page).output.files?.length, 2);
 	const { files: _files, generation: _generation, ...older } = deck;
-	assert.equal(getPublicChatResponse.safeParse({ ...page, output: older }).success, true);
+	assert.equal(publicOutputPage.safeParse({ ...page, output: older }).success, true);
+});
+
+test("the page opens only a shared output: a chat's answer is not a page", () => {
+	const chat = {
+		kind: "chat",
+		thread: { title: "Ask about Mars", created_at: "2026-10-11T00:00:00Z" },
+		messages: [{ role: "user", content: [], author: null, created_at: "2026-10-11T00:00:00Z" }],
+		output: null,
+		expires_at: null,
+	};
+	assert.equal(publicOutputPage.safeParse(chat).success, false);
 });
 
 test("a link's preview names what was shared, not the site", () => {
@@ -135,11 +148,10 @@ test("a link's preview names what was shared, not the site", () => {
 	assert.deepEqual(meta.robots, { index: false, follow: false, nocache: true });
 	assert.equal(meta.referrer, "no-referrer");
 
-	const chat = publicLinkMetadata(
-		summarizePublicLink({ kind: "chat", thread: { title: "Ask about Mars" } })
-	);
-	assert.equal(chat.title, "Ask about Mars");
-	assert.match(String(chat.description), /^Chat · shared read-only/);
+	// Only an output names itself: a chat's answer is treated as naming nothing,
+	// so a stale or forged answer cannot put a chat's title in a preview.
+	assert.equal(summarizePublicLink({ kind: "chat", thread: { title: "Ask about Mars" } }), null);
+	assert.equal(summarizePublicLink({ kind: "output", thread: { title: "x" }, output: null }), null);
 
 	// A link that is gone names nothing, and is still never indexed.
 	const gone = publicLinkMetadata(summarizePublicLink({ detail: "Not found" }));

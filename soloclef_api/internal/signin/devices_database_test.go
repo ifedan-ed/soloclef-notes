@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -40,8 +41,8 @@ func TestEachAccountListsAndSignsOutOnlyItsOwnDevices(t *testing.T) {
 	h.clock = h.clock.Add(time.Minute)
 	herTablet := pairOf(t, h.phoneSignIn("alice@example.test", alicePassword, "Alice's iPad"))
 	hisPhone := pairOf(t, h.phoneSignIn("bob@example.test", bobPassword, "Bob's Pixel"))
-	h.exec(`INSERT INTO push_devices (user_id, token, platform, session_family_id) VALUES
-		($1, 'ExponentPushToken[her-phone]', 'ios', $2), ($1, 'ExponentPushToken[her-tablet]', 'ios', $3), ($4, 'ExponentPushToken[his]', 'android', $5)`,
+	h.exec(`INSERT INTO push_devices (user_id, token, kind, platform, session_family_id) VALUES
+		($1, 'ExponentPushToken[her-phone]', 'expo', 'ios', $2), ($1, 'ExponentPushToken[her-tablet]', 'expo', 'ios', $3), ($4, 'ExponentPushToken[his]', 'expo', 'android', $5)`,
 		testpostgres.Alice, *herPhone.SessionID, *herTablet.SessionID, testpostgres.Bob, *hisPhone.SessionID)
 
 	hers := devicesOf(t, h.as(testpostgres.Alice, principal.MethodSession, http.MethodGet, DevicesPath, ""))
@@ -132,4 +133,93 @@ func TestTheDevicesRoutesTakeASessionOnly(t *testing.T) {
 		}
 	}
 	pairOf(t, h.bodyRefresh(RefreshPath, *phone.RefreshToken))
+}
+
+// asSession sends a request as one particular sign-in of the account, the
+// way the gate hands on a session token (which always names its sign-in).
+func (h *harness) asSession(userID, sessionID, verb, path string) *httptest.ResponseRecorder {
+	h.t.Helper()
+	request := httptest.NewRequest(verb, path, nil)
+	caller := principal.Principal{UserID: userID, Method: principal.MethodSession, SessionID: sessionID}
+	return h.do(request.WithContext(principal.WithPrincipal(request.Context(), caller)))
+}
+
+// The list marks the sign-in that asked, and only it: the website keeps its
+// session in cookies its script cannot read, so this is how it knows which
+// row is "This browser" and must not offer to sign itself out by mistake.
+func TestTheDevicesListMarksTheSignInThatAsked(t *testing.T) {
+	h, _ := newHarness(t)
+	phone := pairOf(t, h.phoneSignIn("alice@example.test", alicePassword, "Alice's iPhone"))
+	h.clock = h.clock.Add(time.Minute)
+	tablet := pairOf(t, h.phoneSignIn("alice@example.test", alicePassword, "Alice's iPad"))
+
+	for _, asking := range []string{*phone.SessionID, *tablet.SessionID} {
+		list := devicesOf(t, h.asSession(testpostgres.Alice, asking, http.MethodGet, DevicesPath))
+		if len(list) != 2 {
+			t.Fatalf("asked from %s: %+v", asking, list)
+		}
+		for _, device := range list {
+			if device.Current != (device.SessionID == asking) {
+				t.Errorf("asked from %s, %s reads current=%v", asking, device.SessionID, device.Current)
+			}
+		}
+	}
+	// A session whose sign-in is not one of the rows (none here: the gate
+	// never lets such a token in) marks nothing.
+	for _, device := range devicesOf(t, h.as(testpostgres.Alice, principal.MethodSession, http.MethodGet, DevicesPath, "")) {
+		if device.Current {
+			t.Errorf("a caller naming no sign-in was given %s as its own", device.SessionID)
+		}
+	}
+}
+
+// Signing in again in a browser that is already signed in ends the sign-in
+// its cookies are replacing: nothing can use it any more, and it must not
+// linger in the devices list as an unknown browser. Another browser's
+// sign-in, and the phone's, are left alone.
+func TestSigningInAgainInTheSameBrowserEndsTheSignInItReplaces(t *testing.T) {
+	h, _ := newHarness(t)
+	signIn := func(cookie string) *http.Cookie {
+		t.Helper()
+		form := url.Values{"username": {"alice@example.test"}, "password": {alicePassword}}
+		request := httptest.NewRequest(http.MethodPost, PasswordPath, strings.NewReader(form.Encode()))
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		if cookie != "" {
+			request.AddCookie(&http.Cookie{Name: h.routes.Cookies.RefreshName, Value: cookie})
+		}
+		answer := h.do(request)
+		if answer.Code != http.StatusOK {
+			t.Fatalf("the sign-in answered %d %s", answer.Code, answer.Body)
+		}
+		return cookiesOf(answer)[h.routes.Cookies.RefreshName]
+	}
+	first := signIn("")
+	elsewhere := signIn("")
+	phone := pairOf(t, h.phoneSignIn("alice@example.test", alicePassword, "Alice's iPhone"))
+	again := signIn(first.Value)
+
+	if got := h.do(cookieRefresh(h, first.Value)); got.Code != http.StatusUnauthorized {
+		t.Errorf("the replaced sign-in still refreshes: %d", got.Code)
+	}
+	for why, token := range map[string]string{"the new sign-in": again.Value, "the other browser": elsewhere.Value} {
+		if got := h.do(cookieRefresh(h, token)); got.Code != http.StatusOK {
+			t.Errorf("%s no longer refreshes: %d %s", why, got.Code, got.Body)
+		}
+	}
+	pairOf(t, h.bodyRefresh(RefreshPath, *phone.RefreshToken))
+	if list := devicesOf(t, h.as(testpostgres.Alice, principal.MethodSession, http.MethodGet, DevicesPath, "")); len(list) != 3 {
+		t.Errorf("want the new browser, the other browser and the phone: %+v", list)
+	}
+
+	// A cookie naming no live sign-in (ended, or never made) is no reason
+	// to refuse the sign-in.
+	signIn(first.Value)
+	signIn("not-a-token-anyone-made")
+}
+
+// cookieRefresh is the website's refresh: the refresh token in its cookie.
+func cookieRefresh(h *harness, token string) *http.Request {
+	request := httptest.NewRequest(http.MethodPost, RefreshPath, nil)
+	request.AddCookie(&http.Cookie{Name: h.routes.Cookies.RefreshName, Value: token})
+	return request
 }

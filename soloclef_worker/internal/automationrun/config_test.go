@@ -29,6 +29,7 @@ func complete(t *testing.T) map[string]string {
 		QdrantCollection: "chunks", QdrantHNSWEf: "128", QdrantQuantized: "false",
 		NCBITool: "soloclef", Brand: "Soloclef Notes", MaxSteps: "40",
 		SecretKeyFile: secretFile(t, "fake-secret-key"), SandboxEnabled: "false",
+		FiguresResvg: "/usr/local/bin/resvg", FiguresFontDir: "/usr/local/share/figures/fonts",
 	}
 }
 
@@ -54,7 +55,7 @@ func TestEveryMissingSettingIsNamedAtOnce(t *testing.T) {
 	if err == nil {
 		t.Fatal("an incomplete configuration was accepted")
 	}
-	for _, name := range []string{AppRedisURL, EmbeddingModel, EmbeddingDimension, QdrantCollection, QdrantHNSWEf, QdrantRescore, QdrantOversampling, NCBITool, Brand, MaxSteps, SecretKeyFile, SandboxEnabled} {
+	for _, name := range []string{AppRedisURL, EmbeddingModel, EmbeddingDimension, QdrantCollection, QdrantHNSWEf, QdrantRescore, QdrantOversampling, NCBITool, Brand, MaxSteps, SecretKeyFile, SandboxEnabled, FiguresResvg, FiguresFontDir} {
 		if !strings.Contains(err.Error(), name) {
 			t.Errorf("the error does not name %s: %v", name, err)
 		}
@@ -74,7 +75,8 @@ func TestTheConnectedAccountsAndArtifactSettings(t *testing.T) {
 	settings := complete(t)
 	cfg, err := LoadConfig(env(settings))
 	if err != nil || cfg.SecretKey != "fake-secret-key" || cfg.MicrosoftMailClientID != "" || cfg.GoogleClientID != "" ||
-		cfg.NextcloudURL != "" || cfg.SandboxEnabled || cfg.ImageModel != "" || len(cfg.PodcastVoices) != 0 {
+		cfg.NextcloudURL != "" || cfg.SandboxEnabled || cfg.VisionModel != "" || len(cfg.PodcastVoices) != 0 ||
+		cfg.FiguresResvg != "/usr/local/bin/resvg" || cfg.FiguresFontDir != "/usr/local/share/figures/fonts" {
 		t.Fatalf("the least a deployment may say: %+v %v", cfg, err)
 	}
 
@@ -82,11 +84,10 @@ func TestTheConnectedAccountsAndArtifactSettings(t *testing.T) {
 	settings[MicrosoftMailClientSecretFile] = secretFile(t, "fake-microsoft-secret")
 	settings[GoogleClientID], settings[GoogleClientSecretFile] = "fake.apps.googleusercontent.com", secretFile(t, "fake-google-secret")
 	settings[NextcloudURL] = "https://cloud.example/nc"
-	settings[ImageModel], settings[VisionModel], settings[PodcastVoices] = "image-model", "vision-model", " af_heart, am_adam ,"
+	settings[VisionModel], settings[PodcastVoices] = "vision-model", " af_heart, am_adam ,"
 	settings[SandboxEnabled], settings[SandboxURL], settings[SandboxAPIKeyFile] = "true", "http://sandbox:8080/", secretFile(t, "fake-sandbox-key")
-	settings[SandboxImage], settings[SandboxCPU], settings[SandboxMemory] = "sandbox:latest", "2", "6Gi"
+	settings[SandboxCPU], settings[SandboxMemory] = "2", "6Gi"
 	settings[SandboxIdleTTL], settings[SandboxCommandTimeout], settings[SandboxMaxPerAccount] = "600", "120", "3"
-	settings[SandboxStack] = "examplestack"
 	cfg, err = LoadConfig(env(settings))
 	if err != nil {
 		t.Fatal(err)
@@ -96,7 +97,7 @@ func TestTheConnectedAccountsAndArtifactSettings(t *testing.T) {
 		t.Errorf("read as %+v", cfg)
 	}
 	if box := cfg.Sandbox; box.URL != "http://sandbox:8080" || box.APIKey != "fake-sandbox-key" || box.IdleTTL != 10*time.Minute ||
-		box.CommandTimeout != 2*time.Minute || box.MaxPerAccount != 3 || box.Image != "sandbox:latest" || box.Stack != "examplestack" {
+		box.CommandTimeout != 2*time.Minute || box.MaxPerAccount != 3 || box.CPU != "2" || box.Memory != "6Gi" {
 		t.Errorf("the sandbox read as %+v", box)
 	}
 
@@ -105,7 +106,7 @@ func TestTheConnectedAccountsAndArtifactSettings(t *testing.T) {
 		"half a Google project":               func(s map[string]string) { delete(s, GoogleClientSecretFile) },
 		"a Nextcloud that is not an address":  func(s map[string]string) { s[NextcloudURL] = "cloud.example" },
 		"a sandbox with no address":           func(s map[string]string) { delete(s, SandboxURL) },
-		"a sandbox with no stack":             func(s map[string]string) { delete(s, SandboxStack) },
+		"a sandbox with no memory limit":      func(s map[string]string) { delete(s, SandboxMemory) },
 		"a secret key file that is not there": func(s map[string]string) { s[SecretKeyFile] = "/nonexistent/secret" },
 		"an empty secret key file":            func(s map[string]string) { s[SecretKeyFile] = secretFile(t, "") },
 	} {

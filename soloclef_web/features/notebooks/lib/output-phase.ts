@@ -13,6 +13,9 @@ export const KNOWN_PHASES = [
 	"rendering",
 	"verifying",
 	"saving",
+	// An artifact whose account has every sandbox in use waits for one
+	// (soloclef_assistant/deliverables/sandboxwait.go).
+	"waiting_for_sandbox",
 ] as const;
 export type KnownPhase = (typeof KNOWN_PHASES)[number];
 

@@ -146,9 +146,9 @@ type placement struct {
 	// keys of an existing one.
 	metadata map[string]any
 	// touchUnchanged records the metadata and the folder on a document
-	// whose bytes are the ones just uploaded. A folder sync needs it (see
-	// the TouchUnchangedFolderFile statement); a plain upload leaves a
-	// duplicate exactly as it was.
+	// whose bytes are the ones just uploaded. A folder uploaded again needs
+	// it (see the TouchUnchangedFolderFile statement); a plain upload leaves
+	// a duplicate exactly as it was.
 	touchUnchanged bool
 }
 

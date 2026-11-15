@@ -1,7 +1,7 @@
 "use client";
 
 import { useAtomValue } from "jotai";
-import { AlertTriangle, Globe, Lock, MoreHorizontal, Pencil, Sparkles, Trash2 } from "lucide-react";
+import { AlertTriangle, MoreHorizontal, Pencil, Sparkles, Trash2 } from "lucide-react";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -49,18 +49,15 @@ import {
 import { ShortcutKbd } from "@/components/ui/shortcut-kbd";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
-import { Switch } from "@/components/ui/switch";
 import type { PromptRead } from "@/contracts/types/prompts.types";
-import { useSiteAdmin } from "@/hooks/use-site-admin";
 
 interface PromptFormData {
 	name: string;
 	prompt: string;
 	mode: "transform" | "explore";
-	is_public: boolean;
 }
 
-const EMPTY_FORM: PromptFormData = { name: "", prompt: "", mode: "transform", is_public: false };
+const EMPTY_FORM: PromptFormData = { name: "", prompt: "", mode: "transform" };
 
 export function PromptsContent() {
 	const { data: prompts, isLoading, isError } = useAtomValue(promptsAtom);
@@ -74,10 +71,6 @@ export function PromptsContent() {
 	const [isSaving, setIsSaving] = useState(false);
 	const [expandedId, setExpandedId] = useState<number | null>(null);
 	const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
-	const [togglingPublicIds, setTogglingPublicIds] = useState<Set<number>>(new Set());
-	// Community prompts reach every account; only administrators publish them
-	// (the API refuses anyone else). A prompt already public can still be made private.
-	const canPublish = useSiteAdmin().isAdmin === true;
 
 	const handleSave = useCallback(async () => {
 		if (!formData.name.trim() || !formData.prompt.trim()) {
@@ -107,7 +100,6 @@ export function PromptsContent() {
 			name: prompt.name,
 			prompt: prompt.prompt,
 			mode: prompt.mode as "transform" | "explore",
-			is_public: prompt.is_public,
 		});
 		setEditingId(prompt.id);
 		setShowForm(true);
@@ -123,25 +115,6 @@ export function PromptsContent() {
 			setDeleteTarget(null);
 		}
 	}, [deleteTarget, deletePrompt]);
-
-	const handleTogglePublic = useCallback(
-		async (prompt: PromptRead) => {
-			if (togglingPublicIds.has(prompt.id)) return;
-			setTogglingPublicIds((prev) => new Set(prev).add(prompt.id));
-			try {
-				await updatePrompt({ id: prompt.id, is_public: !prompt.is_public });
-			} catch {
-				// toast handled by mutation atom
-			} finally {
-				setTogglingPublicIds((prev) => {
-					const next = new Set(prev);
-					next.delete(prompt.id);
-					return next;
-				});
-			}
-		},
-		[updatePrompt, togglingPublicIds]
-	);
 
 	const handleCancel = useCallback(() => {
 		setShowForm(false);
@@ -240,19 +213,6 @@ export function PromptsContent() {
 								</SelectContent>
 							</Select>
 						</div>
-
-						{canPublish && (
-							<div className="flex items-center gap-2">
-								<Switch
-									id="prompt-public"
-									checked={formData.is_public}
-									onCheckedChange={(checked) => setFormData((p) => ({ ...p, is_public: checked }))}
-								/>
-								<Label htmlFor="prompt-public" className="text-sm font-normal">
-									Share with community
-								</Label>
-							</div>
-						)}
 					</div>
 
 					<DialogFooter>
@@ -326,12 +286,6 @@ export function PromptsContent() {
 									<span className="rounded-md border-0 bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
 										{prompt.mode}
 									</span>
-									{prompt.is_public && (
-										<span className="flex items-center gap-1 rounded-md border-0 bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-											<Globe className="size-2.5" />
-											Public
-										</span>
-									)}
 								</div>
 								<p
 									className={`mt-1 text-xs text-muted-foreground ${expandedId === prompt.id ? "whitespace-pre-wrap" : "line-clamp-2"}`}
@@ -362,21 +316,6 @@ export function PromptsContent() {
 									</Button>
 								</DropdownMenuTrigger>
 								<DropdownMenuContent align="end">
-									{(canPublish || prompt.is_public) && (
-										<DropdownMenuItem
-											onClick={() => handleTogglePublic(prompt)}
-											disabled={togglingPublicIds.has(prompt.id)}
-										>
-											{togglingPublicIds.has(prompt.id) ? (
-												<Spinner className="size-4" />
-											) : prompt.is_public ? (
-												<Lock className="size-4" />
-											) : (
-												<Globe className="size-4" />
-											)}
-											{prompt.is_public ? "Make private" : "Share with community"}
-										</DropdownMenuItem>
-									)}
 									<DropdownMenuItem onClick={() => handleEdit(prompt)}>
 										<Pencil className="size-4" />
 										Edit

@@ -2,12 +2,10 @@ package mcptools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
 	"reflect"
-	"sync"
 	"testing"
 	"time"
 
@@ -51,6 +49,35 @@ INSERT INTO search_source_connectors (id, name, connector_type, config, user_id,
   (20, 'Elsewhere', 'MCP_CONNECTOR', '{"server_config": {"transport": "http", "url": "https://else.example.com/mcp"}}', 'bbbbbbbb-0000-4000-8000-000000000002', true);
 `
 
+// sealSeededRows stores the seed's MCP servers as the API stores a form:
+// sealed for their owners. The seed is written in the clear to be read.
+func sealSeededRows(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	ctx := context.Background()
+	rows, err := pool.Query(ctx, `SELECT id, user_id::text, config::text FROM search_source_connectors WHERE connector_type = 'MCP_CONNECTOR'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	type seeded struct {
+		id            int64
+		owner, config string
+	}
+	var all []seeded
+	for rows.Next() {
+		var one seeded
+		if err := rows.Scan(&one.id, &one.owner, &one.config); err != nil {
+			t.Fatal(err)
+		}
+		all = append(all, one)
+	}
+	rows.Close()
+	for _, one := range all {
+		if _, err := pool.Exec(ctx, `UPDATE search_source_connectors SET config = $2::jsonb WHERE id = $1`, one.id, sealedForTest(one.owner, one.config)); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func TestTheRowsOverARealDatabase(t *testing.T) {
 	address := os.Getenv(databaseVariable)
 	if address == "" {
@@ -65,6 +92,7 @@ func TestTheRowsOverARealDatabase(t *testing.T) {
 	if _, err := pool.Exec(ctx, seed); err != nil {
 		t.Fatalf("seeding: %v", err)
 	}
+	sealSeededRows(t, pool)
 	rows := Postgres{Pool: pool}
 
 	t.Run("an account's MCP connections that are switched on, oldest first, and nobody else's", func(t *testing.T) {
@@ -82,7 +110,7 @@ func TestTheRowsOverARealDatabase(t *testing.T) {
 		if !reflect.DeepEqual(ids, []int64{11, 12, 14}) {
 			t.Errorf("connections = %v", ids)
 		}
-		if where, err := readTarget(listed[0].Config); err != nil || where.headers["x-api-key"] != "k" {
+		if where, err := openedTarget(ada, string(listed[0].Config)); err != nil || where.headers["x-api-key"] != "k" {
 			t.Errorf("the first connection's target: %+v, %v", where, err)
 		}
 	})
@@ -124,55 +152,6 @@ func TestTheRowsOverARealDatabase(t *testing.T) {
 		listed, _ := rows.Connections(ctx, ada)
 		if hosts, stored := readSiteHosts(listed[0].SiteHosts); !stored || len(hosts) != 1 {
 			t.Errorf("the list's site hosts = %v, %v", hosts, stored)
-		}
-	})
-
-	t.Run("always allow is added once, by the owner, and loses nothing", func(t *testing.T) {
-		if found, err := rows.AddTrusted(ctx, ben, 11, "search"); found || err != nil {
-			t.Fatalf("another account trusted a tool of Ada's: %v, %v", found, err)
-		}
-		if row, _ := rows.Connection(ctx, ada, 11); len(readTrusted(row.Config)) != 1 {
-			t.Fatalf("Ben's attempt changed Ada's list: %s", row.Config)
-		}
-		// Twelve approvals at once, two of them the same name. Every name
-		// is in the list afterwards and none twice: the row is locked
-		// while the list is read and written.
-		var together sync.WaitGroup
-		for i := range 12 {
-			together.Add(1)
-			go func() {
-				defer together.Done()
-				if owned, err := rows.AddTrusted(ctx, ada, 11, fmt.Sprintf("tool_%d", i%11)); !owned || err != nil {
-					t.Errorf("AddTrusted: %v, %v", owned, err)
-				}
-			}()
-		}
-		together.Wait()
-		row, _ := rows.Connection(ctx, ada, 11)
-		trusted := readTrusted(row.Config)
-		seen := map[string]bool{}
-		for _, name := range trusted {
-			if seen[name] {
-				t.Errorf("%s is listed twice", name)
-			}
-			seen[name] = true
-		}
-		if len(trusted) != 12 || trusted[0] != "create_note" {
-			t.Errorf("trusted_tools = %v", trusted)
-		}
-		// The rest of the config is as it was.
-		top := keys(row.Config)
-		var kept map[string][]string
-		if json.Unmarshal(top["kept"], &kept) != nil || !reflect.DeepEqual(kept["as"], []string{"it", "was"}) {
-			t.Errorf("another key was changed: %s", top["kept"])
-		}
-		if where, err := readTarget(row.Config); err != nil || where.origin != originMember || where.headers["x-api-key"] != "k" {
-			t.Errorf("the server's address or key was changed: %+v, %v", where, err)
-		}
-		// A config that is not an object cannot take a list; that is an
-		// error, not a quiet nothing.
-		if owned, err := rows.AddTrusted(ctx, ada, 14, "search"); owned || err == nil {
-			t.Errorf("a list for a config took a trusted tool: %v, %v", owned, err)
 		}
 	})
 
@@ -219,7 +198,8 @@ func TestTheRowsOverARealDatabase(t *testing.T) {
 
 	t.Run("a turn over the real rows", func(t *testing.T) {
 		source, err := NewSource(Settings{
-			Rows: rows, Generations: newCounter(), Network: loopback{}, Logger: slog.New(slog.DiscardHandler), Now: time.Now,
+			Rows: rows, Generations: newCounter(), Network: loopback{}, Seal: testSeal, OAuth: testOAuth(),
+			Logger: slog.New(slog.DiscardHandler), Now: time.Now,
 			ClientName: "chat-under-test", SiteHostsWhenUnset: []string{}, Limits: testLimits(),
 		})
 		if err != nil {
@@ -234,18 +214,6 @@ func TestTheRowsOverARealDatabase(t *testing.T) {
 		// 12 has the list saved above; 14's config is unreadable.
 		if got := names(set); !reflect.DeepEqual(got, []string{"lookup"}) {
 			t.Fatalf("tools = %v", got)
-		}
-		if err := set.Trust(ctx, "lookup"); err != nil {
-			t.Fatal(err)
-		}
-		if trusted, mcp, err := set.Trusted(ctx, "lookup"); !trusted || !mcp || err != nil {
-			t.Errorf("Trusted = %v, %v, %v", trusted, mcp, err)
-		}
-		if _, err := pool.Exec(ctx, `DELETE FROM search_source_connectors WHERE id = 12`); err != nil {
-			t.Fatal(err)
-		}
-		if trusted, _, _ := set.Trusted(ctx, "lookup"); trusted {
-			t.Error("a deleted connection's tool is trusted")
 		}
 	})
 }
@@ -293,7 +261,8 @@ func TestTheCounterOverARealValkey(t *testing.T) {
 	rows.add(account, 1, "Notes", serverConfig("https://notes.example.com/mcp", "k", cachedList("create_note")))
 	build := func(generations Generations) *Source {
 		source, err := NewSource(Settings{
-			Rows: rows, Generations: generations, Network: loopback{}, Logger: slog.New(slog.DiscardHandler), Now: time.Now,
+			Rows: rows, Generations: generations, Network: loopback{}, Seal: testSeal, OAuth: testOAuth(),
+			Logger: slog.New(slog.DiscardHandler), Now: time.Now,
 			ClientName: "chat-under-test", SiteHostsWhenUnset: []string{}, Limits: testLimits(),
 		})
 		if err != nil {

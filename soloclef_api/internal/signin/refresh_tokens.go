@@ -50,10 +50,25 @@ type issued struct {
 	familyID string
 }
 
+// Proof is how a new sign-in proved who the person is. It is kept with the
+// sign-in (refresh_tokens.sso_proved_at) for one decision: an account first
+// made through single sign-on has no password to ask for, so it may set one
+// only from a sign-in the provider proved a moment ago (password_change.go).
+type Proof int
+
+const (
+	// ProvedByPassword is a password sign-in (and the end-to-end suite's
+	// minted session, which proves nothing through the provider either).
+	ProvedByPassword Proof = iota
+	// ProvedBySSO is a sign-in through the identity provider
+	// (internal/oidcsignin).
+	ProvedBySSO
+)
+
 // startFamily records a new sign-in for the account and answers its first
 // refresh token. A phone names itself (device), which is shown in the
 // devices list.
-func startFamily(ctx context.Context, db DBTX, userID, kind string, device *string, now time.Time) (issued, error) {
+func startFamily(ctx context.Context, db DBTX, userID, kind string, device *string, proof Proof, now time.Time) (issued, error) {
 	token, err := newRefreshToken()
 	if err != nil {
 		return issued{}, err
@@ -62,16 +77,21 @@ func startFamily(ctx context.Context, db DBTX, userID, kind string, device *stri
 	if err != nil {
 		return issued{}, err
 	}
-	familyCap := now.Add(familyLifetime(kind))
+	familyCap := signInCap(kind, now)
+	var ssoProved *time.Time
+	if proof == ProvedBySSO {
+		ssoProved = &now
+	}
 	err = New(db).InsertRefreshToken(ctx, InsertRefreshTokenParams{
 		UserID:         userID,
 		TokenHash:      hashToken(token),
 		ExpiresAt:      tokenExpiry(kind, now, familyCap),
 		FamilyID:       family,
-		AbsoluteExpiry: &familyCap,
+		AbsoluteExpiry: familyCap,
 		Kind:           kind,
 		DeviceLabel:    device,
 		SignedInAt:     &now,
+		SsoProvedAt:    ssoProved,
 		CreatedAt:      now,
 	})
 	if err != nil {
@@ -123,11 +143,12 @@ func rotate(ctx context.Context, pool *pgxpool.Pool, token string, now time.Time
 			}
 			return outcome{refused: true}, nil
 		}
-		familyCap := now.Add(familyLifetime(row.Kind))
-		if row.AbsoluteExpiry != nil {
-			familyCap = *row.AbsoluteExpiry
-		}
-		if !now.Before(row.ExpiresAt) || !now.Before(familyCap) {
+		// The stored cap is the sign-in's, written at its start and copied
+		// forward unchanged: a browser's always has one, a phone's is NULL
+		// because it has none (signInCap). It is read as stored, never
+		// recomputed, so a refresh cannot stretch a browser's month.
+		familyCap := row.AbsoluteExpiry
+		if !now.Before(row.ExpiresAt) || (familyCap != nil && !now.Before(*familyCap)) {
 			return outcome{refused: true}, nil
 		}
 
@@ -135,9 +156,11 @@ func rotate(ctx context.Context, pool *pgxpool.Pool, token string, now time.Time
 		if err != nil {
 			return outcome{}, err
 		}
-		// The successor keeps the family's kind, device and sign-in time:
-		// a phone is the same phone, signed in when it was, across every
-		// refresh.
+		// The successor keeps the family's kind, device, sign-in time and
+		// single sign-on proof: a phone is the same phone, signed in when
+		// and how it was, across every refresh. Its expiry is a fresh idle
+		// time from now (under the family's cap, where it has one), so every
+		// refresh is a use that starts the idle clock again.
 		signedIn := row.SignedInAt
 		if signedIn == nil {
 			signedIn = &row.CreatedAt
@@ -147,10 +170,11 @@ func rotate(ctx context.Context, pool *pgxpool.Pool, token string, now time.Time
 			TokenHash:      hashToken(successor),
 			ExpiresAt:      tokenExpiry(row.Kind, now, familyCap),
 			FamilyID:       row.FamilyID,
-			AbsoluteExpiry: &familyCap,
+			AbsoluteExpiry: familyCap,
 			Kind:           row.Kind,
 			DeviceLabel:    row.DeviceLabel,
 			SignedInAt:     signedIn,
+			SsoProvedAt:    row.SsoProvedAt,
 			CreatedAt:      now,
 		}); err != nil {
 			return outcome{}, err

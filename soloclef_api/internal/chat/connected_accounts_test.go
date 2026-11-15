@@ -16,13 +16,23 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_agent/model"
 	"git.danvics.com/danvics/soloclef/soloclef_agent/model/modeltest"
 	"git.danvics.com/danvics/soloclef/soloclef_agent/tool"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/assembly"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/automationdrafts"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/deliverables"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/drivetools"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/figuretool"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/imapmail"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/jmapaccounts"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/jmapmail"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/mailattachments"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/maildrafts"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/mailtools"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/nextcloudtools"
 	"git.danvics.com/danvics/soloclef/soloclef_connectors/drivegrant"
 	"git.danvics.com/danvics/soloclef/soloclef_connectors/nextcloud"
 	"git.danvics.com/danvics/soloclef/soloclef_ingest/fileread"
+
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/agentrules"
 )
 
 // mailboxes is the account's mail connection: Ada has one mailbox, nobody
@@ -47,6 +57,44 @@ func (noFiles) Read(context.Context, string, string, fileread.File) (fileread.Te
 
 // noMail stands where a mail server would be; no test here reaches one.
 type noMail struct{}
+
+// noJMAP is an account with no JMAP mailbox, and noDrafts a send guard
+// nothing reaches in these tests.
+type noJMAP struct{}
+
+func (noJMAP) Accounts(context.Context, string) ([]jmapaccounts.Account, error)    { return nil, nil }
+func (noJMAP) Folders(context.Context, string, string) ([]jmapmail.Mailbox, error) { return nil, nil }
+func (noJMAP) Search(context.Context, string, string, string, jmapmail.Query) ([]jmapmail.Summary, bool, error) {
+	return nil, false, nil
+}
+func (noJMAP) Read(context.Context, string, string, string) (jmapmail.Email, error) {
+	return jmapmail.Email{}, nil
+}
+func (noJMAP) Thread(context.Context, string, string, string) ([]jmapmail.Email, bool, error) {
+	return nil, false, nil
+}
+func (noJMAP) Download(context.Context, string, string, jmapmail.Attachment, int64) ([]byte, error) {
+	return nil, nil
+}
+func (noJMAP) Sender(context.Context, string, string) (jmapmail.Identity, error) {
+	return jmapmail.Identity{}, nil
+}
+func (noJMAP) Limits(context.Context, string, string) (jmapaccounts.Limits, error) {
+	return jmapaccounts.Limits{}, nil
+}
+
+// noAttachments finds no file: no draft is made in these tests.
+type noAttachments struct{}
+
+func (noAttachments) Resolve(context.Context, string, mailattachments.Request, int64) (maildrafts.Attachment, error) {
+	return maildrafts.Attachment{}, &mailattachments.Refused{Message: "no files here"}
+}
+
+type noDrafts struct{}
+
+func (noDrafts) Create(context.Context, string, string, maildrafts.Message, string) (maildrafts.Created, error) {
+	return maildrafts.Created{}, maildrafts.ErrNoDraft
+}
 
 func (noMail) FolderNames(context.Context, imapmail.Settings) ([]string, error) { return nil, nil }
 func (noMail) Search(context.Context, imapmail.Settings, imapmail.Query) ([]imapmail.Summary, bool, error) {
@@ -83,7 +131,8 @@ func withAccounts(t *testing.T, script *modeltest.Script, data *rows, apps Conne
 	t.Helper()
 	assembly, _, _, _ := production(t, script, script, data, checkpoint.NewMemory(), connected{})
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	mail := &mailtools.Tools{Rows: mailboxes{}, Mail: noMail{}, SignIn: noMail{}, Files: noFiles{}, SearchTimeout: time.Second, Logger: logger}
+	mail := &mailtools.Tools{Rows: mailboxes{}, Mail: noMail{}, SignIn: noMail{}, JMAP: noJMAP{}, Drafts: noDrafts{}, Files: noFiles{},
+		Attachments: noAttachments{}, SearchTimeout: time.Second, Logger: logger}
 	if err := mail.Check(); err != nil {
 		t.Fatal(err)
 	}
@@ -109,6 +158,8 @@ func withAccounts(t *testing.T, script *modeltest.Script, data *rows, apps Conne
 		t.Fatal(err)
 	}
 	assembly.Mail, assembly.Drive, assembly.Nextcloud = mail, drive, cloud
+	// The automation drafter too: a fully connected chat is offered it.
+	assembly.Automations = drafting(&shelvedDrafts{})
 	if apps != nil {
 		assembly.Connected = apps
 	}
@@ -149,12 +200,14 @@ func has(names []string, wanted ...string) int {
 }
 
 // An account that connected a mailbox or its Drive is offered their tools
-// in a plain chat, in every scope, with the prompt that describes them and
-// a line for the step display; an account that connected neither is not,
-// and neither is a notebook's chat or a message that picked one source.
+// in every scope and in a notebook's chat, with the prompt that describes
+// them and a line for the step display; an account that connected neither
+// is not, and neither is a message that picked one source. A tool switched
+// off in the composer's list is not offered, and a kind with none left
+// offered is not in the prompt.
 func TestMailAndDriveToolsAreOfferedToTheAccountThatConnectedThem(t *testing.T) {
 	script := modeltest.NewScript(modeltest.Reply{Text: "ok"}, modeltest.Reply{Text: "ok"}, modeltest.Reply{Text: "ok"},
-		modeltest.Reply{Text: "ok"}, modeltest.Reply{Text: "ok"})
+		modeltest.Reply{Text: "ok"}, modeltest.Reply{Text: "ok"}, modeltest.Reply{Text: "ok"})
 	data := newRows()
 	assembly := withAccounts(t, script, data, nil)
 	every := append(append(mailtools.Names(), drivetools.Names()...), nextcloudtools.Names()...)
@@ -163,7 +216,7 @@ func TestMailAndDriveToolsAreOfferedToTheAccountThatConnectedThem(t *testing.T) 
 	if has(names, every...) != len(every) {
 		t.Fatalf("Ada's plain chat was offered %v", names)
 	}
-	for _, block := range []string{"<email>", "read the user's own connected mailboxes", "cannot send, delete, move or flag", "<google_drive>", "never the whole Drive", "<nextcloud>", "never replaces one"} {
+	for _, block := range []string{"<email>", "read the user's own connected mailboxes", "cannot send, forward, reply-all, delete, move or flag", "never say a message was sent", "<google_drive>", "never the whole Drive", "<nextcloud>", "never replaces one"} {
 		if !strings.Contains(system, block) {
 			t.Errorf("the prompt lacks %q", block)
 		}
@@ -183,28 +236,37 @@ func TestMailAndDriveToolsAreOfferedToTheAccountThatConnectedThem(t *testing.T) 
 	if names, _, _ = shown(t, assembly, Turn{ThreadID: 1, UserID: ada, Scope: "all", PreferredTool: "pubmed"}, script); has(names, every...) != 0 {
 		t.Errorf("a message that picked PubMed was offered %v", names)
 	}
-	// A notebook's chat answers from its sources.
+	// A notebook's chat has them too, its sources still first.
 	data.about.Notebook = &Notebook{ID: 5, Title: "Biology", DocumentIDs: []int64{12}}
-	if names, system, _ = shown(t, assembly, Turn{ThreadID: 1, UserID: ada, Scope: "documents"}, script); has(names, every...) != 0 || strings.Contains(system, "<email>") {
-		t.Errorf("a notebook's chat was offered %v", names)
+	if names, system, _ = shown(t, assembly, Turn{ThreadID: 1, UserID: ada, Scope: "documents"}, script); has(names, every...) != len(every) ||
+		!strings.Contains(system, "<email>") || !strings.Contains(system, "they are your primary material") || !strings.Contains(system, "The user's own connections are here too") {
+		t.Errorf("a notebook's chat was offered %v with the prompt:\n%s", names, system)
+	}
+	// Switched off in the composer: the mail's six tools go, and with them
+	// the prompt's word of mail; Drive stays.
+	if names, system, _ = shown(t, assembly, Turn{ThreadID: 1, UserID: ada, Scope: "documents", DisabledTools: mailtools.Names()}, script); has(names, mailtools.Names()...) != 0 ||
+		strings.Contains(system, "<email>") || has(names, drivetools.Names()...) != len(drivetools.Names()) {
+		t.Errorf("with the mail switched off a notebook's chat was offered %v", names)
 	}
 	data.about.Notebook = nil
 
 	// A deployment with no Google project offers the mail tools alone.
 	assembly.Drive = nil
 	names, system, _ = shown(t, assembly, Turn{ThreadID: 1, UserID: ada, Scope: "documents"}, script)
-	if has(names, mailtools.Names()...) != 4 || has(names, drivetools.Names()...) != 0 || strings.Contains(system, "<google_drive>") {
+	if has(names, mailtools.Names()...) != len(mailtools.Names()) || has(names, drivetools.Names()...) != 0 || strings.Contains(system, "<google_drive>") {
 		t.Errorf("without a Google project the turn was offered %v", names)
 	}
 }
 
-// Reading mail waits for the person, and their "always allow" is kept in
-// the account's own permission rules. Making a Drive file waits every
-// time: no rule waives it, and "always allow" is refused for it.
-func TestReadingAsksFirstAndAWriteAsksEveryTime(t *testing.T) {
+// Every tool of a connected account runs without asking until the person
+// marks it, whatever the tool declares; a marked one waits, offers "always
+// allow" (a Drive write too: under the person's policy that answer is always
+// theirs), and the answer takes the mark off for the account.
+func TestAccountToolsRunUnaskedUntilMarked(t *testing.T) {
 	script := modeltest.NewScript(
 		modeltest.Reply{Calls: []model.ToolCall{{ID: "c1", Name: mailtools.SearchTool, Args: `{"text":"invoice"}`}}},
-		modeltest.Reply{Calls: []model.ToolCall{{ID: "c2", Name: drivetools.CreateTool, Args: `{"name":"Notes","file_type":"google_doc","content":"x"}`}}},
+		modeltest.Reply{Calls: []model.ToolCall{{ID: "c2", Name: mailtools.SearchTool, Args: `{"text":"invoice"}`}}},
+		modeltest.Reply{Calls: []model.ToolCall{{ID: "c3", Name: drivetools.CreateTool, Args: `{"name":"Notes","file_type":"google_doc","content":"x"}`}}},
 		modeltest.Reply{Text: "done"},
 	)
 	data := newRows()
@@ -215,31 +277,97 @@ func TestReadingAsksFirstAndAWriteAsksEveryTime(t *testing.T) {
 	}
 	defer built.Close()
 	ctx := context.Background()
-	result, err := built.Agent.Start(ctx, "asking", []model.Message{model.User("find the invoice and note it")}, event.Discard)
+	// Unmarked, the search runs; marked while it runs, the next one waits.
+	result, err := built.Agent.Start(ctx, "asking", []model.Message{model.User("find the invoice and note it")}, func(ev event.Event) {
+		if ev.Kind == event.ToolResult {
+			data.mark(ada, mailtools.SearchTool)
+			data.mark(ada, drivetools.CreateTool)
+		}
+	})
 	if err != nil || result.Outcome != agent.Paused {
-		t.Fatalf("the search did not wait: %v %v", result.Outcome, err)
+		t.Fatalf("the marked search did not wait: %v %v", result.Outcome, err)
 	}
 	waiting, err := built.Agent.Pending(ctx, "asking")
-	if err != nil || len(waiting) != 1 || waiting[0].Tool != mailtools.SearchTool || !waiting[0].AllowAlways {
+	if err != nil || len(waiting) != 1 || waiting[0].CallID != "c2" || !waiting[0].AllowAlways {
 		t.Fatalf("waiting on %+v, %v", waiting, err)
 	}
-	// "Always allow" for the search is remembered for the account.
-	if err := built.Trust(ctx, mailtools.SearchTool); err != nil || !data.trust[trustKey(ada, mailtools.SearchTool)] {
-		t.Fatalf("the trust was not kept: %v", err)
+	// "Always allow" for the search takes its mark off for the account.
+	if err := built.StopAsking(ctx, mailtools.SearchTool); err != nil || data.marked(ada, mailtools.SearchTool) {
+		t.Fatalf("the mark was not taken off: %v", err)
 	}
 	result, err = built.Agent.Resume(ctx, "asking", []agent.Decision{{CallID: waiting[0].CallID, Verdict: agent.Approve}}, event.Discard)
 	if err != nil || result.Outcome != agent.Paused {
-		t.Fatalf("the Drive write did not wait: %v %v", result.Outcome, err)
+		t.Fatalf("the marked Drive write did not wait: %v %v", result.Outcome, err)
 	}
 	waiting, err = built.Agent.Pending(ctx, "asking")
-	if err != nil || len(waiting) != 1 || waiting[0].Tool != drivetools.CreateTool || waiting[0].AllowAlways {
+	if err != nil || len(waiting) != 1 || waiting[0].Tool != drivetools.CreateTool || !waiting[0].AllowAlways {
 		t.Fatalf("waiting on %+v, %v", waiting, err)
 	}
-	// Even with a standing rule for it, the write still waits next time.
-	data.trust[trustKey(ada, drivetools.CreateTool)] = true
+	// The declaration stays what an unattended run goes by.
 	for _, made := range assembly.Drive.ForTurn(ada) {
 		if made.Name == drivetools.CreateTool && made.Approval != tool.AlwaysAsk {
 			t.Errorf("%s has approval %d", made.Name, made.Approval)
+		}
+	}
+}
+
+// A mail draft's card is the person's question: draft_email marked "ask
+// first" (which the settings page no longer offers, but an old row could
+// hold) runs at once, and the card that follows is the only prompt. A
+// marked reading tool in the same turn still waits, so the marks are read.
+func TestAMailDraftIsItsOwnQuestion(t *testing.T) {
+	script := modeltest.NewScript(
+		modeltest.Reply{Calls: []model.ToolCall{{ID: "d1", Name: mailtools.DraftTool, Args: `{"account_id":"jmap-1","to":["ada@example.test"],"subject":"Hello","body":"Hi"}`}}},
+		modeltest.Reply{Calls: []model.ToolCall{{ID: "s1", Name: mailtools.SearchTool, Args: `{"text":"invoice"}`}}},
+		modeltest.Reply{Text: "done"},
+	)
+	data := newRows()
+	data.mark(ada, mailtools.DraftTool)
+	data.mark(ada, mailtools.SearchTool)
+	assembly := withAccounts(t, script, data, nil)
+	built, err := assembly.Build(context.Background(), Turn{ThreadID: 1, UserID: ada, Scope: "documents"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer built.Close()
+	ctx := context.Background()
+	ranDraft := false
+	result, err := built.Agent.Start(ctx, "drafting", []model.Message{model.User("write to Ada")}, func(ev event.Event) {
+		if ev.Kind == event.ToolResult && ev.Tool == mailtools.DraftTool {
+			ranDraft = true
+		}
+	})
+	if err != nil || result.Outcome != agent.Paused || !ranDraft {
+		t.Fatalf("outcome %v, draft ran %v: %v", result.Outcome, ranDraft, err)
+	}
+	waiting, err := built.Agent.Pending(ctx, "drafting")
+	if err != nil || len(waiting) != 1 || waiting[0].Tool != mailtools.SearchTool {
+		t.Fatalf("waiting on %+v, %v: only the marked search may wait", waiting, err)
+	}
+}
+
+// Every tool a fully connected chat offers, but the memory tool and the
+// hand-overs to a specialist, is on the settings page's list, so none can be
+// left without a way to mark it.
+func TestEveryOfferedToolIsInTheCatalogue(t *testing.T) {
+	script := modeltest.NewScript(modeltest.Reply{Text: "ok"})
+	connected := withAccounts(t, script, newRows(), nil)
+	names, _, _ := shown(t, connected, Turn{ThreadID: 1, UserID: ada, Scope: "all"}, script)
+	listed := map[string]bool{}
+	for _, name := range agentrules.CatalogueNames() {
+		listed[name] = true
+	}
+	for _, name := range names {
+		switch name {
+		// The automation drafter's and the mail drafter's cards are their
+		// own questions, so no mark applies to them and the settings page
+		// does not list them. A figure is drawn in the answer and sends
+		// nothing anywhere: there is nothing to ask first about.
+		case assembly.MemoryToolName, assembly.KnowledgeBaseName, deliverables.DelegateName, automationdrafts.ToolName, mailtools.DraftTool, figuretool.ToolName:
+			continue
+		}
+		if !listed[name] {
+			t.Errorf("%s is offered and cannot be marked on the settings page", name)
 		}
 	}
 }

@@ -46,7 +46,7 @@ var jobStates = map[string]string{
 
 // outputOf is one row as the panel reads it. An output whose run is gone
 // (deleted, or never started) is "failed": there is nothing that will
-// finish it.
+// finish it. One a notebook's chat made is its artifact, and ready.
 func outputOf(row OutputsRow) output {
 	out := output{
 		ID: row.ID, Kind: row.Kind, Title: row.Title, Status: "failed",
@@ -68,6 +68,10 @@ func outputOf(row OutputsRow) output {
 			out.Status = state
 		}
 		out.Phase, out.Progress, out.FailureCode, out.ArtifactID = row.JobPhase, row.JobProgress, row.JobFailure, row.JobArtifact
+	} else if row.MadeArtifact != nil && row.ArtifactFormat != nil {
+		// A notebook's chat made it, with no run: it is its artifact, which
+		// exists (the join found it), so it is ready.
+		out.Status, out.ArtifactID = "ready", row.MadeArtifact
 	}
 	if out.ArtifactID != nil {
 		out.ArtifactFormat = row.ArtifactFormat

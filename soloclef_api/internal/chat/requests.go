@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/assembly"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/automationdrafts"
 	"strconv"
 	"strings"
 
@@ -40,9 +41,9 @@ type Mention struct {
 
 // turnRequest is the body of POST /new_chat, as far as this tier reads it.
 //
-// The apps send more (the page's own copy of the history, the desktop
-// app's file-system mode, and ids an older app still sends); those fields
-// are accepted and not used. Whose the turn is comes from the
+// The apps send more (the page's own copy of the history, and the
+// file-system mode and ids an older app still sends); those fields are
+// accepted and not used. Whose the turn is comes from the
 // request's principal and the thread it owns, never from the body. The
 // history in particular is never read from the request: what the model is
 // shown is what the server stored, not what a client says was said.
@@ -57,6 +58,10 @@ type turnRequest struct {
 	// DisabledTools are the tools the person switched off in the composer's
 	// tool list (GET /agent/tools names them).
 	DisabledTools []string `json:"disabled_tools"`
+	// TimeZone is the IANA zone of the person's device, for an automation
+	// the chat drafts (a schedule's time is a time somewhere). Optional:
+	// an app that sends none is asked about the zone in words.
+	TimeZone string `json:"time_zone"`
 	// Images is read only to refuse it: see readTurn.
 	Images []json.RawMessage `json:"user_images"`
 }
@@ -117,6 +122,7 @@ func readTurn(raw []byte) (turnRequest, []errorenvelope.Failure) {
 	if len(request.DisabledTools) > maxDisabledTools {
 		failures = append(failures, failure("disabled_tools", "Too many tools are listed as switched off"))
 	}
+	failures = append(failures, checkTimeZone(request.TimeZone)...)
 	if request.Scope == scopeWeb && (len(request.DocumentIDs) > 0 || len(request.FolderIDs) > 0) {
 		failures = append(failures, failure("retrieval_scope", "A message that mentions documents cannot be limited to the web"))
 	}
@@ -206,8 +212,8 @@ func readResume(raw []byte) ([]agent.Decision, []string, []errorenvelope.Failure
 		failures = append(failures, failure("decisions", "At least one decision is required"))
 	}
 	decisions := make([]agent.Decision, 0, len(request.Decisions))
-	// always are the calls answered "always allow", whose tools are to be
-	// remembered once the route has checked that they may be.
+	// always are the calls answered "always allow", whose tools' "ask
+	// first" marks come off once the route has checked that they may.
 	var always []string
 	for i, item := range request.Decisions {
 		where := "decisions." + strconv.Itoa(i)
@@ -251,8 +257,20 @@ func readResume(raw []byte) ([]agent.Decision, []string, []errorenvelope.Failure
 	return decisions, always, failures
 }
 
+// checkTimeZone refuses a time zone this server does not know, rather than
+// let the model draft a schedule in a zone saving would then refuse. Absent
+// is fine: the model then asks.
+func checkTimeZone(zone string) []errorenvelope.Failure {
+	if zone == "" || automationdrafts.ValidTimeZone(zone) {
+		return nil
+	}
+	return []errorenvelope.Failure{failure("time_zone", "time_zone must be an IANA time zone, such as Africa/Lagos")}
+}
+
 // maxDisabledTools bounds the list of switched-off tools a request may
-// carry. The chat has about a dozen switchable tools of its own; the bound
-// is only so that a request cannot make every turn carry a long list in
-// its saved choices.
-const maxDisabledTools = 100
+// carry. The list can name a connected app's tools as well as the chat's
+// own dozen (assembly.Menu), and switching a whole app off names each of
+// its tools, up to 200 an app (mcptools' ceiling): a thousand covers
+// several large apps switched off. The bound is only so that a request
+// cannot make every turn carry an unbounded list in its saved choices.
+const maxDisabledTools = 1000

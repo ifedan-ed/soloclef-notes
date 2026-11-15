@@ -21,7 +21,6 @@ import { PeriodicSyncConfig } from "../../components/periodic-sync-config";
 import { VisionLLMConfig } from "../../components/vision-llm-config";
 import { EnabledSwitch } from "../../enablement/enabled-switch";
 import { getConnectorDisplayName } from "../../tabs/all-connectors-tab";
-import { MCPServiceConfig } from "../components/mcp-service-config";
 import { getConnectorConfigComponent } from "../index";
 import { editViewActions } from "./edit-view-actions";
 
@@ -139,11 +138,13 @@ export const ConnectorEditView: FC<ConnectorEditViewProps> = ({
 		}
 	}, [reauthEndpoint, connector.id]);
 
-	// Get connector-specific config component (MCP-backed connectors use a generic view)
-	const ConnectorConfigComponent = useMemo(() => {
-		if (isMCPBacked) return MCPServiceConfig;
-		return getConnectorConfigComponent(connector.connector_type);
-	}, [connector.connector_type, isMCPBacked]);
+	// The type's own settings: for an MCP server, the server form it was
+	// added with, which saves itself. Which of its tools ask first is set in
+	// Settings, Agent permissions, with every other tool.
+	const ConnectorConfigComponent = useMemo(
+		() => getConnectorConfigComponent(connector.connector_type),
+		[connector.connector_type]
+	);
 	const { canSave, canDisconnect, disconnectWarning, subtitle, mailboxesNote } = editViewActions(
 		connector,
 		{ hasSettingsPanel: ConnectorConfigComponent !== null, hasVisionToggle: showsVisionToggle }

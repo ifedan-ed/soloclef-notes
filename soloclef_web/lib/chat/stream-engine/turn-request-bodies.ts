@@ -5,7 +5,6 @@ import type {
 import type { RetrievalScope } from "@/contracts/types/retrieval-scope.types";
 import type { HitlResponse } from "@/features/chat-messages/hitl";
 import type { PreferredToolRequestFields } from "@/features/composer-tools/preferred-tool-request";
-import type { AgentFilesystemSelection } from "@/lib/agent-filesystem";
 import type { NewChatUserImagePayload } from "@/lib/chat/user-turn-api-parts";
 
 /**
@@ -30,26 +29,18 @@ function orAbsent<T>(items: readonly T[]): readonly T[] | undefined {
 	return items.length > 0 ? items : undefined;
 }
 
-/** The fields every turn carries about where the agent's files live. */
-function filesystemFields(selection: AgentFilesystemSelection) {
-	return {
-		filesystem_mode: selection.filesystem_mode,
-		client_platform: selection.client_platform,
-		local_filesystem_mounts: selection.local_filesystem_mounts,
-	};
-}
-
 export interface NewChatBodyInput {
 	threadId: number;
 	userQuery: string;
 	turnToolFields: PreferredToolRequestFields;
-	selection: AgentFilesystemSelection;
 	messageHistory: ReadonlyArray<{ role: string; content: string }>;
 	mentionPayload: MentionedPayload;
 	/** Every mention of the turn, de-duplicated, as the chips show them. */
 	mentionedDocuments: readonly MentionedDocumentInfo[];
 	disabledTools: readonly string[];
 	userImages: readonly NewChatUserImagePayload[];
+	/** The device's IANA time zone (deviceTimeZone), or undefined when unknown. */
+	timeZone: string | undefined;
 }
 
 /** The body of POST /api/v1/new_chat. */
@@ -60,7 +51,6 @@ export function newChatRequestBody(input: NewChatBodyInput): Record<string, unkn
 		user_query: input.userQuery.trim(),
 		retrieval_scope: input.turnToolFields.retrieval_scope,
 		preferred_tool: input.turnToolFields.preferred_tool,
-		...filesystemFields(input.selection),
 		messages: input.messageHistory,
 		mentioned_document_ids: orAbsent(mentionPayload.document_ids),
 		mentioned_folder_ids: orAbsent(mentionPayload.folder_ids),
@@ -71,6 +61,8 @@ export function newChatRequestBody(input: NewChatBodyInput): Record<string, unkn
 		mentioned_thread_ids: orAbsent(mentionPayload.thread_ids),
 		mentioned_documents: orAbsent(input.mentionedDocuments),
 		disabled_tools: orAbsent(input.disabledTools),
+		// Where the person is, for a schedule the chat drafts (left out when unknown).
+		time_zone: input.timeZone,
 		// Unlike the lists above the key itself is left out, as it always was:
 		// a turn without pictures has no user_images field at all.
 		...(input.userImages.length > 0 ? { user_images: input.userImages } : {}),
@@ -81,7 +73,6 @@ export interface ResumeBodyInput {
 	retrievalScope: RetrievalScope;
 	decisions: readonly HitlResponse[];
 	disabledTools: readonly string[];
-	selection: AgentFilesystemSelection;
 }
 
 /** The body of POST /api/v1/threads/{id}/resume; the thread is named by the path. */
@@ -90,7 +81,6 @@ export function resumeRequestBody(input: ResumeBodyInput): Record<string, unknow
 		retrieval_scope: input.retrievalScope,
 		decisions: input.decisions,
 		disabled_tools: orAbsent(input.disabledTools),
-		...filesystemFields(input.selection),
 	};
 }
 
@@ -99,7 +89,6 @@ export interface RegenerateBodyInput {
 	/** The edited question; null regenerates the answer to the same one. */
 	userQuery: string | null;
 	disabledTools: readonly string[];
-	selection: AgentFilesystemSelection;
 	/** The mentions of the user message being answered again. */
 	mentions: readonly MentionedDocumentInfo[];
 	/**
@@ -112,6 +101,8 @@ export interface RegenerateBodyInput {
 	fromMessageId?: number;
 	/** With fromMessageId: also undo the agent's reversible actions after it. */
 	revertActions?: boolean;
+	/** As NewChatBodyInput.timeZone: an answer asked again drafts in the same zone. */
+	timeZone: string | undefined;
 }
 
 /** The body of POST /api/v1/threads/{id}/regenerate; the thread is named by the path. */
@@ -123,13 +114,13 @@ export function regenerateRequestBody(input: RegenerateBodyInput): Record<string
 		retrieval_scope: input.retrievalScope,
 		user_query: input.userQuery,
 		disabled_tools: orAbsent(input.disabledTools),
-		...filesystemFields(input.selection),
 		mentioned_document_ids: orAbsent(ofKind("doc").map((mention) => mention.id)),
 		mentioned_folder_ids: orAbsent(ofKind("folder").map((mention) => mention.id)),
 		mentioned_connector_ids: orAbsent(connectors.map((mention) => mention.id)),
 		mentioned_connectors: orAbsent(connectors),
 		mentioned_thread_ids: orAbsent(ofKind("thread").map((mention) => mention.id)),
 		mentioned_documents: orAbsent(input.mentions),
+		time_zone: input.timeZone,
 	};
 	if (input.editedUserImages !== undefined) body.user_images = input.editedUserImages;
 	if (input.fromMessageId !== undefined) {

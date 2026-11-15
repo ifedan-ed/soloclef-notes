@@ -84,3 +84,26 @@ func TestDownIsAllowedOnlyForTheDatabaseNamed(t *testing.T) {
 		}
 	}
 }
+
+func TestTheSecretKeyIsReadFromItsFileOnlyWhenNamed(t *testing.T) {
+	read := func(path string) ([]byte, error) {
+		switch path {
+		case "/run/secrets/session_secret":
+			return []byte("  deployment-secret\n"), nil
+		case "/run/secrets/empty":
+			return []byte("\n"), nil
+		}
+		return nil, errors.New("no such file")
+	}
+	if key, err := secretKey(environment(map[string]string{}), read); key != "" || err != nil {
+		t.Errorf("unset: %q, %v", key, err)
+	}
+	if key, err := secretKey(environment(map[string]string{SecretKeyFile: "/run/secrets/session_secret"}), read); key != "deployment-secret" || err != nil {
+		t.Errorf("from the file: %q, %v", key, err)
+	}
+	for _, file := range []string{"/run/secrets/empty", "/elsewhere"} {
+		if _, err := secretKey(environment(map[string]string{SecretKeyFile: file}), read); err == nil || !strings.Contains(err.Error(), SecretKeyFile) {
+			t.Errorf("%s: %v", file, err)
+		}
+	}
+}

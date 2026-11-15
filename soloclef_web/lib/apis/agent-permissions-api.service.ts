@@ -1,78 +1,41 @@
 import { z } from "zod";
-import { ValidationError } from "@/lib/error";
 import { baseApiService } from "./base-api.service";
 
-const ActionEnum = z.enum(["allow", "deny", "ask"]);
-export type AgentPermissionAction = z.infer<typeof ActionEnum>;
-
-const AgentPermissionRuleSchema = z.object({
-	id: z.number(),
-	// A rule is the account's own; with a thread it applies to that chat only.
-	thread_id: z.number().nullable(),
-	permission: z.string(),
-	pattern: z.string(),
-	action: ActionEnum,
-	created_at: z.string(),
+/**
+ * Which tools the assistant asks about before it uses them
+ * (soloclef_api/internal/agentrules).
+ *
+ * Every tool runs without asking unless the person marks it "ask first".
+ * The list is every tool the chat can use: its own, under a heading, and
+ * each connected app's, under the app's name and with the app's connection.
+ */
+const AgentToolSchema = z.object({
+	/** The tool's name: the chat's for its own tools, the server's for an app's. */
+	tool: z.string(),
+	/** The heading it is listed under: a kind of tool, or the app's name. */
+	group: z.string(),
+	/** The connected app's connection; null for the chat's own tools. */
+	connector_id: z.number().nullable(),
+	ask_first: z.boolean(),
 });
 
-export type AgentPermissionRule = z.infer<typeof AgentPermissionRuleSchema>;
+export type AgentTool = z.infer<typeof AgentToolSchema>;
 
-const AgentPermissionRuleListSchema = z.array(AgentPermissionRuleSchema);
+const AgentToolListSchema = z.array(AgentToolSchema);
 
-const AgentPermissionRuleCreateSchema = z.object({
-	permission: z
-		.string()
-		.min(1, "Permission is required")
-		.max(255)
-		.regex(/^[a-zA-Z0-9_:.\-*]+$/, "Use letters, digits, '.', '_', ':', '-', or '*' wildcards."),
-	pattern: z.string().min(1).max(255).default("*"),
-	action: ActionEnum,
-	thread_id: z.number().nullable().optional(),
-});
-
-export type AgentPermissionRuleCreate = z.infer<typeof AgentPermissionRuleCreateSchema>;
-
-const AgentPermissionRuleUpdateSchema = z.object({
-	pattern: z.string().min(1).max(255).optional(),
-	action: ActionEnum.optional(),
-});
-
-export type AgentPermissionRuleUpdate = z.infer<typeof AgentPermissionRuleUpdateSchema>;
+/** One tool's choice, as the server takes it. */
+export type AskFirstChoice = Pick<AgentTool, "tool" | "connector_id" | "ask_first">;
 
 class AgentPermissionsApiService {
-	// The rules are the signed-in account's own; the server takes the account
-	// from the session, so no route names whose rules they are.
-	list = async (): Promise<AgentPermissionRule[]> => {
-		return baseApiService.get(`/api/v1/agent/permissions/rules`, AgentPermissionRuleListSchema);
+	// The server takes the account from the session, so no route names whose
+	// tools they are.
+	list = async (): Promise<AgentTool[]> => {
+		return baseApiService.get(`/api/v1/agent/permissions/tools`, AgentToolListSchema);
 	};
 
-	create = async (payload: AgentPermissionRuleCreate): Promise<AgentPermissionRule> => {
-		const parsed = AgentPermissionRuleCreateSchema.safeParse(payload);
-		if (!parsed.success) {
-			throw new ValidationError(parsed.error.issues.map((i) => i.message).join(", "));
-		}
-		return baseApiService.post(`/api/v1/agent/permissions/rules`, AgentPermissionRuleSchema, {
-			body: parsed.data,
-		});
-	};
-
-	update = async (
-		ruleId: number,
-		payload: AgentPermissionRuleUpdate
-	): Promise<AgentPermissionRule> => {
-		const parsed = AgentPermissionRuleUpdateSchema.safeParse(payload);
-		if (!parsed.success) {
-			throw new ValidationError(parsed.error.issues.map((i) => i.message).join(", "));
-		}
-		return baseApiService.patch(
-			`/api/v1/agent/permissions/rules/${ruleId}`,
-			AgentPermissionRuleSchema,
-			{ body: parsed.data }
-		);
-	};
-
-	remove = async (ruleId: number): Promise<void> => {
-		await baseApiService.delete(`/api/v1/agent/permissions/rules/${ruleId}`);
+	/** Mark a tool "ask first", or take the mark off; it applies from the very next call. */
+	setAskFirst = async (choice: AskFirstChoice): Promise<void> => {
+		await baseApiService.put(`/api/v1/agent/permissions/ask-first`, undefined, { body: choice });
 	};
 }
 

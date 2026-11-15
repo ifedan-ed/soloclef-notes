@@ -2,14 +2,12 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useAtomValue, useSetAtom } from "jotai";
-import { useHydrateAtoms } from "jotai/utils";
 import { House, NotebookPen } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
 import { useCallback, useEffect, useMemo } from "react";
 import { statusInboxItemsAtom } from "@/atoms/inbox/status-inbox.atom";
-import { rightPanelCollapsedAtom } from "@/atoms/layout/right-panel.atom";
 import { currentUserAtom } from "@/atoms/user/user-query.atoms";
 import { ActionLogDialog } from "@/components/agent-action-log/action-log-dialog";
 import { ActiveChatStreamRunner } from "@/components/chat/active-chat-stream-runner";
@@ -24,7 +22,6 @@ import { LayoutShell } from "../ui/shell";
 import { pageFrame } from "./page-frame";
 
 interface LayoutDataProviderProps {
-	initialRightPanelCollapsed: boolean;
 	children: React.ReactNode;
 }
 
@@ -32,11 +29,9 @@ interface LayoutDataProviderProps {
  * What the app's frame needs, gathered once for every page: the account, its
  * notifications, the rail's links and the account menu's actions.
  */
-export function LayoutDataProvider({
-	initialRightPanelCollapsed,
-	children,
-}: LayoutDataProviderProps) {
-	useHydrateAtoms([[rightPanelCollapsedAtom, initialRightPanelCollapsed]]);
+export function LayoutDataProvider({ children }: LayoutDataProviderProps) {
+	// The right panel's collapsed state needs no seeding: its atom reads its
+	// own cookie when first used (atoms/layout/right-panel.atom.ts).
 	const tSidebar = useTranslations("sidebar");
 	const router = useRouter();
 	const pathname = usePathname();
@@ -45,7 +40,7 @@ export function LayoutDataProvider({
 	const { data: user } = useAtomValue(currentUserAtom);
 	const userId = user?.id ? String(user.id) : null;
 
-	// One request for every inbox's unread count, instead of one per inbox.
+	// The server's unread total, which the inbox counts on from before its own sync window.
 	const { data: batchUnread, isLoading: isBatchUnreadLoading } = useQuery({
 		queryKey: cacheKeys.notifications.batchUnreadCounts(),
 		queryFn: () => notificationsApiService.getBatchUnreadCounts(),
@@ -54,13 +49,6 @@ export function LayoutDataProvider({
 	});
 
 	const statusInbox = useInbox(userId, "status", batchUnread?.status, !isBatchUnreadLoading);
-	const announcementsInbox = useInbox(
-		userId,
-		"announcements",
-		batchUnread?.announcements,
-		!isBatchUnreadLoading
-	);
-	const totalUnreadCount = statusInbox.unreadCount + announcementsInbox.unreadCount;
 
 	// Share the status inbox through an atom so child components (the
 	// connector popup) read it without a second useInbox of their own.
@@ -145,33 +133,17 @@ export function LayoutDataProvider({
 				pageViewportClassName={frame.viewportClassName}
 				pageContentClassName={frame.contentClassName}
 				notifications={{
-					totalUnreadCount,
-					status: {
-						items: statusInbox.inboxItems,
-						unreadCount: statusInbox.unreadCount,
-						totalCount: statusInbox.totalCount,
-						loading: statusInbox.loading,
-						loadingMore: statusInbox.loadingMore,
-						hasMore: statusInbox.hasMore,
-						loadMore: statusInbox.loadMore,
-						markAsRead: statusInbox.markAsRead,
-						markAllAsRead: statusInbox.markAllAsRead,
-						deleteItem: statusInbox.deleteItem,
-						clearAll: statusInbox.clearAll,
-					},
-					announcements: {
-						items: announcementsInbox.inboxItems,
-						unreadCount: announcementsInbox.unreadCount,
-						totalCount: announcementsInbox.totalCount,
-						loading: announcementsInbox.loading,
-						loadingMore: announcementsInbox.loadingMore,
-						hasMore: announcementsInbox.hasMore,
-						loadMore: announcementsInbox.loadMore,
-						markAsRead: announcementsInbox.markAsRead,
-						markAllAsRead: announcementsInbox.markAllAsRead,
-						deleteItem: announcementsInbox.deleteItem,
-						clearAll: announcementsInbox.clearAll,
-					},
+					items: statusInbox.inboxItems,
+					unreadCount: statusInbox.unreadCount,
+					totalCount: statusInbox.totalCount,
+					loading: statusInbox.loading,
+					loadingMore: statusInbox.loadingMore,
+					hasMore: statusInbox.hasMore,
+					loadMore: statusInbox.loadMore,
+					markAsRead: statusInbox.markAsRead,
+					markAllAsRead: statusInbox.markAllAsRead,
+					deleteItem: statusInbox.deleteItem,
+					clearAll: statusInbox.clearAll,
 				}}
 				focusMode={frame.focusMode}
 			>

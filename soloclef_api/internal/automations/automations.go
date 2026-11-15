@@ -31,11 +31,18 @@
 //   - A trigger read with another automation's id is not found. The old
 //     lookup fetched the trigger by its own id and compared afterwards.
 //   - Lists have a total order (newest first, then id).
+//   - A chat draft becomes an automation at most once: Create names the
+//     draft, and the draft is marked created in the transaction that saves
+//     the automation (create).
 //   - Cancelling is one statement that names the statuses it may change,
 //     so a run that finishes as the button is pressed keeps its ending.
 package automations
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/google/uuid"
+)
 
 // The paths, as the web app calls them.
 const (
@@ -87,4 +94,17 @@ const (
 	runFinished      = "This run already finished."
 	notActive        = "This automation is paused. Resume it to run it."
 	alreadyRunning   = "This automation already has a run waiting or running, and it is set to skip a run that starts then."
+	draftAbsent      = "Draft not found"
+	draftUsed        = "This draft was already created, discarded or replaced by a newer one."
 )
+
+// draftPending is the one status of a chat draft (automation_drafts) that
+// Create may still turn into an automation.
+const draftPending = "pending"
+
+// isUUID reports whether text is a UUID in the 36-character form a draft's
+// id is handed out in. Parse alone also takes braces and "urn:uuid:".
+func isUUID(text string) bool {
+	_, err := uuid.Parse(text)
+	return err == nil && len(text) == 36
+}

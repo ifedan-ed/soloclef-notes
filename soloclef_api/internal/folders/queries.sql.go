@@ -10,32 +10,6 @@ import (
 	"time"
 )
 
-const clearWatchedFlag = `-- name: ClearWatchedFlag :execrows
-UPDATE folders
-SET metadata = jsonb_set(metadata, '{watched}', 'false'::jsonb),
-    updated_at = $1
-WHERE id = $2 AND user_id = $3
-  AND metadata -> 'watched' = 'true'::jsonb
-`
-
-type ClearWatchedFlagParams struct {
-	UpdatedAt time.Time
-	FolderID  int64
-	UserID    string
-}
-
-// Stop keeping a folder in step with a folder on someone's computer. Only
-// the one key is written, so every other value in the metadata keeps its own
-// text, and only a folder that is watched is touched: asking twice changes
-// nothing the second time, `updated_at` included.
-func (q *Queries) ClearWatchedFlag(ctx context.Context, arg ClearWatchedFlagParams) (int64, error) {
-	result, err := q.db.Exec(ctx, clearWatchedFlag, arg.UpdatedAt, arg.FolderID, arg.UserID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const documentsOwned = `-- name: DocumentsOwned :many
 SELECT id, folder_id, title, connector_id, status, document_type::text AS document_type
 FROM documents

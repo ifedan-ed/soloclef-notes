@@ -8,8 +8,12 @@
 # It is an image of its own, not a second binary in the API's, because
 # bringing a database to a version is a step with one dependency (Postgres)
 # and should not wait for, or be rebuilt with, the service that has thirty.
+# Its one sibling module is soloclef_connectors, for the credential sealing.
 FROM golang:1.24-alpine AS build
 WORKDIR /src/soloclef_schema
+# soloclef_connectors is a relative replace (go.mod): the sealing format the
+# credential migration writes. It has no dependencies of its own.
+COPY soloclef_connectors /src/soloclef_connectors
 COPY soloclef_schema/go.mod soloclef_schema/go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY soloclef_schema ./

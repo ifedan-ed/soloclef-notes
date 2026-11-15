@@ -3,7 +3,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useSetAtom } from "jotai";
 import { XIcon } from "lucide-react";
-import { useParams } from "next/navigation";
 import type { FC } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { openDocumentViewerAtom } from "@/atoms/documents/document-viewer.atom";
@@ -13,7 +12,9 @@ import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
 import { useNotebookSources } from "@/features/notebooks/hooks/use-notebook-queries";
 import { SourceGuideView } from "@/features/notebooks/ui/sources/source-guide";
+import { usePathId } from "@/hooks/use-path-segment";
 import { documentsApiService } from "@/lib/apis/documents-api.service";
+import { DYNAMIC_PREFIXES } from "@/lib/routing/dynamic-segments";
 import { citedOriginalTarget, openOriginalLabel } from "./cited-original-target";
 
 const DEFAULT_CHUNK_WINDOW = 5;
@@ -49,8 +50,7 @@ export const CitationPanelContent: FC<CitationPanelContentProps> = ({ chunkId, o
 	// Inside a notebook, the cited document's source guide (the summary shown
 	// when a source is opened on the left) is one click away. For a very large
 	// PDF it is usually what a reader wants before the whole original.
-	const params = useParams<{ notebook_id?: string }>();
-	const notebookId = Number(params?.notebook_id) || 0;
+	const notebookId = usePathId(DYNAMIC_PREFIXES.notebook) ?? 0;
 	const sources = useNotebookSources(notebookId);
 	const source = useMemo(
 		() => sources.data?.find((s) => s.kind === "document" && s.target_id === data?.id) ?? null,

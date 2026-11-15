@@ -33,15 +33,9 @@ type Changes interface {
 	// SetEnabled switches the owner's connection on or off and returns it,
 	// or nil when it is not the owner's or is not there.
 	SetEnabled(ctx context.Context, ownerID string, connectorID int64, enabled bool) (*Connection, error)
-	// DeleteServer removes the owner's MCP server and reports whether there
-	// was one.
-	DeleteServer(ctx context.Context, ownerID string, connectorID int64) (bool, error)
-	// EditTrustedTools reads the server's trusted-tool list, hands it to
-	// edit, and stores what edit returns when edit says it changed. The read
-	// and the write are one transaction with the row locked between them.
-	// found is false when the server is not the owner's or is not there.
-	EditTrustedTools(ctx context.Context, ownerID string, connectorID int64,
-		edit func(trusted []string) (next []string, changed bool)) (trusted []string, stored, found bool, err error)
+	// DeleteServer removes the owner's MCP server and answers the config it
+	// held, or nil when there was none.
+	DeleteServer(ctx context.Context, ownerID string, connectorID int64) ([]byte, error)
 }
 
 // number is a whole-number parameter: its value, and whether it was a number

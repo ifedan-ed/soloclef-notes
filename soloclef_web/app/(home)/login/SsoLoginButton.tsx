@@ -1,19 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { useRuntimeConfig } from "@/components/providers/runtime-config";
 import { Button } from "@/components/ui/button";
 import { getAndClearRedirectPath } from "@/lib/auth-utils";
 import { buildSsoStartUrl } from "@/lib/sso-login";
 
 /**
- * Sign in through the server's OpenID Connect provider (OIDC_DISCOVERY_URL)
- * instead of typing a password; OIDC_BUTTON_LABEL names the button.
+ * Sign in through the server's OpenID Connect provider instead of typing a
+ * password; `label` is the button's words (lib/sso-settings).
  * A full-page navigation, not a fetch: the backend answers with a redirect
  * to the provider and sets the cookie that ties the callback to this browser.
  */
-export function SsoLoginButton() {
-	const { oidcButtonLabel } = useRuntimeConfig();
+export function SsoLoginButton({ label }: { label: string }) {
 	const [isRedirecting, setIsRedirecting] = useState(false);
 
 	const handleClick = () => {
@@ -30,7 +28,7 @@ export function SsoLoginButton() {
 			disabled={isRedirecting}
 			onClick={handleClick}
 		>
-			{oidcButtonLabel}
+			{label}
 		</Button>
 	);
 }

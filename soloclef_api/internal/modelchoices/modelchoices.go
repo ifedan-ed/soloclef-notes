@@ -3,7 +3,7 @@
 //
 //	GET, PUT /api/v1/users/me/quick-model       small helper calls
 //	GET, PUT /api/v1/users/me/studio-model      long written work
-//	GET, PUT /api/v1/users/me/model-roles       looking at pictures, drawing them
+//	GET, PUT /api/v1/users/me/model-roles       looking at pictures
 //	GET      /api/v1/users/me/llm-setup-status  is there a chat model to use
 //
 // # The rule
@@ -23,9 +23,11 @@
 //     chat choice, else the deployment's CHAT_MODEL). An account that picked
 //     a chat model gets that model's voice in its podcasts and its checks
 //     without picking it three times.
-//   - vision and image: the deployment's CHAT_VISION_MODEL and
-//     CHAT_IMAGE_MODEL. Either may be unset, and then the default is null:
-//     the deployment does that job only for an account that chose a model.
+//   - vision: the deployment's CHAT_VISION_MODEL. It may be unset, and
+//     then the default is null: the deployment does that job only for an
+//     account that chose a model. (There is no image model: figures and
+//     infographics are drawn by code. Migration 00026 removed the choices
+//     accounts had stored for one.)
 //
 // # What replaced the Python tier's shapes
 //
@@ -44,9 +46,8 @@
 //   - quick: internal/instructionslint (the model pass of the check).
 //   - studio: soloclef_worker/internal/llm (a podcast's transcript and a
 //     video's script).
-//   - vision, image: stored and answered here; the chat's picture tools are
-//     built once at start-up around the deployment's two names
-//     (internal/chat/wire.go) and do not read an account's choice yet.
+//   - vision: soloclef_assistant/accountvision (the chat's file tools and
+//     the indexer describe an account's pictures with it).
 package modelchoices
 
 // The paths.
@@ -68,7 +69,6 @@ const (
 	Quick  Purpose = "quick"
 	Studio Purpose = "studio"
 	Vision Purpose = "vision"
-	Image  Purpose = "image"
 )
 
 // maxModelNameChars bounds a name before the proxy's list is asked about

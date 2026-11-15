@@ -10,41 +10,22 @@ import (
 	"time"
 )
 
-const clearView = `-- name: ClearView :one
-WITH gone AS (
-    DELETE FROM notifications n
-    WHERE n.user_id = $1
-      AND (n.type <> 'site_announcement' OR CASE
-            WHEN (n.metadata ->> 'expires_at') ~ '^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}'
-            THEN (n.metadata ->> 'expires_at')::timestamptz > $2::timestamptz
-            ELSE true END)
-      AND (cardinality($3::text[]) = 0 OR n.type = ANY ($3::text[]))
-      AND ($4::text = '' OR n.metadata ->> $4::text = $5::text)
-      AND (NOT $6::boolean OR NOT n.read)
-      AND (NOT $7::boolean OR n.metadata ->> 'status' = 'failed')
-      AND ($8::text = ''
-           OR n.title ILIKE $8::text OR n.message ILIKE $8::text)
-      -- 0 is every row of the view; an id is that one row of it.
-      AND ($9::bigint = 0 OR n.id = $9::bigint)
-      AND COALESCE(n.metadata ->> 'status', '') <> 'in_progress'
-    RETURNING n.type, n.read, n.metadata ->> 'announcement_id' AS announcement
-), counted AS (
-    UPDATE site_announcements a
-    SET cleared_read_count = a.cleared_read_count + r.copies
-    FROM (
-        SELECT announcement::bigint AS id, count(*) AS copies
-        FROM gone
-        WHERE type = 'site_announcement' AND read AND announcement ~ '^\d{1,18}$'
-        GROUP BY 1
-    ) r
-    WHERE a.id = r.id
-)
-SELECT count(*) FROM gone
+const clearView = `-- name: ClearView :execrows
+DELETE FROM notifications n
+WHERE n.user_id = $1
+  AND (cardinality($2::text[]) = 0 OR n.type = ANY ($2::text[]))
+  AND ($3::text = '' OR n.metadata ->> $3::text = $4::text)
+  AND (NOT $5::boolean OR NOT n.read)
+  AND (NOT $6::boolean OR n.metadata ->> 'status' = 'failed')
+  AND ($7::text = ''
+       OR n.title ILIKE $7::text OR n.message ILIKE $7::text)
+  -- 0 is every row of the view; an id is that one row of it.
+  AND ($8::bigint = 0 OR n.id = $8::bigint)
+  AND COALESCE(n.metadata ->> 'status', '') <> 'in_progress'
 `
 
 type ClearViewParams struct {
 	UserID        string
-	Now           time.Time
 	Types         []string
 	SourceKey     string
 	SourceValue   string
@@ -55,14 +36,10 @@ type ClearViewParams struct {
 }
 
 // Deletes a view, but never a running job's row: the job still updates it,
-// and an update of a deleted row would fail the job. A read copy of an
-// announcement that is deleted still counts as read on the announcement
-// ("read by N of M"), so the same statement moves that count; the delete and
-// the count cannot come apart.
+// and an update of a deleted row would fail the job.
 func (q *Queries) ClearView(ctx context.Context, arg ClearViewParams) (int64, error) {
-	row := q.db.QueryRow(ctx, clearView,
+	result, err := q.db.Exec(ctx, clearView,
 		arg.UserID,
-		arg.Now,
 		arg.Types,
 		arg.SourceKey,
 		arg.SourceValue,
@@ -71,31 +48,27 @@ func (q *Queries) ClearView(ctx context.Context, arg ClearViewParams) (int64, er
 		arg.SearchPattern,
 		arg.OnlyID,
 	)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const countView = `-- name: CountView :one
 SELECT count(*)
 FROM notifications n
 WHERE n.user_id = $1
-  AND (n.type <> 'site_announcement' OR CASE
-        WHEN (n.metadata ->> 'expires_at') ~ '^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}'
-        THEN (n.metadata ->> 'expires_at')::timestamptz > $2::timestamptz
-        ELSE true END)
-  AND (cardinality($3::text[]) = 0 OR n.type = ANY ($3::text[]))
-  AND ($4::text = '' OR n.metadata ->> $4::text = $5::text)
-  AND (NOT $6::boolean OR NOT n.read)
-  AND (NOT $7::boolean OR n.metadata ->> 'status' = 'failed')
-  AND ($8::text = ''
-       OR n.title ILIKE $8::text OR n.message ILIKE $8::text)
-  AND ($9::timestamptz IS NULL OR n.created_at < $9::timestamptz)
+  AND (cardinality($2::text[]) = 0 OR n.type = ANY ($2::text[]))
+  AND ($3::text = '' OR n.metadata ->> $3::text = $4::text)
+  AND (NOT $5::boolean OR NOT n.read)
+  AND (NOT $6::boolean OR n.metadata ->> 'status' = 'failed')
+  AND ($7::text = ''
+       OR n.title ILIKE $7::text OR n.message ILIKE $7::text)
+  AND ($8::timestamptz IS NULL OR n.created_at < $8::timestamptz)
 `
 
 type CountViewParams struct {
 	UserID        string
-	Now           time.Time
 	Types         []string
 	SourceKey     string
 	SourceValue   string
@@ -110,7 +83,6 @@ type CountViewParams struct {
 func (q *Queries) CountView(ctx context.Context, arg CountViewParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countView,
 		arg.UserID,
-		arg.Now,
 		arg.Types,
 		arg.SourceKey,
 		arg.SourceValue,
@@ -148,24 +120,19 @@ SELECT n.id, n.user_id, n.type, n.title, n.message, n.read, n.metadata, n.create
        count(*) OVER () AS total
 FROM notifications n
 WHERE n.user_id = $1
-  AND (n.type <> 'site_announcement' OR CASE
-        WHEN (n.metadata ->> 'expires_at') ~ '^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}'
-        THEN (n.metadata ->> 'expires_at')::timestamptz > $2::timestamptz
-        ELSE true END)
-  AND (cardinality($3::text[]) = 0 OR n.type = ANY ($3::text[]))
-  AND ($4::text = '' OR n.metadata ->> $4::text = $5::text)
-  AND (NOT $6::boolean OR NOT n.read)
-  AND (NOT $7::boolean OR n.metadata ->> 'status' = 'failed')
-  AND ($8::text = ''
-       OR n.title ILIKE $8::text OR n.message ILIKE $8::text)
-  AND ($9::timestamptz IS NULL OR n.created_at < $9::timestamptz)
+  AND (cardinality($2::text[]) = 0 OR n.type = ANY ($2::text[]))
+  AND ($3::text = '' OR n.metadata ->> $3::text = $4::text)
+  AND (NOT $5::boolean OR NOT n.read)
+  AND (NOT $6::boolean OR n.metadata ->> 'status' = 'failed')
+  AND ($7::text = ''
+       OR n.title ILIKE $7::text OR n.message ILIKE $7::text)
+  AND ($8::timestamptz IS NULL OR n.created_at < $8::timestamptz)
 ORDER BY n.created_at DESC, n.id DESC
-LIMIT $11 OFFSET $10
+LIMIT $10 OFFSET $9
 `
 
 type ListViewParams struct {
 	UserID        string
-	Now           time.Time
 	Types         []string
 	SourceKey     string
 	SourceValue   string
@@ -196,18 +163,12 @@ type ListViewRow struct {
 // The list, the count and the clear each spell the same predicate, so that
 // "Clear all" on a tab deletes exactly the rows that tab lists. A filter left
 // out is its zero value: ” for a text, an empty array for the types.
-//
-// An announcement past its expiry is in no view. The expiry is text inside
-// the metadata, so it is cast only when it reads as a timestamp: one row
-// with a malformed value must not fail the whole inbox, and CASE is the one
-// construct that promises the cast is not evaluated for it.
 // One page of a view, newest first, with the size of the whole view beside
 // each row so the page and its total are one statement. `before` pages
 // backwards from the oldest row a client holds.
 func (q *Queries) ListView(ctx context.Context, arg ListViewParams) ([]ListViewRow, error) {
 	rows, err := q.db.Query(ctx, listView,
 		arg.UserID,
-		arg.Now,
 		arg.Types,
 		arg.SourceKey,
 		arg.SourceValue,
@@ -340,17 +301,11 @@ const unreadCounts = `-- name: UnreadCounts :one
 SELECT
     count(*) FILTER (WHERE n.type = ANY ($1::text[])) AS status_total,
     count(*) FILTER (WHERE n.type = ANY ($1::text[]) AND n.created_at > $2::timestamptz) AS status_recent,
-    count(*) FILTER (WHERE n.type = 'site_announcement') AS announcements_total,
-    count(*) FILTER (WHERE n.type = 'site_announcement' AND n.created_at > $2::timestamptz) AS announcements_recent,
     count(*) AS all_total,
     count(*) FILTER (WHERE n.created_at > $2::timestamptz) AS all_recent
 FROM notifications n
 WHERE n.user_id = $3 AND NOT n.read
   AND ($4::text = '' OR n.type = $4::text)
-  AND (n.type <> 'site_announcement' OR CASE
-        WHEN (n.metadata ->> 'expires_at') ~ '^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}'
-        THEN (n.metadata ->> 'expires_at')::timestamptz > $5::timestamptz
-        ELSE true END)
 `
 
 type UnreadCountsParams struct {
@@ -358,35 +313,30 @@ type UnreadCountsParams struct {
 	RecentAfter time.Time
 	UserID      string
 	OnlyType    string
-	Now         time.Time
 }
 
 type UnreadCountsRow struct {
-	StatusTotal         int64
-	StatusRecent        int64
-	AnnouncementsTotal  int64
-	AnnouncementsRecent int64
-	AllTotal            int64
-	AllRecent           int64
+	StatusTotal  int64
+	StatusRecent int64
+	AllTotal     int64
+	AllRecent    int64
 }
 
 // Every unread count the inbox shows, in one pass over the caller's unread
-// rows: each tab's total, and how many of those are newer than the live
-// sync's window. `only_type` narrows all of them to one type (” is any).
+// rows: the tab's total and the whole inbox's, and how many of those are
+// newer than the live sync's window. `only_type` narrows all of them to
+// one type (” is any).
 func (q *Queries) UnreadCounts(ctx context.Context, arg UnreadCountsParams) (UnreadCountsRow, error) {
 	row := q.db.QueryRow(ctx, unreadCounts,
 		arg.StatusTypes,
 		arg.RecentAfter,
 		arg.UserID,
 		arg.OnlyType,
-		arg.Now,
 	)
 	var i UnreadCountsRow
 	err := row.Scan(
 		&i.StatusTotal,
 		&i.StatusRecent,
-		&i.AnnouncementsTotal,
-		&i.AnnouncementsRecent,
 		&i.AllTotal,
 		&i.AllRecent,
 	)

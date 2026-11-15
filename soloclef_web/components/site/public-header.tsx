@@ -5,7 +5,7 @@ import { BRAND } from "@/lib/brand";
 
 /**
  * The bar above pages a signed-out visitor can open inside the app, such as a
- * shared chat. Fixed and 4rem tall: the page below pads its top by that much.
+ * shared Studio output. Fixed and 4rem tall: the page below pads its top by that much.
  */
 export function PublicHeader() {
 	return (

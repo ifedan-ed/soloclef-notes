@@ -120,18 +120,18 @@ func ask(t *testing.T, f *fake, userID string, method principal.Method, verb, pa
 
 func pointer[T any](value T) *T { return &value }
 
-// shared is two links of the caller's: a chat that never expires, and a
-// studio output whose link lapsed long ago. Every title is invented.
+// shared is two links of the caller's to studio outputs: one whose link
+// lapsed long ago, and one that never expires and has no frozen title.
+// Every title is invented.
 func shared() []Link {
 	return []Link{
 		{ID: 302, ShareToken: "tok-302", OwnerID: callerID,
-			CreatedAt:        time.Date(2026, 3, 1, 0, 0, 5, 250_000_000, time.UTC),
-			ExpiresAt:        pointer(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)),
-			NotebookOutputID: pointer(int64(40)), NotebookID: pointer(int64(7)),
-			StoredTitle: "An output — “quoted” <&>"},
+			CreatedAt:  time.Date(2026, 3, 1, 0, 0, 5, 250_000_000, time.UTC),
+			ExpiresAt:  pointer(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)),
+			NotebookID: 7, StoredTitle: "An output — “quoted” <&>", OutputTitle: "Renamed since"},
 		{ID: 300, ShareToken: "tok-300", OwnerID: callerID,
-			CreatedAt: time.Date(2026, 3, 1, 0, 0, 4, 0, time.UTC),
-			ThreadID:  pointer(int64(12)), ThreadTitle: pointer("The chat as it is titled now"), Messages: 3},
+			CreatedAt:  time.Date(2026, 3, 1, 0, 0, 4, 0, time.UTC),
+			NotebookID: 8, OutputTitle: "The deck as it is titled now"},
 	}
 }
 
@@ -144,25 +144,23 @@ func TestTheListIsEveryLinkInTheShapeThePanelReads(t *testing.T) {
 		`"notebook_id":7,"created_by_user_id":"` + callerID + `"},` +
 		`{"id":300,"share_token":"tok-300","public_url":"https://notes.example.invalid/public/tok-300",` +
 		`"created_at":"2026-03-01T00:00:04Z","expires_at":null,"is_expired":false,` +
-		`"kind":"chat","message_count":3,"thread_id":12,"thread_title":"The chat as it is titled now",` +
-		`"notebook_id":null,"created_by_user_id":"` + callerID + `"}]}`
+		`"kind":"output","message_count":0,"thread_id":null,"thread_title":"The deck as it is titled now",` +
+		`"notebook_id":8,"created_by_user_id":"` + callerID + `"}]}`
 	if got.status != http.StatusOK || string(got.raw) != want {
 		t.Errorf("status %d\n got  %s\n want %s", got.status, got.raw, want)
 	}
 }
 
-// The title frozen into the copy, then the chat's own, then "Untitled"; an
-// empty title is no title.
+// The title frozen into the copy, then the output's own, then "Untitled";
+// an empty title is no title.
 func TestWhatALinkIsListedAs(t *testing.T) {
 	for name, c := range map[string]struct {
 		link Link
 		want string
 	}{
-		"the frozen title wins":             {Link{StoredTitle: "Frozen", ThreadTitle: pointer("Now")}, "Frozen"},
-		"no frozen title: the chat's":       {Link{ThreadTitle: pointer("Now")}, "Now"},
-		"an empty chat title is no title":   {Link{ThreadTitle: pointer("")}, "Untitled"},
-		"a link whose chat is gone":         {Link{}, "Untitled"},
-		"an output with a title of its own": {Link{StoredTitle: "A deck", NotebookOutputID: pointer(int64(1))}, "A deck"},
+		"the frozen title wins":         {Link{StoredTitle: "Frozen", OutputTitle: "Now"}, "Frozen"},
+		"no frozen title: the output's": {Link{OutputTitle: "Now"}, "Now"},
+		"no title anywhere is Untitled": {Link{}, "Untitled"},
 	} {
 		if got := c.link.Title(); got != c.want {
 			t.Errorf("%s: listed as %q, want %q", name, got, c.want)

@@ -265,15 +265,17 @@ func (s Store) SaveNote(ctx context.Context, note Note) (int64, error) {
 }
 
 // errAttended is the answer to a question an unattended turn never asks.
-var errAttended = errors.New("automationrun: an unattended run consults no standing trust and stores none")
+var errAttended = errors.New("automationrun: an unattended run consults no person's ask-first marks and changes none")
 
-// Trusted and Trust complete assembly.PromptRows. The assembly does not
-// call either for an unattended turn (assembly.Unattended is the one rule
-// consulted), so reaching one is a bug, and it is an error rather than an
-// answer: neither "yes" nor "no" would be true.
-func (s Store) Trusted(context.Context, string, string) (bool, error) { return false, errAttended }
+// AsksFirst and StopAsking complete assembly.PromptRows. The assembly does
+// not call either for an unattended turn (assembly.Unattended is the one
+// rule consulted), so reaching one is a bug, and it is an error rather than
+// an answer: neither "yes" nor "no" would be true.
+func (s Store) AsksFirst(context.Context, string, assembly.MarkedTool) (bool, error) {
+	return false, errAttended
+}
 
-func (s Store) Trust(context.Context, string, string) error { return errAttended }
+func (s Store) StopAsking(context.Context, string, assembly.MarkedTool) error { return errAttended }
 
 // ChatModel is assembly.ModelChoice: the account's chosen chat model, or ""
 // when it has chosen none and the deployment's default answers.

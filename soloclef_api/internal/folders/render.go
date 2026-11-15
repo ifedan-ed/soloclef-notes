@@ -12,7 +12,7 @@ import (
 // in this order.
 //
 // A folder's answer names no owner. The caller is the owner of every folder
-// they can be sent, so the field would say nothing, and leaving it out
+// they can be sent, so the field would say nothing, and leaving it null
 // means no answer here ever carries an account id.
 func Build(folder Folder) (*pythonjson.Object, error) {
 	metadata, err := readMetadata(folder.Metadata)
@@ -25,6 +25,10 @@ func Build(folder Folder) (*pythonjson.Object, error) {
 	rendered.Set("name", folder.Name)
 	rendered.Set("position", folder.Position)
 	rendered.Set("parent_id", numberOrNil(folder.ParentID))
+	// The phone bundles of 2026-11-14 require the key (nullable) and refuse
+	// a folder list without it; null keeps the rule above: no account id.
+	// installed-builds: folders-created-by-id
+	rendered.Set("created_by_id", nil)
 	rendered.Set("created_at", pythonjson.PydanticDateTime(folder.CreatedAt))
 	rendered.Set("updated_at", pythonjson.PydanticDateTime(folder.UpdatedAt))
 	rendered.Set("metadata", metadata)

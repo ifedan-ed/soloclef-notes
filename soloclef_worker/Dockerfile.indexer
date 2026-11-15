@@ -38,6 +38,8 @@ COPY soloclef_chunker/recursive soloclef_chunker/recursive
 COPY soloclef_chunker/tablesafe soloclef_chunker/tablesafe
 COPY soloclef_filestore soloclef_filestore
 COPY soloclef_ingest soloclef_ingest
+# The notification step: a source that fails to index tells its owner.
+COPY soloclef_notify soloclef_notify
 # A document's vision choice is read in the API's own spelling of a model
 # choice (soloclef_assistant/ownmodels), so the indexer builds against that
 # module, and against the modules it imports in turn. The worker's go.mod

@@ -1,0 +1,52 @@
+{
+  "status": 200,
+  "body": {
+    "methodResponses": [
+      [
+        "Email/set",
+        {
+          "accountId": "c",
+          "oldState": "sbe",
+          "newState": "sbi",
+          "created": {
+            "draft": {
+              "id": "maaaaaf",
+              "threadId": "d",
+              "blobId": "caxlu3cthir71wntmalafq07dooedarkvqikkgpihns1zswyfumm7aqaau",
+              "size": 455
+            }
+          }
+        },
+        "e"
+      ],
+      [
+        "EmailSubmission/set",
+        {
+          "accountId": "c",
+          "newState": "sau",
+          "created": {
+            "send": {
+              "id": "f",
+              "sendAt": "2026-11-13T00:53:04Z",
+              "undoStatus": "pending"
+            }
+          }
+        },
+        "s"
+      ],
+      [
+        "Email/set",
+        {
+          "accountId": "c",
+          "oldState": "sbi",
+          "newState": "sbm",
+          "updated": {
+            "maaaaaf": null
+          }
+        },
+        "s"
+      ]
+    ],
+    "sessionState": "3f4a7bc7"
+  }
+}

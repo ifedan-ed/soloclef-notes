@@ -23,6 +23,7 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/deliverables"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/documents"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/websearch"
+	"git.danvics.com/danvics/soloclef/soloclef_connectors/sealedsecret"
 	"git.danvics.com/danvics/soloclef/soloclef_filestore"
 )
 
@@ -264,9 +265,6 @@ INSERT INTO new_chat_messages (id, role, content, thread_id, turn_id, created_at
   (203, 'USER', '[{"type":"text","text":"second"}]', 2, '2:2', '2026-01-01 10:01:00+00'),
   (204, 'ASSISTANT', '[{"type":"text","text":"two"}]', 2, '2:2', '2026-01-01 10:01:00+00'),
   (205, 'ASSISTANT', '[{"type":"text","text":"two, resumed"}]', 2, '2:3', '2026-01-01 10:02:00+00');
-INSERT INTO public_chat_snapshots (id, thread_id, user_id, share_token, content_hash, snapshot_data, message_ids) VALUES
-  (1, 2, 'aaaaaaaa-0000-4000-8000-000000000001', 'tok-a', 'h', '{}', '{201,202}'),
-  (2, 2, 'aaaaaaaa-0000-4000-8000-000000000001', 'tok-b', 'h2', '{}', '{203,204}');
 INSERT INTO token_usage (prompt_tokens, completion_tokens, total_tokens, cost_micros, usage_type, thread_id, message_id, user_id)
   VALUES (5, 5, 10, 0, 'chat', 2, 204, 'aaaaaaaa-0000-4000-8000-000000000001');`); err != nil {
 			t.Fatal(err)
@@ -304,13 +302,11 @@ INSERT INTO token_usage (prompt_tokens, completion_tokens, total_tokens, cost_mi
 		if len(ids) != 4 || ids[0] != 201 || ids[1] != 202 || ids[2] != opened.UserMessageID || ids[3] != opened.AssistantMessageID {
 			t.Errorf("the thread's messages = %v", ids)
 		}
-		// The snapshot that showed a replaced answer is gone; the other
-		// stays. What the replaced answer cost is still counted.
-		var snapshots, usage int
-		_ = pool.QueryRow(ctx, `SELECT count(*) FROM public_chat_snapshots WHERE thread_id = 2`).Scan(&snapshots)
+		// What the replaced answer cost is still counted.
+		var usage int
 		_ = pool.QueryRow(ctx, `SELECT count(*) FROM token_usage WHERE thread_id = 2 AND message_id IS NULL AND total_tokens = 10`).Scan(&usage)
-		if snapshots != 1 || usage != 1 {
-			t.Errorf("snapshots left = %d (want 1), usage rows kept = %d (want 1)", snapshots, usage)
+		if usage != 1 {
+			t.Errorf("usage rows kept = %d (want 1)", usage)
 		}
 		if _, err := pool.Exec(ctx, `DELETE FROM new_chat_messages WHERE thread_id = 2`); err != nil {
 			t.Fatal(err)
@@ -398,44 +394,51 @@ INSERT INTO token_usage (prompt_tokens, completion_tokens, total_tokens, cost_mi
 		}
 	})
 
-	t.Run("always allow is a row per account, written once", func(t *testing.T) {
-		if trusted, err := store.Trusted(ctx, ada, "write_note"); trusted || err != nil {
-			t.Fatalf("trusted before anything: %v, %v", trusted, err)
+	t.Run("an ask-first mark is the account's, by tool and by app", func(t *testing.T) {
+		chatTool, appTool := MarkedTool{Name: "write_note"}, MarkedTool{Connector: 70, Name: "write_note"}
+		if asks, err := store.AsksFirst(ctx, ada, chatTool); asks || err != nil {
+			t.Fatalf("asks before any mark: %v, %v", asks, err)
 		}
-		for i := 0; i < 2; i++ {
-			if err := store.Trust(ctx, ada, "write_note"); err != nil {
+		for _, statement := range []string{
+			`INSERT INTO search_source_connectors (id, user_id, name, connector_type, config) VALUES (70, $1, 'Notes', 'MCP_CONNECTOR', '{}')`,
+			`INSERT INTO agent_ask_first_tools (user_id, connector_id, tool) VALUES ($1, NULL, 'write_note'), ($1, 70, 'create_page')`,
+		} {
+			if _, err := pool.Exec(ctx, statement, ada); err != nil {
 				t.Fatal(err)
 			}
 		}
-		var count int
-		_ = pool.QueryRow(ctx, `SELECT count(*) FROM agent_permission_rules WHERE permission = 'write_note'`).Scan(&count)
-		if count != 1 {
-			t.Errorf("%d rules after trusting twice", count)
-		}
-		if trusted, _ := store.Trusted(ctx, ada, "write_note"); !trusted {
-			t.Error("not trusted after trusting")
+		if asks, _ := store.AsksFirst(ctx, ada, chatTool); !asks {
+			t.Error("a marked tool does not ask")
 		}
 		for name, check := range map[string]func() (bool, error){
-			"another account": func() (bool, error) { return store.Trusted(ctx, ben, "write_note") },
-			"a third account": func() (bool, error) { return store.Trusted(ctx, dee, "write_note") },
-			"another tool":    func() (bool, error) { return store.Trusted(ctx, ada, "delete_note") },
+			"another account":            func() (bool, error) { return store.AsksFirst(ctx, ben, chatTool) },
+			"a third account":            func() (bool, error) { return store.AsksFirst(ctx, dee, chatTool) },
+			"another tool":               func() (bool, error) { return store.AsksFirst(ctx, ada, MarkedTool{Name: "delete_note"}) },
+			"an app's tool of that name": func() (bool, error) { return store.AsksFirst(ctx, ada, appTool) },
 		} {
-			if trusted, err := check(); trusted || err != nil {
-				t.Errorf("%s is trusted: %v, %v", name, trusted, err)
+			if asks, err := check(); asks || err != nil {
+				t.Errorf("%s asks: %v, %v", name, asks, err)
 			}
 		}
-		// A rule that says "ask" or covers one thread is not "always allow".
-		_, _ = pool.Exec(ctx, `INSERT INTO agent_permission_rules (user_id, thread_id, permission, pattern, action) VALUES
-			($1, NULL, 'send_mail', '*', 'ask'), ($1, 1, 'move_file', '*', 'allow')`, ada)
-		for _, name := range []string{"send_mail", "move_file"} {
-			if trusted, _ := store.Trusted(ctx, ada, name); trusted {
-				t.Errorf("%s is trusted by a rule that does not say so", name)
+		if asks, _ := store.AsksFirst(ctx, ada, MarkedTool{Connector: 70, Name: "create_page"}); !asks {
+			t.Error("a marked app tool does not ask")
+		}
+		// "Always allow" takes the one mark off, twice as harmlessly as once.
+		for range 2 {
+			if err := store.StopAsking(ctx, ada, chatTool); err != nil {
+				t.Fatal(err)
 			}
 		}
-		// Removed in settings: gone from the next question.
-		_, _ = pool.Exec(ctx, `DELETE FROM agent_permission_rules WHERE permission = 'write_note'`)
-		if trusted, _ := store.Trusted(ctx, ada, "write_note"); trusted {
-			t.Error("still trusted after the rule was removed")
+		if asks, _ := store.AsksFirst(ctx, ada, chatTool); asks {
+			t.Error("still asks after the mark was taken off")
+		}
+		if asks, _ := store.AsksFirst(ctx, ada, MarkedTool{Connector: 70, Name: "create_page"}); !asks {
+			t.Error("taking one mark off took the app's too")
+		}
+		// The app removed: its marks go with it.
+		_, _ = pool.Exec(ctx, `DELETE FROM search_source_connectors WHERE id = 70`)
+		if n := countRows(t, pool, "agent_ask_first_tools"); n != 0 {
+			t.Errorf("%d marks left after the app was removed", n)
 		}
 	})
 
@@ -490,8 +493,19 @@ INSERT INTO token_usage (prompt_tokens, completion_tokens, total_tokens, cost_mi
 		}
 	})
 
-	t.Run("a search provider's key is the account's own", func(t *testing.T) {
-		keys := websearch.StoredKeys{Pool: pool}
+	t.Run("a search provider's key is the account's own connection, sealed for it", func(t *testing.T) {
+		seal, err := sealedsecret.New("fake-secret-key", sealedsecret.WebSearchKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for owner, key := range map[string]string{ada: "exa-ada", dee: "exa-dee"} {
+			sealed, _ := seal.Seal(owner, key)
+			if _, err := pool.Exec(ctx, `INSERT INTO web_search_connections (user_id, provider, api_key, key_mask)
+				VALUES ($1, 'exa', $2, '••••') ON CONFLICT (user_id, provider) DO UPDATE SET api_key = EXCLUDED.api_key`, owner, sealed); err != nil {
+				t.Fatal(err)
+			}
+		}
+		keys := websearch.StoredKeys{Pool: pool, Seal: seal}
 		if key, found, err := keys.Key(ctx, ada, websearch.Exa); err != nil || !found || key != "exa-ada" {
 			t.Errorf("Ada's Exa key = %q, %v, %v", key, found, err)
 		}
@@ -501,9 +515,10 @@ INSERT INTO token_usage (prompt_tokens, completion_tokens, total_tokens, cost_mi
 		if key, _, _ := keys.Key(ctx, dee, websearch.Exa); key != "exa-dee" {
 			t.Errorf("Dee's Exa key = %q", key)
 		}
-		// A connector switched off keeps its key and is left alone.
+		// An Exa MCP server is not a web search connection: Ben's is
+		// never read as a key.
 		if key, found, err := keys.Key(ctx, ben, websearch.Exa); found || key != "" || err != nil {
-			t.Errorf("Ben's switched-off Exa key was used: %q, %v, %v", key, found, err)
+			t.Errorf("Ben's MCP server was read as a key: %q, %v, %v", key, found, err)
 		}
 	})
 
@@ -610,7 +625,11 @@ INSERT INTO token_usage (prompt_tokens, completion_tokens, total_tokens, cost_mi
 			s.Rows, s.Store, sc.store = store, checkpoints, checkpoints
 			sc.rows = nil
 		}
-		first := newApp(t, script, []tool.Tool{write}, wire, trustFrom(store))
+		// Marked "ask first", so the turn pauses for it.
+		if _, err := pool.Exec(ctx, `INSERT INTO agent_ask_first_tools (user_id, tool) VALUES ($1, 'write_note')`, ada); err != nil {
+			t.Fatal(err)
+		}
+		first := newApp(t, script, []tool.Tool{write}, wire, marksFrom(store))
 		frames, _ := first.ask(ada, `{"chat_id":2,"user_query":"Note this"}`)
 		page := readAll(t, frames)
 		if page.failure != nil || len(page.interrupts) != 1 {
@@ -622,7 +641,7 @@ INSERT INTO token_usage (prompt_tokens, completion_tokens, total_tokens, cost_mi
 			now := s.Now
 			s.Now = func() time.Time { return now().Add(time.Hour) }
 		}
-		second := newApp(t, script, []tool.Tool{write}, wire, trustFrom(store), later)
+		second := newApp(t, script, []tool.Tool{write}, wire, marksFrom(store), later)
 		// Another account sees no thread, whichever process it asks, and
 		// cannot answer the waiting approval.
 		if got := second.call(dee, "GET", "/api/v1/threads/2/pending-interrupts", ""); got.status != 404 {
@@ -665,9 +684,9 @@ INSERT INTO token_usage (prompt_tokens, completion_tokens, total_tokens, cost_mi
 	})
 }
 
-// trustFrom makes the scripted assembly read trust from the real table.
-func trustFrom(store Store) appOption {
-	return func(_ *Service, sc *scripted) { sc.trusted = store.Trusted }
+// marksFrom makes the scripted assembly read the marks from the real table.
+func marksFrom(store Store) appOption {
+	return func(_ *Service, sc *scripted) { sc.marks = store }
 }
 
 func countRows(t *testing.T, pool *pgxpool.Pool, table string) int {

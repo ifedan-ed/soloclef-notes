@@ -13,7 +13,7 @@ import (
 )
 
 // Rejection is a reply that was read and is not acceptable: what was wrong
-// with it, written for the model, which is shown it once and asked again.
+// with it, written for the model, which is shown it and asked again.
 type Rejection struct{ Problems string }
 
 func (r *Rejection) Error() string { return r.Problems }
@@ -23,8 +23,8 @@ func Reject(format string, arguments ...any) *Rejection {
 	return &Rejection{Problems: fmt.Sprintf(format, arguments...)}
 }
 
-// ErrUnusable is a reply that was still not acceptable after it had been
-// asked for again.
+// ErrUnusable is a reply that was still not acceptable after the rounds of
+// correction its caller allowed.
 var ErrUnusable = errors.New("llm: the model's reply could not be used")
 
 // correction is what the model is told after a reply was refused. The
@@ -36,36 +36,48 @@ Reply again with the corrected JSON object only: no prose, no code fence, no com
 
 // AskJSON asks for a JSON object and hands it to read, which decodes and
 // checks it. A reply read refuses (with a *Rejection, or any error from
-// decoding) is asked for once more, with the model's own reply and the
-// problems shown to it. One retry and not a loop: a model that cannot
-// satisfy the shape when shown exactly what it broke is not helped by a
-// third ask.
+// decoding) is asked for again, with the model's own reply and the
+// problems shown to it, up to fixes times. fixes is the caller's choice,
+// said where it calls: how many rounds a reply of that kind deserves
+// depends on how long it is and how many independent parts it has (one
+// for a short plan, more for a whole deck). Every round keeps the whole
+// exchange so far, so the feedback is cumulative: the model sees each
+// reply it wrote and each list of problems, and does not undo an earlier
+// fix while making the next.
 //
 // A provider failure or a timeout is returned as it is: those are the
 // platform failing, not the model answering badly, and asking again with a
 // correction would only spend more.
-func AskJSON[T any](ctx context.Context, m model.Model, timeout time.Duration, messages []model.Message, read func(raw []byte) (T, error)) (T, error) {
+func AskJSON[T any](ctx context.Context, m model.Model, timeout time.Duration, fixes int, messages []model.Message, read func(raw []byte) (T, error)) (T, error) {
 	var zero T
-	reply, err := ask(ctx, m, timeout, messages)
-	if err != nil {
-		return zero, err
+	conversation := append([]model.Message{}, messages...)
+	for round := 0; ; round++ {
+		reply, err := ask(ctx, m, timeout, conversation)
+		if err != nil {
+			return zero, err
+		}
+		value, problem := parse(reply, read)
+		if problem == nil {
+			return value, nil
+		}
+		if round == fixes {
+			return zero, fmt.Errorf("%w after %s: %v (the reply began %q)", ErrUnusable, rounds(fixes), problem, clip(reply, 300))
+		}
+		conversation = append(conversation,
+			model.Message{Role: model.RoleAssistant, Content: reply},
+			model.Message{Role: model.RoleUser, Content: fmt.Sprintf(correction, problem.Error())})
 	}
-	value, problem := parse(reply, read)
-	if problem == nil {
-		return value, nil
+}
+
+// rounds says how many corrections were asked for.
+func rounds(fixes int) string {
+	switch fixes {
+	case 0:
+		return "no correction"
+	case 1:
+		return "one correction"
 	}
-	retry := append(append([]model.Message{}, messages...),
-		model.Message{Role: model.RoleAssistant, Content: reply},
-		model.Message{Role: model.RoleUser, Content: fmt.Sprintf(correction, problem.Error())})
-	reply, err = ask(ctx, m, timeout, retry)
-	if err != nil {
-		return zero, err
-	}
-	value, problem = parse(reply, read)
-	if problem != nil {
-		return zero, fmt.Errorf("%w after one retry: %v (the reply began %q)", ErrUnusable, problem, clip(reply, 300))
-	}
-	return value, nil
+	return fmt.Sprintf("%d corrections", fixes)
 }
 
 // Ask is one call for plain text.

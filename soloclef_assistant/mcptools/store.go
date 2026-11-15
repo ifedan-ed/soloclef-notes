@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"git.danvics.com/danvics/soloclef/soloclef_connectors/mcpserver"
 )
 
 // Connection is one MCP connection's row, as read.
@@ -33,16 +34,14 @@ type Rows interface {
 	// off. Another account's connection is nil too: the account is part
 	// of every statement, so an id from elsewhere names nothing.
 	Connection(ctx context.Context, userID string, connectorID int64) (*Connection, error)
-	// AddTrusted adds a tool's name to the connection's trusted list,
-	// provided the connection is still the account's. found is false, and
-	// nothing is written, when it is not.
-	AddTrusted(ctx context.Context, userID string, connectorID int64, toolName string) (found bool, err error)
 	// StoreDefinitions saves a server's tool list on its row, where every
 	// process (and the Python tier) reads it instead of asking the server.
 	StoreDefinitions(ctx context.Context, userID string, connectorID int64, cached []byte) error
 	// MarkAuthExpired flags a connection whose server refused its key.
 	// changed is true the first time only.
 	MarkAuthExpired(ctx context.Context, userID string, connectorID int64) (changed bool, err error)
+	// StoreTokens is TokenRows': an OAuth server's renewed tokens.
+	StoreTokens(ctx context.Context, userID string, connectorID int64, previous, sealed string, expiresAt int64) (stored bool, err error)
 }
 
 // Postgres is Rows over the tier's database.
@@ -73,49 +72,16 @@ func (p Postgres) Connection(ctx context.Context, userID string, connectorID int
 	return &Connection{ID: connectorID, Name: row.Name, Config: row.Config, SiteHosts: row.SiteHosts}, nil
 }
 
-func (p Postgres) AddTrusted(ctx context.Context, userID string, connectorID int64, toolName string) (bool, error) {
-	tx, err := p.Pool.Begin(ctx)
-	if err != nil {
-		return false, err
-	}
-	// After a commit this does nothing; before one it undoes the lock.
-	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
-	queries := New(tx)
-
-	// The row is locked while its list is read and written back, so two
-	// approvals arriving together both end up in the list.
-	config, err := queries.LockConfig(ctx, LockConfigParams{ID: connectorID, UserID: userID})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	trusted := readTrusted(config)
-	for _, name := range trusted {
-		if name == toolName {
-			return true, nil
-		}
-	}
-	list, err := json.Marshal(append(trusted, toolName))
-	if err != nil {
-		return false, err
-	}
-	changed, err := queries.SetConfigKey(ctx, SetConfigKeyParams{Key: keyTrusted, Value: list, ID: connectorID, UserID: userID})
-	if err != nil {
-		return false, err
-	}
-	if changed == 0 {
-		// The row is there and locked, so the only thing that stops the
-		// write is a config that is not a JSON object.
-		return false, fmt.Errorf("mcptools: connection %d has a config that is not an object", connectorID)
-	}
-	return true, tx.Commit(ctx)
-}
-
 func (p Postgres) StoreDefinitions(ctx context.Context, userID string, connectorID int64, cached []byte) error {
 	_, err := New(p.Pool).SetConfigKey(ctx, SetConfigKeyParams{Key: keyCached, Value: cached, ID: connectorID, UserID: userID})
 	return err
+}
+
+func (p Postgres) StoreTokens(ctx context.Context, userID string, connectorID int64, previous, sealed string, expiresAt int64) (bool, error) {
+	changed, err := New(p.Pool).StoreTokens(ctx, StoreTokensParams{
+		Sealed: sealed, ExpiresAt: expiresAt, ID: connectorID, UserID: userID, Previous: previous,
+	})
+	return changed > 0, err
 }
 
 func (p Postgres) MarkAuthExpired(ctx context.Context, userID string, connectorID int64) (bool, error) {
@@ -124,26 +90,21 @@ func (p Postgres) MarkAuthExpired(ctx context.Context, userID string, connectorI
 }
 
 // The keys of a connection's config this package reads or writes. They are
-// the Python tier's, because both tiers read the same rows: the settings
-// pages list, trust and untrust through that tier.
+// the Python tier's, because both tiers read the same rows.
 const (
-	keyServer  = "server_config"
-	keyOrigin  = "server_origin"
-	keyTrusted = "trusted_tools"
-	keyCached  = "cached_tools"
+	keyServer = "server_config"
+	keyOrigin = "server_origin"
+	keyCached = "cached_tools"
 )
 
-// transports are the values of server_config.transport that mean "a remote
-// server". A row without the key, or with "stdio", was a command run inside
-// the backend's container; those are never started.
-var transports = map[string]bool{"streamable-http": true, "http": true, "sse": true}
-
 // target is where a connection goes and what it carries: everything about a
-// server that is read from its row at the moment of use and kept nowhere.
+// server that is read from its row at the moment of use, opened there, and
+// kept nowhere.
 type target struct {
-	origin  string
-	address string
-	headers map[string]string
+	origin    string
+	address   string
+	transport string
+	headers   map[string]string
 }
 
 // keys splits a config into its top-level keys without decoding the values.
@@ -156,58 +117,50 @@ func keys(config []byte) map[string]json.RawMessage {
 	return top
 }
 
-// readTarget reads a connection's address and headers from its config. The
-// error says why the server cannot be connected to; it never contains the
-// address or a header's value.
-func readTarget(config []byte) (target, error) {
+// readServer reads a connection's stored server settings and who added it,
+// opening nothing. The error says why the server cannot be connected to;
+// it never contains the address or a secret.
+func readServer(config []byte) (mcpserver.Stored, string, error) {
 	top := keys(config)
-	var server struct {
-		Transport *string         `json:"transport"`
-		URL       json.RawMessage `json:"url"`
-		Headers   json.RawMessage `json:"headers"`
+	raw, found := top[keyServer]
+	if !found {
+		return mcpserver.Stored{}, "", errors.New("the connection has no server_config")
 	}
-	if raw, found := top[keyServer]; !found || json.Unmarshal(raw, &server) != nil {
-		return target{}, errors.New("the connection has no readable server_config")
-	}
-	if server.Transport == nil || !transports[*server.Transport] {
-		return target{}, errors.New("the connection is not a remote server (only streamable-http, http and sse are connected to)")
-	}
-	out := target{origin: originSite}
-	if json.Unmarshal(server.URL, &out.address) != nil || strings.TrimSpace(out.address) == "" {
-		return target{}, errors.New("the connection has no address")
-	}
-	if len(server.Headers) > 0 && string(server.Headers) != "null" {
-		// Every value must be text. A number or an object where a key
-		// should be is a broken row, and guessing its spelling would send
-		// the server something nobody typed.
-		if json.Unmarshal(server.Headers, &out.headers) != nil {
-			return target{}, errors.New("the connection's headers are not a map of text to text")
-		}
+	stored, err := mcpserver.Parse(raw)
+	if err != nil {
+		// A local (stdio) server, a row from before its secrets were
+		// sealed, or a damaged one: never guessed at.
+		return mcpserver.Stored{}, "", errors.New("the connection's server_config is not a remote server's sealed settings")
 	}
 	// Anything not marked "member" is a site server: rows from before the
 	// two kinds existed carry no marker, and they were all the site's.
-	var origin string
-	if json.Unmarshal(top[keyOrigin], &origin) == nil && origin == originMember {
-		out.origin = originMember
+	origin := originSite
+	var marker string
+	if json.Unmarshal(top[keyOrigin], &marker) == nil && marker == originMember {
+		origin = originMember
 	}
-	return out, nil
+	return stored, origin, nil
 }
 
-// readTrusted is the connection's trusted list: the text items of
-// config.trusted_tools, and nothing when the key is absent or not a list.
-func readTrusted(config []byte) []string {
-	var items []json.RawMessage
-	if json.Unmarshal(keys(config)[keyTrusted], &items) != nil {
-		return nil
+// target opens a connection's settings for one connection: the one place a
+// stored secret leaves its seal, at the moment it is needed. An OAuth
+// server's access token is renewed first when it has run out (tokens.go).
+func (s *Source) target(ctx context.Context, userID string, row Connection) (target, error) {
+	stored, origin, err := readServer(row.Config)
+	if err != nil {
+		return target{}, err
 	}
-	trusted := make([]string, 0, len(items))
-	for _, item := range items {
-		var name string
-		if json.Unmarshal(item, &name) == nil && len(item) > 0 && item[0] == '"' {
-			trusted = append(trusted, name)
+	var tokens *mcpserver.Tokens
+	if stored.Auth.Type == mcpserver.AuthOAuth {
+		if tokens, err = s.currentTokens(ctx, userID, row, stored, origin); err != nil {
+			return target{}, err
 		}
 	}
-	return trusted
+	opened, err := mcpserver.Open(s.seal, userID, stored, tokens)
+	if err != nil {
+		return target{}, err
+	}
+	return target{origin: origin, address: strings.TrimSpace(opened.Address), transport: stored.Transport, headers: opened.Headers}, nil
 }
 
 // readSiteHosts is the administrators' list of allowed hosts. stored is

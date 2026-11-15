@@ -34,7 +34,7 @@ func (r Routes) passwordSignIn(response http.ResponseWriter, request *http.Reque
 	if !ok {
 		return
 	}
-	expires, err := r.StartWebSession(response, request, userID)
+	expires, err := r.StartWebSession(response, request, userID, ProvedByPassword)
 	if err != nil {
 		r.fail(response, request, "could not start the sign-in", err)
 		return
@@ -52,10 +52,24 @@ func (r Routes) passwordSignIn(response http.ResponseWriter, request *http.Reque
 // (internal/oidcsignin) calls it once the provider's answer is, so the
 // cookies, the lifetimes and the rotation that follows are the same however
 // the person proved who they are. Whoever calls it has already decided that
-// the account may sign in.
-func (r Routes) StartWebSession(response http.ResponseWriter, request *http.Request, userID string) (accessExpiresAt int64, err error) {
+// the account may sign in, and says how it was proved (proof).
+//
+// A browser that is already signed in and signs in again has its earlier
+// sign-in ended here. The website's single sign-on confirmation, before an
+// account made by single sign-on sets its first password, does exactly that;
+// so does signing in as someone else without signing out first. The new
+// cookies replace the old ones, so nothing could ever use that sign-in
+// again; left alive it would sit in the devices list as a second browser for
+// up to 30 days, one the person could only guess was a stranger's.
+func (r Routes) StartWebSession(response http.ResponseWriter, request *http.Request, userID string, proof Proof) (accessExpiresAt int64, err error) {
 	now := r.now()
-	started, err := startFamily(request.Context(), r.Pool, userID, kindWeb, nil, now)
+	if replaced, err := request.Cookie(r.Cookies.RefreshName); err == nil && replaced.Value != "" {
+		// A token that names no live sign-in ends nothing, and is no error.
+		if _, err := endByToken(request.Context(), r.Pool, replaced.Value, now); err != nil {
+			return 0, fmt.Errorf("ending the sign-in this browser replaces: %w", err)
+		}
+	}
+	started, err := startFamily(request.Context(), r.Pool, userID, kindWeb, nil, proof, now)
 	if err != nil {
 		return 0, err
 	}
@@ -68,8 +82,9 @@ func (r Routes) StartWebSession(response http.ResponseWriter, request *http.Requ
 }
 
 // phoneSignIn is the phone app's: JSON `{email, password, device_label}`.
-// The device's name makes it a phone sign-in, which lives a year and is
-// listed by that name; without one it is a browser-length sign-in.
+// The device's name makes it a phone sign-in, which lives until it goes 180
+// days unused (lifetimes.go), and is listed by that name; without one it is
+// a browser-length sign-in.
 func (r Routes) phoneSignIn(response http.ResponseWriter, request *http.Request) {
 	body, ok := readBody(request)
 	if !ok {
@@ -89,7 +104,7 @@ func (r Routes) phoneSignIn(response http.ResponseWriter, request *http.Request)
 	if !ok {
 		return
 	}
-	pair, err := r.startTokenSession(request.Context(), userID, asked.DeviceLabel)
+	pair, err := r.startTokenSession(request.Context(), userID, asked.DeviceLabel, ProvedByPassword)
 	if err != nil {
 		r.fail(response, request, "could not start the sign-in", err)
 		return
@@ -108,17 +123,17 @@ func (r Routes) phoneSignIn(response http.ResponseWriter, request *http.Request)
 // rotation that follows are the same however the person proved who they
 // are. A phone that sends no name gets a browser-length sign-in, as the
 // password route always gave it; the app always sends one.
-func (r Routes) StartPhoneSession(ctx context.Context, userID string, deviceLabel *string) (TokenPair, error) {
-	return r.startTokenSession(ctx, userID, deviceLabel)
+func (r Routes) StartPhoneSession(ctx context.Context, userID string, deviceLabel *string, proof Proof) (TokenPair, error) {
+	return r.startTokenSession(ctx, userID, deviceLabel, proof)
 }
 
-func (r Routes) startTokenSession(ctx context.Context, userID string, deviceLabel *string) (TokenPair, error) {
+func (r Routes) startTokenSession(ctx context.Context, userID string, deviceLabel *string, proof Proof) (TokenPair, error) {
 	kind, device := kindWeb, deviceName(deviceLabel)
 	if device != nil {
 		kind = kindPhone
 	}
 	now := r.now()
-	started, err := startFamily(ctx, r.Pool, userID, kind, device, now)
+	started, err := startFamily(ctx, r.Pool, userID, kind, device, proof, now)
 	if err != nil {
 		return TokenPair{}, err
 	}

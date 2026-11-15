@@ -1,81 +1,77 @@
 # Privacy and data
 
-Soloclef is self-hosted: it runs on its owner's own server, not on a
-large cloud platform. Your files, notebooks, notes, chats and Studio outputs
-are stored there.
-
-Some features need AI models or services that run elsewhere. This page lists
-exactly what goes where, so you can choose.
+Soloclef runs on its owner's own server. Your files, notebooks, notes, chats
+and Studio outputs are stored there. Some features need AI models or
+services that run elsewhere; this page lists what goes where, so you can
+choose.
 
 ## What stays on the server
 
-- Your files and everything made from them. Uploads, sources, notes,
-  chats and Studio outputs are stored on the server.
-- Local parsing. The Local parser reads files on the server. The file
-  itself is not sent anywhere.
-- Search index. Sources are turned into search vectors with the BGE-M3
-  embedding model, which runs on the server. If that local service is down,
-  the text is sent to the same model at OpenRouter instead, so indexing
-  doesn't stop.
-- No analytics. There is no third-party tracking or analytics. If the app
-  crashes in your browser, the error report goes to the server itself.
-- Report Issue. On an error message, Report Issue only opens your own
-  mail app with a draft to the site's owner: the error code, request ID,
-  message, page, browser and time. Nothing is sent unless you send it, through
-  your own mail provider.
+- Your files and everything made from them.
+- Files read by the Local parser. The file itself goes nowhere else.
+- Your mail. It is read live from your mailbox when needed and never copied
+  into Soloclef. An attachment the assistant reads is turned into text for
+  that answer only.
+- Your keys and passwords for connectors and model connections. They are
+  stored encrypted and never shown again.
+- Errors. The server as shipped sends no analytics anywhere. If the app
+  fails in your browser, the error report goes to the server's own log.
 
-## What is sent to outside services
+## What goes to outside services
+
+The server's models are reached through one model proxy that the server's
+owner runs, so the owner decides which provider answers each job.
 
 | When you… | What is sent | To |
 | --- | --- | --- |
-| Chat, or make a Studio output | Your question and the relevant passages from your sources | The AI model provider of the model in use (for example OpenAI, Google, DeepSeek or others through OpenRouter) |
-| Choose a hosted parser | The whole file, and with Vision on, the images in it | The parser you chose (Datalab, LlamaParse or Unstructured), and no other |
-| Turn on Vision | The images in the file | The vision model's provider |
-| Make an audio or video overview | The script to be read aloud | OpenAI, for the voices |
-| Search for new sources | Your search query | The service you search (PubMed, arXiv, Google Scholar, Exa, Tavily and so on). The web pages you import are reached through the site's web proxy service |
-| Read a web page | The page's address | Browserbase, if you have a Browserbase connector; otherwise, or if Browserbase fails, the server reads it through the site's web proxy service |
-| Read a page that shows a captcha | The page's address and its captcha | A captcha-solving service (2captcha) |
-| Pick Exa, Tavily or Browserbase in the chat's Tools | The search words, or the address of the page to open | Exa, Tavily or Browserbase, with your own key |
-| Pick files from Nextcloud | Nothing extra: the server fetches the files from your Nextcloud | — |
-| Pick files from Google Drive | Nothing extra: the server fetches only the files you picked, and Google tells the app about no others | — |
-| Connect an agent over MCP | Whatever the agent asks for with your API key or sign-in: search results and documents from your account, while API access is on | Your agent and its model provider |
-| Connect a mailbox (Email (IMAP)) | Your username and app password, which are stored encrypted here and never shown again | Your mail server, which the server signs in to |
-| Let the assistant read your mail | The text of the messages it reads, and of any attachment it opens; images in attachments go to the vision model | The AI model provider of the model in use, and the vision model's provider |
-| Get an email from the app (password reset, automation result) | The email: for an automation, the run's full result | The site's mail provider (SMTP2GO), then your own mail provider |
-| Sign in with the single sign-on button | You sign in there, and it tells the app your email address | The site owner's own single sign-on service |
+| Chat, or make a Studio output | Your question and the relevant passages from your sources | The provider behind the model in use. With a model from your own connection, that service. |
+| Add a source | The source's text, in passages, to be indexed for search | The embedding model's provider |
+| Choose a hosted parser | The whole file | The parser you chose: Datalab, LlamaParse or Unstructured |
+| Turn on Vision | The pictures in the file | The vision model's provider |
+| Make an audio or video overview | The script to be read aloud | The speech model's provider |
+| Search for new sources | Your search words | The service you search: PubMed, arXiv, medRxiv and bioRxiv, or Exa or Tavily with your own key |
+| Add a search result or a web page | The page's address | The site that serves it. The server fetches the page itself. |
+| Use a tool of an MCP server you added | What the tool is given | That MCP server |
+| Pick files from Google Drive or Nextcloud | Nothing extra. The server fetches only the files you picked. | Google or your Nextcloud |
+| Let the assistant read your mail | The text of the messages and attachments it reads | The model in use, and the vision model for pictures |
+| Press Send on a mail draft | The message as shown on the card | Your Stalwart mail server, which sends it |
+| Connect an agent | Whatever the agent asks for, while API access is on | Your agent and its model provider |
+| Get a push on your phone | A short title, such as "Slide deck ready", and at most the notebook's name | Apple for an iPhone, Expo's push service for an Android phone |
+| Get an email from Soloclef | The email, including an automation's full result | The server's mail service, then your own mail provider |
+| Sign in with single sign-on | Your sign-in, after which the provider tells the server your email address | The server owner's single sign-on service |
 
-If a file must not leave the server, use the Local parser, leave
-Vision off, and bear in mind that asking about it still sends the
-relevant passages to a model provider.
+If a file must not leave the server, use the Local parser and leave Vision
+off. Asking about it still sends the relevant passages to a model.
 
 ## Who can see what
 
-Everything in your account is yours alone: notebooks, documents, notes,
-chats, Studio outputs, connections, [automations](automations.md) and their
-results. No other account can see any of it. Your connections, your mailbox
-included, are used only by your own chats and automations.
+Everything in your account is yours alone. No other account can see it,
+and your connections are used only by your own chats and automations.
 
-You can make public links: a read-only copy of a chat or of a finished Studio
-output, or a live link to a notebook that shows your newest chat in it, its
-finished outputs and its source files. Anyone with the link can open it
-without signing in. See
-[Settings and sharing](workspaces-and-sharing.md#public-links).
+A Studio output you share with a public link can be opened by anyone with
+the link, until it expires or you revoke it. Chats, notebooks and sources
+cannot be shared.
 
-Agents you connect over MCP, and your API keys, can read and change everything
-in your account while API access is on in Settings → API access (see
-[Connect your agent](connect-your-agent.md)).
+Agents and API keys can read and change everything in your account while API
+access is on (see [Connect your agent](connect-your-agent.md)).
+
+The assistant cannot send mail by itself. It can only prepare a draft, which
+is sent when you press Send.
 
 ## Deleting your data
 
-Deleting a notebook removes its source links (your documents and notes
-stay), and Delete chat history removes the chats in it. To have all of your data
-deleted, including uploaded documents and your account, ask the owner through
-the contact page (`/contact` on your server).
+- Remove from notebook takes a source out of a notebook. The document stays
+  in your library.
+- Deleting a notebook deletes its chat and its Studio outputs. Your
+  documents and notes stay.
+- Delete chat history deletes a notebook's chat.
+- Removing a mailbox removes it from Soloclef only. Nothing in the mailbox
+  changes.
+- Deleting your account, under Settings, Profile, erases everything the
+  account owns. See
+  [Account and security](account-and-security.md#deleting-your-account).
 
-You can also delete your account yourself, with Settings → Profile → Delete
-account (type DELETE to confirm). It happens at once and can't be undone: your
-notebooks, notes, chats, documents, connectors and API keys are deleted with
-it.
-
-Removing a mailbox from the Email (IMAP) card removes it from the app
-only; nothing in the mailbox changes.
+To ask for anything else to be deleted, write to the server's owner through
+the contact page, at `/contact` on your server. On an error message, Report
+Issue opens your own mail app with a report already written to that address;
+nothing is sent until you send it.

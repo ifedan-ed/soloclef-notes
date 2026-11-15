@@ -1,0 +1,14 @@
+{
+  "build": "Android 1.0.0 (preview APK)",
+  "platform": "android",
+  "app_version": "1.0.0",
+  "store_build": "preview",
+  "update_channel": "preview",
+  "source_commit": "a7ba0c1c35263a7b90bf54152c69bc89a69581f8",
+  "source_branch": "app/go-api-1.0",
+  "reports_app_version": false,
+  "taken": "2026-11-13",
+  "openapi_sha256": "101cff0cd6bc4bc1c26209eda2d0b7254a2f0185a6f2cc7eaec9b6ca2afffd81",
+  "published": true,
+  "update_ids": []
+}

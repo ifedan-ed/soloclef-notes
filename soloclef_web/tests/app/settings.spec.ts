@@ -5,17 +5,18 @@ import { expect, test } from "./fixtures";
 
 /**
  * The account's one settings page: /dashboard/settings/<section>. Everything
- * here is the signed-in account's own; the only sections held back are the
- * site administrators' (features/settings-visibility).
+ * here is the signed-in account's own, and every account sees every section.
  *
  * Sections are found by their address, not their label, so a reworded label
  * does not break the walk through them.
  */
 
-/** Every section a normal account sees in the web app (not the desktop app's two). */
+/** Every section an account sees in the web app. */
 const SECTIONS = [
 	"profile",
+	"security",
 	"appearance",
+	"notifications",
 	"api-key",
 	"models",
 	"instructions",
@@ -24,10 +25,8 @@ const SECTIONS = [
 	"connectors",
 	"automations",
 	"public-links",
+	"agent-permissions",
 ] as const;
-
-/** Kept in the code, out of sight: for site administrators only. */
-const ADMIN_ONLY = ["community-prompts", "agent-permissions", "announcements"] as const;
 
 const sectionUrl = (slug: string) => `/dashboard/settings/${slug}`;
 const sectionLink = (page: Page, slug: string) =>
@@ -82,17 +81,6 @@ test.describe("Settings", () => {
 			}
 			await expect(page).toHaveURL(new RegExp(`/dashboard/settings/${slug}$`));
 			await expectNoOverflow(page, `settings: ${slug}`);
-		}
-	});
-
-	test("admin sections are not in the nav and their addresses go to Profile", async ({ page }) => {
-		await openSection(page, "profile");
-		for (const slug of ADMIN_ONLY) {
-			await expect(page.locator(`a[href="${sectionUrl(slug)}"]`)).toHaveCount(0);
-		}
-		for (const slug of ADMIN_ONLY) {
-			await page.goto(sectionUrl(slug));
-			await expect(page).toHaveURL(/\/dashboard\/settings\/profile$/);
 		}
 	});
 
@@ -249,18 +237,29 @@ test.describe("Settings", () => {
 		}
 	});
 
-	test("models: the model roles show, and a member may connect only their own endpoint", async ({
+	test("models: every preset is an OpenAI-compatible endpoint with its address typed", async ({
 		page,
 	}) => {
 		await openSection(page, "models");
 		await expect(page.getByText("Model Roles")).toBeVisible();
-		// Connecting the named providers is admin-only; a member is offered one
-		// connection, an OpenAI-compatible endpoint of their own.
+		// The server calls only OpenAI-compatible endpoints, so that is all the
+		// grid offers, to every account: known providers' public addresses and
+		// the custom form. Nothing Go cannot call (Bedrock, Azure, Vertex, a
+		// local Ollama or LM Studio) is offered.
 		const connect = page.getByRole("button", { name: /Connect$/ });
-		await expect(connect).toHaveCount(1);
-		await expect(connect).toHaveAccessibleName(
-			/^OpenAI-Compatible OpenAI-compatible endpoint Connect$/
+		await expect(connect).toHaveCount(6);
+		for (const gone of [/Bedrock/, /Azure/, /Vertex/, /Ollama/, /LM Studio/]) {
+			await expect(page.getByRole("button", { name: gone })).toHaveCount(0);
+		}
+		await page.getByRole("button", { name: /^Claude .*Connect$/ }).click();
+		const dialog = page.getByRole("dialog");
+		await expect(dialog.getByRole("heading", { name: "Connect Claude" })).toBeVisible();
+		await expect(dialog.getByPlaceholder("https://api.anthropic.com/v1")).toHaveValue(
+			"https://api.anthropic.com/v1"
 		);
+		// Nothing can be listed or connected before a key is typed.
+		await expect(dialog.getByRole("button", { name: "List models" })).toBeDisabled();
+		await expectNoOverflow(page, "models: connect dialog");
 	});
 
 	test("connectors: overview, search, MCP server form", async ({ page }) => {
@@ -277,12 +276,14 @@ test.describe("Settings", () => {
 		await expect(search).toHaveValue("");
 	});
 
-	test("my prompts: no sharing with the community for a member", async ({ page }) => {
+	// Prompts are one person's own: there is no community to share them with.
+	test("my prompts: nothing to share", async ({ page }) => {
 		await openSection(page, "prompts");
 		await page.getByRole("button", { name: "New", exact: true }).click();
 		const dialog = page.getByRole("dialog", { name: "New prompt" });
 		await expect(dialog).toBeVisible();
 		await expect(dialog.getByText("Share with community")).toHaveCount(0);
+		await expect(dialog.getByRole("switch")).toHaveCount(0);
 		await page.keyboard.press("Escape");
 	});
 
@@ -316,6 +317,26 @@ test.describe("Settings", () => {
 		const alert = page.getByRole("alertdialog", { name: "Delete prompt" });
 		await alert.getByRole("button", { name: "Delete" }).click();
 		await expect(page.getByText(`${name} v2`)).toBeHidden();
+	});
+
+	test("agent permissions: every tool runs unasked until switched to ask first", async ({
+		page,
+	}) => {
+		await openSection(page, "agent-permissions");
+		// exact: "read email thread" is a switch of its own.
+		const readMail = page.getByRole("switch", { name: "Ask first before read email", exact: true });
+		// Nothing asks first until the person says so.
+		await expect(readMail).not.toBeChecked();
+		await readMail.click();
+		await expect(readMail).toBeChecked();
+		// Saved on the server: a reload shows it.
+		await page.reload();
+		await expect(readMail).toBeChecked();
+		await readMail.click();
+		await expect(readMail).not.toBeChecked();
+		// A mail draft's card is its own question: it has no switch to set.
+		await expect(page.getByRole("switch", { name: "Ask first before draft email" })).toHaveCount(0);
+		await expectNoOverflow(page, "settings: agent-permissions");
 	});
 
 	test("appearance: timestamps toggle is local", async ({ page }) => {

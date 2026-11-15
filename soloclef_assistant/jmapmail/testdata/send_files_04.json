@@ -1,0 +1,65 @@
+{
+  "status": 200,
+  "body": {
+    "methodResponses": [
+      [
+        "Mailbox/get",
+        {
+          "accountId": "c",
+          "state": "n",
+          "list": [
+            {
+              "id": "d",
+              "name": "Drafts",
+              "role": "drafts"
+            },
+            {
+              "id": "c",
+              "name": "Junk Mail",
+              "role": "junk"
+            },
+            {
+              "id": "e",
+              "name": "Sent Items",
+              "role": "sent"
+            },
+            {
+              "id": "a",
+              "name": "Inbox",
+              "role": "inbox"
+            },
+            {
+              "id": "b",
+              "name": "Deleted Items",
+              "role": "trash"
+            }
+          ],
+          "notFound": []
+        },
+        "m"
+      ],
+      [
+        "Identity/get",
+        {
+          "accountId": "c",
+          "state": "sae",
+          "list": [
+            {
+              "id": "b",
+              "name": "ada@example.test",
+              "email": "ada@example.test",
+              "replyTo": null,
+              "bcc": null,
+              "textSignature": "",
+              "htmlSignature": "",
+              "mayDelete": true
+            }
+          ],
+          "notFound": []
+        },
+        "i"
+      ]
+    ],
+    "sessionState": "e8a8b15b"
+  }
+}

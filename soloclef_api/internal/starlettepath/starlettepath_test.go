@@ -8,7 +8,7 @@ import (
 )
 
 // This package is held to its behaviour where the requests can be sent:
-// internal/publicchat for a route's own use of it, and cmd/api/router_test.go for the guard in front of the whole server,
+// internal/notebooks for a route's own use of it, and cmd/api/router_test.go for the guard in front of the whole server,
 // which asks its rules of every served route. The tests here are the small
 // ones about the pieces.
 

@@ -32,10 +32,15 @@
 //     or account refuses the request; a document of another account is not
 //     read even if a source row named it.
 //   - **A document being deleted is not generated from.**
-//   - **An artifact run needs no worker and no queue message**: it starts at
-//     once, heartbeats, stops when the person deletes or cancels the output,
-//     and is failed by a sweep if its process dies, so the panel never spins
-//     on a job nothing is making.
+//   - **An artifact run needs no worker and no queue message**: its row is
+//     the queue, claimed at once by the process that wrote it when it has
+//     room and by any replica otherwise. It heartbeats, stops when the
+//     person deletes or cancels the output, and outlives a restart: a deploy
+//     waits for it within a bound, and one cut off, by that bound or by a
+//     process that died, is made again from its stored task as its next
+//     attempt, failing as interrupted only after three (runner.go, queue.go,
+//     requeue.go, attempt.go). The panel never spins on a job nothing is
+//     making, and never shows a deploy as a failure.
 //   - **The request is refused whole and at once** for an option outside
 //     its vocabulary or a field the kind does not have; nothing is guessed.
 //   - **A repeated click is one output**, by the request id, as before, and

@@ -1,15 +1,15 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Suspense, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Logo } from "@/components/Logo";
-import { useRuntimeConfig } from "@/components/providers/runtime-config";
 import { Button } from "@/components/ui/button";
 import { getAuthErrorDetails, shouldRetry } from "@/lib/auth-errors";
 import { setRedirectPath } from "@/lib/auth-utils";
+import { SSO_SETTINGS } from "@/lib/sso-settings";
 import { LocalLoginForm } from "./LocalLoginForm";
 import { SsoLoginButton } from "./SsoLoginButton";
 
@@ -20,15 +20,27 @@ import { SsoLoginButton } from "./SsoLoginButton";
  * footer here (`isAuthPage`), same as it always has for this route.
  */
 
+/**
+ * The single sign-on button's words, or null with single sign-on off. They
+ * are the build's (NEXT_PUBLIC_OIDC_ENABLED and NEXT_PUBLIC_OIDC_BUTTON_LABEL,
+ * which docker-compose.go.yml fills from the API's own SOLOCLEF_API_OIDC_ENABLED
+ * and SOLOCLEF_WEB_SSO_BUTTON_LABEL), so the page's HTML already has the right
+ * form in it: no request to wait for and nothing that moves once it is drawn.
+ */
+const ssoLabel = SSO_SETTINGS.enabled ? SSO_SETTINGS.buttonLabel : null;
+
 function LoginContent() {
 	const t = useTranslations("auth");
 	const tCommon = useTranslations("common");
 	const router = useRouter();
-	const { oidcEnabled } = useRuntimeConfig();
 	const [urlError, setUrlError] = useState<{ title: string; message: string } | null>(null);
-	const searchParams = useSearchParams();
 
 	useEffect(() => {
+		// Read once, in the browser, from the address itself rather than with
+		// useSearchParams: that hook makes a static export leave the whole page
+		// out of its HTML until the script runs, and the notices below only
+		// ever need the address the page was opened with.
+		const searchParams = new URLSearchParams(window.location.search);
 		// Check for various URL parameters that might indicate success or error states
 		const registered = searchParams.get("registered");
 		const error = searchParams.get("error");
@@ -99,7 +111,7 @@ function LoginContent() {
 				duration: 4000,
 			});
 		}
-	}, [router, searchParams, t, tCommon]);
+	}, [router, t, tCommon]);
 
 	return (
 		<section className="ss-home-hero ss-home-pad flex min-h-screen items-center justify-center">
@@ -169,9 +181,9 @@ function LoginContent() {
 					)}
 				</AnimatePresence>
 
-				{oidcEnabled && (
+				{ssoLabel && (
 					<div className="mt-8 w-full">
-						<SsoLoginButton />
+						<SsoLoginButton label={ssoLabel} />
 						<div className="mt-6 flex items-center gap-3 text-sm text-muted-foreground">
 							<span className="h-px flex-1 bg-border" />
 							<span>{t("or_sign_in_with_password")}</span>
@@ -180,7 +192,7 @@ function LoginContent() {
 					</div>
 				)}
 
-				<div className={`${oidcEnabled ? "mt-6" : "mt-8"} w-full text-left`}>
+				<div className={`${ssoLabel ? "mt-6" : "mt-8"} w-full text-left`}>
 					<LocalLoginForm />
 				</div>
 			</div>
@@ -189,10 +201,5 @@ function LoginContent() {
 }
 
 export default function LoginPage() {
-	// Suspense fallback returns null - the GlobalLoadingProvider handles the loading UI
-	return (
-		<Suspense fallback={null}>
-			<LoginContent />
-		</Suspense>
-	);
+	return <LoginContent />;
 }

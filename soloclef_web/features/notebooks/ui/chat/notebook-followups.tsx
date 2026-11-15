@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuiState, useThreadRuntime } from "@assistant-ui/react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CornerDownRight } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useEffect } from "react";
@@ -47,10 +47,15 @@ export function NotebookFollowups() {
 	const notebookId = notebook?.notebookId ?? 0;
 	if (running && isLast && notebookId) turnsRunning.add(notebookId);
 	const watchTitle = notebook?.watchTitle;
+	const queryClient = useQueryClient();
 	useEffect(() => {
 		if (!settled || !turnsRunning.delete(notebookId)) return;
 		watchTitle?.();
-	}, [settled, notebookId, watchTitle]);
+		// What the turn made (a deck, a quiz, a video queued) is listed in
+		// the notebook's Studio, which is read again so it shows there now
+		// and not at the next reload.
+		void queryClient.invalidateQueries({ queryKey: notebookKeys.outputs(notebookId) });
+	}, [settled, notebookId, watchTitle, queryClient]);
 
 	if (!enabled || !settled) return null;
 

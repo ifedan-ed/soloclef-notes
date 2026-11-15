@@ -3,7 +3,6 @@
 import { ChatModelPicker } from "@/features/chat-model/ui/chat-model-picker";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
-import { ImageModelSelector } from "./image-model-selector";
 
 interface ChatHeaderProps {
 	className?: string;
@@ -26,7 +25,6 @@ export function ChatHeader({ className, onChatModelSelected }: ChatHeaderProps) 
 			)}
 		>
 			<ChatModelPicker className={selectorClassName} onChatModelSelected={onChatModelSelected} />
-			<ImageModelSelector className={selectorClassName} mobileIconOnly />
 		</div>
 	);
 }

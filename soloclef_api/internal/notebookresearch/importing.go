@@ -1,9 +1,6 @@
 package notebookresearch
 
 import (
-	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -12,9 +9,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/jackc/pgx/v5"
-
-	"git.danvics.com/danvics/soloclef/soloclef_api/internal/database"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/notebooksources"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/parserchoice"
 )
@@ -168,81 +162,10 @@ func (r Routes) readPage(x *exchange) {
 	r.add(x, []item{{address: address, url: text, title: clip(text, maxTitleChars), source: "web"}}, parser)
 }
 
-var errNotebookAbsent = errors.New("notebook not found")
-
-// add links every item to the notebook in one transaction, making a
-// document for each page the account does not hold yet, then starts the
-// reads and answers the notebook's sources. parser is the one a PDF among
-// them is read with, nil for the local one; a document the account already
-// holds keeps its own.
+// add links every item to the notebook through the import (Imports.Add)
+// and answers the notebook's sources, as both routes do.
 func (r Routes) add(x *exchange, items []item, parser *string) {
-	now := r.now()
-	toRead, err := database.Write(x.ctx.Context(), r.Pool, func(ctx context.Context, tx pgx.Tx, _ *database.Effects) ([]int64, error) {
-		q := New(tx)
-		// Marks the notebook used, and proves it is the caller's: every
-		// row written below is written under this lock on it.
-		touched, err := q.TouchNotebook(ctx, TouchNotebookParams{UsedAt: now, NotebookID: x.notebookID, UserID: x.userID})
-		if err != nil {
-			return nil, err
-		}
-		if touched == 0 {
-			return nil, errNotebookAbsent
-		}
-		var toRead []int64
-		for _, picked := range items {
-			lookup := ExistingImportParams{UserID: x.userID, Identity: importIdentity(picked.address), Url: picked.url}
-			if picked.paper != nil {
-				lookup.Doi, lookup.Pmid, lookup.Pmcid, lookup.ArxivID = picked.paper.DOI, picked.paper.PMID, picked.paper.PMCID, picked.paper.ArxivID
-			}
-			documentID, err := q.ExistingImport(ctx, lookup)
-			switch {
-			case err == nil:
-				// Held already: linked again, not read twice, unless its
-				// read never ran.
-				requeued, err := q.RequeueUnread(ctx, RequeueUnreadParams{Now: now, ID: documentID, UserID: x.userID, StaleBefore: now.Add(-staleAfter)})
-				if err != nil {
-					return nil, err
-				}
-				if requeued == 1 {
-					toRead = append(toRead, documentID)
-				}
-			case errors.Is(err, pgx.ErrNoRows):
-				metadata := map[string]any{"url": picked.url, "research_source": picked.source, "notebook_id": x.notebookID}
-				if picked.snippet != "" {
-					metadata["snippet"] = picked.snippet
-				}
-				if picked.paper != nil {
-					metadata["paper"] = picked.paper
-				}
-				encoded, err := json.Marshal(metadata)
-				if err != nil {
-					return nil, err
-				}
-				sum := sha256.Sum256([]byte(picked.url))
-				documentID, err = q.InsertPending(ctx, InsertPendingParams{
-					UserID: x.userID, Title: picked.title, Snippet: picked.snippet, ContentHash: hex.EncodeToString(sum[:]),
-					Identity: lookup.Identity, Metadata: encoded, Parser: parser, Now: now,
-				})
-				if errors.Is(err, pgx.ErrNoRows) {
-					// Another import of the same page committed between
-					// the look and the insert: its document is the one.
-					if documentID, err = q.ExistingImport(ctx, lookup); err != nil {
-						return nil, err
-					}
-				} else if err != nil {
-					return nil, err
-				} else {
-					toRead = append(toRead, documentID)
-				}
-			default:
-				return nil, err
-			}
-			if err := q.LinkSource(ctx, LinkSourceParams{NotebookID: x.notebookID, UserID: x.userID, DocumentID: &documentID}); err != nil {
-				return nil, err
-			}
-		}
-		return toRead, nil
-	})
+	_, err := r.imports().Add(x.ctx.Context(), Importing{UserID: x.userID, NotebookID: x.notebookID, RequestID: x.requestID, Parser: parser}, items)
 	if errors.Is(err, errNotebookAbsent) {
 		x.refuse(http.StatusNotFound, notebookAbsent)
 		return
@@ -250,10 +173,6 @@ func (r Routes) add(x *exchange, items []item, parser *string) {
 	if err != nil {
 		x.fail("could not import the results", err)
 		return
-	}
-	// After the commit: a read takes the row the moment it starts.
-	for _, documentID := range toRead {
-		r.Reads.Start(documentID, x.userID, x.requestID)
 	}
 	listed, err := notebooksources.Listing(x.ctx.Context(), r.Pool, x.userID, x.notebookID)
 	if err != nil {

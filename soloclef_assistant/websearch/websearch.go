@@ -15,6 +15,9 @@
 //     with one number, whichever of its ten pages a sentence rested on.
 //   - A provider's key is looked up when a call is made and held nowhere, so
 //     a key removed in settings is gone from the next call.
+//   - A provider is connected natively, with its own key checked against it
+//     before it is saved (Verify), and stored sealed. It used to be dug out
+//     of whatever MCP server the person had added for that provider.
 package websearch
 
 import (
@@ -226,7 +229,7 @@ func (s Search) search(ctx context.Context, provider Provider, key, query string
 		}
 		// The cause can carry the address with a key in its query; the
 		// model and the page get a sentence.
-		return nil, fmt.Errorf("%s could not be reached just now", provider.label())
+		return nil, &refusal{fmt.Sprintf("%s could not be reached just now", provider.label()), ErrUnavailable}
 	}
 	defer response.Body.Close()
 	switch status := response.StatusCode; {
@@ -236,15 +239,35 @@ func (s Search) search(ctx context.Context, provider Provider, key, query string
 	case status == http.StatusPaymentRequired || status == http.StatusTooManyRequests || status == 432 || status == 433:
 		return nil, &refusal{fmt.Sprintf("the user's %s account is out of quota or rate limited", provider.label()), ErrQuota}
 	default:
-		return nil, fmt.Errorf("%s is busy just now (status %d)", provider.label(), status)
+		return nil, &refusal{fmt.Sprintf("%s is busy just now (status %d)", provider.label(), status), ErrUnavailable}
 	}
 	// A search answer is a few kilobytes; a megabyte is a wrong answer.
 	raw, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
 	if err != nil {
-		return nil, fmt.Errorf("%s's answer could not be read", provider.label())
+		return nil, &refusal{fmt.Sprintf("%s's answer could not be read", provider.label()), ErrUnavailable}
 	}
 	return parse(provider, raw, limit)
 }
+
+// verifyQuery is the search a key is checked with. Neither provider has a
+// documented endpoint that checks a key without searching, so the check is
+// the smallest search there is (one result, no page contents): the very
+// request the tools make, so a key that passes is a key the tools can use.
+const verifyQuery = "soloclef connection check"
+
+// Verify asks the provider whether key is a key it accepts, before it is
+// saved. nil is yes; otherwise the error wraps ErrKeyRejected, ErrQuota or
+// ErrUnavailable, and its sentence never contains the key.
+func (s Search) Verify(ctx context.Context, provider Provider, key string) error {
+	if provider != Exa && provider != Tavily {
+		return fmt.Errorf("websearch: unknown provider %q", provider)
+	}
+	_, err := s.search(ctx, provider, key, verifyQuery, 1)
+	return err
+}
+
+// Label is the provider's name as a person reads it.
+func (p Provider) Label() string { return p.label() }
 
 func parse(provider Provider, raw []byte, limit int) ([]Result, error) {
 	var answer struct {
@@ -263,7 +286,7 @@ func parse(provider Provider, raw []byte, limit int) ([]Result, error) {
 		} `json:"results"`
 	}
 	if err := json.Unmarshal(raw, &answer); err != nil {
-		return nil, fmt.Errorf("%s's answer is not readable", provider.label())
+		return nil, &refusal{fmt.Sprintf("%s's answer is not readable", provider.label()), ErrUnavailable}
 	}
 	out := make([]Result, 0, min(limit, len(answer.Results)))
 	for _, r := range answer.Results {

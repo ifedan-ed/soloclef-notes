@@ -30,7 +30,10 @@ function choice(overrides: Partial<ModelChoice>): ModelChoice {
 test("the server's answer parses, with a job the server names no model for", () => {
 	const none = { selected: null, model: null, available: false, default: null, models: [] };
 	assert.deepEqual(modelChoiceSchema.parse(none), none);
-	assert.deepEqual(modelRolesSchema.parse({ vision: choice({}), image: none }).image, none);
+	assert.deepEqual(modelRolesSchema.parse({ vision: none }).vision, none);
+	// The server still answers `image` for installed phone builds; the web
+	// has no image model, so the field is dropped, never shown or sent back.
+	assert.equal("image" in modelRolesSchema.parse({ vision: choice({}), image: none }), false);
 	// A name is a string: an id-shaped answer from an older server is refused, not shown.
 	assert.equal(modelChoiceSchema.safeParse({ ...none, selected: 4 }).success, false);
 });

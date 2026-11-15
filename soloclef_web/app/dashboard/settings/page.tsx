@@ -1,6 +1,7 @@
-import { redirect } from "next/navigation";
+import { ClientRedirect } from "@/components/routing/client-redirect";
 import { settingsPath } from "@/lib/dashboard-paths";
 
+/** Settings open on their first section. */
 export default function SettingsPage() {
-	redirect(settingsPath("profile"));
+	return <ClientRedirect to={settingsPath("profile")} />;
 }

@@ -11,6 +11,14 @@
 # A module added to go.mod's replaces needs its two COPY lines here in the
 # same change; the build stops at `go mod download` otherwise, naming it.
 
+# resvg (github.com/linebender/resvg, Apache-2.0 OR MIT), pinned, built
+# static: it draws an infographic poster's PNG (SOLOCLEF_API_FIGURES_RESVG).
+# The same version, built the same way, as the worker's and PedsHub Tools'.
+FROM rust:1.89.0-alpine3.22 AS resvg
+RUN apk add --no-cache musl-dev \
+ && cargo install resvg --version 0.48.1 --locked --root /out \
+ && /out/bin/resvg --version
+
 # At least the `go` line of soloclef_api/go.mod: the official image will not
 # download a newer toolchain than its own, so an older one stops the build.
 FROM golang:1.25-alpine AS build
@@ -28,6 +36,7 @@ COPY soloclef_connectors/go.mod soloclef_connectors/
 COPY soloclef_filestore/go.mod soloclef_filestore/go.sum soloclef_filestore/
 COPY soloclef_ingest/go.mod soloclef_ingest/go.sum soloclef_ingest/
 COPY soloclef_mail/go.mod soloclef_mail/go.sum* soloclef_mail/
+COPY soloclef_notify/go.mod soloclef_notify/go.sum soloclef_notify/
 COPY soloclef_schema/go.mod soloclef_schema/go.sum soloclef_schema/
 COPY soloclef_studio/go.mod soloclef_studio/go.sum soloclef_studio/
 # The chunker's manifest and nothing else of it. No package of the chunker is
@@ -41,6 +50,12 @@ COPY soloclef_api/go.mod soloclef_api/go.sum soloclef_api/
 # dependency bump fetches the one new module and not all of them.
 RUN --mount=type=cache,target=/go/pkg/mod \
     cd soloclef_api && go mod download
+# The figures' fonts (SOLOCLEF_API_FIGURES_FONT_DIR), from the figures module
+# as it was downloaded: resvg draws a poster's figures in the faces
+# figures-go measured their labels with (its fonts/README).
+RUN --mount=type=cache,target=/go/pkg/mod \
+    mkdir -p /out/figure-fonts \
+ && cp "$(cd soloclef_api && go list -m -f '{{.Dir}}' github.com/ifedan-ed/figures-go)"/fonts/*.ttf /out/figure-fonts/
 COPY soloclef_celery soloclef_celery
 COPY soloclef_agent soloclef_agent
 # The chat's tools and the assembly of a turn's agent, shared with the worker.
@@ -53,6 +68,8 @@ COPY soloclef_filestore soloclef_filestore
 COPY soloclef_ingest soloclef_ingest
 # The SMTP transport of the reset mail; its queue packages are not compiled.
 COPY soloclef_mail soloclef_mail
+# The notification step (an inbox row, then a push), shared with the worker.
+COPY soloclef_notify soloclef_notify
 # The migrations are compiled into the binary: the start-up check compares
 # the database's version with them (soloclef_schema/schemaversion).
 COPY soloclef_schema soloclef_schema
@@ -75,6 +92,11 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # itself (cmd/api/healthcheck.go) and not curl.
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/soloclef-api /usr/local/bin/soloclef-api
+# An infographic's PNG: resvg and the figures' fonts (the paths the compose
+# file names). The deck's own faces are in the binary (deckrender) and are
+# written to a temporary directory at start.
+COPY --from=resvg /out/bin/resvg /usr/local/bin/resvg
+COPY --from=build /out/figure-fonts /usr/local/share/figures/fonts
 # uid 65532. A secret mounted for this container has to be readable by it.
 USER nonroot:nonroot
 # No port is exposed and no setting is baked in: the address is

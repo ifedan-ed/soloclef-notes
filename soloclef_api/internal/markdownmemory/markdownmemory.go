@@ -9,8 +9,11 @@
 // save pipeline here is the validation and the re-render only.
 //
 // What makes the port deep rather than wide is that a write *rewrites* what it
-// is given. save_memory strips a preamble, refuses a document that is too long
-// or has no heading, and then re-renders the document through app/services/memory/document.py's parser —
+// is given. Two saves share one parser and renderer. The assistant's (Save,
+// called by the chat's memory tool) strips a preamble and refuses a document
+// that is too long or has no heading; a person's (SaveWrittenByPerson, called
+// by these routes) accepts any text and keeps what stands outside a heading
+// under "## Notes". Both re-render the document through app/services/memory/document.py's parser —
 // which normalises a legacy bullet and an ISO week date into a plain date. So
 // the bytes a client gets back are the parser's, and the parser rests on three
 // pieces of Python behaviour that Go does not share: str.strip's whitespace

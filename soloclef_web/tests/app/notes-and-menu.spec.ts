@@ -137,7 +137,12 @@ test.describe("Notebook menu", () => {
 		await page.getByRole("button", { name: "Notebook options" }).click();
 		await expect(page.getByRole("menuitem", { name: "Remove from featured" })).toBeVisible();
 		await page.getByRole("menuitem", { name: "Copy notebook" }).click();
-		await expect(page.getByText("Notebook copied with its sources and notes.")).toBeVisible();
+		// A copy takes the sources and leaves the notes (internal/notebookcopy): the toast says so.
+		await expect(
+			page.getByText(
+				"Notebook copied with its sources. Notes, chats and Studio outputs stay with the original."
+			)
+		).toBeVisible();
 		await expect(page).not.toHaveURL(new RegExp(`/notebooks/${notebook.id}(\\?|$)`));
 		const titles = (await listNotebooks(request, token)).map((n) => n.title);
 		expect(titles.filter((t) => t.startsWith(notebook.title))).toHaveLength(2);

@@ -17,12 +17,12 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { artifactDownloadPath } from "@/features/artifacts/api/artifact-download-path";
 import { artifactManifestQueryOptions } from "@/features/artifacts/api/artifact-queries";
-import { artifactDownloadFilename } from "@/features/artifacts/lib/artifact-selectors";
+import { artifactDownloads } from "@/features/artifacts/lib/artifact-selectors";
 import {
 	ArtifactRenderer,
 	resolveArtifactPresentation,
 } from "@/features/artifacts/rendering/artifact-renderer";
-import { ArtifactDownloadButton } from "@/features/artifacts/ui/artifact-download-button";
+import { ArtifactDownloads } from "@/features/artifacts/ui/artifact-downloads";
 import { publicLinksApi, ShareDialog } from "@/features/public-sharing";
 import { cn } from "@/lib/utils";
 import { useDelayedFlag } from "../../hooks/use-delayed-flag";
@@ -116,7 +116,6 @@ export function OutputView({
 				<ShareDialog
 					open={shareOpen}
 					onOpenChange={setShareOpen}
-					subject="output"
 					itemTitle={output.title}
 					create={(expiry) => publicLinksApi.shareOutput(notebookId, output.id, expiry)}
 				/>
@@ -300,9 +299,8 @@ function ArtifactActions({ artifactId }: { artifactId: number }) {
 		<>
 			{Actions ? <Actions manifest={manifest.data} /> : null}
 			{renderer.downloadable ? (
-				<ArtifactDownloadButton
-					path={artifactDownloadPath(artifactId)}
-					filename={artifactDownloadFilename(manifest.data, artifactId)}
+				<ArtifactDownloads
+					downloads={artifactDownloads(manifest.data, artifactId, artifactDownloadPath(artifactId))}
 					className="size-8 shrink-0 rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
 				/>
 			) : null}

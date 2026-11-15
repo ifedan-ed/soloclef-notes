@@ -9,7 +9,10 @@ export const inboxItemTypeEnum = z.enum([
 	"connector_indexing",
 	"connector_deletion",
 	"document_processing",
-	"site_announcement",
+	"studio_output",
+	"automation_run",
+	"mail_draft",
+	"app_update",
 ]);
 
 /**
@@ -82,15 +85,66 @@ export const documentProcessingMetadata = baseInboxItemMetadata.extend({
 	chunks_count: z.number().optional(),
 	document_id: z.number().optional(),
 	error_message: z.string().nullable().optional(),
+	// A row can stand for several documents ("3 imports failed"): how many,
+	// and up to five of their names. Its title already says the summary.
+	count: z.number().optional(),
+	names: z.array(z.string()).optional(),
+	notebook_id: z.number().nullable().optional(),
 });
 
 /**
- * An administrator's announcement: where it points and when it stops showing.
+ * A Studio output finished or failed. A failure the person can simply run
+ * again carries `retry: true` (the inbox's "Try again").
  */
-export const siteAnnouncementMetadata = z.object({
-	announcement_id: z.number(),
-	link: z.string().nullable().optional(),
-	expires_at: z.string().nullable().optional(),
+export const studioOutputMetadata = baseInboxItemMetadata.extend({
+	status: z.enum(["completed", "failed"]),
+	notebook_id: z.number().nullable(),
+	notebook_title: z.string().nullable(),
+	output_id: z.number().nullable(),
+	output_kind: z.enum([
+		"slides",
+		"report",
+		"audio",
+		"video",
+		"quiz",
+		"flashcards",
+		"mindmap",
+		"infographic",
+		"data_table",
+		"artifact",
+	]),
+	output_title: z.string(),
+	retry: z.boolean(),
+	error_message: z.string().nullable().optional(),
+	thread_id: z.number().nullable().optional(),
+});
+
+/** An automation run ended: `status` is the inbox's two-way outcome, `run_status` the run's own. */
+export const automationRunMetadata = baseInboxItemMetadata.extend({
+	status: z.enum(["completed", "failed"]),
+	run_status: z.enum(["succeeded", "failed", "needs_attention", "timed_out"]),
+	automation_id: z.number(),
+	automation_name: z.string(),
+	run_id: z.number(),
+});
+
+/** A mail draft is ready to review; `link` is the page that shows it, when the mail feature gives one. */
+export const mailDraftMetadata = baseInboxItemMetadata.extend({
+	status: z.literal("completed"),
+	draft_id: z.string(),
+	link: z.string().nullable(),
+	account_label: z.string().nullable().optional(),
+});
+
+/**
+ * A newer iPhone app is in the App Store ("Soloclef 1.2.0 is out"), written
+ * for an account with an iPhone on an older version. `store_url` is the
+ * listing, which opening the item shows in a new tab.
+ */
+export const appUpdateMetadata = baseInboxItemMetadata.extend({
+	status: z.literal("completed"),
+	version: z.string(),
+	store_url: z.string(),
 });
 
 /**
@@ -101,7 +155,10 @@ export const inboxItemMetadata = z.union([
 	connectorIndexingMetadata,
 	connectorDeletionMetadata,
 	documentProcessingMetadata,
-	siteAnnouncementMetadata,
+	studioOutputMetadata,
+	automationRunMetadata,
+	mailDraftMetadata,
+	appUpdateMetadata,
 	baseInboxItemMetadata,
 ]);
 
@@ -143,9 +200,11 @@ export const documentProcessingInboxItem = inboxItem.extend({
 // =============================================================================
 
 /**
- * Notification category for tab-level filtering
+ * The server's inbox category, which the list, unread-count and clear routes
+ * take; status (uploads, syncs, Studio outputs, automation runs, mail drafts)
+ * is the only one.
  */
-export const notificationCategory = z.enum(["status", "announcements"]);
+export const notificationCategory = z.enum(["status"]);
 export type NotificationCategory = z.infer<typeof notificationCategory>;
 
 /**
@@ -251,8 +310,8 @@ export const getSourceTypesResponse = z.object({
 });
 
 /**
- * Batched unread counts for every category in a single response, instead of
- * one /unread-count call per category.
+ * Unread counts keyed by category, from /unread-counts-batch; status is the
+ * only category.
  */
 export const categoryUnreadCount = z.object({
 	total_unread: z.number(),
@@ -261,7 +320,6 @@ export const categoryUnreadCount = z.object({
 
 export const getBatchUnreadCountResponse = z.object({
 	status: categoryUnreadCount,
-	announcements: categoryUnreadCount.default({ total_unread: 0, recent_unread: 0 }),
 });
 
 // =============================================================================
@@ -293,12 +351,6 @@ export function isDocumentProcessingMetadata(
 	metadata: unknown
 ): metadata is DocumentProcessingMetadata {
 	return documentProcessingMetadata.safeParse(metadata).success;
-}
-
-export function isSiteAnnouncementMetadata(
-	metadata: unknown
-): metadata is SiteAnnouncementMetadata {
-	return siteAnnouncementMetadata.safeParse(metadata).success;
 }
 
 /**
@@ -337,7 +389,9 @@ export type BaseInboxItemMetadata = z.infer<typeof baseInboxItemMetadata>;
 export type ConnectorIndexingMetadata = z.infer<typeof connectorIndexingMetadata>;
 export type ConnectorDeletionMetadata = z.infer<typeof connectorDeletionMetadata>;
 export type DocumentProcessingMetadata = z.infer<typeof documentProcessingMetadata>;
-export type SiteAnnouncementMetadata = z.infer<typeof siteAnnouncementMetadata>;
+export type StudioOutputMetadata = z.infer<typeof studioOutputMetadata>;
+export type AutomationRunMetadata = z.infer<typeof automationRunMetadata>;
+export type MailDraftMetadata = z.infer<typeof mailDraftMetadata>;
 export type InboxItemMetadata = z.infer<typeof inboxItemMetadata>;
 export type InboxItem = z.infer<typeof inboxItem>;
 export type ConnectorIndexingInboxItem = z.infer<typeof connectorIndexingInboxItem>;

@@ -1,0 +1,18 @@
+{
+  "subtitle": "Recognising it, treating an attack, and keeping it controlled",
+  "key_numbers": [
+    {"value": "1 in 11", "label": "children in the UK have asthma"},
+    {"value": "3", "label": "school-age children die of an asthma attack every month"},
+    {"value": "2", "label": "or more reliever uses a week means poor control"}
+  ],
+  "sections": [
+    {"heading": "Recognise it", "points": ["Wheeze, cough, breathlessness and chest tightness", "Worse at night, with exercise, colds or allergens", "Symptoms that come and go, with a personal or family history of atopy"]},
+    {"heading": "Severity of an attack", "points": ["Moderate: can talk in sentences, SpO2 92% or more", "Severe: too breathless to talk or feed, SpO2 under 92%", "Life-threatening: silent chest, cyanosis, exhaustion, confusion"]},
+    {"heading": "Treat an acute attack", "points": ["Salbutamol by spacer, 2 to 10 puffs, repeated every 20 to 30 minutes", "Oral prednisolone for 3 days", "Oxygen to keep SpO2 at 94 to 98%"],
+     "figure": {"type":"flowchart","title":"First hour of an attack","alt":"Give salbutamol by spacer; if improving, continue and give prednisolone; if not, escalate to nebulised treatment and senior review.","spec":{"nodes":[{"id":"a","text":"Salbutamol 10 puffs by spacer","shape":"start","next":"q"},{"id":"q","text":"Improving after 20 minutes?","shape":"decision","yes":"p","no":"e"},{"id":"p","text":"Prednisolone, review in 1 hour","shape":"end","tone":"good"},{"id":"e","text":"Nebulised salbutamol and ipratropium, senior review","shape":"end","tone":"bad"}]}}},
+    {"heading": "Keep it controlled", "points": ["Low-dose inhaled corticosteroid every day", "Check inhaler technique and adherence at every visit", "A written asthma action plan for home and school"],
+     "figure": {"type":"bar_chart","title":"Reliever use and control","alt":"Children using their reliever three or more times a week are far more often poorly controlled.","spec":{"categories":["0 to 1","2","3 or more"],"series":[{"label":"Poorly controlled","values":[8,24,61]}],"value_axis":{"label":"Poorly controlled","unit":"%","min":0,"max":70},"category_label":"Reliever uses a week","value_labels":true}}}
+  ],
+  "takeaway": "A child who needs their reliever more than twice a week needs their preventer reviewed.",
+  "sources": "BTS/SIGN 2019 asthma guideline; NICE NG80; Asthma + Lung UK. Illustrative figures for teaching."
+}

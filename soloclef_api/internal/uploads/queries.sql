@@ -89,8 +89,7 @@ WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id);
 -- A file of an uploaded folder whose bytes are the ones the document
 -- already holds. Nothing is indexed again, but two things are recorded:
 -- when it was last seen (`mtime` and the rest of this upload's metadata,
--- merged over the old keys), which is what the folder sync's "which files
--- changed" check reads, and the folder it is in now. `updated_at` is left
+-- merged over the old keys), and the folder it is in now. `updated_at` is left
 -- alone: the document did not change.
 UPDATE documents
 SET document_metadata = COALESCE(document_metadata, '{}'::jsonb) || sqlc.arg(metadata)::jsonb,
@@ -108,16 +107,6 @@ SELECT id FROM folders WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id) F
 -- there refuses the upload while it has cost the sender nothing. Another
 -- account's folder is not there.
 SELECT id FROM folders WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id);
-
--- name: MarkFolderWatched :exec
--- The top folder of an uploaded folder says so: the desktop app lists the
--- folders it keeps in step by this marker, and reads the parser its files
--- were sent to from it. The keys are merged over whatever the folder
--- already carries, and `updated_at` moves because the folder was synced.
-UPDATE folders
-SET metadata = COALESCE(metadata, '{}'::jsonb) || sqlc.arg(metadata)::jsonb,
-    updated_at = now()
-WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id);
 
 -- name: InsertOriginalFile :exec
 -- Where the uploaded bytes are. The backend is recorded beside the key

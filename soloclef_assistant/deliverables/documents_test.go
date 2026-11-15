@@ -57,9 +57,10 @@ type shed struct {
 	runError error
 }
 
-func (s *shed) Check() error { return nil }
-func (s *shed) ID() string   { return "bench-1" }
-func (s *shed) Bench(context.Context, Owner) (Bench, error) {
+func (s *shed) Check() error                         { return nil }
+func (s *shed) ID() string                           { return "bench-1" }
+func (s *shed) Release(context.Context, Owner) error { return nil }
+func (s *shed) Bench(context.Context, Owner, SandboxWait) (Bench, error) {
 	if s.refuse != nil {
 		return nil, s.refuse
 	}
@@ -656,24 +657,22 @@ func TestOnlyTheVerifiedBytesAreSaved(t *testing.T) {
 }
 
 func TestWhatFailsVerification(t *testing.T) {
-	const path = "/workspace/deck.pptx"
-	sound := shape(100, 100, 5000, 3000)
-	args := `{"path":"` + path + `","format":"pptx"}`
+	const path = "/workspace/report.docx"
+	args := `{"path":"` + path + `","format":"docx"}`
 	for name, test := range map[string]struct {
 		file  []byte
 		setup func(*ledger)
 		want  string
 		pages int
 	}{
-		"a structural fault is found before anything is rendered": {file: pptx(t, "", sound, ""), want: "slide 2 contains no drawable shapes", pages: 2},
-		"a deck LibreOffice cannot open":                          {file: pptx(t, "", sound), setup: func(l *ledger) { l.shed.render.failed = "converting" }, want: "LibreOffice could not convert the artifact to PDF; the file is not a valid pptx document.", pages: 1},
-		"a deck that renders a slide short":                       {file: pptx(t, "", sound, sound), setup: func(l *ledger) { l.shed.render.pages = 1 }, want: "expected 2 page(s), found 1", pages: 1},
-		"a file rewritten while it was rendered":                  {file: pptx(t, "", sound), setup: func(l *ledger) { l.shed.render.otherHash = true }, want: "The artifact changed while it was being verified. Verify it again when nothing is writing to it.", pages: 1},
-		"a render that ran out of time":                           {file: pptx(t, "", sound), setup: func(l *ledger) { l.shed.render.timedOut = true }, want: "Rendering the artifact took too long; make it smaller or simpler.", pages: 1},
-		"a word list that cannot be read":                         {file: pptx(t, "", sound), setup: func(l *ledger) { l.shed.render.noWords = true }, want: "The positions of the drawn text could not be read from the PDF.", pages: 1},
-		"what the placement rules measured": {file: pptx(t, "", sound), setup: func(l *ledger) {
-			l.shed.render.words = `<doc><page width="960" height="540"><flow><block><line><word xMin="900" yMin="10" xMax="990" yMax="40">Overview</word></line></block></flow></page></doc>`
-		}, want: `slide 1: text runs off the slide and is cut: "Overview"`, pages: 1},
+		"a structural fault is found before anything is rendered": {file: docx(t, `<w:p><w:r><w:t>The light reactions make ATP.</w:t></w:r></w:p>`), want: "DOCX has no section page setup", pages: 0},
+		"a document LibreOffice cannot open":                      {file: goodDOCX(t), setup: func(l *ledger) { l.shed.render.failed = "converting" }, want: "LibreOffice could not convert the artifact to PDF; the file is not a valid docx document.", pages: 0},
+		"a file rewritten while it was rendered":                  {file: goodDOCX(t), setup: func(l *ledger) { l.shed.render.otherHash = true }, want: "The artifact changed while it was being verified. Verify it again when nothing is writing to it.", pages: 0},
+		"a render that ran out of time":                           {file: goodDOCX(t), setup: func(l *ledger) { l.shed.render.timedOut = true }, want: "Rendering the artifact took too long; make it smaller or simpler.", pages: 0},
+		"a word list that cannot be read":                         {file: goodDOCX(t), setup: func(l *ledger) { l.shed.render.noWords = true }, want: "The positions of the drawn text could not be read from the PDF.", pages: 1},
+		"what the placement rules measured": {file: goodDOCX(t), setup: func(l *ledger) {
+			l.shed.render.words = `<doc><page width="595" height="842"><flow><block><line><word xMin="560" yMin="10" xMax="640" yMax="40">Overview</word></line></block></flow></page></doc>`
+		}, want: `page 1: text runs off the page and is cut: "Overview"`, pages: 1},
 	} {
 		_, l, tools := built(t, path, test.file)
 		if test.setup != nil {
@@ -685,7 +684,11 @@ func TestWhatFailsVerification(t *testing.T) {
 			continue
 		}
 		got := verdict(t, text)
-		if got.Status != "failed" || len(got.Findings) != 1 || got.Findings[0] != test.want || got.PageCount == nil || *got.PageCount != test.pages || got.Notes == nil {
+		pages := 0
+		if got.PageCount != nil {
+			pages = *got.PageCount
+		}
+		if got.Status != "failed" || len(got.Findings) != 1 || got.Findings[0] != test.want || pages != test.pages || got.Notes == nil {
 			t.Errorf("%s: %s", name, text)
 		}
 		// Nothing of a failed verification is left in the sandbox, and it
@@ -693,7 +696,7 @@ func TestWhatFailsVerification(t *testing.T) {
 		if len(l.shed.files) != 1 {
 			t.Errorf("%s: the sandbox holds %d files afterwards", name, len(l.shed.files))
 		}
-		if _, err := runTool(t, tools[SaveTool], `{"format":"pptx","title":"Deck","path":"`+path+`","markdown_representation":"x"}`); err == nil || len(l.created) != 0 {
+		if _, err := runTool(t, tools[SaveTool], `{"format":"docx","title":"Report","path":"`+path+`","markdown_representation":"x"}`); err == nil || len(l.created) != 0 {
 			t.Errorf("%s: a failed file was saved (%v)", name, err)
 		}
 		// The card draws the same verdict.
@@ -701,7 +704,13 @@ func TestWhatFailsVerification(t *testing.T) {
 			t.Errorf("%s: card %s", name, rendered(t, card))
 		}
 	}
-	_, _, tools := built(t, path, pptx(t, "", sound))
+	// A deck is not verified as a file: it is saved from its content.
+	if _, _, tools := built(t, "/workspace/deck.pptx", nil); true {
+		if _, err := runTool(t, tools[VerifyTool], `{"path":"/workspace/deck.pptx","format":"pptx"}`); err == nil || !strings.Contains(err.Error(), "save its content with save_artifact") {
+			t.Errorf("verifying a deck: %v", err)
+		}
+	}
+	_, _, tools := built(t, path, goodDOCX(t))
 
 	// What is wrong with the call, not the file, is an error.
 	for args, says := range map[string]string{
@@ -777,7 +786,7 @@ func TestADeploymentWithoutASandboxSaysSo(t *testing.T) {
 	}
 	// The real refusals: NoSandbox, and a specialist that has a sandbox
 	// keeps the record of what passed.
-	if _, err := (NoSandbox{}).Bench(context.Background(), Owner{}); err == nil || err.Error() != noSandboxSentence {
+	if _, err := (NoSandbox{}).Bench(context.Background(), Owner{}, SandboxWait{}); err == nil || err.Error() != noSandboxSentence {
 		t.Errorf("NoSandbox: %v", err)
 	}
 	s, _ := specialist(t, modeltest.NewScript(), &ledger{})
@@ -794,9 +803,9 @@ func TestADeploymentWithoutASandboxSaysSo(t *testing.T) {
 }
 
 func TestInstructionsComeFromTheSandboxImage(t *testing.T) {
-	_, l, tools := built(t, "/opt/skills/pptx/SKILL.md", []byte("# PowerPoint\nUse python-pptx."))
-	text, err := runTool(t, tools[InstructionsTool], `{"artifact_type":"PPTX"}`)
-	if err != nil || !strings.HasPrefix(text, "# PowerPoint\nUse python-pptx.") || !strings.Contains(text, `save_artifact(format="pptx", title="...", path=output_path, markdown_representation="...")`) ||
+	_, l, tools := built(t, "/opt/skills/pdf/SKILL.md", []byte("# PDF\nUse WeasyPrint."))
+	text, err := runTool(t, tools[InstructionsTool], `{"artifact_type":"PDF"}`)
+	if err != nil || !strings.HasPrefix(text, "# PDF\nUse WeasyPrint.") || !strings.Contains(text, `save_artifact(format="pdf", title="...", path=output_path, markdown_representation="...")`) ||
 		!strings.Contains(text, "no load_source_document and no load_artifact_for_revision") {
 		t.Errorf("instructions: %q, %v", text, err)
 	}
@@ -901,13 +910,12 @@ func TestTheRecordOfVerificationsIsBounded(t *testing.T) {
 	}
 }
 
-// The variables that point the test below at a real OpenSandbox server, the
-// ones package sandbox's own real test reads. The server must be a
-// throwaway.
+// The variables that point the test below at a real sandbox service, the
+// ones package sandbox's own real test reads. The test's thread id is the
+// clock's, and its sandbox is removed at the end.
 const (
-	realSandboxURL   = "SOLOCLEF_TEST_SANDBOX_URL"
-	realSandboxKey   = "SOLOCLEF_TEST_SANDBOX_KEY"
-	realSandboxImage = "SOLOCLEF_TEST_SANDBOX_IMAGE"
+	realSandboxURL = "SOLOCLEF_TEST_SANDBOX_URL"
+	realSandboxKey = "SOLOCLEF_TEST_SANDBOX_KEY"
 )
 
 // TestBuiltDocumentsInARealSandbox takes each built format through the real
@@ -918,11 +926,10 @@ const (
 func TestBuiltDocumentsInARealSandbox(t *testing.T) {
 	address := os.Getenv(realSandboxURL)
 	if address == "" {
-		t.Skipf("%s is not set; this test needs a throwaway OpenSandbox server", realSandboxURL)
+		t.Skipf("%s is not set; this test needs a running sandbox service", realSandboxURL)
 	}
 	client, err := sandbox.New(sandbox.Settings{
-		// A stack of this run's own, so nothing it makes is any deployment's.
-		Stack: fmt.Sprintf("test-documents-%d", time.Now().UnixNano()), URL: address, APIKey: os.Getenv(realSandboxKey), Image: os.Getenv(realSandboxImage),
+		URL: address, APIKey: os.Getenv(realSandboxKey),
 		CPU: "2", Memory: "2Gi", IdleTTL: 10 * time.Minute, CommandTimeout: 3 * time.Minute, MaxPerAccount: 2,
 	}, &http.Client{})
 	if err != nil {
@@ -982,16 +989,6 @@ for s in d.sections:
 d.add_heading("Photosynthesis", 1)
 d.add_paragraph("The light reactions capture energy as ATP and NADPH in the thylakoid membranes.")
 d.save("/workspace/made.docx")`},
-		{name: "pptx", pages: 2, preview: true, code: `
-from pptx import Presentation
-from pptx.util import Inches, Pt
-p = Presentation()
-for title in ("Photosynthesis", "The Calvin cycle"):
-    slide = p.slides.add_slide(p.slide_layouts[6])
-    box = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(8), Inches(1.5))
-    box.text_frame.text = title
-    box.text_frame.paragraphs[0].runs[0].font.size = Pt(40)
-p.save("/workspace/made.pptx")`},
 		{name: "xlsx", code: `
 from openpyxl import Workbook
 w = Workbook()
@@ -1065,61 +1062,31 @@ c.save()`
 		}
 	})
 
-	t.Run("a deck's placement, measured", func(t *testing.T) {
-		// One deck built the way a model builds one, twice: laid out
-		// cleanly, and with the faults a look at pictures was relied on to
-		// catch. Its previews are kept in SOLOCLEF_TEST_KEEP_PREVIEWS, when
-		// set, to be looked at.
-		if out, err := call(ExecuteTool, map[string]string{"code_or_command": placementDeck}); err != nil || !strings.HasSuffix(out, "[Command exited with code 0]") {
-			t.Fatalf("building: %v\n%s", err, out)
-		}
-		text, err := call(VerifyTool, map[string]string{"path": "/workspace/clean.pptx", "format": "pptx"})
-		if err != nil || verdict(t, text).Status != "verified" {
-			t.Fatalf("the clean deck: %s, %v", text, err)
-		}
-		if _, err := call(SaveTool, map[string]string{"format": "pptx", "title": "Clean deck", "path": "/workspace/clean.pptx", "markdown_representation": "# The cell cycle"}); err != nil {
-			t.Fatal(err)
-		}
-		keep(t, "clean.pdf", l.created[len(l.created)-1].Preview)
-
-		text, err = call(VerifyTool, map[string]string{"path": "/workspace/faulty.pptx", "format": "pptx"})
+	t.Run("a drawn deck, previewed and measured", func(t *testing.T) {
+		// The sample deck through save_artifact: drawn here, converted by
+		// the sandbox's LibreOffice, measured, and kept verified (the
+		// image has the fonts the renderer measures with).
+		saved, err := call(SaveTool, map[string]any{"format": "pptx", "title": "Photosynthesis", "deck": sampleDeck(t)})
 		if err != nil {
 			t.Fatal(err)
 		}
-		got := verdict(t, text)
-		all := strings.Join(got.Findings, "\n")
-		t.Logf("the faulty deck's findings:\n%s", all)
-		for _, want := range []string{
-			`slide 1: the line "Staircase" crosses the text of "Source"`,
-			`slide 1: the line "Staircase" crosses the text of "Moon label"`,
-			`slide 2: the text of "Crowded" ("G1: the cell grows S: DNA is copied G2: checks before div...") is not drawn whole inside its box`,
-			`slide 2: words are drawn over each other`,
-			`slide 2: "Fine print" in Fine print is set at 9 pt`,
-			`slide 2: "Faint words on a pale ground" in Faint is #C8C8C8 on #FFFFFF`,
-			`slide 2: the picture "Chart" runs off the slide`,
-			`slide 2: the text of "Covered" ("Hidden behind the card") is hidden under the shape "Late card"`,
-		} {
-			if !strings.Contains(all, want) {
-				t.Errorf("no finding %q", want)
-			}
+		stored := l.created[len(l.created)-1]
+		if stored.Format != FormatPPTX || string(stored.Metadata) != verifiedMetadata || !bytes.HasPrefix(stored.Preview, []byte("%PDF-")) {
+			t.Errorf("stored %s with %s; saved %s", stored.Format, stored.Metadata, saved)
 		}
-		// What was laid out well is not blamed.
-		for _, sound := range []string{"Title", "Subtitle", "Heading", "Interphase", "Mitosis", "Link", "Hours"} {
-			if strings.Contains(all, `"`+sound+`"`) {
-				t.Errorf("a finding names %q", sound)
-			}
+		keep(t, "drawn.pdf", stored.Preview)
+
+		// The rules still catch a badly built deck there.
+		data, err := os.ReadFile("testdata/faulty-deck.pptx")
+		if err != nil {
+			t.Fatal(err)
 		}
-		if got.Status != "failed" {
-			t.Errorf("status %s", got.Status)
+		_, findings, err := s.previewDeck(context.Background(), owner, data, 2)
+		if err != nil {
+			t.Fatal(err)
 		}
-		// The faulty deck's own drawing, kept for the eye: verification
-		// leaves nothing behind, so it is converted here as the render
-		// command converts it.
-		if out, err := call(ExecuteTool, map[string]string{"language": "bash", "code_or_command": "cd /workspace && soffice --headless -env:UserInstallation=file:///tmp/keep-profile --convert-to pdf faulty.pptx >/dev/null 2>&1; ls -l faulty.pdf"}); err == nil && strings.Contains(out, "faulty.pdf") {
-			box := Sandboxes{Client: client}
-			if pdf, err := box.read(t, owner, "/workspace/faulty.pdf"); err == nil {
-				keep(t, "faulty.pdf", pdf)
-			}
+		if all := strings.Join(findings, "\n"); !strings.Contains(all, `the line "Staircase" crosses the text of "Source"`) || !strings.Contains(all, `is hidden under the shape "Late card"`) {
+			t.Errorf("the faulty deck's findings:\n%s", all)
 		}
 	})
 }
@@ -1138,132 +1105,12 @@ func keep(t *testing.T, name string, data []byte) {
 // read reads a sandbox file for a test.
 func (s Sandboxes) read(t *testing.T, owner Owner, path string) ([]byte, error) {
 	t.Helper()
-	bench, err := s.Bench(context.Background(), owner)
+	bench, err := s.Bench(context.Background(), owner, SandboxWait{})
 	if err != nil {
 		return nil, err
 	}
 	return bench.ReadFile(context.Background(), path, MaxDocumentBytes)
 }
-
-// placementDeck builds two decks of two slides with python-pptx: clean.pptx,
-// laid out as the pptx skill asks (cards, connectors that end at their
-// cards, a picture, a table, a footer), and faulty.pptx, the same with the
-// faults the placement rules exist for.
-const placementDeck = `
-from pptx import Presentation
-from pptx.util import Inches, Pt, Emu
-from pptx.dml.color import RGBColor
-from pptx.enum.shapes import MSO_SHAPE, MSO_CONNECTOR
-from pptx.enum.text import MSO_AUTO_SIZE
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-
-fig, ax = plt.subplots(figsize=(4, 3), dpi=100)
-ax.bar(["G1", "S", "G2", "M"], [11, 8, 4, 1], color="#2F6690")
-ax.set_ylabel("hours")
-fig.tight_layout()
-fig.savefig("/workspace/chart.png")
-
-INK, PAPER, ACCENT, MUTED = RGBColor(0x1B, 0x26, 0x3B), RGBColor(0xFF, 0xFF, 0xFF), RGBColor(0x2F, 0x66, 0x90), RGBColor(0x55, 0x5F, 0x6B)
-
-def text(slide, name, x, y, w, h, words, size, colour=INK, bold=False, auto=False):
-    box = slide.shapes.add_textbox(Inches(x), Inches(y), Inches(w), Inches(h))
-    box.name = name
-    frame = box.text_frame
-    frame.word_wrap = True
-    if not auto:
-        # A box that keeps its size, as the pptx skill asks: text that does
-        # not fit runs out of it.
-        frame.auto_size = MSO_AUTO_SIZE.NONE
-    for side in ("margin_left", "margin_right", "margin_top", "margin_bottom"):
-        setattr(frame, side, 0)
-    paragraphs = words if isinstance(words, list) else [words]
-    for i, line in enumerate(paragraphs):
-        p = frame.paragraphs[0] if i == 0 else frame.add_paragraph()
-        run = p.add_run()
-        run.text = line
-        run.font.size, run.font.bold, run.font.name = Pt(size), bold, "Arial"
-        run.font.color.rgb = colour
-    return box
-
-def card(slide, name, x, y, w, h, words, fill=ACCENT):
-    shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(x), Inches(y), Inches(w), Inches(h))
-    shape.name = name
-    shape.fill.solid()
-    shape.fill.fore_color.rgb = fill
-    shape.line.fill.background()
-    frame = shape.text_frame
-    frame.word_wrap = True
-    run = frame.paragraphs[0].add_run()
-    run.text = words
-    run.font.size, run.font.name, run.font.bold = Pt(20), "Arial", True
-    run.font.color.rgb = PAPER
-    return shape
-
-def build(path, faulty):
-    deck = Presentation()
-    deck.slide_width, deck.slide_height = Inches(13.333), Inches(7.5)
-    blank = deck.slide_layouts[6]
-
-    # Slide 1: a title, a staircase to "the moon", and a source line.
-    one = deck.slides.add_slide(blank)
-    text(one, "Title", 0.8, 1.2, 8, 1.2, "The cell cycle", 54, bold=True)
-    text(one, "Subtitle", 0.8, 2.6, 7, 1.2, "Four phases, one division: how a cell copies itself and splits in two.", 24, colour=MUTED)
-    moon = one.shapes.add_shape(MSO_SHAPE.OVAL, Inches(11.4), Inches(2.4), Inches(0.6), Inches(0.6))
-    moon.name = "Moon"
-    moon.fill.solid(); moon.fill.fore_color.rgb = ACCENT
-    text(one, "Moon label", 10.9, 3.1, 1.6, 0.4, "the moon", 14, colour=MUTED)
-    # The staircase climbs to the foot of "the moon"'s label; a faulty one
-    # starts down in the source line and runs on up through the label.
-    if faulty:
-        points = [(3.0, 7.1), (4.2, 5.4), (10.0, 5.4), (10.0, 4.4), (11.3, 4.4), (11.3, 2.4)]
-    else:
-        points = [(8.0, 6.2), (8.8, 5.4), (10.0, 5.4), (10.0, 4.4), (11.3, 4.4), (11.3, 3.6)]
-    steps = one.shapes.build_freeform(Inches(points[0][0]), Inches(points[0][1]))
-    steps.add_line_segments([(Inches(x), Inches(y)) for x, y in points[1:]], close=False)
-    stairs = steps.convert_to_shape()
-    stairs.name = "Staircase"
-    stairs.fill.background()
-    stairs.line.color.rgb = ACCENT
-    stairs.line.width = Pt(1.5)
-    text(one, "Source", 0.8, 6.7, 11.5, 0.5, "Source: Alberts, Molecular Biology of the Cell, 7th edition, chapter 17.", 12, colour=MUTED, auto=True)
-
-    # Slide 2: two cards joined by a connector, a chart, a table, a footer.
-    two = deck.slides.add_slide(blank)
-    text(two, "Heading", 0.8, 0.5, 11.7, 0.9, "What happens in each phase", 36, bold=True)
-    card(two, "Interphase", 0.8, 1.8, 3.2, 1.2, "Interphase: grow and copy")
-    card(two, "Mitosis", 5.0, 1.8, 3.2, 1.2, "Mitosis: divide the nucleus")
-    link = two.shapes.add_connector(MSO_CONNECTOR.STRAIGHT, Inches(4.0), Inches(2.4), Inches(5.0), Inches(2.4))
-    link.name = "Link"
-    link.line.color.rgb = INK
-    bullets = ["G1: the cell grows", "S: DNA is copied", "G2: checks before division"]
-    if faulty:
-        bullets = bullets * 4
-    text(two, "Crowded" if faulty else "Phases", 0.8, 3.4, 7.4, 1.6 if faulty else 1.6, bullets, 20)
-    if faulty:
-        text(two, "Fine print", 0.8, 5.3, 6, 0.4, "Fine print", 9)
-        text(two, "Faint", 0.8, 5.8, 6, 0.5, "Faint words on a pale ground", 20, colour=RGBColor(0xC8, 0xC8, 0xC8))
-        text(two, "Covered", 9.0, 6.4, 3.5, 0.5, "Hidden behind the card", 18)
-        late = two.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(8.9), Inches(6.3), Inches(3.8), Inches(0.8))
-        late.name = "Late card"
-        late.fill.solid(); late.fill.fore_color.rgb = RGBColor(0xEE, 0xF2, 0xF7)
-        late.line.fill.background()
-    picture = two.shapes.add_picture("/workspace/chart.png", Inches(9.0 if not faulty else 10.5), Inches(1.6), width=Inches(3.6))
-    picture.name = "Chart"
-    rows = two.shapes.add_table(3, 2, Inches(9.0), Inches(4.6), Inches(3.6), Inches(1.2))
-    rows.name = "Hours"
-    for r, (a, b) in enumerate([("Phase", "Hours"), ("G1", "11"), ("S", "8")]):
-        for c, value in enumerate((a, b)):
-            cell = rows.table.cell(r, c)
-            cell.text = value
-            cell.text_frame.paragraphs[0].runs[0].font.size = Pt(14)
-    deck.save(path)
-
-build("/workspace/clean.pptx", False)
-build("/workspace/faulty.pptx", True)
-print("built")
-`
 
 // The specialist as the main agent runs it, for a report: the four steps in
 // order through the nested loop, a first verification that fails and is

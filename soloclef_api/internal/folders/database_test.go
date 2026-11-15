@@ -72,7 +72,6 @@ func TestTheTableKeepsAccountsApartByItself(t *testing.T) {
 		"rename":       func() error { return w.Rename(ctx, b, mine.ID, "Taken", at) },
 		"reparent":     func() error { return w.Reparent(ctx, b, mine.ID, nil, "zz", at) },
 		"reposition":   func() error { return w.Reposition(ctx, b, mine.ID, "zz", at) },
-		"clear":        func() error { return w.ClearWatched(ctx, b, mine.ID, at) },
 		"move":         func() error { return w.MoveDocuments(ctx, b, []int64{document}, nil) },
 		"move to mine": func() error { return w.MoveDocuments(ctx, b, []int64{document}, &theirs.ID) },
 		"restore": func() error {

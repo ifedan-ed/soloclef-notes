@@ -3,6 +3,7 @@ import { mock, test } from "node:test";
 import {
 	EMAIL_MAILBOXES_NOTE,
 	editViewActions,
+	MCP_DISCONNECT_WARNING,
 } from "@/components/assistant-ui/connector-popup/connector-configs/views/edit-view-actions";
 import { baseApiService } from "@/lib/apis/base-api.service";
 import { connectorsApiService } from "@/lib/apis/connectors-api.service";
@@ -72,13 +73,22 @@ test("an MCP server keeps its own wording", () => {
 		{
 			connector_type: "MCP_CONNECTOR",
 			is_indexable: false,
-			config: { server_config: { name: "My tools", url: "https://mcp.example.com" } },
+			config: {
+				server_config: {
+					url: "https://mcp.example.com",
+					transport: "streamable-http",
+					auth: { type: "none" },
+					headers: {},
+				},
+			},
 		},
 		withPanel
 	);
 	assert.equal(mcp.canDisconnect, true);
 	assert.equal(mcp.canSave, false);
-	assert.equal(mcp.disconnectWarning, "Your agent will lose access to this service");
+	// Removing a server is its disconnect, and it says the OAuth sign-in goes too.
+	assert.equal(mcp.disconnectWarning, MCP_DISCONNECT_WARNING);
+	assert.match(mcp.disconnectWarning, /revoked/);
 });
 
 test("a connection's PUT names the connection and no workspace", async (t) => {
@@ -151,10 +161,15 @@ test("the lists, the test and the policy are asked without a workspace id", asyn
 		]
 	);
 
-	const server = { url: "https://mcp.example.com", headers: {}, transport: "streamable-http" };
-	await connectorsApiService.testMCPConnection({ ...server, transport: "streamable-http" }, 5);
+	const server = {
+		url: "https://mcp.example.com",
+		headers: {},
+		transport: "streamable-http" as const,
+		auth: { type: "none" as const },
+	};
+	await connectorsApiService.testMCPConnection(server, 5);
 	await connectorsApiService.createMCPConnector({
-		data: { name: "My tools", server_config: { ...server, transport: "streamable-http" } },
+		data: { name: "My tools", server_config: server },
 	});
 	await connectorsApiService.indexConnector({ connector_id: 5 });
 	await connectorsApiService.indexConnector({

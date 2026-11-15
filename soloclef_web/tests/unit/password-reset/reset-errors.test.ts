@@ -27,8 +27,11 @@ test("the Go API names the refused password in the message", () => {
 	);
 });
 
-test("a server with mail switched off is a plain failure", () => {
-	assert.equal(classifyResetError(new AppError("PASSWORD_RESET_UNAVAILABLE", 503)), "reset_failed");
+test("a server with mail switched off says resets by email are not available", () => {
+	assert.equal(
+		classifyResetError(new AppError("PASSWORD_RESET_UNAVAILABLE", 503)),
+		"reset_unavailable"
+	);
 });
 
 test("rate limits and anything else get their own message", () => {

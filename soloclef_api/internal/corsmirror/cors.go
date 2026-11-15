@@ -17,8 +17,8 @@ import (
 // deployment be reached on localhost without configuring anything.
 var loopbackOrigins = regexp.MustCompile(`^https?://(localhost|127\.0\.0\.1)(:\d+)?$`)
 
-// alwaysAllowed are the two origins app.py appends for local development and
-// the desktop app. They name no server.
+// alwaysAllowed are the two origins app.py appends for local development.
+// They name no server.
 var alwaysAllowed = []string{"http://localhost:3000", "http://127.0.0.1:3000"}
 
 // exposedHeaders is app.py's expose_headers.

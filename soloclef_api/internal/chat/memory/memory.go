@@ -8,9 +8,11 @@
 // the model sent.
 //
 // What a document may contain is not decided here either. The checks and
-// the re-rendering are internal/markdownmemory's Save, the same function the
-// Settings page's routes call, so a document saved from chat and one saved
-// from Settings obey one set of rules.
+// the re-rendering are internal/markdownmemory's Save, the assistant's
+// stricter save: the model must write "## " sections, and a document without
+// one is refused so the model is told to rewrite it. The Settings routes
+// accept any text a person types (SaveWrittenByPerson), through the same
+// renderer and under the same length limit.
 //
 // # What this does better than the tool it replaces
 //

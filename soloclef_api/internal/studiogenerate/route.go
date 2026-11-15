@@ -25,15 +25,17 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/requestcontext"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/studiooutputs"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/deliverables"
+	"git.danvics.com/danvics/soloclef/soloclef_studio/notebookoutput"
 )
 
 // maxBodyBytes bounds a generate body: its longest fields are a 4000
 // character template and a 2000 character focus.
 const maxBodyBytes = 64 << 10
 
-// Starter starts an artifact job in the background (*Runner).
-type Starter interface {
-	Start(job Job)
+// Waker is told an artifact job was queued (*Runner): the job itself is in
+// the row, and whichever process has room claims it from there.
+type Waker interface {
+	Wake()
 }
 
 // Routes is the two routes.
@@ -41,7 +43,7 @@ type Routes struct {
 	Pool   *pgxpool.Pool
 	Models Models
 	// Runner makes the artifact kinds.
-	Runner Starter
+	Runner Waker
 	// OpenPodcast opens a podcast at its brief gate with the given shape,
 	// through the specialist's own opener; StartDraft approves that brief
 	// and queues the draft (podcasts.StartDraft). cmd/api supplies both.
@@ -52,14 +54,8 @@ type Routes struct {
 	// SandboxEnabled says this deployment can build the kinds made by code
 	// (a report, slides, a data table). Off, they are refused by name.
 	SandboxEnabled bool
-	// ImageEnabled says this deployment has a model that draws (the chat's
-	// image model is named), which an infographic is made with. Off, an
-	// infographic is refused when it is asked for, as a sandbox kind is.
-	// It used to be accepted, shown as generating, and failed a moment
-	// later by the specialist, with nothing telling the person why.
-	ImageEnabled bool
-	Errors       errorenvelope.Writer
-	Logger       *slog.Logger
+	Errors         errorenvelope.Writer
+	Logger         *slog.Logger
 }
 
 // Check reports what is missing. Called once at start-up.
@@ -270,9 +266,6 @@ func (r Routes) start(ctx context.Context, who Caller, notebookID int64, request
 	if needsSandbox(request) && !r.SandboxEnabled {
 		return 0, &refusal{http.StatusServiceUnavailable, notEnabled}
 	}
-	if needsImageModel(request) && !r.ImageEnabled {
-		return 0, &refusal{http.StatusServiceUnavailable, notEnabled}
-	}
 	documents, err := read(ctx, q)
 	if err != nil {
 		return 0, err
@@ -300,10 +293,14 @@ func (r Routes) start(ctx context.Context, who Caller, notebookID int64, request
 	if err != nil {
 		return 0, fmt.Errorf("encoding the output's sources: %w", err)
 	}
-	output := CreateOutputParams{
+	output := notebookoutput.CreateOutputParams{
 		Kind: request.Kind, Title: outputTitle(request, notebookTitle), Options: options,
 		SourceDocumentIds: made, NotebookID: notebookID, UserID: who.UserID,
 	}
+	// The output's own heading, apart from the listing title above, which
+	// names the kind (heading.go). A podcast has none: its title reaches no
+	// model and is never spoken, only listed and given to its transcript.
+	own := outputHeading(request, notebookTitle)
 	switch request.Kind {
 	case "audio":
 		// An audio overview is a podcast run and has no job to carry the
@@ -314,9 +311,9 @@ func (r Routes) start(ctx context.Context, who Caller, notebookID int64, request
 		}
 		return r.startAudio(ctx, who, request, documents, output)
 	case "video":
-		return r.startVideo(ctx, who, request, documents, output, callID)
+		return r.startVideo(ctx, who, request, own, documents, output, callID)
 	default:
-		return r.startArtifact(ctx, who, request, documents, output, callID)
+		return r.startArtifact(ctx, who, request, own, documents, output, callID)
 	}
 }
 
@@ -361,7 +358,7 @@ func thread(ctx context.Context, q *Queries, userID string, notebookID int64, ti
 // once and lists it. The podcast is opened before the output is written
 // because opening may ask the model proxy for voices; if the draft cannot
 // then be queued the podcast is closed again, so nothing is left waiting.
-func (r Routes) startAudio(ctx context.Context, who Caller, request Request, documents []SourceDocument, output CreateOutputParams) (int64, error) {
+func (r Routes) startAudio(ctx context.Context, who Caller, request Request, documents []SourceDocument, output notebookoutput.CreateOutputParams) (int64, error) {
 	q := New(r.Pool)
 	threadID, err := thread(ctx, q, who.UserID, output.NotebookID, output.Title)
 	if err != nil {
@@ -386,7 +383,7 @@ func (r Routes) startAudio(ctx context.Context, who Caller, request Request, doc
 		return 0, &refusal{http.StatusServiceUnavailable, "The audio overview could not be queued right now. Please try again."}
 	}
 	output.PodcastID, output.ThreadID = &podcastID, &threadID
-	outputID, err := q.CreateOutput(ctx, output)
+	outputID, err := notebookoutput.New(r.Pool).CreateOutput(ctx, output)
 	var conflict *pgconn.PgError
 	if output.RequestKey == nil || !errors.As(err, &conflict) || conflict.Code != uniqueViolation {
 		return outputID, err
@@ -416,15 +413,17 @@ const uniqueViolation = "23505"
 // startVideo queues the render job through the specialist's queuer and
 // lists it. The queuer is idempotent on the click's id, so a click that
 // lost a race finds the winner's job and then the winner's output.
-func (r Routes) startVideo(ctx context.Context, who Caller, request Request, documents []SourceDocument, output CreateOutputParams, callID string) (int64, error) {
+func (r Routes) startVideo(ctx context.Context, who Caller, request Request, own heading, documents []SourceDocument, output notebookoutput.CreateOutputParams, callID string) (int64, error) {
 	q := New(r.Pool)
 	threadID, err := thread(ctx, q, who.UserID, output.NotebookID, output.Title)
 	if err != nil {
 		return 0, err
 	}
 	jobID, err := r.Videos.Queue(ctx, deliverables.Owner{UserID: who.UserID, ThreadID: threadID}, callID, deliverables.VideoRequest{
-		// On one line, as the worker stores it.
-		Title: output.Title, Brief: oneLine(videoBrief(request)), Material: wholeMaterial(documents),
+		// The author heads the opening slide with this title, so it is the
+		// video's own heading, not the listing title (heading.go). The
+		// brief is on one line, as the worker stores it.
+		Title: videoTitle(own, output.Title), Brief: oneLine(videoBrief(request, own)), Material: wholeMaterial(documents),
 	})
 	if err != nil {
 		// The same click, already queued under another thread.
@@ -434,14 +433,14 @@ func (r Routes) startVideo(ctx context.Context, who Caller, request Request, doc
 		return 0, err
 	}
 	output.DeliverableJobID, output.ThreadID = &jobID, &threadID
-	return q.CreateOutput(ctx, output)
+	return notebookoutput.New(r.Pool).CreateOutput(ctx, output)
 }
 
 // startArtifact writes the thread, the job and the output together and then
 // hands the job to the runner. The model is looked up first: an account
 // whose model is gone is told so now, not by a failed job a minute later,
 // and the output records which model writes it.
-func (r Routes) startArtifact(ctx context.Context, who Caller, request Request, documents []SourceDocument, output CreateOutputParams, callID string) (int64, error) {
+func (r Routes) startArtifact(ctx context.Context, who Caller, request Request, own heading, documents []SourceDocument, output notebookoutput.CreateOutputParams, callID string) (int64, error) {
 	_, modelName, err := r.Models.For(ctx, who.UserID)
 	if err != nil {
 		r.Logger.WarnContext(ctx, "a studio output was not started: the account's model is unavailable",
@@ -451,15 +450,26 @@ func (r Routes) startArtifact(ctx context.Context, who Caller, request Request, 
 	if output.GeneratedBy, err = json.Marshal(map[string]string{"model": modelName}); err != nil {
 		return 0, err
 	}
-	stored, err := json.Marshal(map[string]any{"version": 1, "output": request.Kind, "format": artifactKind(request)})
+	// The job is written with everything it is made from, so that it is not
+	// tied to this process: the task is read back by whichever process
+	// claims it, after a deploy as much as now (stored_task.go).
+	made := Job{Task: artifactTask(request, own, compileMaterial(documents, artifactMaterialChars))}
+	if request.Kind == "infographic" {
+		made.Style, made.Orientation = request.Options["style"], request.Options["orientation"]
+	}
+	stored, err := encodeTask(request.Kind, artifactKind(request), made)
 	if err != nil {
 		return 0, err
 	}
-	task := artifactTask(request, output.Title, compileMaterial(documents, artifactMaterialChars))
 
-	type started struct{ outputID, jobID, threadID int64 }
+	type started struct{ outputID int64 }
 	done, err := database.Write(ctx, r.Pool, func(ctx context.Context, tx pgx.Tx, _ *database.Effects) (started, error) {
 		q := New(tx)
+		// The account's share first (fair_share.go): a request over it
+		// writes nothing, not even the hidden thread.
+		if err := admitAnother(ctx, q, who.UserID); err != nil {
+			return started{}, err
+		}
 		threadID, err := thread(ctx, q, who.UserID, output.NotebookID, output.Title)
 		if err != nil {
 			return started{}, err
@@ -475,8 +485,8 @@ func (r Routes) startArtifact(ctx context.Context, who Caller, request Request, 
 			return started{}, err
 		}
 		output.DeliverableJobID, output.ThreadID = &jobID, &threadID
-		outputID, err := q.CreateOutput(ctx, output)
-		return started{outputID, jobID, threadID}, err
+		outputID, err := notebookoutput.New(tx).CreateOutput(ctx, output)
+		return started{outputID}, err
 	})
 	var raced *refusal
 	if errors.As(err, &raced) && raced.status == http.StatusConflict {
@@ -488,11 +498,7 @@ func (r Routes) startArtifact(ctx context.Context, who Caller, request Request, 
 	if err != nil {
 		return 0, err
 	}
-	job := Job{ID: done.jobID, UserID: who.UserID, ThreadID: done.threadID, Task: task}
-	if request.Kind == "infographic" {
-		job.Style, job.Orientation = request.Options["style"], request.Options["orientation"]
-	}
 	// After the commit: the runner claims the row, which must be visible.
-	r.Runner.Start(job)
+	r.Runner.Wake()
 	return done.outputID, nil
 }

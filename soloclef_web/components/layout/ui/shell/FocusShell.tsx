@@ -5,7 +5,6 @@ import { useTranslations } from "next-intl";
 import type React from "react";
 import { closeCitationPanelAtom } from "@/atoms/citation/citation-panel.atom";
 import { closeDocumentViewerAtom } from "@/atoms/documents/document-viewer.atom";
-import { closeEditorPanelAtom } from "@/atoms/editor/editor-panel.atom";
 import { closeArtifactPanelAtom } from "@/features/artifacts/state/artifact-panel.atom";
 import { closeArtifactsPanelAtom } from "@/features/chat-artifacts";
 import { closeHitlEditPanelAtom } from "@/features/chat-messages/hitl";
@@ -31,14 +30,12 @@ export function FocusShell({
 	const layout = useRightPanelLayout();
 	const closeArtifact = useSetAtom(closeArtifactPanelAtom);
 	const closeDocument = useSetAtom(closeDocumentViewerAtom);
-	const closeEditor = useSetAtom(closeEditorPanelAtom);
 	const closeHitlEdit = useSetAtom(closeHitlEditPanelAtom);
 	const closeCitation = useSetAtom(closeCitationPanelAtom);
 	const closeArtifacts = useSetAtom(closeArtifactsPanelAtom);
 	const closeAll = () => {
 		closeArtifact();
 		closeDocument();
-		closeEditor();
 		closeHitlEdit();
 		closeCitation();
 		closeArtifacts();

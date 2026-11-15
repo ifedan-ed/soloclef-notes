@@ -22,6 +22,7 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/chat/parts"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/chat/threads"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/chat/turns"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/inflight"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/assembly"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/cite"
 )
@@ -96,14 +97,18 @@ type Service struct {
 	Logger  *slog.Logger
 	Now     func() time.Time
 
-	// Lifetime is cancelled when the server shuts down. A turn runs under
-	// it and not under its request's context: a reader who closes the tab
-	// has not asked for the answer to be thrown away, and finds it finished
-	// when they come back. Stop is the way to stop a turn.
+	// Lifetime is cancelled when the server's shutdown drain ends (cmd/api,
+	// drain.go), not when the stop signal arrives: a deploy lets turns that
+	// are running finish, within the drain's bound, and only a turn still
+	// going when the bound passes is stopped. A turn runs under it and not
+	// under its request's context: a reader who closes the tab has not asked
+	// for the answer to be thrown away, and finds it finished when they come
+	// back. Stop is the way to stop a turn.
 	Lifetime context.Context
 
-	// running counts turns still finishing, for Wait.
-	running sync.WaitGroup
+	// running counts turns still finishing: for Wait, and for the drain,
+	// which waits for it to be idle (Idle).
+	running inflight.Counter
 }
 
 // Check reports what is missing. Called once at start-up.
@@ -147,6 +152,19 @@ func (s *Service) Check() error {
 // The server calls it after cancelling Lifetime and before closing the
 // database pool, so a turn cut short by a deploy still saves what it had.
 func (s *Service) Wait() { s.running.Wait() }
+
+// Idle is closed once no turn is running in this process: what the server's
+// shutdown drain waits for, beside the Studio's runs.
+//
+// A turn still running when the drain's bound passes is not handed to the
+// next process, unlike a Studio job. A turn is a live answer streamed to the
+// one reader who asked, over a connection that ends with this process, and
+// its tools act on the account as they go (a mail draft written, a document
+// changed, an automation drafted): running it again from the question would
+// do those twice. So it gets the clean end a Stop gets: Lifetime is
+// cancelled, the turn saves the answer it has so far, its unfinished tool
+// lines are marked interrupted, and the person can ask again.
+func (s *Service) Idle() <-chan struct{} { return s.running.Idle() }
 
 // randomHex returns n random bytes as hex, for ids nobody has to guess.
 func randomHex(n int) string {
@@ -282,9 +300,9 @@ func (s *Service) stream(ctx context.Context, j job, out io.Writer, flush func()
 	writer.Data("activity-timing", steps.timing())
 
 	done := make(chan struct{})
-	s.running.Add(1)
+	s.running.Begin()
 	go func() {
-		defer s.running.Done()
+		defer s.running.End()
 		defer close(done)
 		s.finish(ctx, j, writer, builder, steps, usage)
 	}()

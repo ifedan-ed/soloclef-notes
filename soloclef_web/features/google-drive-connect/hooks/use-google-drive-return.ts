@@ -1,9 +1,10 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
+import { replaceAddressQuery } from "@/lib/routing/replace-query";
 
 /**
  * Back from Google's consent page (``?google_drive=connected`` or an error
@@ -12,8 +13,6 @@ import { toast } from "sonner";
 export function useGoogleDriveReturn(onConnected?: () => void) {
 	const t = useTranslations("google_drive_connect");
 	const params = useSearchParams();
-	const router = useRouter();
-	const pathname = usePathname();
 	const outcome = params.get("google_drive");
 	const handled = useRef<string | null>(null);
 
@@ -31,6 +30,6 @@ export function useGoogleDriveReturn(onConnected?: () => void) {
 		const next = new URLSearchParams(params.toString());
 		next.delete("google_drive");
 		const query = next.toString();
-		router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
-	}, [outcome, params, pathname, router, t, onConnected]);
+		replaceAddressQuery(query);
+	}, [outcome, params, t, onConnected]);
 }

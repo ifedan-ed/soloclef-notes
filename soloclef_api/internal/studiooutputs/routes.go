@@ -237,6 +237,11 @@ func (r Routes) remove(x *exchange) {
 			if err = q.CancelPodcast(ctx, CancelPodcastParams{ID: *removed.PodcastID, UserID: x.userID}); err == nil {
 				artifact, err = q.PodcastArtifact(ctx, PodcastArtifactParams{ID: *removed.PodcastID, UserID: x.userID})
 			}
+		case removed.ArtifactID != nil:
+			// What a notebook's chat made, with no run to stop: the
+			// artifact is removed as a finished run's is, so deleting it
+			// from the Studio is the same whoever made it.
+			artifact = removed.ArtifactID
 		}
 		if errors.Is(err, pgx.ErrNoRows) {
 			// The run is gone; the output was all there was.

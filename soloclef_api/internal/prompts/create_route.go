@@ -34,9 +34,8 @@ func (r CreateRoute) Register(api huma.API) {
 		Method:      http.MethodPost,
 		Path:        CreatePath,
 		Summary:     "Write a prompt",
-		Description: "The same response as the Python tier's POST /api/v1/prompts, " +
-			"byte for byte, and the same row.",
-		Tags: []string{"prompts"},
+		Description: "A new prompt of the signed-in account's own, answered as stored.",
+		Tags:        []string{"prompts"},
 	}, func(ctx context.Context, _ *struct{}) (*huma.StreamResponse, error) {
 		return &huma.StreamResponse{Body: r.serve}, nil
 	})
@@ -74,37 +73,16 @@ func (r CreateRoute) serve(ctx huma.Context) {
 		now = time.Now
 	}
 
-	type outcome struct {
-		created Prompt
-		refusal *refusal
-	}
-	result, err := database.Write(ctx.Context(), r.Pool,
-		func(ctx context.Context, tx pgx.Tx, _ *database.Effects) (outcome, error) {
-			// The admin row is read only when the request actually asks to
-			// publish, which is the only time the question matters.
-			if requested.IsPublic {
-				administrator, err := MayPublish(ctx, tx, caller.UserID)
-				if err != nil {
-					return outcome{}, err
-				}
-				if !administrator {
-					return outcome{refusal: &refusal{
-						Status: http.StatusForbidden, Message: publishingRefused}}, nil
-				}
-			}
-			created, err := Insert(ctx, tx, caller.UserID, requested, now().UTC())
-			return outcome{created: created}, err
+	created, err := database.Write(ctx.Context(), r.Pool,
+		func(ctx context.Context, tx pgx.Tx, _ *database.Effects) (Prompt, error) {
+			return Insert(ctx, tx, caller.UserID, requested, now().UTC())
 		})
 	if err != nil {
 		r.fail(ctx, response, requestID, "could not write the prompt", err)
 		return
 	}
-	if result.refusal != nil {
-		r.Errors.Write(response, result.refusal.Status, result.refusal.Message, requestID)
-		return
-	}
 
-	body, err := pythonjson.Marshal(Build(result.created))
+	body, err := pythonjson.Marshal(Build(created))
 	if err != nil {
 		r.fail(ctx, response, requestID, "could not render the prompt", err)
 		return

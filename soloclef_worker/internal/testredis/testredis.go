@@ -44,6 +44,7 @@ const (
 	DriveSync
 	AutomationTriggers
 	WorkerCommand
+	PushDelivery
 )
 
 // liveQueues are the queues real deployments have used. One of them in

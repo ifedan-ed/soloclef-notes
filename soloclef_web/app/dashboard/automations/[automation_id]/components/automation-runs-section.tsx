@@ -1,7 +1,10 @@
 "use client";
 import { History } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAutomationRuns } from "@/hooks/use-automation-runs";
+import { readRunParam } from "@/lib/automations/run-link";
 import { RunRow } from "./run-row";
 import { RunsLoading } from "./runs-loading";
 
@@ -22,6 +25,10 @@ const LIMIT = 20;
 export function AutomationRunsSection({ automationId }: AutomationRunsSectionProps) {
 	const { data, isLoading, error } = useAutomationRuns(automationId, { limit: LIMIT });
 	const runs = data?.items ?? [];
+	// A link from the inbox names a run (?run=): it opens expanded. Read once,
+	// so later visits to the page open nothing by themselves.
+	const searchParams = useSearchParams();
+	const [linkedRunId] = useState(() => readRunParam(searchParams.toString()));
 
 	return (
 		<Card className="border-border/60 bg-accent">
@@ -57,7 +64,12 @@ export function AutomationRunsSection({ automationId }: AutomationRunsSectionPro
 				) : (
 					<div className="space-y-2">
 						{runs.map((run) => (
-							<RunRow key={run.id} run={run} automationId={automationId} />
+							<RunRow
+								key={run.id}
+								run={run}
+								automationId={automationId}
+								initiallyOpen={run.id === linkedRunId}
+							/>
 						))}
 					</div>
 				)}

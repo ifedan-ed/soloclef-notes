@@ -1,45 +1,59 @@
-# Run your own server
+# Install
+
+Soloclef runs as one Docker Compose stack on a Linux host. This page takes
+you from a fresh checkout to a working site with your own account.
 
 ## What you need
 
-- A Linux host with Docker Engine 24 or later and Compose v2, about 25 GB of
-  free disk (the sandbox image alone is about 13 GB) and 8 GB of memory.
-- A [LiteLLM](https://docs.litellm.ai/) proxy on a Docker network of its own.
-  Every model call goes through it: chat, embeddings, picture models and
-  speech. It must serve, under the names you put in the settings, a chat
-  model, a quick model for short calls, the embedding model (BGE-M3) and, for
-  audio overviews, a speech model.
-- For the phone app and for people outside your network: an https address,
-  such as `https://notes.example.org`, from a reverse proxy or tunnel in
-  front of the server.
+- Docker Engine 24 or later with Compose v2.
+- About 8 GB of memory and 25 GB of free disk. The Studio sandbox image is
+  most of that disk; without sandboxes you need far less.
+- A LiteLLM proxy running on a Docker network of its own on the same
+  host. Every model call goes through it. It must serve:
+    - a chat model;
+    - a small, fast model for short tasks such as naming a notebook;
+    - the BGE-M3 embedding model;
+    - a speech model, for audio and video overviews;
+    - optionally a vision model, which reads pictures in uploads.
+- An https address for the site, such as `https://notes.example.org`, from a
+  reverse proxy or a tunnel. The phone app only talks to https servers.
 
-## First start
+## 1. Get the code and the settings file
 
 ```bash
-git clone https://github.com/ifedan-ed/soloclef-notes.git soloclef
+git clone <repository URL> soloclef
 cd soloclef
 cp docker/.env.go.example docker/.env.go
 ```
 
-Edit `docker/.env.go`. Every line is required and every value in the example
-is a placeholder: replace each one that names a host, a model, a network or a
-limit with your own. At least:
+All settings live in `docker/.env.go`. Every line in it must stay: Compose
+stops before starting anything and names a setting that is missing. Lines
+marked optional may be left empty, and empty means that feature is off.
+
+Replace every example value that names a host, a model, a network or a
+limit. At least set these:
 
 ```dotenv
-SOLOCLEF_GO_MODEL_NETWORK=<the LiteLLM proxy's Docker network>
+SOLOCLEF_GO_MODEL_NETWORK=<the Docker network LiteLLM is on>
 SOLOCLEF_GO_LITELLM_URL=http://litellm:4000/v1
-SOLOCLEF_API_CHAT_MODEL=<the proxy's name for your chat model>
-SOLOCLEF_WORKER_QUICK_MODEL=<the proxy's name for a small, fast model>
-SOLOCLEF_GO_EMBEDDING_MODEL=<the proxy's name for BGE-M3>
+SOLOCLEF_API_CHAT_MODEL=<LiteLLM's name for your chat model>
+SOLOCLEF_WORKER_QUICK_MODEL=<LiteLLM's name for the small model>
+SOLOCLEF_GO_EMBEDDING_MODEL=<LiteLLM's name for BGE-M3>
+SOLOCLEF_GO_TTS_SERVICE=openai/<LiteLLM's name for the speech model>
 SOLOCLEF_API_PUBLIC_URL=https://notes.example.org
 SOLOCLEF_API_FRONTEND_URL=https://notes.example.org
 SOLOCLEF_API_ALLOWED_ORIGINS=https://notes.example.org
 SOLOCLEF_API_ERROR_REPORT_URL=https://notes.example.org/contact
+SOLOCLEF_API_BRAND_NAME=Soloclef
+SOLOCLEF_API_SIGNUP_ALLOWED=false
 ```
 
-The secrets are files, one per secret, in `docker/secrets-go` (the directory
-`SOLOCLEF_GO_SECRETS_DIR` names). The services are given each file's path,
-never its value:
+The [settings reference](settings-reference.md) explains every line.
+
+## 2. Make the secrets
+
+Secrets are files, one per secret, in `docker/secrets-go`. The services are
+given the path to each file, never the value.
 
 ```bash
 mkdir -m 700 docker/secrets-go
@@ -49,66 +63,56 @@ openssl rand -hex 32 > session_secret
 printf '%s\n' "your LiteLLM key" > litellm_key
 printf '%s\n' "soloclef" > s3_access_key
 openssl rand -hex 24 > s3_secret_key
-# Only when SOLOCLEF_API_SANDBOX_ENABLED or SOLOCLEF_WORKER_VIDEO_ENABLED is true:
-openssl rand -hex 32 > sandbox_api_key
 chmod 0444 *
 cd ../..
 ```
 
-The services run as different users, so each file must be readable by all
-(0444) inside a directory only you can enter (0700).
+The services run as different users, so each file must be readable by all,
+inside a directory only you can enter. Keep the database password to hex
+characters.
 
-Build and start:
+Keep `session_secret` safe and never change it. It signs sign-ins, and it
+also encrypts what people store in their connections: mailbox passwords,
+their own model keys, Exa and Tavily keys and MCP server secrets. With a
+different secret none of those can be opened again, and everyone has to
+reconnect.
 
-```bash
-docker compose -p soloclefgo --env-file docker/.env.go \
-  -f docker/docker-compose.go.yml up -d --build
-```
+Studio sandboxes need one more file. See
+[Optional features](optional-features.md#studio-sandboxes).
 
-The first build compiles the Go services and the chunker's Rust core and
-downloads BGE-M3's tokenizer at a pinned revision, checked against its
-checksum. With a sandbox switch on it also builds the sandbox image
-(LibreOffice, Remotion and a PDF stack), which is large; later builds use the
-cache. The site answers on `SOLOCLEF_GO_SITE_PUBLISH` (loopback port 18470 in
-the example).
+## 3. Start it
 
-The commands on these pages use a shell function for the three options every
-command needs:
+Every command on these pages uses the same three Compose options, so define
+a shell function for them first:
 
 ```bash
 dc() { docker compose -p soloclefgo --env-file docker/.env.go -f docker/docker-compose.go.yml "$@"; }
 ```
 
-## The first account
-
-Sign-ups are off in the example (`SOLOCLEF_API_SIGNUP_ALLOWED=false`). Make
-your account with the API's own command, which reads the password from
-standard input so it is not left in a shell history, and make it the
-administrator:
+Then build and start:
 
 ```bash
-printf '%s\n' "your password" | dc exec -T api soloclef-api set-password you@example.com
-dc exec api soloclef-api set-admin you@example.com true
+dc up -d --build
 ```
 
-The same two commands make and promote every other account while sign-ups
-are off. See [Sign-in](sign-in.md) for single sign-on and open sign-up.
+The first build takes a while. Later builds reuse the cache. On this and
+every later start, the database schema is brought up to date before the
+other services start.
 
-## Models
+Check that everything is running:
 
-The server's own models are the proxy's, named in `docker/.env.go`:
-`SOLOCLEF_API_CHAT_MODEL` answers in chat for an account that chose no model,
-`SOLOCLEF_WORKER_QUICK_MODEL` makes short calls, `SOLOCLEF_GO_EMBEDDING_MODEL`
-embeds, and `SOLOCLEF_GO_TTS_SERVICE` voices audio overviews. Image and vision
-models are optional. Each person can also add a provider of their own under
-Settings → Models, with their own key; those calls go through the proxy too.
-Every model setting is in [Every setting](guide/settings-reference.md#models).
+```bash
+dc ps
+dc logs -f api
+```
 
-## An https address
+The site now answers on the address in `SOLOCLEF_GO_SITE_PUBLISH`, which is
+`127.0.0.1:18470` in the example.
 
-The stack publishes one port, Caddy's, on `SOLOCLEF_GO_SITE_PUBLISH`. It
-speaks plain http; put your TLS proxy in front of it. With Caddy on the same
-host:
+## 4. Put https in front
+
+The stack publishes one port. It speaks plain http, so put your TLS proxy or
+tunnel in front of it. With Caddy on the same host:
 
 ```text
 notes.example.org {
@@ -116,33 +120,114 @@ notes.example.org {
 }
 ```
 
-Set `SOLOCLEF_GO_TRUSTED_PROXIES` so the stack believes that proxy's
-`X-Forwarded-Proto`, keep `SOLOCLEF_API_SESSION_COOKIE_SECURE_POLICY=always`,
-and set the four address settings above to the https address. Then rebuild
-the web app, which draws its public pages with the address when it is built:
-`dc up -d --build frontend`.
+With nginx:
 
-## Email (optional)
+```nginx
+server {
+    listen 443 ssl;
+    server_name notes.example.org;
+    # ssl_certificate and ssl_certificate_key as usual
 
-Set `SOLOCLEF_API_SMTP_ENABLED=true` and the other `SOLOCLEF_API_SMTP_`
-settings to send password-reset links and automation results. Without email,
-make and reset accounts with `set-password`.
+    client_max_body_size 600m;
+
+    location / {
+        proxy_pass http://127.0.0.1:18470;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_buffering off;
+        proxy_read_timeout 900s;
+    }
+}
+```
+
+Whatever you use, it must:
+
+- pass `X-Forwarded-Proto` and `X-Forwarded-For`;
+- not buffer responses, because chat answers, live updates and the MCP
+  server all stream;
+- accept a request as large as one upload: the largest file times the most
+  files per upload, 500 MB with the example values;
+- let a request run for several minutes.
+
+Then tell the stack to trust that proxy. Set `SOLOCLEF_GO_TRUSTED_PROXIES` to
+its address, or leave `private_ranges` if it reaches the stack from a
+private address. Keep `SOLOCLEF_API_SESSION_COOKIE_SECURE_POLICY=always`.
+
+## 5. Make your account
+
+Sign-ups are off in the example, so make your own account from the command
+line. The password is read from standard input, so it stays out of your
+shell history:
+
+```bash
+printf '%s\n' "your password" | dc exec -T api soloclef-api set-password you@example.com
+dc exec api soloclef-api set-admin you@example.com true
+```
+
+Open your https address and sign in.
+
+`set-password` makes an account, or gives an existing one a new password. A
+password needs at least 8 characters. `set-admin` makes an account an
+administrator, or an ordinary account again with `false`. Use the same two
+commands for everyone else while sign-ups are off.
+
+## Who can join
+
+`SOLOCLEF_API_SIGNUP_ALLOWED` decides whether people can make their own
+accounts. It must be `true` or `false`.
+
+- With `false`, the sign-in page and the phone app offer Request access,
+  which opens your contact page. The server refuses sign-ups, and single
+  sign-on makes no new accounts. You add people with `set-password`.
+- With `true`, anyone who can reach the site can sign up, and a first single
+  sign-on with a new address makes an account.
+
+Set `SOLOCLEF_API_SUPPORT_EMAIL` so the contact page has an address to show.
+
+The website's pages are built with the sign-up setting, the public address,
+the support address and the single sign-on settings in them. After changing
+any of those, rebuild the web app:
+
+```bash
+dc up -d --build proxy
+```
+
+Every other setting is read when its service starts, so `dc up -d` is
+enough.
+
+## Models and costs
+
+Everyone uses the models named in `docker/.env.go` unless they choose
+otherwise, and those calls are on your bill. They all go through your
+LiteLLM proxy, so set budgets and rate limits there.
+
+People can also connect their own OpenAI-compatible service with their own
+key, under Settings, Models. Soloclef calls that service directly, not
+through your proxy, and those calls are on their bill. An address inside
+your own network, such as an Ollama machine, is refused until you allow it.
+See [Optional features](optional-features.md#models-on-your-own-network).
+
+Choose the embedding model before the first upload. Changing it later means
+embedding every document again. See
+[Updating and backups](operations.md#the-embedding-model).
 
 ## What runs
 
 | Service | What it does |
 | --- | --- |
-| `proxy` | Caddy, the one published port, routing to the services below |
-| `frontend` | The Next.js web app |
-| `api` | The Go API, with the chat and its agent |
-| `indexer` | Reads uploaded files, chunks and embeds them into Postgres and Qdrant |
-| `worker` | Podcasts, videos, automations, Drive sync and other background jobs |
-| `parse-service` | PDF, Word, PowerPoint and EPUB to Markdown with PyMuPDF4LLM; the one Python service |
-| `mcp` | The MCP server for agents, at `/mcp` |
-| `zero-cache` | Live updates to notebooks and chats |
-| `migrate` | Brings the database schema up to date on every start, then exits |
-| `postgres`, `valkey`, `qdrant`, `minio` | The database, the queue and counters, the vector store and the file store |
-| `opensandbox` | Isolated sandboxes for Studio's reports, decks and videos, only when switched on |
+| `proxy` | Caddy, the one published port. It serves the web app's files and routes everything else to the services below. |
+| `api` | The API: sign-in, notebooks, the chat, uploads, and the live updates the web app and the phone app follow. |
+| `indexer` | Reads uploaded files, splits them into passages and embeds them. |
+| `parse-service` | Turns PDF, Word, PowerPoint and EPUB files into text, on the server. |
+| `worker` | Background work: audio and video overviews, automations, Google Drive sync and phone pushes. |
+| `mcp` | The MCP server that AI agents connect to at `/mcp`. |
+| `migrate` | Brings the database schema up to date on every start, then exits. |
+| `postgres`, `valkey`, `qdrant`, `minio` | The database, the job queue, the search index and the file store. |
+| `minio-init` | Creates the file store's bucket, then exits. |
+| `sandboxd` | Runs Studio's sandboxes. It only starts when sandboxes are switched on. |
 
-[Every setting](guide/settings-reference.md) covers the rest of
-`docker/.env.go`.
+Next: [Optional features](optional-features.md) covers single sign-on, email,
+Google Drive, Nextcloud, mail sign-ins, phone pushes, Studio sandboxes and
+hosted parsers.

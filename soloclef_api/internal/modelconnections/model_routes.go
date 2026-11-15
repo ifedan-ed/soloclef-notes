@@ -12,33 +12,26 @@ import (
 
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/errorenvelope"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/pythonjson"
-	"git.danvics.com/danvics/soloclef/soloclef_assistant/ownmodels"
 )
 
 // A connection's models: trying the connection with one of them, listing
-// what its provider offers, and switching and editing the ones stored.
-// They are WriteRoutes' because they share its gate (a session, and
-// mayConnect) and its rule of ownership.
+// what its endpoint offers, and switching and editing the ones stored.
+// They are WriteRoutes' because they share its gate (a session), its rule
+// of ownership and its refusal of a row of a provider that is gone.
 //
-// The list of a provider's models is the model proxy's catalogue
-// (proxy_catalogue.go), and a connection is tried by asking one of its
-// models a question through the proxy, for every provider but one. An
-// OpenAI-compatible connection is listed from its own GET {base}/models and
-// tried at its own address, through the egress guard (endpoint.go).
+// A connection's models are listed from its own GET {base}/models, and it
+// is tried by asking one of them a question at its own address, both
+// through the egress guard (endpoint.go). A model's facts come from that
+// list (which says little) and from what the person sets; nothing is
+// looked up in a catalogue, because no catalogue knows a person's endpoint.
 
-const (
-	// noCatalogueMessage is the refusal for a provider the catalogue does
-	// not cover. It says what to do instead, because there is something.
-	noCatalogueMessage = "The model service has no list of models for this provider: its models are the ones at the address you gave. Add each model by its name; connecting tests it."
-	catalogueDown      = "The model service's list of models cannot be read right now. Please try again."
-	// maxSwitchedModels is how many models one request may switch.
-	maxSwitchedModels = 1000
-)
+// maxSwitchedModels is how many models one request may switch.
+const maxSwitchedModels = 1000
 
-// noModelVerdict answers a verify of a connection with no model. A key
-// cannot be tried on its own through the proxy: every request it takes
-// names a model. Saying so is the truth, where the Python route answered
-// "verified" for any provider it had no cheap request for.
+// noModelVerdict answers a verify of a connection with no model. The test
+// is a chat question, and a question names a model. Saying so is the
+// truth, where the Python route answered "verified" for any provider it
+// had no cheap request for.
 var noModelVerdict = Verdict{
 	Status:  "NO_MODEL",
 	Message: "This connection has no model to try it with. Add a model, then test the connection.",
@@ -64,12 +57,12 @@ func (r WriteRoutes) verify(ctx huma.Context) {
 		request.refuse(http.StatusNotFound, connectionAbsent)
 		return
 	}
+	if !request.supported(stored.Provider) {
+		return
+	}
 	model, found, err := r.Connections.ModelToVerify(ctx.Context(), request.userID, id)
 	if err != nil {
 		request.failed("could not choose a model to verify with", err)
-		return
-	}
-	if !request.mayConnect(stored.Provider) {
 		return
 	}
 	if !found {
@@ -95,14 +88,9 @@ func (w writeRequest) sendJSON(value any) {
 	_, _ = w.response.Write(rendered)
 }
 
-// listed is the models of a connection as probe describes it: the
-// endpoint's own list for an OpenAI-compatible connection, the proxy's
-// catalogue for every other provider. The refusal is written when there is
-// no list.
+// listed is the endpoint's own list of models, as probe describes the
+// endpoint. The refusal is written when there is no list.
 func (w writeRequest) listed(probe Probe) ([]pickedModel, bool) {
-	if probe.Provider != ownmodels.Provider {
-		return w.catalogued(probe.Provider)
-	}
 	models, err := w.routes.Endpoints.Models(w.ctx.Context(), probe)
 	var refused *endpointRefusal
 	switch {
@@ -118,27 +106,8 @@ func (w writeRequest) listed(probe Probe) ([]pickedModel, bool) {
 	return models, true
 }
 
-// catalogued is the provider's models from the proxy's catalogue, or the
-// refusal written.
-func (w writeRequest) catalogued(provider string) ([]pickedModel, bool) {
-	models, err := w.routes.Catalogue.Models(w.ctx.Context(), provider)
-	switch {
-	case errors.Is(err, ErrNoCatalogue):
-		w.refuse(http.StatusConflict, noCatalogueMessage)
-		return nil, false
-	case err != nil:
-		// The cause names this deployment's proxy; the person is told
-		// only that the list could not be read.
-		w.routes.Logger.ErrorContext(w.ctx.Context(), w.what,
-			"request_id", w.requestID, "reason", "the model proxy's catalogue could not be read", "error", err.Error())
-		w.refuse(http.StatusBadGateway, catalogueDown)
-		return nil, false
-	}
-	return models, true
-}
-
-// previewedModel is a catalogue model as the connect dialog lists one,
-// before any connection exists: the apps call its catalogue entry
+// previewedModel is a listed model as the connect dialog shows one,
+// before any connection exists: the apps call what is known of it
 // `metadata` there and send it back under that name (readPicked).
 type previewedModel struct {
 	ModelID                 string          `json:"model_id"`
@@ -153,12 +122,10 @@ type previewedModel struct {
 	Metadata                json.RawMessage `json:"metadata"`
 }
 
-// discoverPreview lists a provider's models for a connection that is not
-// made yet. For an OpenAI-compatible endpoint the body is the connection as
-// it would be made (base_url, api_key, headers) and its own list is read.
-// For every other provider only the provider is read: the catalogue is the
-// same whatever the key and the address, so a key that was sent is neither
-// parsed nor forwarded.
+// discoverPreview lists an endpoint's models for a connection that is not
+// made yet. The body is the connection as it would be made (provider,
+// base_url, api_key, headers), held to the same rules as the create, and
+// the endpoint's own list is read with what was typed.
 func (r WriteRoutes) discoverPreview(ctx huma.Context) {
 	request, ok := r.begin(ctx, "a provider's models could not be listed")
 	if !ok {
@@ -168,28 +135,18 @@ func (r WriteRoutes) discoverPreview(ctx huma.Context) {
 	if !ok {
 		return
 	}
-	var failures []errorenvelope.Failure
-	provider, named := sent.text("provider", maxProviderChars, &failures)
-	if provider = strings.TrimSpace(provider); failures == nil && (!named || !knownProvider(provider)) {
-		failures = append(failures, invalid("provider", "provider must be one of the providers this server lists"))
+	fields, failures := readChange(sent, true)
+	if len(failures) == 0 {
+		// The address and key rules only mean something for a body that
+		// named the one provider; otherwise the provider's refusal is the
+		// one to read.
+		failures = providerRules(fields, true)
 	}
 	if len(failures) > 0 {
 		r.Errors.WriteValidation(request.response, request.requestID, failures)
 		return
 	}
-	if !request.mayConnect(provider) {
-		return
-	}
-	probe := Probe{Provider: provider}
-	if provider == ownmodels.Provider {
-		fields, failures := readChange(sent, true)
-		if failures = append(failures, providerRules(provider, fields, true, false)...); len(failures) > 0 {
-			r.Errors.WriteValidation(request.response, request.requestID, failures)
-			return
-		}
-		probe.BaseURL, probe.Key, probe.Headers = fields.baseURL, fields.key, fields.headers
-	}
-	models, ok := request.listed(probe)
+	models, ok := request.listed(Probe{BaseURL: fields.baseURL, Key: fields.key, Headers: fields.headers})
 	if !ok {
 		return
 	}
@@ -225,16 +182,13 @@ func (r WriteRoutes) discover(ctx huma.Context) {
 		request.refuse(http.StatusNotFound, connectionAbsent)
 		return
 	}
-	if !request.mayConnect(stored.Provider) {
+	if !request.supported(stored.Provider) {
 		return
 	}
-	probe := Probe{Provider: stored.Provider}
-	if stored.Provider == ownmodels.Provider {
-		// The endpoint's own list needs its key and headers; no other
-		// provider's does, and for those the key stays sealed.
-		if probe, ok = request.stored(stored, ""); !ok {
-			return
-		}
+	// The endpoint's own list needs its key and headers, opened.
+	probe, ok := request.stored(stored, "")
+	if !ok {
+		return
 	}
 	listed, ok := request.listed(probe)
 	if !ok {
@@ -242,7 +196,7 @@ func (r WriteRoutes) discover(ctx huma.Context) {
 	}
 	models, err := r.Connections.StoreDiscovered(ctx.Context(), request.userID, id, listed)
 	if err != nil {
-		request.failed("could not store the provider's models", err)
+		request.failed("could not store the endpoint's models", err)
 		return
 	}
 	request.models(models)
@@ -300,7 +254,7 @@ func (r WriteRoutes) switchModels(ctx huma.Context) {
 	}
 	// Asked first so that a connection that is not the caller's is "not
 	// found" and not an empty list.
-	if provider, ok := request.storedProvider(id); !ok || !request.mayConnect(provider) {
+	if provider, ok := request.storedProvider(id); !ok || !request.supported(provider) {
 		return
 	}
 	models, err := r.Connections.SetModelsEnabled(ctx.Context(), request.userID, id, modelIDs, enabled)
@@ -433,7 +387,7 @@ func (r WriteRoutes) updateModel(ctx huma.Context) {
 		request.refuse(http.StatusNotFound, modelAbsent)
 		return
 	}
-	if !request.mayConnect(provider) {
+	if !request.supported(provider) {
 		return
 	}
 	model, found, err := r.Connections.UpdateModel(ctx.Context(), request.userID, id, fields)

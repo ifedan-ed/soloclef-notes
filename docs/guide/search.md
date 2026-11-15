@@ -2,16 +2,20 @@
 
 The Search notebooks box on the home page does two things at once:
 
-- It filters your notebooks by title.
-- Under Found inside notebooks, it lists the notebooks whose sources or
-  notes match, and shows where each match is.
+- it filters your notebooks by title;
+- under Found inside notebooks, it lists notebooks whose sources or notes
+  match, and shows the matching passages.
 
-It looks inside each notebook's ticked sources and its notes, never in Studio
-outputs or chats. It lists up to 8 notebooks, with up to 3 matches each and 20
-in all. A search can be up to 200 characters.
+Type at least 2 characters. It looks inside each notebook's ticked sources
+and its notes, never in Studio outputs or chats. It shows up to 8 notebooks,
+with up to 3 matches each. Click a match to open the notebook with that
+source guide or note open.
 
-Use All and Recent to switch views, and the grid and list buttons to
-change the layout. Notebooks pinned with Pin to featured show at the top.
+All and Recent switch the view. All shows your pinned notebooks first, under
+Featured notebooks. Recent shows the 12 notebooks you changed last. The grid
+and list buttons change the layout.
 
-To find new material for a notebook, use the research box in its Sources
-panel instead. See [Notebooks and sources](notebooks-and-sources.md#research-search-and-import).
+To find notes on their own, use Search your notes on the Notes page (see
+[Notes](notes.md#the-notes-page)). To find new material for a notebook, use
+the search box in its Sources panel (see
+[Notebooks and sources](notebooks-and-sources.md#finding-new-sources)).

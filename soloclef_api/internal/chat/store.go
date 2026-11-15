@@ -316,11 +316,6 @@ func (s Store) HistoryBefore(ctx context.Context, threadID int64, question *Ques
 func (s Store) ReplaceTurn(ctx context.Context, question *Question, turn NewTurn) (OpenedTurn, error) {
 	return database.Write(ctx, s.Pool, func(ctx context.Context, tx pgx.Tx, _ *database.Effects) (OpenedTurn, error) {
 		queries := New(tx)
-		// The snapshots first: they name the messages by id, and are found
-		// by those ids.
-		if err := queries.DeleteSnapshotsOfMessages(ctx, DeleteSnapshotsOfMessagesParams{ThreadID: &turn.ThreadID, MessageIds: question.Replaced}); err != nil {
-			return OpenedTurn{}, err
-		}
 		if err := queries.DeleteMessages(ctx, DeleteMessagesParams{ThreadID: turn.ThreadID, MessageIds: question.Replaced}); err != nil {
 			return OpenedTurn{}, err
 		}
@@ -328,10 +323,18 @@ func (s Store) ReplaceTurn(ctx context.Context, question *Question, turn NewTurn
 	})
 }
 
-func (s Store) Trusted(ctx context.Context, userID, tool string) (bool, error) {
-	return New(s.Pool).ToolIsTrusted(ctx, ToolIsTrustedParams{UserID: userID, Tool: tool})
+// AsksFirst reports whether the account marked the tool "ask first".
+func (s Store) AsksFirst(ctx context.Context, userID string, tool MarkedTool) (bool, error) {
+	if tool.Connector != 0 {
+		return New(s.Pool).AppToolAsksFirst(ctx, AppToolAsksFirstParams{UserID: userID, ConnectorID: &tool.Connector, Tool: tool.Name})
+	}
+	return New(s.Pool).ChatToolAsksFirst(ctx, ChatToolAsksFirstParams{UserID: userID, Tool: tool.Name})
 }
 
-func (s Store) Trust(ctx context.Context, userID, tool string) error {
-	return New(s.Pool).TrustTool(ctx, TrustToolParams{UserID: userID, Tool: tool})
+// StopAsking removes the account's "ask first" mark on the tool, if any.
+func (s Store) StopAsking(ctx context.Context, userID string, tool MarkedTool) error {
+	if tool.Connector != 0 {
+		return New(s.Pool).StopAskingAppTool(ctx, StopAskingAppToolParams{UserID: userID, ConnectorID: &tool.Connector, Tool: tool.Name})
+	}
+	return New(s.Pool).StopAskingChatTool(ctx, StopAskingChatToolParams{UserID: userID, Tool: tool.Name})
 }

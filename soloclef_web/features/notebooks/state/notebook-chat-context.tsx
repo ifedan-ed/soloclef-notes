@@ -26,6 +26,8 @@ export interface NotebookChatContextValue {
 	 * uploading to the account's files where this chat could not see them.
 	 */
 	uploadSources?: () => void;
+	/** Opens one of the notebook's sources, by its document, in the Sources panel. */
+	openSource?: (documentId: number) => void;
 	/** Opens the Sources panel on its "Search the web" box. */
 	openResearch?: () => void;
 	/** Brings the chat into view (the phone's Chat tab). */

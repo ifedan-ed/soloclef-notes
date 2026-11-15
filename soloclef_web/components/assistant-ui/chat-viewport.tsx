@@ -47,8 +47,7 @@ export interface ChatViewportProps {
  * scrolls an area while text is drag-selected only once the pointer leaves
  * that area; with the composer inside, dragging a selection down onto it
  * scrolled nothing, so nothing below it could be selected (2026-11-06,
- * tests/app/chat-select-scroll.spec.ts). The public chat (public-thread.tsx)
- * is laid out the same way. A fade at the top of the composer still shows
+ * tests/app/chat-select-scroll.spec.ts). A fade at the top of the composer still shows
  * that text continues beneath it, and lets the pointer through to the
  * messages.
  */

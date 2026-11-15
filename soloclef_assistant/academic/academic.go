@@ -133,6 +133,12 @@ type Paper struct {
 	Venue    string
 	Year     string
 	Abstract string
+	// PMID and DOI are the paper's PubMed id and DOI, when its source
+	// names them: PubMed names both, the preprint index the DOI. They are
+	// what a paper is found again by, so the research box and the chat's
+	// add_sources tool can tell one paper listed twice.
+	PMID string
+	DOI  string
 	// PMCID is PubMed Central's id when the paper is there.
 	PMCID string
 	// FullText is the body's text, when it was asked for and is open.

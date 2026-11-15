@@ -1,21 +1,24 @@
-// Package videojob makes a video: narrated slides, rendered in the sandbox.
+// Package videojob makes a video: a narrated, animated slide deck.
 //
 // # What a video is made of
 //
-// The account's chat model writes the scenes (each a narration, its
-// on-screen text, and a Remotion TSX module that draws it); the narration
-// is voiced through the proxy's speech route and measured; the scenes are
-// built and the last frame of each is rendered and its layout measured
-// (layout.go); the video is rendered (every frame, or each scene's entrance with
-// its last still held to the narration); the MP4 is checked; and it is kept
-// as an artifact with its slides and their narration. A build that fails,
-// a finding of the layout check, or a failed check sends the scenes back
-// to the model for a repair, twice at most.
+// The account's chat model writes the video as a slide deck with narration
+// (deckspec: what each slide says and what is spoken over it, in one call;
+// author.go). Its narration is voiced through the proxy's speech route, a
+// slide at a time, and measured (narration.go). The slides are laid out by
+// the deck renderer (deckrender), the same one that draws a slide deck,
+// and each part of each slide comes in as its narration reaches it
+// (film.go): only the frames in which something moves are drawn, as SVG
+// rasterised by resvg (frames.go), and ffmpeg joins them, held to the
+// narration, with the voice (encode.go). The MP4 is checked (verify.go) and
+// kept as an artifact with its slides and their narration (deliver.go).
 //
-// It is the Python worker's pipeline (app/deliverables/video/executor.py,
-// the deliverable job task and the sandbox tools it called), on the
-// user-keyed schema and with its defects fixed; each fix is said where it
-// is made.
+// It replaces a pipeline in which the model wrote a Remotion (React) scene
+// per slide as code, which was built, checked for layout and repaired in a
+// sandbox, and rendered frame by frame in a headless browser: 80 to 170
+// seconds of rendering a segment, twelve minutes for a short video, and a
+// video lost whenever a scene would not build. Nothing here runs code a
+// model wrote, so there is no sandbox, no repair and no browser.
 //
 // # The message
 //
@@ -35,10 +38,14 @@
 //   - A retry moves a failed or cancelled row to queued under the next
 //     attempt's task id, with a sandbox of its own; an old attempt still
 //     running finds its writes refused and stops.
-//   - A worker that is stopping gives its attempt back to the queue
-//     (Release) and the message goes back with it. A worker that died
+//   - A worker that is stopping waits for the video within its shutdown
+//     grace (internal/broker, ShutdownGrace); one still being made at the
+//     end of it gives its attempt back to the queue (Release) and the
+//     message goes back with it, for the next worker. A worker that died
 //     leaves a running row whose heartbeat goes stale; when its message is
-//     delivered again, the claim takes the attempt over (twice at most).
+//     delivered again, the claim takes the attempt over. Releases and
+//     takeovers are counted together: an attempt is made again twice at
+//     most, then failed (a release fails it as interrupted).
 //     The Python tier needed its minute-by-minute reconciler for both, and
 //     the Go stack schedules nothing.
 package videojob
@@ -49,12 +56,14 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"os/exec"
 	"sync"
 	"time"
 
 	"git.danvics.com/danvics/soloclef/soloclef_agent/model"
 	"git.danvics.com/danvics/soloclef/soloclef_celery/celery"
 	"git.danvics.com/danvics/soloclef/soloclef_filestore"
+	"git.danvics.com/danvics/soloclef/soloclef_notify/notify"
 
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/broker"
 )
@@ -74,6 +83,12 @@ type Indexer interface {
 	Index(ctx context.Context, documentID int64) error
 }
 
+// Notifier tells the video's owner it is ready or failed
+// (soloclef_notify/notify).
+type Notifier interface {
+	StudioFinished(ctx context.Context, run notify.StudioRun) error
+}
+
 // Timing is how the job paces itself: decisions about the job, made in
 // cmd/worker with their reasons.
 type Timing struct {
@@ -86,24 +101,28 @@ type Timing struct {
 	KeepAlive time.Duration
 	// Claim decides when a dead worker's attempt is taken over.
 	Claim ClaimRules
-	// RepairCycles is how many times the scenes may be repaired.
-	RepairCycles int
-	// NarrationConcurrency is how many scenes are voiced at once.
+	// NarrationConcurrency is how many of a video's passages are voiced
+	// at once, across its slides.
 	NarrationConcurrency int
 }
 
 // Job runs deliverables.execute_queued messages.
 type Job struct {
-	Rows      Rows
-	Sandboxes Sandboxes
-	Models    Models
-	Voicer    Voicer
-	Audio     Measurer
-	Files     filestore.Writer
-	Indexer   Indexer
-	Config    Config
-	Timing    Timing
-	Log       *slog.Logger
+	Rows   Rows
+	Models Models
+	// Raster draws a frame (deckrender.Rasteriser over the configured
+	// resvg).
+	Raster  Rasteriser
+	Voicer  Voicer
+	Audio   Audio
+	Files   filestore.Writer
+	Indexer Indexer
+	// Notifier is told when a video is ready or has failed; never when it
+	// was cancelled or the attempt moved on.
+	Notifier Notifier
+	Config   Config
+	Timing   Timing
+	Log      *slog.Logger
 	// Measured, when set, is told each delivered video's stages. The log
 	// line says the same; this is for a test to read.
 	Measured func(jobID int64, stages []Stage)
@@ -115,19 +134,24 @@ type Job struct {
 // Check reports what is missing. Called once at start-up.
 func (j *Job) Check() error {
 	switch {
-	case j.Rows == nil || j.Sandboxes == nil || j.Models == nil || j.Voicer == nil || j.Audio == nil ||
-		j.Files == nil || j.Indexer == nil || j.Log == nil:
+	case j.Rows == nil || j.Raster == nil || j.Models == nil || j.Voicer == nil || j.Audio == nil ||
+		j.Files == nil || j.Indexer == nil || j.Notifier == nil || j.Log == nil:
 		return errors.New("videojob: a dependency is missing")
 	case !j.Config.Enabled:
-		return errors.New("videojob: the render is not enabled; register Refusal instead")
-	case j.Config.Mode != ModeFrames && j.Config.Mode != ModeStills:
-		return errors.New("videojob: no render mode")
-	case j.Config.MaxRenders < 1 || j.Config.RenderTimeout <= 0 || j.Config.Sandbox.CommandTimeout <= 0:
+		return errors.New("videojob: the video is not enabled; register Refusal instead")
+	case j.Config.MaxRenders < 1 || j.Config.FrameWorkers < 1 || j.Config.RenderTimeout <= 0:
 		return errors.New("videojob: the render limits are not set")
 	case j.Timing.CallTimeout <= 0 || j.Timing.StatusInterval <= 0 || j.Timing.KeepAlive <= 0 ||
 		j.Timing.Claim.StaleAfter < 3*j.Timing.KeepAlive || j.Timing.Claim.MaxTakeovers < 0 ||
-		j.Timing.RepairCycles < 0 || j.Timing.NarrationConcurrency < 1:
+		j.Timing.NarrationConcurrency < 1:
 		return errors.New("videojob: the timing is incomplete, or a takeover would not wait for three missed keep-alives")
+	}
+	// The image's ffmpeg and ffprobe join and check every video: a worker
+	// without them would fail each one after its narration was paid for.
+	for _, program := range []string{ffmpegProgram, ffprobeProgram} {
+		if _, err := exec.LookPath(program); err != nil {
+			return fmt.Errorf("videojob: %s is not installed: %w", program, err)
+		}
 	}
 	return nil
 }
@@ -160,15 +184,11 @@ func (j *Job) Run(ctx context.Context, msg *celery.Message) error {
 		log.Info("nothing to make for this message", "why", claim.Why)
 		return nil
 	case claimFinishCancel:
-		j.terminate(ctx, log, job)
 		log.Info("a cancel whose worker had stopped is finished")
 		return j.Rows.Cancelled(context.WithoutCancel(ctx), job)
 	}
 	if job.Takeovers > 0 {
-		// The dead worker's sandbox may still be rendering; it goes before
-		// a new one is made under the same name.
 		log.Warn("taking over an attempt whose worker stopped answering", "takeover", job.Takeovers)
-		j.terminate(ctx, log, job)
 	}
 
 	work, stop := context.WithCancelCause(ctx)
@@ -184,10 +204,8 @@ func (j *Job) Run(ctx context.Context, msg *celery.Message) error {
 	return j.conclude(ctx, work, log, job, measured, err)
 }
 
-// conclude settles the row after an attempt, and always removes the
-// attempt's sandbox.
+// conclude settles the row after an attempt.
 func (j *Job) conclude(ctx, work context.Context, log *slog.Logger, job Claimed, measured *stages, err error) error {
-	defer j.terminate(ctx, log, job)
 	cause := context.Cause(work)
 	settle, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
 	defer cancel()
@@ -197,6 +215,7 @@ func (j *Job) conclude(ctx, work context.Context, log *slog.Logger, job Claimed,
 		if j.Measured != nil {
 			j.Measured(job.ID, measured.List())
 		}
+		j.notify(settle, log, job, false)
 		return nil
 	case errors.Is(err, errCancelled) || errors.Is(cause, errCancelled):
 		log.Info("the video was cancelled; stopped", measured.logAttrs()...)
@@ -205,9 +224,18 @@ func (j *Job) conclude(ctx, work context.Context, log *slog.Logger, job Claimed,
 		log.Info("the attempt moved on while it was being made; stopped")
 		return nil
 	case errors.Is(ctx.Err(), context.Canceled):
-		log.Warn("the worker is stopping; the video goes back to the queue")
-		if releaseErr := j.Rows.Release(settle, job); releaseErr != nil {
+		released, releaseErr := j.Rows.Release(settle, job, j.Timing.Claim)
+		switch {
+		case releaseErr != nil:
 			log.Error("the attempt could not be given back; it will be taken over when its heartbeat is stale", "error", releaseErr.Error())
+		case !released:
+			// Stopped on every run it is allowed: it ends here, and the
+			// message is acknowledged rather than put back.
+			log.Warn("the worker is stopping, and this video has been restarted as often as it may; failed", "restarts", job.Takeovers)
+			j.notify(settle, log, job, true)
+			return nil
+		default:
+			log.Warn("the worker is stopping; the video goes back to the queue")
 		}
 		return fmt.Errorf("%w: %w", broker.ErrRequeue, err)
 	}
@@ -221,16 +249,18 @@ func (j *Job) conclude(ctx, work context.Context, log *slog.Logger, job Claimed,
 	if markErr := j.Rows.Fail(settle, job, code, internal); markErr != nil {
 		return fmt.Errorf("%w; and the job could not be marked failed: %w", err, markErr)
 	}
+	j.notify(settle, log, job, true)
 	return err
 }
 
-// terminate removes the attempt's sandbox. A failure is logged: the server
-// removes an idle sandbox by itself when its time to live passes.
-func (j *Job) terminate(ctx context.Context, log *slog.Logger, job Claimed) {
-	removal, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
-	defer cancel()
-	if err := j.Sandboxes.TerminateJob(removal, job.sandboxName()); err != nil {
-		log.Warn("the attempt's sandbox could not be removed; it expires on its own", "error", err.Error())
+// notify tells the owner how the video ended. The failure's reason stays
+// on the job's row, where the Studio's card turns its code into a
+// sentence; the notification says that it failed and opens the card. A
+// notification that cannot be written is logged and the video's ending
+// stands.
+func (j *Job) notify(ctx context.Context, log *slog.Logger, job Claimed, failed bool) {
+	if err := j.Notifier.StudioFinished(ctx, notify.StudioRun{UserID: job.UserID, JobID: job.ID, Failed: failed}); err != nil {
+		log.Error("the video's notification could not be written", "error", err.Error())
 	}
 }
 

@@ -10,63 +10,6 @@ import (
 	"time"
 )
 
-const accountName = `-- name: AccountName :one
-SELECT display_name FROM "user" WHERE id = $1
-`
-
-func (q *Queries) AccountName(ctx context.Context, userID string) (*string, error) {
-	row := q.db.QueryRow(ctx, accountName, userID)
-	var display_name *string
-	err := row.Scan(&display_name)
-	return display_name, err
-}
-
-const deleteExpiredLink = `-- name: DeleteExpiredLink :exec
-DELETE FROM public_chat_snapshots
-WHERE thread_id = $1
-  AND user_id = $2
-  AND content_hash = $3
-  AND expires_at IS NOT NULL AND expires_at <= now()
-`
-
-type DeleteExpiredLinkParams struct {
-	ThreadID    *int64
-	UserID      string
-	ContentHash string
-}
-
-// An expired link stays dead: sharing the same content again gets a new
-// address, so the old row must not be there to be found by its hash.
-func (q *Queries) DeleteExpiredLink(ctx context.Context, arg DeleteExpiredLinkParams) error {
-	_, err := q.db.Exec(ctx, deleteExpiredLink, arg.ThreadID, arg.UserID, arg.ContentHash)
-	return err
-}
-
-const deleteLink = `-- name: DeleteLink :execrows
-DELETE FROM public_chat_snapshots
-WHERE id = $1
-  AND thread_id = $2
-  AND user_id = $3
-`
-
-type DeleteLinkParams struct {
-	LinkID   int64
-	ThreadID *int64
-	UserID   string
-}
-
-// One statement finds the link and takes it down: the link, the thread it
-// is of and the account are all in the question, so there is no moment
-// between a check and a delete, and a link of another account's thread is
-// no row.
-func (q *Queries) DeleteLink(ctx context.Context, arg DeleteLinkParams) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteLink, arg.LinkID, arg.ThreadID, arg.UserID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const deleteThread = `-- name: DeleteThread :execrows
 DELETE FROM new_chat_threads WHERE id = $1 AND user_id = $2
 `
@@ -398,41 +341,6 @@ func (q *Queries) NotebookThreads(ctx context.Context, arg NotebookThreadsParams
 	return items, nil
 }
 
-const ownedArtifacts = `-- name: OwnedArtifacts :many
-SELECT id FROM artifacts
-WHERE id = ANY($1::bigint[])
-  AND user_id = $2
-ORDER BY id
-`
-
-type OwnedArtifactsParams struct {
-	ArtifactIds []int64
-	UserID      string
-}
-
-// Which of the artifact ids a thread's cards name are this account's. The
-// same reason as ReadyPodcasts: the list decides what a stranger with the
-// link is served.
-func (q *Queries) OwnedArtifacts(ctx context.Context, arg OwnedArtifactsParams) ([]int64, error) {
-	rows, err := q.db.Query(ctx, ownedArtifacts, arg.ArtifactIds, arg.UserID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []int64
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		items = append(items, id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const ownsNotebook = `-- name: OwnsNotebook :one
 SELECT EXISTS (SELECT 1 FROM notebooks WHERE id = $1 AND user_id = $2)
 `
@@ -447,55 +355,6 @@ func (q *Queries) OwnsNotebook(ctx context.Context, arg OwnsNotebookParams) (boo
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
-}
-
-const readyPodcasts = `-- name: ReadyPodcasts :many
-SELECT id, title, podcast_transcript, artifact_id
-FROM podcast_runs
-WHERE id = ANY($1::bigint[])
-  AND user_id = $2
-  AND status = 'ready'
-`
-
-type ReadyPodcastsParams struct {
-	PodcastIds []int64
-	UserID     string
-}
-
-type ReadyPodcastsRow struct {
-	ID                int64
-	Title             string
-	PodcastTranscript []byte
-	ArtifactID        *int64
-}
-
-// The finished podcasts a thread's cards name, the account's own only: a
-// card's podcast id is content, and content can be written by a client
-// (the append route), so the id alone must never be enough to put another
-// account's transcript in a public page.
-func (q *Queries) ReadyPodcasts(ctx context.Context, arg ReadyPodcastsParams) ([]ReadyPodcastsRow, error) {
-	rows, err := q.db.Query(ctx, readyPodcasts, arg.PodcastIds, arg.UserID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ReadyPodcastsRow
-	for rows.Next() {
-		var i ReadyPodcastsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Title,
-			&i.PodcastTranscript,
-			&i.ArtifactID,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const searchThreads = `-- name: SearchThreads :many
@@ -587,54 +446,6 @@ func (q *Queries) Thread(ctx context.Context, arg ThreadParams) (ThreadRow, erro
 		&i.UpdatedAt,
 	)
 	return i, err
-}
-
-const threadLinks = `-- name: ThreadLinks :many
-SELECT id, share_token, created_at, COALESCE(cardinality(message_ids), 0)::bigint AS message_count
-FROM public_chat_snapshots
-WHERE thread_id = $1
-  AND user_id = $2
-  AND (expires_at IS NULL OR expires_at > now())
-ORDER BY created_at DESC, id DESC
-`
-
-type ThreadLinksParams struct {
-	ThreadID *int64
-	UserID   string
-}
-
-type ThreadLinksRow struct {
-	ID           int64
-	ShareToken   string
-	CreatedAt    time.Time
-	MessageCount int64
-}
-
-// A thread's live links, newest first. An expired link opens nothing, so
-// it is not listed as if it did.
-func (q *Queries) ThreadLinks(ctx context.Context, arg ThreadLinksParams) ([]ThreadLinksRow, error) {
-	rows, err := q.db.Query(ctx, threadLinks, arg.ThreadID, arg.UserID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ThreadLinksRow
-	for rows.Next() {
-		var i ThreadLinksRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.ShareToken,
-			&i.CreatedAt,
-			&i.MessageCount,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const threadMessages = `-- name: ThreadMessages :many
@@ -800,65 +611,6 @@ func (q *Queries) UpdateThread(ctx context.Context, arg UpdateThreadParams) (Upd
 		&i.Archived,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const upsertLink = `-- name: UpsertLink :one
-INSERT INTO public_chat_snapshots (
-    thread_id, user_id, expires_at, share_token, content_hash,
-    snapshot_data, message_ids
-)
-SELECT thread.id, thread.user_id, $1, $2,
-       $3, $4, $5::bigint[]
-FROM new_chat_threads AS thread
-WHERE thread.id = $6 AND thread.user_id = $7
-ON CONFLICT ON CONSTRAINT uq_snapshot_thread_content_hash
-DO UPDATE SET expires_at = EXCLUDED.expires_at
-    WHERE public_chat_snapshots.user_id = EXCLUDED.user_id
-RETURNING id, share_token, expires_at, (xmax = 0)::boolean AS is_new
-`
-
-type UpsertLinkParams struct {
-	ExpiresAt    *time.Time
-	ShareToken   string
-	ContentHash  string
-	SnapshotData []byte
-	MessageIds   []int64
-	ThreadID     int64
-	UserID       string
-}
-
-type UpsertLinkRow struct {
-	ID         int64
-	ShareToken string
-	ExpiresAt  *time.Time
-	IsNew      bool
-}
-
-// Same content, same address: a second share of an unchanged thread keeps
-// the row and takes the newest choice of expiry. One statement, so two
-// requests sharing at once get the one link and neither gets a constraint
-// error. `xmax = 0` is true only for a row this statement inserted.
-//
-// The thread is selected under its owner, so a link is only ever made to
-// the caller's own thread; the conflict's update is held to the same owner.
-func (q *Queries) UpsertLink(ctx context.Context, arg UpsertLinkParams) (UpsertLinkRow, error) {
-	row := q.db.QueryRow(ctx, upsertLink,
-		arg.ExpiresAt,
-		arg.ShareToken,
-		arg.ContentHash,
-		arg.SnapshotData,
-		arg.MessageIds,
-		arg.ThreadID,
-		arg.UserID,
-	)
-	var i UpsertLinkRow
-	err := row.Scan(
-		&i.ID,
-		&i.ShareToken,
-		&i.ExpiresAt,
-		&i.IsNew,
 	)
 	return i, err
 }

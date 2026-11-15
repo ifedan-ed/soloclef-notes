@@ -113,7 +113,7 @@ func (r Resolver) Resolve(ctx context.Context, request *http.Request) (Principal
 					return Principal{}, err
 				}
 				if live {
-					return Principal{UserID: session.UserID, Method: MethodSession}, nil
+					return Principal{UserID: session.UserID, Method: MethodSession, SessionID: session.SessionID}, nil
 				}
 			}
 		}
@@ -128,7 +128,7 @@ func (r Resolver) Resolve(ctx context.Context, request *http.Request) (Principal
 				return Principal{}, err
 			}
 			if live {
-				return Principal{UserID: session.UserID, Method: MethodSession}, nil
+				return Principal{UserID: session.UserID, Method: MethodSession, SessionID: session.SessionID}, nil
 			}
 		}
 	}

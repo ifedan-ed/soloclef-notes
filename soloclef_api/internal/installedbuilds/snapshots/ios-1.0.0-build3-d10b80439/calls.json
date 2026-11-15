@@ -1,0 +1,2060 @@
+[
+ {
+  "method": "GET",
+  "path": "/api/v1/admin/announcements",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:166",
+   "lib/api/endpoints.ts:111"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/admin/announcements",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:167",
+   "lib/api/endpoints.ts:112"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/admin/announcements/{announcement_id}/withdraw",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:168",
+   "lib/api/endpoints.ts:114"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/agent-sign-in",
+  "in_snapshot": true,
+  "sites": [
+   "features/agent/ConnectAgentScreen.tsx:46"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/agent/flags",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:156"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/agent/permissions/rules",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:157"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/agent/permissions/rules",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:158"
+  ],
+  "query": {}
+ },
+ {
+  "method": "DELETE",
+  "path": "/api/v1/agent/permissions/rules/{rule_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:160"
+  ],
+  "query": {}
+ },
+ {
+  "method": "PATCH",
+  "path": "/api/v1/agent/permissions/rules/{rule_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:159"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/agent/tools",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:168"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/app/handoff",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/connectors/handoff.ts:108",
+   "features/sources/drive/driveHandoff.ts:58"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/app/handoff/{code}",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/connectors/handoff.ts:110"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/app/handoff/complete",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/connectors/handoff.ts:87"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/artifacts/{artifact_id}/download",
+  "in_snapshot": true,
+  "sites": [
+   "features/chat/tools/ArtifactCards.tsx:30"
+  ],
+  "query": {}
+ },
+ {
+  "method": "PUT",
+  "path": "/api/v1/artifacts/{artifact_id}/flashcard-order",
+  "in_snapshot": true,
+  "sites": [
+   "features/studio/studyMutations.ts:23",
+   "lib/api/endpoints.ts:85"
+  ],
+  "query": {}
+ },
+ {
+  "method": "DELETE",
+  "path": "/api/v1/artifacts/{artifact_id}/flashcard-progress",
+  "in_snapshot": true,
+  "sites": [
+   "features/studio/studyMutations.ts:23",
+   "lib/api/endpoints.ts:86"
+  ],
+  "query": {
+   "generation": null
+  }
+ },
+ {
+  "method": "PATCH",
+  "path": "/api/v1/artifacts/{artifact_id}/flashcard-progress",
+  "in_snapshot": true,
+  "sites": [
+   "features/studio/studyMutations.ts:23",
+   "lib/api/endpoints.ts:84"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/artifacts/{artifact_id}/manifest",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:200",
+   "lib/api/endpoints.ts:81"
+  ],
+  "query": {}
+ },
+ {
+  "method": "PUT",
+  "path": "/api/v1/artifacts/{artifact_id}/quiz-answer",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:88"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/artifacts/{artifact_id}/quiz-retake",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:90"
+  ],
+  "query": {}
+ },
+ {
+  "method": "PUT",
+  "path": "/api/v1/artifacts/{artifact_id}/quiz-skip",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:89"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/artifacts/media-links",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:82",
+   "lib/studio/mediaLinks.ts:28"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/auth/oidc/app/confirm",
+  "in_snapshot": true,
+  "sites": [
+   "features/auth/sso.ts:115"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/auth/oidc/app/exchange",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/client.ts:332"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/auth/oidc/app/start",
+  "in_snapshot": true,
+  "sites": [
+   "features/auth/sso.ts:41"
+  ],
+  "query": {
+   "app_redirect": null,
+   "challenge": null,
+   "challenge_method": [
+    "S256"
+   ],
+   "device": null,
+   "choose_account": [
+    "1"
+   ]
+  }
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/automations",
+  "in_snapshot": true,
+  "sites": [
+   "features/automations/api.ts:17"
+  ],
+  "query": {
+   "limit": null,
+   "offset": null
+  }
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/automations",
+  "in_snapshot": true,
+  "sites": [
+   "features/automations/api.ts:19"
+  ],
+  "query": {}
+ },
+ {
+  "method": "DELETE",
+  "path": "/api/v1/automations/{automation_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/automations/api.ts:21"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/automations/{automation_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/automations/api.ts:18"
+  ],
+  "query": {}
+ },
+ {
+  "method": "PATCH",
+  "path": "/api/v1/automations/{automation_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/automations/api.ts:20"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/automations/{automation_id}/runs",
+  "in_snapshot": true,
+  "sites": [
+   "features/automations/api.ts:24"
+  ],
+  "query": {
+   "limit": null,
+   "offset": null
+  }
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/automations/{automation_id}/runs/{run_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/automations/api.ts:25"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/automations/{automation_id}/runs/{run_id}/cancel",
+  "in_snapshot": true,
+  "sites": [
+   "features/automations/api.ts:27"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/automations/{automation_id}/triggers",
+  "in_snapshot": true,
+  "sites": [
+   "features/automations/api.ts:29"
+  ],
+  "query": {}
+ },
+ {
+  "method": "DELETE",
+  "path": "/api/v1/automations/{automation_id}/triggers/{trigger_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/automations/api.ts:33"
+  ],
+  "query": {}
+ },
+ {
+  "method": "PATCH",
+  "path": "/api/v1/automations/{automation_id}/triggers/{trigger_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/automations/api.ts:31"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/automations/model-eligibility",
+  "in_snapshot": true,
+  "sites": [
+   "features/automations/api.ts:22",
+   "lib/api/endpoints.ts:206"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/chunks/{chunk_id}/document",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:185"
+  ],
+  "query": {
+   "chunk_window": null
+  }
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/client-errors",
+  "in_snapshot": true,
+  "sites": [
+   "lib/errors/clientErrors.ts:29",
+   "lib/errors/contractReports.ts:32",
+   "lib/errors/contractReports.ts:69"
+  ],
+  "query": {}
+ },
+ {
+  "method": "DELETE",
+  "path": "/api/v1/connectors/{connector_id}/google-drive/connection",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:123"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/connectors/{connector_id}/nextcloud/browse",
+  "in_snapshot": true,
+  "sites": [
+   "features/sources/api.ts:86"
+  ],
+  "query": {
+   "path": null
+  }
+ },
+ {
+  "method": "DELETE",
+  "path": "/api/v1/connectors/{connector_id}/nextcloud/connection",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:130"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/connectors/{connector_id}/nextcloud/documents/{document_id}/refresh",
+  "in_snapshot": true,
+  "sites": [
+   "features/sources/api.ts:91"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/connectors/{connector_id}/nextcloud/import",
+  "in_snapshot": true,
+  "sites": [
+   "features/sources/api.ts:89"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/connectors/{connector_id}/nextcloud/import/preview",
+  "in_snapshot": true,
+  "sites": [
+   "features/sources/api.ts:88"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/connectors/{connector_id}/nextcloud/search",
+  "in_snapshot": true,
+  "sites": [
+   "features/sources/api.ts:87"
+  ],
+  "query": {
+   "q": null
+  }
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/connectors/email-imap/accounts",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:133"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/connectors/email-imap/accounts",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:135"
+  ],
+  "query": {}
+ },
+ {
+  "method": "DELETE",
+  "path": "/api/v1/connectors/email-imap/accounts/{account_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:138"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/connectors/email-imap/accounts/{account_id}/test",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:139"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/connectors/email-imap/microsoft",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:141"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/connectors/email-imap/microsoft/connect",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:143"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/connectors/email-imap/test",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:140"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/connectors/mcp",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:146"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/connectors/mcp",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:148"
+  ],
+  "query": {}
+ },
+ {
+  "method": "DELETE",
+  "path": "/api/v1/connectors/mcp/{connector_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:150"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/connectors/mcp/{connector_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:147"
+  ],
+  "query": {}
+ },
+ {
+  "method": "PUT",
+  "path": "/api/v1/connectors/mcp/{connector_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:149"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/connectors/mcp/{connector_id}/untrust-tool",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:153"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/connectors/mcp/policy",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:151"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/connectors/mcp/test",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:152"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/deliverable-jobs/{job_id}",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:202"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/diagrams/mermaid",
+  "in_snapshot": false,
+  "sites": [
+   "lib/render/mermaid/mermaidClient.ts:54"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/documents/{document_id}/download-original",
+  "in_snapshot": true,
+  "sites": [
+   "features/sources/api.ts:113"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/documents/{document_id}/editor-content",
+  "in_snapshot": true,
+  "sites": [
+   "features/sources/api.ts:99"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/documents/{document_id}/versions",
+  "in_snapshot": true,
+  "sites": [
+   "features/sources/api.ts:103"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/documents/{document_id}/versions/{version_number}",
+  "in_snapshot": true,
+  "sites": [
+   "features/sources/api.ts:107"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/documents/{document_id}/versions/{version_number}/restore",
+  "in_snapshot": true,
+  "sites": [
+   "features/sources/api.ts:111"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/documents/{document_id}/view-manifest",
+  "in_snapshot": true,
+  "sites": [
+   "features/sources/api.ts:97",
+   "lib/api/endpoints.ts:191"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/documents/fileupload",
+  "in_snapshot": true,
+  "sites": [
+   "lib/uploads/uploadQueue.ts:304"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/documents/folder-upload",
+  "in_snapshot": true,
+  "sites": [
+   "lib/uploads/uploadQueue.ts:308"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/documents/search/titles",
+  "in_snapshot": true,
+  "sites": [
+   "features/automations/api.ts:37",
+   "features/sources/api.ts:82"
+  ],
+  "query": {
+   "title": null,
+   "page": null,
+   "page_size": null
+  }
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/etl/capabilities",
+  "in_snapshot": true,
+  "sites": [
+   "features/sources/api.ts:79"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/folders",
+  "in_snapshot": true,
+  "sites": [
+   "features/automations/api.ts:38",
+   "features/sources/api.ts:83"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/global-model-connections",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:92",
+   "lib/api/endpoints.ts:179"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/google-drive/connect",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:122"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/google-drive/connection",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:121",
+   "features/sources/api.ts:94"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/logs",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:104"
+  ],
+  "query": {
+   "level": null,
+   "status": null,
+   "source": null,
+   "limit": null
+  }
+ },
+ {
+  "method": "DELETE",
+  "path": "/api/v1/logs/{log_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:106"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/logs/summary",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:105"
+  ],
+  "query": {
+   "hours": null
+  }
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/model-connections",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:93",
+   "lib/api/endpoints.ts:180"
+  ],
+  "query": {}
+ },
+ {
+  "method": "DELETE",
+  "path": "/api/v1/model-connections/{connection_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:165"
+  ],
+  "query": {}
+ },
+ {
+  "method": "PUT",
+  "path": "/api/v1/model-connections/{connection_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:164"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/model-providers",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:163"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/new_chat",
+  "in_snapshot": true,
+  "sites": [
+   "lib/chat/engine.ts:294"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/nextcloud/connection",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:126",
+   "features/sources/api.ts:85"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/nextcloud/login",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:127"
+  ],
+  "query": {}
+ },
+ {
+  "method": "DELETE",
+  "path": "/api/v1/nextcloud/login/{flow_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:129"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/nextcloud/login/{flow_id}/poll",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:128"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/nextcloud/refreshable-documents",
+  "in_snapshot": true,
+  "sites": [
+   "features/sources/api.ts:92"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/notebook-links",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:111"
+  ],
+  "query": {}
+ },
+ {
+  "method": "DELETE",
+  "path": "/api/v1/notebook-links/{link_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:112"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/notebook-report-templates",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:74"
+  ],
+  "query": {}
+ },
+ {
+  "method": "DELETE",
+  "path": "/api/v1/notebook-report-templates/{template_key}",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:77"
+  ],
+  "query": {}
+ },
+ {
+  "method": "PUT",
+  "path": "/api/v1/notebook-report-templates/{template_key}",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:76"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/notebooks",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:47"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/notebooks",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:125"
+  ],
+  "query": {}
+ },
+ {
+  "method": "DELETE",
+  "path": "/api/v1/notebooks/{notebook_id}",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:131"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/notebooks/{notebook_id}",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:48"
+  ],
+  "query": {}
+ },
+ {
+  "method": "PATCH",
+  "path": "/api/v1/notebooks/{notebook_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/notebooks/notebookActions.ts:92",
+   "lib/api/endpoints.ts:128"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/notebooks/{notebook_id}/copy",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:134"
+  ],
+  "query": {}
+ },
+ {
+  "method": "DELETE",
+  "path": "/api/v1/notebooks/{notebook_id}/feature",
+  "in_snapshot": true,
+  "sites": [
+   "features/notebooks/notebookActions.ts:99",
+   "lib/api/endpoints.ts:139"
+  ],
+  "query": {}
+ },
+ {
+  "method": "PUT",
+  "path": "/api/v1/notebooks/{notebook_id}/feature",
+  "in_snapshot": true,
+  "sites": [
+   "features/notebooks/notebookActions.ts:99",
+   "lib/api/endpoints.ts:137"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/notebooks/{notebook_id}/followups",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:164"
+  ],
+  "query": {}
+ },
+ {
+  "method": "DELETE",
+  "path": "/api/v1/notebooks/{notebook_id}/public-link",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:154"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/notebooks/{notebook_id}/public-link",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:149"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/notebooks/{notebook_id}/public-link",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:152"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/notebooks/{notebook_id}/research/import",
+  "in_snapshot": true,
+  "sites": [
+   "features/sources/api.ts:75"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/notebooks/{notebook_id}/research/read-page",
+  "in_snapshot": true,
+  "sites": [
+   "features/sources/api.ts:74"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/notebooks/{notebook_id}/research/search",
+  "in_snapshot": true,
+  "sites": [
+   "features/sources/api.ts:77"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/notebooks/{notebook_id}/research/sources",
+  "in_snapshot": true,
+  "sites": [
+   "features/sources/api.ts:73",
+   "lib/api/endpoints.ts:183"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/notebooks/{notebook_id}/sources",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:49"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/notebooks/{notebook_id}/sources",
+  "in_snapshot": true,
+  "sites": [
+   "features/sources/api.ts:61",
+   "lib/uploads/uploadQueue.ts:290",
+   "lib/uploads/uploadQueue.ts:296"
+  ],
+  "query": {}
+ },
+ {
+  "method": "DELETE",
+  "path": "/api/v1/notebooks/{notebook_id}/sources/{source_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/sources/api.ts:65"
+  ],
+  "query": {}
+ },
+ {
+  "method": "PATCH",
+  "path": "/api/v1/notebooks/{notebook_id}/sources/{source_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/sources/api.ts:64",
+   "features/sources/sourceQueries.ts:61"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/notebooks/{notebook_id}/sources/{source_id}/guide",
+  "in_snapshot": true,
+  "sites": [
+   "features/sources/api.ts:67",
+   "lib/api/endpoints.ts:188"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/notebooks/{notebook_id}/sources/toggle",
+  "in_snapshot": true,
+  "sites": [
+   "features/sources/api.ts:62",
+   "features/sources/sourceQueries.ts:61"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/notebooks/{notebook_id}/studio/generate",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:57"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/notebooks/{notebook_id}/studio/outputs",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:56"
+  ],
+  "query": {}
+ },
+ {
+  "method": "DELETE",
+  "path": "/api/v1/notebooks/{notebook_id}/studio/outputs/{output_id}",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:60"
+  ],
+  "query": {}
+ },
+ {
+  "method": "PATCH",
+  "path": "/api/v1/notebooks/{notebook_id}/studio/outputs/{output_id}",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:59"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/notebooks/{notebook_id}/studio/outputs/{output_id}/public-link",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:73"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/notebooks/{notebook_id}/studio/outputs/{output_id}/report-suggestions/{suggestion_id}/add",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:66"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/notebooks/{notebook_id}/studio/outputs/{output_id}/report-suggestions/{suggestion_id}/dismiss",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:68"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/notebooks/{notebook_id}/studio/outputs/{output_id}/report-view",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:64"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/notebooks/{notebook_id}/studio/outputs/{output_id}/view",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:62"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/notebooks/{notebook_id}/studio/suggestions",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:161",
+   "lib/api/endpoints.ts:71"
+  ],
+  "query": {
+   "kind": null,
+   "variant": null,
+   "language": null,
+   "refresh": [
+    "true"
+   ]
+  }
+ },
+ {
+  "method": "DELETE",
+  "path": "/api/v1/notebooks/{notebook_id}/threads",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:142"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/notebooks/{notebook_id}/threads",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:51",
+   "lib/api/endpoints.ts:93"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/notebooks/{notebook_id}/threads",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:53"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/notebooks/search",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:144"
+  ],
+  "query": {
+   "q": null,
+   "limit": null
+  }
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/notes",
+  "in_snapshot": true,
+  "sites": [
+   "features/notes/useNotesList.ts:35",
+   "features/notes/useNotesList.ts:48"
+  ],
+  "query": {
+   "q": null,
+   "limit": null,
+   "notebook_id": null
+  }
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/notes",
+  "in_snapshot": true,
+  "sites": [
+   "features/notes/noteActions.ts:26",
+   "features/notes/noteActions.ts:31",
+   "lib/api/endpoints.ts:197"
+  ],
+  "query": {}
+ },
+ {
+  "method": "DELETE",
+  "path": "/api/v1/notes/{note_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/notes/noteActions.ts:51"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/notes/{note_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/notes/noteApi.ts:58"
+  ],
+  "query": {}
+ },
+ {
+  "method": "PATCH",
+  "path": "/api/v1/notes/{note_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/notes/noteApi.ts:37"
+  ],
+  "query": {}
+ },
+ {
+  "method": "PUT",
+  "path": "/api/v1/notes/{note_id}/notebook",
+  "in_snapshot": true,
+  "sites": [
+   "features/notes/noteActions.ts:36"
+  ],
+  "query": {}
+ },
+ {
+  "method": "DELETE",
+  "path": "/api/v1/notes/{note_id}/pin",
+  "in_snapshot": true,
+  "sites": [
+   "features/notes/noteActions.ts:47"
+  ],
+  "query": {}
+ },
+ {
+  "method": "PUT",
+  "path": "/api/v1/notes/{note_id}/pin",
+  "in_snapshot": true,
+  "sites": [
+   "features/notes/noteActions.ts:47"
+  ],
+  "query": {}
+ },
+ {
+  "method": "DELETE",
+  "path": "/api/v1/notes/{note_id}/sources/{notebook_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/notes/noteActions.ts:42"
+  ],
+  "query": {}
+ },
+ {
+  "method": "PUT",
+  "path": "/api/v1/notes/{note_id}/sources/{notebook_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/notes/noteActions.ts:42"
+  ],
+  "query": {}
+ },
+ {
+  "method": "DELETE",
+  "path": "/api/v1/notifications",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:108"
+  ],
+  "query": {
+   "category": [
+    "announcements",
+    "status"
+   ],
+   "filter": [
+    "unread"
+   ]
+  }
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/notifications",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:100"
+  ],
+  "query": {
+   "category": [
+    "announcements",
+    "status"
+   ],
+   "filter": [
+    "errors",
+    "unread"
+   ],
+   "before_date": null,
+   "limit": null,
+   "offset": null
+  }
+ },
+ {
+  "method": "DELETE",
+  "path": "/api/v1/notifications/{notification_id}",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:106"
+  ],
+  "query": {}
+ },
+ {
+  "method": "PATCH",
+  "path": "/api/v1/notifications/{notification_id}/read",
+  "in_snapshot": true,
+  "sites": [
+   "features/inbox/inboxQueries.ts:112",
+   "lib/api/endpoints.ts:103"
+  ],
+  "query": {}
+ },
+ {
+  "method": "PATCH",
+  "path": "/api/v1/notifications/read-all",
+  "in_snapshot": true,
+  "sites": [
+   "features/inbox/inboxQueries.ts:121",
+   "lib/api/endpoints.ts:104"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/notifications/unread-counts-batch",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:102"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/pats",
+  "in_snapshot": true,
+  "sites": [
+   "features/apiAccess/patQueries.ts:17"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/pats",
+  "in_snapshot": true,
+  "sites": [
+   "features/apiAccess/patQueries.ts:23"
+  ],
+  "query": {}
+ },
+ {
+  "method": "DELETE",
+  "path": "/api/v1/pats/{pat_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/apiAccess/patQueries.ts:24"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/podcasts/languages",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:78"
+  ],
+  "query": {}
+ },
+ {
+  "method": "PUT",
+  "path": "/api/v1/presence",
+  "in_snapshot": false,
+  "sites": [
+   "lib/push/presence.ts:74"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/prompts",
+  "in_snapshot": true,
+  "sites": [
+   "features/prompts/promptQueries.ts:15",
+   "lib/api/endpoints.ts:166"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/prompts",
+  "in_snapshot": true,
+  "sites": [
+   "features/prompts/promptQueries.ts:21"
+  ],
+  "query": {}
+ },
+ {
+  "method": "DELETE",
+  "path": "/api/v1/prompts/{prompt_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/prompts/promptQueries.ts:26"
+  ],
+  "query": {}
+ },
+ {
+  "method": "PUT",
+  "path": "/api/v1/prompts/{prompt_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/prompts/promptQueries.ts:23"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/prompts/{prompt_id}/copy",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:170"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/prompts/public",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:169"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/public-notebooks/{token}",
+  "in_snapshot": false,
+  "sites": [
+   "features/public/publicApi.ts:35"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/public-notebooks/{token}/artifacts/{artifact_id}/download",
+  "in_snapshot": false,
+  "sites": [
+   "features/public/publicApi.ts:35"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/public-notebooks/{token}/artifacts/{artifact_id}/manifest",
+  "in_snapshot": false,
+  "sites": [
+   "features/public/publicApi.ts:35"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/public-notebooks/{token}/sources/{source_id}",
+  "in_snapshot": false,
+  "sites": [
+   "features/public/publicApi.ts:35"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/public/{share_token}",
+  "in_snapshot": true,
+  "sites": [
+   "features/public/publicApi.ts:33"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/public/{share_token}/artifacts/{artifact_id}/content",
+  "in_snapshot": true,
+  "sites": [
+   "features/public/PublicCards.tsx:49",
+   "features/public/publicApi.ts:34"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/public/{share_token}/podcasts/{podcast_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/public/PublicCards.tsx:51"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/public/{share_token}/podcasts/{podcast_id}/stream",
+  "in_snapshot": true,
+  "sites": [
+   "features/public/PublicCards.tsx:50"
+  ],
+  "query": {}
+ },
+ {
+  "method": "DELETE",
+  "path": "/api/v1/push/devices",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:118"
+  ],
+  "query": {
+   "token": null
+  }
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/push/devices",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:117"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/push/preferences",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:119"
+  ],
+  "query": {}
+ },
+ {
+  "method": "PUT",
+  "path": "/api/v1/push/preferences",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:120"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/search-source-connectors",
+  "in_snapshot": true,
+  "sites": [
+   "features/automations/api.ts:39",
+   "features/settings/api.ts:115",
+   "lib/api/endpoints.ts:204"
+  ],
+  "query": {
+   "limit": null
+  }
+ },
+ {
+  "method": "PUT",
+  "path": "/api/v1/search-source-connectors/{connector_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:116"
+  ],
+  "query": {}
+ },
+ {
+  "method": "PUT",
+  "path": "/api/v1/search-source-connectors/{connector_id}/enabled",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:118"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/search-source-connectors/{connector_id}/index",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:117"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/sign-in-options",
+  "in_snapshot": true,
+  "sites": [
+   "features/server/serverCheck.ts:42"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/snapshots",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:109"
+  ],
+  "query": {}
+ },
+ {
+  "method": "DELETE",
+  "path": "/api/v1/snapshots/{snapshot_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:110"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/support-contact",
+  "in_snapshot": true,
+  "sites": [
+   "features/help/ReportIssueScreen.tsx:52"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/system-instructions/lint",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:88"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/threads/{thread_id}",
+  "in_snapshot": true,
+  "sites": [
+   "lib/chat/engine.ts:206"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/threads/{thread_id}/actions",
+  "in_snapshot": true,
+  "sites": [
+   "lib/chat/actions.ts:25"
+  ],
+  "query": {
+   "page": null,
+   "page_size": null
+  }
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/threads/{thread_id}/cancel-active-turn",
+  "in_snapshot": true,
+  "sites": [
+   "lib/chat/engine.ts:549"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/threads/{thread_id}/messages",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:97"
+  ],
+  "query": {
+   "skip": null,
+   "limit": null
+  }
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/threads/{thread_id}/pending-interrupts",
+  "in_snapshot": true,
+  "sites": [
+   "lib/chat/engine.ts:222"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/threads/{thread_id}/regenerate",
+  "in_snapshot": true,
+  "sites": [
+   "lib/chat/engine.ts:315"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/threads/{thread_id}/resume",
+  "in_snapshot": true,
+  "sites": [
+   "lib/chat/engine.ts:332"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/threads/{thread_id}/revert-turn/{chat_turn_id}",
+  "in_snapshot": true,
+  "sites": [
+   "lib/chat/actions.ts:37"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/threads/{thread_id}/revert/{action_id}",
+  "in_snapshot": true,
+  "sites": [
+   "lib/chat/actions.ts:31"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/threads/{thread_id}/snapshots",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:156"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/threads/{thread_id}/turn-status",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:95",
+   "lib/chat/engine.ts:197"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/users/me/chat-model",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:94",
+   "lib/api/endpoints.ts:176"
+  ],
+  "query": {}
+ },
+ {
+  "method": "PUT",
+  "path": "/api/v1/users/me/chat-model",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:95",
+   "lib/api/endpoints.ts:178"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/users/me/llm-setup-status",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:91",
+   "lib/api/endpoints.ts:170"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/users/me/memory",
+  "in_snapshot": true,
+  "sites": [
+   "features/memory/memoryApi.ts:22"
+  ],
+  "query": {}
+ },
+ {
+  "method": "PUT",
+  "path": "/api/v1/users/me/memory",
+  "in_snapshot": true,
+  "sites": [
+   "features/memory/memoryApi.ts:26"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/api/v1/users/me/memory/reset",
+  "in_snapshot": true,
+  "sites": [
+   "features/memory/memoryApi.ts:31"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/users/me/model-roles",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:96"
+  ],
+  "query": {}
+ },
+ {
+  "method": "PUT",
+  "path": "/api/v1/users/me/model-roles",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:97"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/users/me/quick-model",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:98"
+  ],
+  "query": {}
+ },
+ {
+  "method": "PUT",
+  "path": "/api/v1/users/me/quick-model",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:99"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/users/me/settings",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:84"
+  ],
+  "query": {}
+ },
+ {
+  "method": "PATCH",
+  "path": "/api/v1/users/me/settings",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:85"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/api/v1/users/me/studio-model",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:100"
+  ],
+  "query": {}
+ },
+ {
+  "method": "PUT",
+  "path": "/api/v1/users/me/studio-model",
+  "in_snapshot": true,
+  "sites": [
+   "features/settings/api.ts:101"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/auth/change-password",
+  "in_snapshot": true,
+  "sites": [
+   "features/account/ChangePasswordScreen.tsx:60"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/auth/desktop/login",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/client.ts:295"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/auth/devices",
+  "in_snapshot": true,
+  "sites": [
+   "features/account/DevicesScreen.tsx:41"
+  ],
+  "query": {}
+ },
+ {
+  "method": "DELETE",
+  "path": "/auth/devices/{session_id}",
+  "in_snapshot": true,
+  "sites": [
+   "features/account/DevicesScreen.tsx:47"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/auth/jwt/logout-all",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/client.ts:365"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/auth/jwt/refresh",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/client.ts:405"
+  ],
+  "query": {}
+ },
+ {
+  "method": "POST",
+  "path": "/auth/jwt/revoke",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/client.ts:355"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/auth/password",
+  "in_snapshot": true,
+  "sites": [
+   "features/account/ChangePasswordScreen.tsx:52"
+  ],
+  "query": {}
+ },
+ {
+  "method": "DELETE",
+  "path": "/users/me",
+  "in_snapshot": true,
+  "sites": [
+   "features/account/DeleteAccountSheet.tsx:34"
+  ],
+  "query": {}
+ },
+ {
+  "method": "GET",
+  "path": "/users/me",
+  "in_snapshot": true,
+  "sites": [
+   "lib/api/endpoints.ts:46",
+   "lib/files/fs.ts:146"
+  ],
+  "query": {}
+ },
+ {
+  "method": "PATCH",
+  "path": "/users/me",
+  "in_snapshot": true,
+  "sites": [
+   "features/account/ProfileScreen.tsx:42"
+  ],
+  "query": {}
+ }
+]

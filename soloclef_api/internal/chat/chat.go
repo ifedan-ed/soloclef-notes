@@ -40,9 +40,9 @@
 //     processes (package turns). They were one process's memory.
 //   - The step limit is per turn. A thread used to stop answering for good
 //     after 120 model calls over its life.
-//   - "Always allow" is a row read at the moment each call is decided, so
-//     removing it takes effect on the next call, and a tool that must
-//     always ask cannot be allowed for good by any route.
+//   - Every tool runs without asking unless the person marked it "ask
+//     first", and a mark is a row read at the moment each call is decided,
+//     so a change in settings takes effect on the next call.
 //   - A decision is matched to the call it answers by id, never by its
 //     place in a list, and a set of decisions that does not answer exactly
 //     the waiting calls is refused whole.

@@ -1,19 +1,26 @@
 package videojob
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
-	"regexp"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 )
 
-// The checks a rendered MP4 passes before it is kept
-// (app/artifacts/verification/formats/video.py). They run in the sandbox,
-// where the file is: only a few lines of metadata cross back.
+// The checks a finished MP4 passes before it is kept
+// (app/artifacts/verification/formats/video.py, the Python worker's): one
+// video and one audio stream, at 1920 by 1080, the length planned, the
+// narration not ending early, and no slide blank. They run here, on the
+// file this worker just wrote, with ffprobe and ffmpeg.
 const (
 	videoWidth        = 1920
 	videoHeight       = 1080
@@ -22,12 +29,9 @@ const (
 	minFrameStddev    = 1.0
 )
 
-var sha256Line = regexp.MustCompile(`^[0-9a-f]{64}$`)
-
 // verified is what the checks found.
 type verified struct {
-	// Findings are what is wrong with the video: each is something a repair
-	// of the scenes can address. None means the video passed.
+	// Findings are what is wrong with the video. None means it passed.
 	Findings []string
 	// SHA256 is the digest of the file that was checked: the bytes later
 	// stored must be these.
@@ -36,52 +40,31 @@ type verified struct {
 	Seconds float64
 }
 
-// frameSample is a moment of one scene to look at.
+// frameSample is a moment of one slide to look at.
 type frameSample struct {
-	Scene int
+	Slide int
 	At    float64
 }
 
-// frameSamples are the middle of each scene, on the grid the render puts
-// the scenes on: by then every element is on screen (the layout rules bring
-// them in within two seconds) and none has gone.
-func frameSamples(voices []voiced) []frameSample {
-	var out []frameSample
-	start := 0
-	for _, voice := range voices {
-		frames, err := sceneFrames(voice.Seconds, fps, minFrames)
-		if err != nil {
-			continue
-		}
-		out = append(out, frameSample{Scene: voice.Number, At: float64(start+frames/2) / fps})
-		start += frames
+// frameSamples are the end of each slide's narration on the film, when
+// every part of it is on screen.
+func frameSamples(shots []shot) []frameSample {
+	out := make([]frameSample, len(shots))
+	for i, s := range shots {
+		at := float64(s.Start)/fps + min(leadIn+s.Voice, s.seconds()-0.1)
+		out[i] = frameSample{Slide: s.Number, At: at}
 	}
 	return out
 }
 
-// verifyVideo checks the MP4 at output. expected is the length it was
-// planned at, or 0 to read it from the sidecar a frames render writes.
+// verifyVideo checks the MP4 at output, expected seconds long.
 //
-// An error is the sandbox failing to run a check, not the video failing
-// one: the Python worker turned those into findings and handed them to a
-// repair, which spent a model call asking the scenes to fix an ffprobe that
-// did not answer.
-func verifyVideo(ctx context.Context, box Sandbox, output string, expected float64, samples []frameSample, limit time.Duration) (verified, error) {
-	run := func(command, doing string) (string, error) {
-		result, err := box.RunWithin(ctx, command, limit)
-		if err != nil {
-			return "", fmt.Errorf("could not %s: %w", doing, err)
-		}
-		if !result.OK() {
-			return "", fmt.Errorf("could not %s: %s", doing, tail(result.Output, 2000))
-		}
-		return strings.TrimSpace(result.Output), nil
-	}
-	quoted := quote(output)
-	probe, err := run("ffprobe -v error -count_packets -of json -show_entries "+
-		"format=duration:stream=codec_type,width,height,duration,nb_read_packets "+quoted, "probe the video")
+// An error is a check that could not run, not the video failing one.
+func verifyVideo(ctx context.Context, tools mediaTools, output string, expected float64, samples []frameSample) (verified, error) {
+	probe, err := tools.run(ctx, tools.ffprobe, "-v", "error", "-count_packets", "-of", "json", "-show_entries",
+		"format=duration:stream=codec_type,width,height,duration,nb_read_packets", output)
 	if err != nil {
-		return verified{}, err
+		return verified{}, fmt.Errorf("could not probe the video: %w", err)
 	}
 	var probed struct {
 		Format struct {
@@ -95,7 +78,7 @@ func verifyVideo(ctx context.Context, box Sandbox, output string, expected float
 			Packets  string `json:"nb_read_packets"`
 		} `json:"streams"`
 	}
-	if err := json.Unmarshal([]byte(probe), &probed); err != nil {
+	if err := json.Unmarshal(probe, &probed); err != nil {
 		return verified{}, fmt.Errorf("the video's probe is not readable: %w", err)
 	}
 	var out verified
@@ -128,71 +111,55 @@ func verifyVideo(ctx context.Context, box Sandbox, output string, expected float
 	if audios != 1 {
 		finding("Video must contain exactly one narration audio stream")
 	}
-
-	if expected == 0 {
-		// A frames render writes how long it meant the file to be.
-		sidecar, err := box.ReadFile(ctx, output+".segments.json", 1<<20)
-		if err != nil {
-			return verified{}, fmt.Errorf("could not read the render's segment record: %w", err)
-		}
-		var segments struct {
-			Expected float64 `json:"expected_duration_seconds"`
-		}
-		if json.Unmarshal(sidecar, &segments) != nil || segments.Expected <= 0 || math.IsInf(segments.Expected, 0) {
-			return verified{}, fmt.Errorf("the render's segment record is not readable: %q", tail(string(sidecar), 300))
-		}
-		expected = segments.Expected
-	}
 	if out.Seconds > 0 && math.Abs(out.Seconds-expected) > durationTolerance {
-		finding("Video duration does not match its rendered segments")
+		finding(fmt.Sprintf("Video runs %.2fs and was planned at %.2fs", out.Seconds, expected))
 	}
-
 	if out.Seconds > 0 {
-		// A frame from the middle of each scene, as 64x36 grey levels: a
-		// scene whose frame is one colour drew nothing. The Python check
-		// sampled one frame, the middle of the whole video, which can land
-		// on a scene's first moments while its elements are still coming
-		// in and fail a good video as blank; and it could not say which
-		// scene was wrong, which is what a repair needs to know.
-		var times []string
+		// A frame from each slide, as 64 by 36 grey levels: a slide whose
+		// frame is one colour drew nothing.
 		for _, sample := range samples {
-			times = append(times, strconv.FormatFloat(sample.At, 'f', 3, 64))
-		}
-		stats, err := run("for at in "+strings.Join(times, " ")+"; do ffmpeg -nostdin -v error -ss \"$at\" -i "+quoted+
-			" -frames:v 1 -vf 'scale=64:36,format=gray' -f rawvideo - | "+
-			`python3 -c 'import json,statistics,sys; d=sys.stdin.buffer.read(); print(json.dumps({"levels":len(set(d)),"stddev":statistics.pstdev(d) if d else 0}))'`+
-			" || exit 1; done", "sample the scenes' frames")
-		if err != nil {
-			return verified{}, err
-		}
-		lines := strings.Split(stats, "\n")
-		if len(lines) != len(samples) {
-			return verified{}, fmt.Errorf("the frame samples are not readable: %q", tail(stats, 300))
-		}
-		for i, line := range lines {
-			var frame struct {
-				Levels int     `json:"levels"`
-				Stddev float64 `json:"stddev"`
+			raw, err := tools.run(ctx, tools.ffmpeg, "-nostdin", "-v", "error", "-ss", strconv.FormatFloat(sample.At, 'f', 3, 64), "-i", output,
+				"-frames:v", "1", "-vf", "scale=64:36,format=gray", "-f", "rawvideo", "-")
+			if err != nil {
+				return verified{}, fmt.Errorf("could not sample slide %d's frame: %w", sample.Slide, err)
 			}
-			if err := json.Unmarshal([]byte(line), &frame); err != nil {
-				return verified{}, fmt.Errorf("the frame sample is not readable: %w", err)
-			}
-			if frame.Levels < minFrameLevels || frame.Stddev < minFrameStddev {
-				finding(fmt.Sprintf("Scene %d's frame at %.2fs is blank or single-color (%d grey levels, deviation %.2f)",
-					samples[i].Scene, samples[i].At, frame.Levels, frame.Stddev))
+			levels, deviation := greyLevels(raw)
+			if levels < minFrameLevels || deviation < minFrameStddev {
+				finding(fmt.Sprintf("Slide %d's frame at %.2fs is blank or single-colour (%d grey levels, deviation %.2f)", sample.Slide, sample.At, levels, deviation))
 			}
 		}
 	}
-
-	sum, err := run("sha256sum -- "+quoted, "hash the video")
+	file, err := os.Open(output)
 	if err != nil {
 		return verified{}, err
 	}
-	out.SHA256, _, _ = strings.Cut(sum, " ")
-	if !sha256Line.MatchString(out.SHA256) {
-		return verified{}, fmt.Errorf("the video's hash is not readable: %q", tail(sum, 200))
+	defer file.Close()
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return verified{}, err
 	}
+	out.SHA256 = hex.EncodeToString(hash.Sum(nil))
 	return out, nil
+}
+
+// greyLevels is how many grey levels a frame's pixels use and how far they
+// spread.
+func greyLevels(pixels []byte) (int, float64) {
+	if len(pixels) == 0 {
+		return 0, 0
+	}
+	seen := map[byte]bool{}
+	sum := 0.0
+	for _, p := range pixels {
+		seen[p] = true
+		sum += float64(p)
+	}
+	mean := sum / float64(len(pixels))
+	spread := 0.0
+	for _, p := range pixels {
+		spread += (float64(p) - mean) * (float64(p) - mean)
+	}
+	return len(seen), math.Sqrt(spread / float64(len(pixels)))
 }
 
 // positive is a probe's number, or 0 when it is not a positive one.
@@ -202,4 +169,22 @@ func positive(text string) float64 {
 		return 0
 	}
 	return value
+}
+
+// mediaTools are the ffmpeg and ffprobe the worker image carries.
+type mediaTools struct{ ffmpeg, ffprobe string }
+
+// run runs one of them and answers its standard output.
+func (m mediaTools) run(ctx context.Context, program string, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, program, args...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, fmt.Errorf("%s: %w: %s", filepath.Base(program), err, tail(stderr.String(), 500))
+	}
+	return out, nil
 }

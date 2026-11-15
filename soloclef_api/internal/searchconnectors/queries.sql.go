@@ -257,10 +257,11 @@ func (q *Queries) DeleteConnection(ctx context.Context, arg DeleteConnectionPara
 	return result.RowsAffected(), nil
 }
 
-const deleteServer = `-- name: DeleteServer :execrows
+const deleteServer = `-- name: DeleteServer :one
 DELETE FROM search_source_connectors
 WHERE id = $1 AND user_id = $2
   AND connector_type = 'MCP_CONNECTOR'
+RETURNING config
 `
 
 type DeleteServerParams struct {
@@ -268,14 +269,14 @@ type DeleteServerParams struct {
 	UserID string
 }
 
-// An MCP server holds no documents, so its row is the whole of it. The count
-// is the answer: 0 is "not found".
-func (q *Queries) DeleteServer(ctx context.Context, arg DeleteServerParams) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteServer, arg.ID, arg.UserID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+// An MCP server holds no documents, so its row is the whole of it. No row
+// back is "not found". The config comes back so that an OAuth sign-in it
+// held can be revoked at its provider once the delete has committed.
+func (q *Queries) DeleteServer(ctx context.Context, arg DeleteServerParams) ([]byte, error) {
+	row := q.db.QueryRow(ctx, deleteServer, arg.ID, arg.UserID)
+	var config []byte
+	err := row.Scan(&config)
+	return config, err
 }
 
 const insertConnection = `-- name: InsertConnection :one
@@ -356,30 +357,6 @@ func (q *Queries) InsertConnection(ctx context.Context, arg InsertConnectionPara
 		&i.UpdatedAt,
 	)
 	return i, err
-}
-
-const lockTrustedTools = `-- name: LockTrustedTools :one
-SELECT COALESCE(config -> 'trusted_tools', 'null'::jsonb)::jsonb AS trusted_tools
-FROM search_source_connectors
-WHERE id = $1 AND user_id = $2
-  AND connector_type = 'MCP_CONNECTOR'
-FOR UPDATE
-`
-
-type LockTrustedToolsParams struct {
-	ID     int64
-	UserID string
-}
-
-// The trusted-tool list of an MCP server its owner is about to edit, locked
-// until the transaction ends, so two edits made at once cannot each write a
-// list without the other's change. The list alone is read: the rest of the
-// config holds the server's key and this edit has no use for it.
-func (q *Queries) LockTrustedTools(ctx context.Context, arg LockTrustedToolsParams) ([]byte, error) {
-	row := q.db.QueryRow(ctx, lockTrustedTools, arg.ID, arg.UserID)
-	var trusted_tools []byte
-	err := row.Scan(&trusted_tools)
-	return trusted_tools, err
 }
 
 const markConnectionDocumentsDeleting = `-- name: MarkConnectionDocumentsDeleting :execrows
@@ -611,26 +588,36 @@ func (q *Queries) SiteAllowedHosts(ctx context.Context) ([]byte, error) {
 	return value, err
 }
 
-const storeTrustedTools = `-- name: StoreTrustedTools :execrows
+const storeServerSignIn = `-- name: StoreServerSignIn :execrows
 UPDATE search_source_connectors
-SET config = jsonb_set(config, '{trusted_tools}', $1::jsonb, true),
+SET config = jsonb_set(config - 'auth_expired' - 'cached_tools', '{server_config,auth,oauth}',
+                       $1::jsonb, true),
     updated_at = now()
 WHERE id = $2 AND user_id = $3
   AND connector_type = 'MCP_CONNECTOR'
-  AND jsonb_typeof(config) = 'object'
+  AND config #>> '{server_config,auth,type}' = 'oauth'
+  AND config #>> '{server_config,url}' = $4::text
 `
 
-type StoreTrustedToolsParams struct {
-	TrustedTools []byte
-	ID           int64
-	UserID       string
+type StoreServerSignInParams struct {
+	Oauth     []byte
+	ID        int64
+	UserID    string
+	ServerUrl string
 }
 
-// Writes the one key and leaves the rest of the config as it is. A config
-// that is not an object cannot take a key, matches nothing, and the route
-// reports the server as one it cannot edit.
-func (q *Queries) StoreTrustedTools(ctx context.Context, arg StoreTrustedToolsParams) (int64, error) {
-	result, err := q.db.Exec(ctx, storeTrustedTools, arg.TrustedTools, arg.ID, arg.UserID)
+// A finished OAuth sign-in: the client, the endpoints and the sealed
+// tokens, written over the server's `auth.oauth` only while the server is
+// still an OAuth server at the address the sign-in started for. The "enter
+// the key again" flag goes, and so does the tool list, which the server is
+// asked for again with the sign-in.
+func (q *Queries) StoreServerSignIn(ctx context.Context, arg StoreServerSignInParams) (int64, error) {
+	result, err := q.db.Exec(ctx, storeServerSignIn,
+		arg.Oauth,
+		arg.ID,
+		arg.UserID,
+		arg.ServerUrl,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -761,9 +748,8 @@ type UpdateServerRow struct {
 }
 
 // An edit of an MCP server: its name, its settings, or both. Only the
-// `server_config` key is written, so the trusted tools and the origin stay
-// whatever they are at the moment of the write, not what they were when
-// the form was opened. New settings also drop the two things that were
+// `server_config` key is written, so the origin stays whatever it is at
+// the moment of the write, not what it was when the form was opened. New settings also drop the two things that were
 // true of the old ones only: the "enter the key again" flag, and the tool
 // list the old address answered with.
 func (q *Queries) UpdateServer(ctx context.Context, arg UpdateServerParams) (UpdateServerRow, error) {

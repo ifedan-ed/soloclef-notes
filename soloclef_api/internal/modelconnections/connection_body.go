@@ -97,15 +97,17 @@ func readChange(b body, creating bool) (change, []errorenvelope.Failure) {
 	case creating && !read.setProvider:
 		failures = append(failures, invalid("provider", "provider is required"))
 	case read.setProvider && !knownProvider(read.provider):
-		// Null included: a connection always has a provider.
-		failures = append(failures, invalid("provider", "provider must be one of the providers this server lists"))
+		// Null included: a connection always has a provider, and there is
+		// one it may have (providers.go).
+		failures = append(failures, invalid("provider", providerUnknown))
 	}
 
 	read.baseURL, read.setBaseURL = b.text("base_url", maxBaseURLChars, &failures)
 	read.baseURL = strings.TrimSpace(read.baseURL)
 	if read.baseURL != "" {
-		// The proxy is handed this address to call. Anything but a plain
-		// web address is refused here, not discovered by a failed test.
+		// This tier calls this address with the person's key. Anything but
+		// a plain web address is refused here, not discovered by a failed
+		// test; providerRules then puts it to the egress guard.
 		address, err := url.Parse(read.baseURL)
 		if err != nil || (address.Scheme != "http" && address.Scheme != "https") || address.Host == "" || address.User != nil {
 			failures = append(failures, invalid("base_url", "base_url must be an http or https address"))
@@ -124,6 +126,12 @@ func readChange(b body, creating bool) (change, []errorenvelope.Failure) {
 			// own field; a body that wrote these keys could store a value
 			// in the clear or a list of names that is not true.
 			failures = append(failures, invalid("extra", "extra may not set headers_sealed or header_names: send the headers as headers"))
+		} else if namesRetiredBag(object) {
+			// Where Bedrock's and Vertex AI's credentials used to be kept.
+			// Nothing sends them anywhere now, so a credential put there
+			// would be stored for nothing; refusing it keeps the answers'
+			// stripping of these keys (render.go) about old rows only.
+			failures = append(failures, invalid("extra", "extra may not hold litellm_params or kwargs: nothing in extra is sent to the endpoint"))
 		} else if object == nil {
 			read.extra = []byte(`{}`)
 		} else {
@@ -165,27 +173,18 @@ func readChange(b body, creating bool) (change, []errorenvelope.Failure) {
 	return read, failures
 }
 
-// providerRules are what a connection of one provider must hold beyond
-// readChange's shape: an OpenAI-compatible endpoint is called by this tier
-// itself, so it needs an address the egress guard accepts and a key, and
-// it alone sends headers of its own. creating says the body is a whole new
-// connection; for a change, only the fields it names are held, plus both
-// address and key when it moves a connection to that provider.
-func providerRules(provider string, fields change, creating, changingProvider bool) []errorenvelope.Failure {
+// providerRules are what an OpenAI-compatible connection must hold beyond
+// readChange's shape. This tier calls the endpoint itself, so it needs an
+// address the egress guard accepts and a key. creating says the body is a
+// whole new connection; for a change, only the fields it names are held.
+func providerRules(fields change, creating bool) []errorenvelope.Failure {
 	var failures []errorenvelope.Failure
-	if provider != ownmodels.Provider {
-		if fields.setHeaders && len(fields.headers) > 0 {
-			failures = append(failures, invalid("headers", "Headers are sent only to an OpenAI-compatible endpoint"))
-		}
-		return failures
-	}
-	whole := creating || changingProvider
-	if whole || fields.setBaseURL {
+	if creating || fields.setBaseURL {
 		if _, err := ownmodels.CheckAddress(fields.baseURL); err != nil {
 			failures = append(failures, invalid("base_url", ownmodels.RefusalSentence(err, fields.baseURL)))
 		}
 	}
-	if (whole && !fields.setKey) || (fields.setKey && fields.key == "") {
+	if (creating && !fields.setKey) || (fields.setKey && fields.key == "") {
 		failures = append(failures, invalid("api_key", "An OpenAI-compatible connection needs the endpoint's API key"))
 	}
 	return failures
@@ -195,6 +194,21 @@ func providerRules(provider string, fields change, creating, changingProvider bo
 // are kept under.
 func namesHeaders(object map[string]json.RawMessage) bool {
 	for _, key := range ownmodels.ExtraKeys {
+		if _, named := object[key]; named {
+			return true
+		}
+	}
+	return false
+}
+
+// retiredBags are the keys of `extra` the Python tier merged, unread, into
+// the call it made to Bedrock or Vertex AI: where their credentials were
+// kept (render.go, credentialBags).
+var retiredBags = []string{"litellm_params", "kwargs"}
+
+// namesRetiredBag reports whether an `extra` object names one of them.
+func namesRetiredBag(object map[string]json.RawMessage) bool {
+	for _, key := range retiredBags {
 		if _, named := object[key]; named {
 			return true
 		}
@@ -227,7 +241,7 @@ func readPicked(b body) ([]pickedModel, []errorenvelope.Failure) {
 	}
 	var sent []struct {
 		pickedModel
-		// The apps call a model's catalogue entry `metadata`.
+		// The apps call what is known of a model `metadata`.
 		Metadata json.RawMessage `json:"metadata"`
 	}
 	if err := json.Unmarshal(raw, &sent); err != nil {
@@ -270,18 +284,4 @@ func readPicked(b body) ([]pickedModel, []errorenvelope.Failure) {
 		picked = append(picked, model.pickedModel)
 	}
 	return picked, nil
-}
-
-// paramsBag is the `litellm_params` object of an `extra`, or nil.
-func paramsBag(extra []byte) json.RawMessage {
-	var object map[string]json.RawMessage
-	if json.Unmarshal(extra, &object) != nil {
-		return nil
-	}
-	bag := object["litellm_params"]
-	var fields map[string]json.RawMessage
-	if json.Unmarshal(bag, &fields) != nil || fields == nil {
-		return nil
-	}
-	return bag
 }

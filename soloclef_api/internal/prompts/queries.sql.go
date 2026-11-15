@@ -10,34 +10,18 @@ import (
 	"time"
 )
 
-const accountIsAdministrator = `-- name: AccountIsAdministrator :one
-SELECT is_superuser FROM "user" WHERE id = $1
-`
-
-// Whether the caller administers this deployment: the account's own flag,
-// the one the web app reads from /users/me. Only run when a request actually
-// asks to publish (internal/prompts/admin.go).
-func (q *Queries) AccountIsAdministrator(ctx context.Context, id string) (bool, error) {
-	row := q.db.QueryRow(ctx, accountIsAdministrator, id)
-	var is_superuser bool
-	err := row.Scan(&is_superuser)
-	return is_superuser, err
-}
-
 const createPrompt = `-- name: CreatePrompt :one
-INSERT INTO prompts (user_id, name, prompt, mode, version, is_public, created_at)
+INSERT INTO prompts (user_id, name, prompt, mode, version, created_at)
 VALUES ($1,
         $2,
         $3,
         $4::prompt_mode,
         $5,
-        $6,
-        $7)
+        $6)
 RETURNING id,
           name,
           prompt,
           mode::text AS mode,
-             is_public,
           version,
           created_at
 `
@@ -48,7 +32,6 @@ type CreatePromptParams struct {
 	Prompt    string
 	Mode      PromptMode
 	Version   int64
-	IsPublic  bool
 	CreatedAt time.Time
 }
 
@@ -57,14 +40,13 @@ type CreatePromptRow struct {
 	Name      string
 	Prompt    string
 	Mode      string
-	IsPublic  bool
 	Version   int64
 	CreatedAt time.Time
 }
 
-// create_prompt's and copy_public_prompt's insert. created_at and version are
-// passed in rather than defaulted in SQL because both are Python-side defaults
-// on the model, evaluated in the application.
+// create_prompt's insert. created_at and version are passed in rather than
+// defaulted in SQL because both were Python-side defaults on the model,
+// evaluated in the application.
 func (q *Queries) CreatePrompt(ctx context.Context, arg CreatePromptParams) (CreatePromptRow, error) {
 	row := q.db.QueryRow(ctx, createPrompt,
 		arg.UserID,
@@ -72,7 +54,6 @@ func (q *Queries) CreatePrompt(ctx context.Context, arg CreatePromptParams) (Cre
 		arg.Prompt,
 		arg.Mode,
 		arg.Version,
-		arg.IsPublic,
 		arg.CreatedAt,
 	)
 	var i CreatePromptRow
@@ -81,7 +62,6 @@ func (q *Queries) CreatePrompt(ctx context.Context, arg CreatePromptParams) (Cre
 		&i.Name,
 		&i.Prompt,
 		&i.Mode,
-		&i.IsPublic,
 		&i.Version,
 		&i.CreatedAt,
 	)
@@ -110,7 +90,6 @@ SELECT id,
        name,
        prompt,
        mode::text AS mode,
-       is_public,
        version,
        created_at
 FROM prompts
@@ -127,7 +106,6 @@ type PromptOfAccountRow struct {
 	Name      string
 	Prompt    string
 	Mode      string
-	IsPublic  bool
 	Version   int64
 	CreatedAt time.Time
 }
@@ -144,7 +122,6 @@ func (q *Queries) PromptOfAccount(ctx context.Context, arg PromptOfAccountParams
 		&i.Name,
 		&i.Prompt,
 		&i.Mode,
-		&i.IsPublic,
 		&i.Version,
 		&i.CreatedAt,
 	)
@@ -156,7 +133,6 @@ SELECT id,
        name,
        prompt,
        mode::text AS mode,
-       is_public,
        version,
        created_at
 FROM prompts
@@ -169,7 +145,6 @@ type PromptsOfAccountRow struct {
 	Name      string
 	Prompt    string
 	Mode      string
-	IsPublic  bool
 	Version   int64
 	CreatedAt time.Time
 }
@@ -200,118 +175,8 @@ func (q *Queries) PromptsOfAccount(ctx context.Context, userID string) ([]Prompt
 			&i.Name,
 			&i.Prompt,
 			&i.Mode,
-			&i.IsPublic,
 			&i.Version,
 			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const publicPromptByID = `-- name: PublicPromptByID :one
-SELECT id,
-       name,
-       prompt,
-       mode::text AS mode,
-       is_public,
-       version,
-       created_at
-FROM prompts
-WHERE id = $1 AND is_public = true
-`
-
-type PublicPromptByIDRow struct {
-	ID        int64
-	Name      string
-	Prompt    string
-	Mode      string
-	IsPublic  bool
-	Version   int64
-	CreatedAt time.Time
-}
-
-// copy_public_prompt's source. is_public is part of the predicate and the
-// owner is not, so any account may copy any published prompt — including one
-// of their own, which neither tier excludes.
-func (q *Queries) PublicPromptByID(ctx context.Context, id int64) (PublicPromptByIDRow, error) {
-	row := q.db.QueryRow(ctx, publicPromptByID, id)
-	var i PublicPromptByIDRow
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.Prompt,
-		&i.Mode,
-		&i.IsPublic,
-		&i.Version,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
-const publicPromptsOfOtherAccounts = `-- name: PublicPromptsOfOtherAccounts :many
-SELECT prompts.id,
-       prompts.name,
-       prompts.prompt,
-       prompts.mode::text AS mode,
-       prompts.is_public,
-       prompts.version,
-       prompts.created_at,
-       account.display_name AS author_name
-FROM prompts
-JOIN "user" AS account ON account.id = prompts.user_id
-WHERE prompts.is_public = true AND prompts.user_id <> $1
-ORDER BY prompts.created_at DESC, prompts.id DESC
-`
-
-type PublicPromptsOfOtherAccountsRow struct {
-	ID         int64
-	Name       string
-	Prompt     string
-	Mode       string
-	IsPublic   bool
-	Version    int64
-	CreatedAt  time.Time
-	AuthorName *string
-}
-
-// list_public_prompts: every community prompt except the caller's own.
-//
-// The author's row is joined rather than fetched in a second statement. The
-// Python route uses selectinload, which is a second SELECT over the ids it
-// just read; the rows are the same either way because prompts.user_id is NOT
-// NULL and carries a foreign key to a primary key, so the join can neither
-// multiply a prompt nor drop one. (The route still reads `p.user if p.user`,
-// and the renderer keeps that nullability, because the column's NOT NULL is
-// the only reason it cannot happen.)
-//
-// display_name, not email. The Python route sent the address until 2026-11-08,
-// which handed every signed-in account the site administrators' addresses —
-// only an administrator can publish a community prompt — and both tiers send
-// the display name now.
-func (q *Queries) PublicPromptsOfOtherAccounts(ctx context.Context, userID string) ([]PublicPromptsOfOtherAccountsRow, error) {
-	rows, err := q.db.Query(ctx, publicPromptsOfOtherAccounts, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []PublicPromptsOfOtherAccountsRow
-	for rows.Next() {
-		var i PublicPromptsOfOtherAccountsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.Prompt,
-			&i.Mode,
-			&i.IsPublic,
-			&i.Version,
-			&i.CreatedAt,
-			&i.AuthorName,
 		); err != nil {
 			return nil, err
 		}
@@ -328,30 +193,25 @@ UPDATE prompts
 SET name = CASE WHEN $1::boolean THEN $2::varchar ELSE name END,
     prompt = CASE WHEN $3::boolean THEN $4::text ELSE prompt END,
     mode = CASE WHEN $5::boolean THEN $6::prompt_mode ELSE mode END,
-    is_public = CASE WHEN $7::boolean THEN $8::boolean ELSE is_public END,
-    version = CASE WHEN $9::boolean THEN version + 1 ELSE version END
-WHERE id = $10 AND user_id = $11
+    version = version + 1
+WHERE id = $7 AND user_id = $8
 RETURNING id,
           name,
           prompt,
           mode::text AS mode,
-             is_public,
           version,
           created_at
 `
 
 type UpdatePromptParams struct {
-	SetName     bool
-	Name        *string
-	SetPrompt   bool
-	Prompt      *string
-	SetMode     bool
-	Mode        NullPromptMode
-	SetIsPublic bool
-	IsPublic    *bool
-	BumpVersion bool
-	ID          int64
-	UserID      string
+	SetName   bool
+	Name      *string
+	SetPrompt bool
+	Prompt    *string
+	SetMode   bool
+	Mode      NullPromptMode
+	ID        int64
+	UserID    string
 }
 
 type UpdatePromptRow struct {
@@ -359,20 +219,17 @@ type UpdatePromptRow struct {
 	Name      string
 	Prompt    string
 	Mode      string
-	IsPublic  bool
 	Version   int64
 	CreatedAt time.Time
 }
 
-// update_prompt's write. The Python route assigns only the fields the body
-// mentioned (model_dump(exclude_unset=True)), so each CASE here is one of
-// those decisions: an unmentioned column keeps its value and an explicit null
-// is written as NULL, which every column here refuses — a 500 on both tiers.
+// update_prompt's write, run only when the body mentioned at least one field
+// (update_route.go). Each CASE is one of those mentions: an unmentioned
+// column keeps its value and an explicit null is written as NULL, which every
+// column here refuses — a 500.
 //
-// The version is bumped by the same expression the Python route assigns
-// (`Prompt.version = Prompt.version + 1`, which is the column and not the
-// loaded value), and only when the body mentioned one of name, prompt or mode.
-// Mentioning is_public alone changes no content and bumps nothing.
+// The version is bumped by the column's own expression rather than the loaded
+// value, so two updates racing cannot both write the same next version.
 func (q *Queries) UpdatePrompt(ctx context.Context, arg UpdatePromptParams) (UpdatePromptRow, error) {
 	row := q.db.QueryRow(ctx, updatePrompt,
 		arg.SetName,
@@ -381,9 +238,6 @@ func (q *Queries) UpdatePrompt(ctx context.Context, arg UpdatePromptParams) (Upd
 		arg.Prompt,
 		arg.SetMode,
 		arg.Mode,
-		arg.SetIsPublic,
-		arg.IsPublic,
-		arg.BumpVersion,
 		arg.ID,
 		arg.UserID,
 	)
@@ -393,7 +247,6 @@ func (q *Queries) UpdatePrompt(ctx context.Context, arg UpdatePromptParams) (Upd
 		&i.Name,
 		&i.Prompt,
 		&i.Mode,
-		&i.IsPublic,
 		&i.Version,
 		&i.CreatedAt,
 	)

@@ -1,6 +1,6 @@
 # Updating and backups
 
-The commands use the `dc` function from [Run your own server](self-hosting.md#first-start).
+The commands use the `dc` function from [Install](self-hosting.md#3-start-it).
 
 ## Updating
 
@@ -10,29 +10,174 @@ git pull
 dc up -d --build
 ```
 
-The `migrate` service applies any new database migration before the API, the
-indexer and the worker start. Each of those checks at start that the database
-is at the schema version its build expects and refuses to start, saying so,
-if it is not, so a half-applied upgrade never serves requests.
+Database changes are applied before the services start. If a service finds
+the database at a different version than it expects, it refuses to start and
+says why, so a half-finished upgrade never serves requests.
 
-Compare `docker/.env.go` with `docker/.env.go.example` after pulling: a new
-required setting stops Compose before anything starts, naming it.
+After pulling, compare `docker/.env.go` with `docker/.env.go.example`. If a
+new setting was added, Compose stops before starting anything and names it.
+Copy the new lines across and fill them in.
+
+### What an update does to work in progress
+
+An update waits for the work that is running before it restarts a service,
+up to a limit, so you can update at any time.
+
+| Service | What it waits for | Longest wait |
+| --- | --- | --- |
+| `api` | Studio outputs being made (everything except audio overviews and videos) and chat answers being written | 5 minutes |
+| `worker` | Videos, audio overviews, automation runs | 15 minutes |
+
+The wait ends as soon as nothing is running, so an update on a quiet server
+does not wait at all. While the API waits it keeps answering: the site stays
+up, and a Studio output asked for during the update is made by the new
+version as soon as it starts.
+
+Work still running when the limit passes is not lost:
+
+- A Studio output or a video is made again from the start by the new
+  version. It shows as still being made, not as failed. An output stopped by
+  three updates in a row fails with "The server restarted while it was being
+  made", and can be made again with Try again.
+- A Studio output that was waiting for a free sandbox goes back to waiting
+  in the new version, in a fresh sandbox once one is free.
+- An audio overview carries on from the lines already voiced.
+- A chat answer keeps what it had written so far, and you can ask again.
+
+If the API stops unexpectedly, its Studio outputs are taken up the same way
+within about four minutes, by another copy of the API or by the API when it
+starts again.
+
+To stop a service at once instead of waiting, send the stop a second time:
+press Ctrl-C again, or run `dc kill api`. What it was making is taken up again
+as above.
+
+### Open tabs
+
+A page loads parts of its code only when they are first needed, such as the
+video player. Each build names those files differently, so a tab opened
+before an update would ask for files the new build does not have.
+
+The `proxy` service keeps them for it. Each time it starts, it adds its own
+build's code files (everything under `/_next/static`) to the volume
+`soloclefgo_site_assets`, and serves a file from there when the running
+build does not have it. A build's files are removed 14 days after another
+build replaced it, checked every hour, and the volume keeps at most the 20
+most recent builds. A build whose code files come to more than 256 MiB is
+not kept. Pages themselves always come from the running build.
+
+Only regular files are served from the volume. Anything else found in it,
+such as a symbolic link, is removed at start and at every hourly check, and
+the proxy's log says so.
+
+If a tab is older than that, or the file is missing for another reason, the
+page reloads itself once and carries on with the new build. If it still
+fails after the reload, it shows the error page.
+
+The volume holds nothing else and needs no backup. Deleting it is safe:
+
+```bash
+dc rm --stop --force proxy
+docker volume rm soloclefgo_site_assets
+dc up -d proxy
+```
+
+Tabs that were open then reload once when they next load code.
+
+## Phone apps already installed
+
+A phone keeps the version of the app it installed until its owner updates
+it, and an app update sent over the air reaches it only when the app next
+starts. So a server update must keep answering every version, and every
+update of it, still in use. Soloclef's tests hold each server change to the
+phone apps still installed from the App Store, and fail before a change that
+would break one is released.
+
+To see which versions and updates phones still use:
+
+```bash
+dc exec api soloclef-api app-versions
+```
+
+It lists the newest version the App Store offers and, for each platform, app
+version and update, how many phones were seen in the last 30 days. Phones
+report what they run each time the app starts, if notifications are allowed.
+Versions and updates from before 14 November 2026 do not report it and are
+listed together.
+
+Support for an old version or update is removed once a newer one has been
+published and no phone has reported the old one for 30 days.
 
 ## What to back up
 
-| What | Where |
+| What | Where it is |
 | --- | --- |
-| Accounts, notebooks, chats, notes and the text of every chunk | the `soloclefgo_postgres_data` volume; use `pg_dump` for a consistent copy |
-| Uploaded files, audio, videos and other Studio files | the `soloclefgo_minio_data` volume (the MinIO bucket) |
-| The search vectors | the `soloclefgo_qdrant_data` volume; they can be rebuilt by indexing again, at the cost of the embedding calls |
-| Your settings | `docker/.env.go` and the secrets directory |
+| Accounts, notebooks, chats, notes, settings and the text of every source | The Postgres database, volume `soloclefgo_postgres_data` |
+| Uploaded files, and everything Studio made | The MinIO file store, volume `soloclefgo_minio_data` |
+| The search index | The Qdrant store, volume `soloclefgo_qdrant_data` |
+| Your settings | `docker/.env.go` |
+| Your secrets | `docker/secrets-go`, and any key files you keep elsewhere, such as an Apple push key |
 
-A nightly `pg_dump`, a copy of the MinIO volume, `docker/.env.go` and the
-secrets are enough to rebuild the server elsewhere.
+The secrets matter as much as the data. Many things people store, such as
+mailbox passwords and their own API keys, are encrypted with
+`session_secret`. A database restored with a different secret cannot open
+them.
+
+### Making a backup
+
+Dump the database while the stack runs:
 
 ```bash
-dc exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB"' > soloclef-$(date +%F).dump
+mkdir -p backup
+dc exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB"' > backup/soloclef-$(date +%F).dump
 ```
 
-`dc down` stops the stack and keeps the volumes; `dc down -v` deletes them,
-and every document with them.
+Copy the file store and the search index with their services stopped for a
+moment, so each copy is consistent. Uploads and searches fail while they are
+stopped.
+
+```bash
+dc stop minio qdrant
+for v in minio_data qdrant_data; do
+  docker run --rm -v soloclefgo_$v:/data:ro -v "$PWD/backup":/backup alpine \
+    tar czf /backup/$v-$(date +%F).tgz -C /data .
+done
+dc start minio qdrant
+```
+
+Then copy `backup/`, `docker/.env.go` and `docker/secrets-go` somewhere off
+the server.
+
+### Restoring
+
+On a new host, check out the same version of Soloclef and put back
+`docker/.env.go` and `docker/secrets-go`. Then:
+
+```bash
+dc build
+dc create
+for v in minio_data qdrant_data; do
+  docker run --rm -v soloclefgo_$v:/data -v "$PWD/backup":/backup alpine \
+    tar xzf /backup/$v-<date>.tgz -C /data
+done
+dc up -d --wait postgres
+dc exec -T postgres sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner' < backup/soloclef-<date>.dump
+dc up -d
+```
+
+`dc create` makes the stack's volumes without starting anything, so the
+files go in before any service uses them.
+
+## Stopping and removing
+
+`dc down` stops the stack and keeps every volume. `dc down -v` deletes the
+volumes, and every document with them.
+
+## The embedding model
+
+The search index is built for one embedding model. You can move that model
+to another host, or another provider of the same model, by changing it in
+LiteLLM. Nothing in Soloclef changes.
+
+Switching to a different embedding model on a server that already holds
+documents is not supported. Choose the model before the first upload.

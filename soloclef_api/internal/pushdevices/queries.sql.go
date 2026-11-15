@@ -10,17 +10,6 @@ import (
 	"time"
 )
 
-const choices = `-- name: Choices :one
-SELECT choices FROM push_preferences WHERE user_id = $1
-`
-
-func (q *Queries) Choices(ctx context.Context, userID string) ([]byte, error) {
-	row := q.db.QueryRow(ctx, choices, userID)
-	var choices []byte
-	err := row.Scan(&choices)
-	return choices, err
-}
-
 const familyIsLive = `-- name: FamilyIsLive :one
 
 SELECT EXISTS (
@@ -53,6 +42,29 @@ func (q *Queries) FamilyIsLive(ctx context.Context, arg FamilyIsLiveParams) (boo
 	return live, err
 }
 
+const preferences = `-- name: Preferences :one
+SELECT choices, quiet_start_minute, quiet_end_minute, time_zone FROM push_preferences WHERE user_id = $1
+`
+
+type PreferencesRow struct {
+	Choices          []byte
+	QuietStartMinute *int16
+	QuietEndMinute   *int16
+	TimeZone         *string
+}
+
+func (q *Queries) Preferences(ctx context.Context, userID string) (PreferencesRow, error) {
+	row := q.db.QueryRow(ctx, preferences, userID)
+	var i PreferencesRow
+	err := row.Scan(
+		&i.Choices,
+		&i.QuietStartMinute,
+		&i.QuietEndMinute,
+		&i.TimeZone,
+	)
+	return i, err
+}
+
 const removeDevice = `-- name: RemoveDevice :exec
 DELETE FROM push_devices WHERE user_id = $1 AND token = $2
 `
@@ -68,73 +80,153 @@ func (q *Queries) RemoveDevice(ctx context.Context, arg RemoveDeviceParams) erro
 	return err
 }
 
-const saveChoices = `-- name: SaveChoices :one
-INSERT INTO push_preferences (user_id, choices, updated_at)
-VALUES ($1, $2::jsonb, $3::timestamptz)
+const savePreferences = `-- name: SavePreferences :one
+INSERT INTO push_preferences (user_id, choices, quiet_start_minute, quiet_end_minute, time_zone, updated_at)
+VALUES ($1, $2::jsonb,
+        CASE WHEN $3::boolean THEN $4::smallint END,
+        CASE WHEN $3::boolean THEN $5::smallint END,
+        CASE WHEN $3::boolean THEN $6::text END,
+        $7::timestamptz)
 ON CONFLICT (user_id) DO UPDATE SET
     choices = push_preferences.choices || EXCLUDED.choices,
+    quiet_start_minute = CASE WHEN $3::boolean THEN EXCLUDED.quiet_start_minute ELSE push_preferences.quiet_start_minute END,
+    quiet_end_minute = CASE WHEN $3::boolean THEN EXCLUDED.quiet_end_minute ELSE push_preferences.quiet_end_minute END,
+    time_zone = CASE WHEN $3::boolean THEN EXCLUDED.time_zone ELSE push_preferences.time_zone END,
     updated_at = EXCLUDED.updated_at
-RETURNING choices
+RETURNING choices, quiet_start_minute, quiet_end_minute, time_zone
 `
 
-type SaveChoicesParams struct {
-	UserID  string
-	Choices []byte
-	Now     time.Time
+type SavePreferencesParams struct {
+	UserID     string
+	Choices    []byte
+	SetQuiet   bool
+	QuietStart *int16
+	QuietEnd   *int16
+	TimeZone   *string
+	Now        time.Time
+}
+
+type SavePreferencesRow struct {
+	Choices          []byte
+	QuietStartMinute *int16
+	QuietEndMinute   *int16
+	TimeZone         *string
 }
 
 // The kinds given, over the ones saved: a kind not named keeps its choice.
-func (q *Queries) SaveChoices(ctx context.Context, arg SaveChoicesParams) ([]byte, error) {
-	row := q.db.QueryRow(ctx, saveChoices, arg.UserID, arg.Choices, arg.Now)
-	var choices []byte
-	err := row.Scan(&choices)
-	return choices, err
+// Quiet hours are written only when the request named them
+// (set_quiet), and then as given: three values, or three NULLs for off.
+// One statement, so a change to the switches and one to the quiet hours
+// sent together are saved together.
+func (q *Queries) SavePreferences(ctx context.Context, arg SavePreferencesParams) (SavePreferencesRow, error) {
+	row := q.db.QueryRow(ctx, savePreferences,
+		arg.UserID,
+		arg.Choices,
+		arg.SetQuiet,
+		arg.QuietStart,
+		arg.QuietEnd,
+		arg.TimeZone,
+		arg.Now,
+	)
+	var i SavePreferencesRow
+	err := row.Scan(
+		&i.Choices,
+		&i.QuietStartMinute,
+		&i.QuietEndMinute,
+		&i.TimeZone,
+	)
+	return i, err
 }
 
 const upsertDevice = `-- name: UpsertDevice :one
-INSERT INTO push_devices (user_id, token, platform, label, language, session_family_id, last_seen_at)
+WITH replaced AS (
+    DELETE FROM push_devices
+    WHERE user_id = $1
+      AND session_family_id = $11::uuid
+      AND token <> $2
+    RETURNING update_notified_version
+)
+INSERT INTO push_devices (user_id, token, kind, apns_environment, platform, label, language, app_version,
+                          update_id, runtime_version,
+                          update_notified_version, session_family_id, last_seen_at)
 VALUES ($1, $2, $3, $4, $5,
-        $6::uuid, $7::timestamptz)
+        $6, $7, $8,
+        $9::uuid, $10,
+        (SELECT r.update_notified_version FROM replaced r WHERE r.update_notified_version IS NOT NULL LIMIT 1),
+        $11::uuid, $12::timestamptz)
 ON CONFLICT (token) DO UPDATE SET
     user_id = EXCLUDED.user_id,
+    kind = EXCLUDED.kind,
+    apns_environment = EXCLUDED.apns_environment,
     platform = EXCLUDED.platform,
     label = EXCLUDED.label,
     language = EXCLUDED.language,
+    app_version = EXCLUDED.app_version,
+    update_id = EXCLUDED.update_id,
+    runtime_version = EXCLUDED.runtime_version,
+    update_notified_version = COALESCE(push_devices.update_notified_version, EXCLUDED.update_notified_version),
     session_family_id = EXCLUDED.session_family_id,
     last_seen_at = EXCLUDED.last_seen_at
-RETURNING id, token, platform, label, language, last_seen_at
+RETURNING id, token, kind, platform, label, language, app_version, update_id, runtime_version, last_seen_at
 `
 
 type UpsertDeviceParams struct {
-	UserID   string
-	Token    string
-	Platform string
-	Label    *string
-	Language *string
-	FamilyID string
-	Now      time.Time
+	UserID          string
+	Token           string
+	Kind            string
+	ApnsEnvironment *string
+	Platform        string
+	Label           *string
+	Language        *string
+	AppVersion      *string
+	UpdateID        *string
+	RuntimeVersion  *string
+	FamilyID        string
+	Now             time.Time
 }
 
 type UpsertDeviceRow struct {
-	ID         int64
-	Token      string
-	Platform   string
-	Label      *string
-	Language   *string
-	LastSeenAt time.Time
+	ID             int64
+	Token          string
+	Kind           string
+	Platform       string
+	Label          *string
+	Language       *string
+	AppVersion     *string
+	UpdateID       *string
+	RuntimeVersion *string
+	LastSeenAt     time.Time
 }
 
-// This phone, for this account, from now on. A token is one phone's, and a
-// phone shows one account at a time: when someone signs in on it as another
-// account, its token moves to that account (the one with a live sign-in on
-// it now) and the last stops being pushed to it.
+// This phone, for this account, from now on, with its token's kind (and,
+// for an APNs token, the environment it was minted in) and the app version
+// it runs (NULL from a build that does not say). A token is one phone's,
+// and a phone shows one account at a time: when someone signs in on it as
+// another account, its token moves to that account (the one with a live
+// sign-in on it now) and the last stops being pushed to it.
+//
+// A sign-in is one app on one phone, so it holds one token: one it
+// registered before (the Expo token an iPhone had before it moved to APNs,
+// or a token the phone's service replaced) is deleted in the same
+// statement, so the phone is never pushed twice, once on each.
+//
+// The App Store version the phone was last told about
+// (update_notified_version) belongs to the phone, not to its token or its
+// account: a replaced token hands it to the new one, and a token that moves
+// account keeps it, so a phone is never told about the same version twice
+// because its token changed (soloclef_notify/notify, AppUpdated).
 func (q *Queries) UpsertDevice(ctx context.Context, arg UpsertDeviceParams) (UpsertDeviceRow, error) {
 	row := q.db.QueryRow(ctx, upsertDevice,
 		arg.UserID,
 		arg.Token,
+		arg.Kind,
+		arg.ApnsEnvironment,
 		arg.Platform,
 		arg.Label,
 		arg.Language,
+		arg.AppVersion,
+		arg.UpdateID,
+		arg.RuntimeVersion,
 		arg.FamilyID,
 		arg.Now,
 	)
@@ -142,9 +234,13 @@ func (q *Queries) UpsertDevice(ctx context.Context, arg UpsertDeviceParams) (Ups
 	err := row.Scan(
 		&i.ID,
 		&i.Token,
+		&i.Kind,
 		&i.Platform,
 		&i.Label,
 		&i.Language,
+		&i.AppVersion,
+		&i.UpdateID,
+		&i.RuntimeVersion,
 		&i.LastSeenAt,
 	)
 	return i, err

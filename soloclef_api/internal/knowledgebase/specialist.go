@@ -46,8 +46,9 @@ func (w Writer) Delegate(chat model.Model, turn assembly.KnowledgeOwner) (agent.
 		// The reads may run side by side; every change runs alone, in the
 		// order the model gave (tool.Tool.Parallel).
 		MaxSteps: specialistSteps, MaxParallelTools: 4,
-		Store:   turn.Store,
-		Trusted: turn.Trusted,
+		Store:    turn.Store,
+		Trusted:  turn.Policy.Trusted,
+		AskFirst: turn.Policy.AskFirst,
 	})
 	if err != nil {
 		return agent.Delegate{}, err
@@ -94,10 +95,10 @@ func (Writer) Activities() map[string]assembly.Activity {
 
 const delegateDescription = "Make changes in the user's documents and folders: write a note, edit a note's text, rename or move a document, make, rename or move a folder, delete a note or an empty folder. Give it the whole task: what to write (the full text), which documents or folders (by name, or by id if a search gave one), and where things go."
 
-// mainPrompt tells the main agent what the specialist is for and what each
-// change costs the person: a card to approve.
+// mainPrompt tells the main agent what the specialist is for, and that a
+// change can be undone, so it is made rather than asked about.
 const mainPrompt = `To change the user's documents and folders, hand the task to knowledge_base: saving something as a note, editing a note, renaming or moving documents, organising folders, deleting a note or an empty folder. Put everything it needs in the task, including the full text of anything to write: it sees nothing of this conversation.
-Only do this when the user asks for a change. Each change is shown to the user for approval before it is made, and each can be undone from the chat afterwards, so do not ask for permission in prose first.
+Only do this when the user asks for a change. Each change can be undone from the chat afterwards, and is shown to the user for approval first only if they asked for that, so do not ask for permission in prose first.
 Uploaded files are not edited or deleted from the chat, only renamed and moved.`
 
 // systemPrompt is the specialist's own.
@@ -107,7 +108,7 @@ How to work:
 1. Find what the task is about. Use list_folder to walk the folders and find_documents to find a document by its title or words in it. Every item has an id; act on ids you have seen, never on guesses.
 2. Before editing a note, read it with read_document, and copy the passage to replace exactly.
 3. Before making a folder or a note, look at where it is going: follow the user's existing folders and naming, and do not make a second folder of a name that exists.
-4. Make the changes the task asks for, and no others. Each change is shown to the user for approval; if one is declined, do not make it again and do not work around it.
+4. Make the changes the task asks for, and no others. A change the user asked to approve is shown to them first; if one is declined, do not make it again and do not work around it.
 5. If the task is ambiguous (several documents fit and nothing says which), make no change and say what you found, so the user can choose.
 
 What can be changed:

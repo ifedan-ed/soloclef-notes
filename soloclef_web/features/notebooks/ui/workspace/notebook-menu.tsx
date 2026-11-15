@@ -2,13 +2,11 @@
 
 import {
 	Copy,
-	Globe,
 	MessageSquareX,
 	MoreVertical,
 	Palette,
 	Pin,
 	PinOff,
-	Share2,
 	SlidersHorizontal,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -30,28 +28,24 @@ import { DeleteHistoryDialog } from "./delete-history-dialog";
 
 type Open = "configure" | "customize" | "delete-history" | null;
 
-/** The notebook's ⋮ menu and the dialogs it opens. */
+/**
+ * The notebook's ⋮ menu and the dialogs it opens. It has no Share item on
+ * purpose: only a Studio output can be shared, from that output's own view.
+ */
 export function NotebookMenu({
 	notebook,
 	onUpdate,
 	onCopy,
 	onSetFeatured,
 	onDeleteHistory,
-	onSharePublicly,
-	onShareNotebook,
 }: {
 	notebook: Notebook;
 	onUpdate: (changes: NotebookChanges) => Promise<unknown>;
 	onCopy: () => Promise<unknown>;
 	onSetFeatured: (featured: boolean) => Promise<unknown>;
 	onDeleteHistory: () => Promise<unknown>;
-	/** Present only for people who may create public links (Owners, by default). */
-	onSharePublicly?: () => void;
-	/** "Share notebook…": its live link. Same rule as onSharePublicly. */
-	onShareNotebook?: () => void;
 }) {
 	const t = useTranslations("notebooks");
-	const tShare = useTranslations("publicSharing");
 	const [open, setOpen] = useState<Open>(null);
 	const [copying, setCopying] = useState(false);
 	const close = (next: boolean) => {
@@ -109,18 +103,6 @@ export function NotebookMenu({
 						{notebook.featured ? <PinOff className="size-4" /> : <Pin className="size-4" />}
 						{notebook.featured ? t("unpin_featured") : t("pin_featured")}
 					</DropdownMenuItem>
-					{onShareNotebook ? (
-						<DropdownMenuItem onSelect={onShareNotebook} data-testid="menu-share-notebook">
-							<Share2 className="size-4" />
-							{tShare("notebook.menu")}
-						</DropdownMenuItem>
-					) : null}
-					{onSharePublicly ? (
-						<DropdownMenuItem onSelect={onSharePublicly}>
-							<Globe className="size-4" />
-							{tShare("menu_share_chat")}
-						</DropdownMenuItem>
-					) : null}
 					<DropdownMenuSeparator />
 					<DropdownMenuItem
 						className="text-destructive focus:text-destructive"

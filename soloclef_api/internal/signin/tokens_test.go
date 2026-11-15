@@ -52,21 +52,28 @@ func TestARefreshTokenIsRandomAndStoredOnlyAsItsHash(t *testing.T) {
 
 func TestHowLongEachKindOfRefreshTokenLives(t *testing.T) {
 	now := time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)
+	at := func(d time.Duration) *time.Time { end := now.Add(d); return &end }
 	for _, c := range []struct {
 		name string
 		kind string
-		cap  time.Time
+		cap  *time.Time
 		want time.Time
 	}{
-		{"a browser's slides by its idle time", kindWeb, now.Add(webAbsolute), now.Add(webIdle)},
-		{"a browser's never passes its sign-in's cap", kindWeb, now.Add(time.Hour), now.Add(time.Hour)},
-		{"a phone's lives as long as its sign-in", kindPhone, now.Add(phoneLifetime), now.Add(phoneLifetime)},
+		{"a browser's slides by its idle time", kindWeb, at(webAbsolute), now.Add(webIdle)},
+		{"a browser's never passes its sign-in's cap", kindWeb, at(time.Hour), now.Add(time.Hour)},
+		{"a phone's slides by 180 days unused, with no cap", kindPhone, nil, now.Add(180 * 24 * time.Hour)},
 	} {
 		if got := tokenExpiry(c.kind, now, c.cap); !got.Equal(c.want) {
 			t.Errorf("%s: %v, want %v", c.name, got, c.want)
 		}
 	}
-	if familyLifetime(kindPhone) != 365*24*time.Hour || familyLifetime(kindWeb) != 30*24*time.Hour {
+	if got := signInCap(kindPhone, now); got != nil {
+		t.Errorf("a phone's sign-in is capped at %v; it must have no cap", *got)
+	}
+	if got := signInCap(kindWeb, now); got == nil || !got.Equal(now.Add(30*24*time.Hour)) {
+		t.Errorf("a browser's sign-in cap is %v, want 30 days from the sign-in", got)
+	}
+	if idleLifetime(kindPhone) != 180*24*time.Hour || idleLifetime(kindWeb) != 14*24*time.Hour {
 		t.Error("the sign-in lifetimes changed")
 	}
 }

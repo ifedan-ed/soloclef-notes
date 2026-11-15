@@ -70,9 +70,8 @@
 	--radius: 0.5rem;
 
 	/* The reference marks its one accent clause, its "ours" table column and its
-	 * forward links in a single tone. It is `--primary`, a warm peach that departs
-	 * from the desktop app's putty on purpose so the accent reads apart from
-	 * the cream `--foreground`. On `--background` it measures 8.9:1, which
+	 * forward links in a single tone. It is `--primary`, a warm peach chosen so
+	 * the accent reads apart from the cream `--foreground`. On `--background` it measures 8.9:1, which
 	 * clears WCAG AAA for text at any size. */
 	--home-accent: var(--primary);
 

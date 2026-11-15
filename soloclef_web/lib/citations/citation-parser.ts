@@ -7,28 +7,39 @@
 // state. This module exposes a per-call URL map so multiple concurrent
 // renderers / SSR contexts can't race each other.
 
+import {
+	decodeSourceMarker,
+	SOURCE_MARKER_PATTERN,
+	type SourceCitationToken,
+} from "@/lib/citations/addressless-source";
 import { FENCED_OR_INLINE_CODE } from "@/lib/markdown/code-regions";
 
 /**
  * Matches `[citation:...]` with numeric IDs (incl. negative, doc- prefix,
- * comma-separated), URL-based IDs from live web search, or `urlciteN`
- * placeholders produced by `preprocessCitationMarkdown`.
+ * comma-separated), URL-based IDs from live web search, an addressless
+ * source (`src_mail_…`, `src_app_…`: lib/citations/addressless-source.ts),
+ * or the `urlciteN` and `srcciteN` placeholders produced by
+ * `preprocessCitationMarkdown`.
  *
  * Also matches Chinese brackets 【】 and zero-width spaces that LLMs
  * sometimes emit.
  */
 export const CITATION_REGEX =
-	/[[【]\u200B?citation:\s*(https?:\/\/[^\]】\u200B]+|urlcite\d+|(?:doc-)?-?\d+(?:\s*,\s*(?:doc-)?-?\d+)*)\s*\u200B?[\]】]/g;
+	/[[【]\u200B?citation:\s*(https?:\/\/[^\]】\u200B]+|urlcite\d+|srccite\d+|src_(?:mail|app)_[A-Za-z0-9_-]+|(?:doc-)?-?\d+(?:\s*,\s*(?:doc-)?-?\d+)*)\s*\u200B?[\]】]/g;
 
 /** A single parsed citation reference. */
 export type CitationToken =
 	| { kind: "url"; url: string }
-	| { kind: "chunk"; chunkId: number; isDocsChunk: boolean };
+	| { kind: "chunk"; chunkId: number; isDocsChunk: boolean }
+	| SourceCitationToken;
 
 /** Output of `parseTextWithCitations` — interleaved text + citation tokens. */
 export type ParsedSegment = string | CitationToken;
 
-/** Per-call URL placeholder map; key is `urlciteN`, value is the original URL. */
+/**
+ * Per-call placeholder map: `urlciteN` to the original URL, `srcciteN` to the
+ * original addressless marker value (`src_mail_…`).
+ */
 export type CitationUrlMap = Map<string, string>;
 
 /** Result of preprocessing raw markdown for downstream parsing. */
@@ -41,6 +52,22 @@ export interface PreprocessedCitations {
 
 /** Pattern matching only URL-form citations (used during preprocessing). */
 const URL_CITATION_REGEX = /[[【]\u200B?citation:\s*(https?:\/\/[^\]】\u200B]+)\s*\u200B?[\]】]/g;
+
+/**
+ * Pattern matching only addressless markers (used during preprocessing).
+ * Their base64url letters include "_", which Markdown can read as emphasis
+ * ("…a-_b_…") and split the marker across nodes before it is seen.
+ */
+const SOURCE_CITATION_REGEX = new RegExp(
+	`[[【]\\u200B?citation:\\s*(${SOURCE_MARKER_PATTERN})\\s*\\u200B?[\\]】]`,
+	"g"
+);
+
+/** Both kinds preprocessing puts aside: group 1 an address, group 2 an addressless marker. */
+const PUT_ASIDE_REGEX = new RegExp(
+	`${URL_CITATION_REGEX.source}|${SOURCE_CITATION_REGEX.source}`,
+	"g"
+);
 
 /**
  * Replace `[citation:URL]` tokens with `[citation:urlciteN]` placeholders so
@@ -64,11 +91,16 @@ export function preprocessCitationMarkdown(content: string): PreprocessedCitatio
 	const parts = content.split(FENCED_OR_INLINE_CODE);
 	const transformed = parts.map((part, index) => {
 		if (index % 2 === 1) return part;
-		return part.replace(URL_CITATION_REGEX, (_match, url: string) => {
-			const key = `urlcite${counter++}`;
-			urlMap.set(key, url.trim());
-			return `[citation:${key}]`;
-		});
+		// One pass and one counter for both placeholders, in reading order,
+		// as the phone app's copy numbers a streaming answer's parts.
+		return part.replace(
+			PUT_ASIDE_REGEX,
+			(_match, url: string | undefined, ref: string | undefined) => {
+				const key = `${url ? "urlcite" : "srccite"}${counter++}`;
+				urlMap.set(key, (url ?? ref ?? "").trim());
+				return `[citation:${key}]`;
+			}
+		);
 	});
 
 	return { content: transformed.join(""), urlMap };
@@ -102,6 +134,12 @@ export function parseTextWithCitations(text: string, urlMap: CitationUrlMap): Pa
 			if (url) {
 				segments.push({ kind: "url", url });
 			}
+		} else if (captured.startsWith("srccite") || captured.startsWith("src_")) {
+			// A marker that does not decode is dropped, not shown raw.
+			const source = decodeSourceMarker(
+				captured.startsWith("srccite") ? (urlMap.get(captured) ?? "") : captured
+			);
+			if (source) segments.push(source);
 		} else {
 			const rawIds = captured.split(",").map((s) => s.trim());
 			for (const rawId of rawIds) {
@@ -121,7 +159,9 @@ export function parseTextWithCitations(text: string, urlMap: CitationUrlMap): Pa
 		segments.push(text.substring(lastIndex));
 	}
 
-	return segments.length > 0 ? segments : [text];
+	// A text that was nothing but dropped markers is nothing, not the
+	// markers shown raw.
+	return segments.length > 0 || lastIndex > 0 ? segments : [text];
 }
 
 /** Type guard for the citation branch of `ParsedSegment`. */

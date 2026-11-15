@@ -29,7 +29,6 @@ import type { DocumentParser } from "@/contracts/types/document.types";
 import { PARSER_NAME_KEYS } from "@/features/parser-choice/parser-labels";
 import { ParserPicker } from "@/features/parser-choice/ui/parser-picker";
 import { useEtlCapabilities } from "@/hooks/use-etl-capabilities";
-import { useElectronAPI } from "@/hooks/use-platform";
 import { documentsApiService } from "@/lib/apis/documents-api.service";
 import { splitDroppedFolders } from "@/lib/drop/dropped-files";
 import {
@@ -185,9 +184,6 @@ export function DocumentUploadTab({
 		};
 	}, []);
 
-	const electronAPI = useElectronAPI();
-	const isElectron = !!electronAPI?.browseFiles;
-
 	// With vision on, pictures are accepted whatever the parser reads: the
 	// vision model describes them.
 	const acceptedFor = useCallback(
@@ -323,41 +319,11 @@ export function DocumentUploadTab({
 		// Type filtering happens in addFiles, which says what it turned away.
 		onDrop,
 		maxSize: maxFileSizeBytes,
-		noClick: isElectron,
 	});
 
 	const handleFileInputClick = useCallback((e: React.MouseEvent<HTMLInputElement>) => {
 		e.stopPropagation();
 	}, []);
-
-	const handleBrowseFiles = useCallback(async () => {
-		if (!electronAPI?.browseFiles) return;
-
-		const paths = await electronAPI.browseFiles();
-		if (!paths || paths.length === 0) return;
-
-		const fileDataList = await electronAPI.readLocalFiles(paths);
-		const filtered = fileDataList.filter(
-			(fd: { name: string; data: ArrayBuffer; mimeType: string }) => {
-				const ext = fd.name.includes(".") ? `.${fd.name.split(".").pop()?.toLowerCase()}` : "";
-				return ext !== "" && supportedExtensionsSet.has(ext);
-			}
-		);
-
-		if (filtered.length === 0) {
-			toast.error(t("no_supported_files_in_folder"));
-			return;
-		}
-
-		const newFiles: FileWithId[] = filtered.map(
-			(fd: { name: string; data: ArrayBuffer; mimeType: string }) => ({
-				id: crypto.randomUUID?.() ?? `file-${Date.now()}-${Math.random().toString(36)}`,
-				file: new File([fd.data], fd.name, { type: fd.mimeType }),
-			})
-		);
-		setFolderUpload(null);
-		setFiles((prev) => [...prev, ...newFiles]);
-	}, [electronAPI, supportedExtensionsSet, t]);
 
 	const handleFolderChange = useCallback(
 		(e: ChangeEvent<HTMLInputElement>) => {
@@ -564,37 +530,6 @@ export function DocumentUploadTab({
 		const sizeClass = compact ? "h-7" : "h-8";
 		const widthClass = fullWidth ? "w-full" : "";
 
-		if (isElectron) {
-			return (
-				<DropdownMenu>
-					<DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-						<Button
-							variant="ghost"
-							size="sm"
-							className={`text-xs gap-1 bg-neutral-700/50 hover:bg-accent hover:text-accent-foreground ${sizeClass} ${widthClass}`}
-						>
-							Browse
-							<ChevronDown className="h-3 w-3 opacity-60" />
-						</Button>
-					</DropdownMenuTrigger>
-					<DropdownMenuContent
-						align="center"
-						className="dark:bg-neutral-800"
-						onClick={(e) => e.stopPropagation()}
-					>
-						<DropdownMenuItem onClick={handleBrowseFiles}>
-							<FileIcon className="h-4 w-4 mr-2" />
-							Files
-						</DropdownMenuItem>
-						<DropdownMenuItem onClick={() => folderInputRef.current?.click()}>
-							<FolderOpen className="h-4 w-4 mr-2" />
-							Folder
-						</DropdownMenuItem>
-					</DropdownMenuContent>
-				</DropdownMenu>
-			);
-		}
-
 		return (
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
@@ -663,46 +598,29 @@ export function DocumentUploadTab({
 			{/* MOBILE DROP ZONE */}
 			<div className="sm:hidden">
 				{hasContent ? (
-					isElectron ? (
-						<div className="flex w-full justify-center">
-							{renderBrowseButton({ compact: true })}
-						</div>
-					) : (
+					<Button
+						type="button"
+						variant="ghost"
+						className="h-8 w-full gap-1.5 rounded-md border border-dashed border-muted-foreground/30 px-0 text-xs text-muted-foreground transition-colors hover:border-foreground/50 hover:bg-transparent hover:text-accent-foreground"
+						onClick={() => fileInputRef.current?.click()}
+					>
+						Add more files
+					</Button>
+				) : (
+					<div className="flex w-full flex-col items-center gap-4 bg-transparent px-4 py-12 select-none">
 						<Button
 							type="button"
 							variant="ghost"
-							className="h-8 w-full gap-1.5 rounded-md border border-dashed border-muted-foreground/30 px-0 text-xs text-muted-foreground transition-colors hover:border-foreground/50 hover:bg-transparent hover:text-accent-foreground"
+							className="h-auto w-full flex-col gap-4 whitespace-normal bg-transparent p-0 text-foreground hover:bg-transparent hover:text-foreground"
 							onClick={() => fileInputRef.current?.click()}
 						>
-							Add more files
-						</Button>
-					)
-				) : (
-					<div className="flex w-full flex-col items-center gap-4 bg-transparent px-4 py-12 select-none">
-						{isElectron ? (
-							<div className="flex w-full flex-col items-center gap-4">
-								<div className="text-center space-y-1.5">
-									<p className="text-base font-medium">{t("select_files_or_folder")}</p>
-									<p className="text-sm text-muted-foreground">
-										{t("file_size_limit", { maxMB: maxFileSizeMB })}
-									</p>
-								</div>
+							<div className="text-center space-y-1.5">
+								<p className="text-base font-medium">{t("tap_select_files_or_folder")}</p>
+								<p className="text-sm text-muted-foreground">
+									{t("file_size_limit", { maxMB: maxFileSizeMB })}
+								</p>
 							</div>
-						) : (
-							<Button
-								type="button"
-								variant="ghost"
-								className="h-auto w-full flex-col gap-4 whitespace-normal bg-transparent p-0 text-foreground hover:bg-transparent hover:text-foreground"
-								onClick={() => fileInputRef.current?.click()}
-							>
-								<div className="text-center space-y-1.5">
-									<p className="text-base font-medium">{t("tap_select_files_or_folder")}</p>
-									<p className="text-sm text-muted-foreground">
-										{t("file_size_limit", { maxMB: maxFileSizeMB })}
-									</p>
-								</div>
-							</Button>
-						)}
+						</Button>
 						<fieldset
 							className="mt-1 flex w-full justify-center border-none p-0 m-0"
 							onClick={(e) => e.stopPropagation()}

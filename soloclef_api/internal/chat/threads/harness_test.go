@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -108,6 +109,19 @@ var testTools = []Tool{
 	{Name: "generate_podcast", Description: "Make a podcast", EnabledByDefault: true},
 }
 
+// listTools is the route's lister in these tests: Ben has a mailbox, so
+// his list has its tool too, and anyone else's list is the chat's own.
+// "broken" is an account whose connections cannot be read.
+func listTools(_ context.Context, userID string) ([]Tool, error) {
+	switch userID {
+	case ben:
+		return append(slices.Clone(testTools), Tool{Name: "search_emails", Description: "Search your email", EnabledByDefault: true, Group: "Mail", Connector: "mail"}), nil
+	case "broken":
+		return nil, errors.New("the connections could not be read")
+	}
+	return testTools, nil
+}
+
 // newWorld seeds the database and serves the routes over it. The tests of
 // one world share its rows, so each test function makes its own.
 func newWorld(t *testing.T) *world {
@@ -158,7 +172,7 @@ func newWorldFor(tb testing.TB) *world {
 			}
 			return checkpoints.DeleteTree(ctx, "chat-"+itoa(threadID))
 		},
-		Tools: testTools, FrontendURL: "https://notes.example/",
+		Tools:    listTools,
 		Events:   routeanalytics.Capture{Sink: w.events},
 		StopWait: 2 * time.Second, Logger: logger,
 		Now: func() time.Time { return w.now },

@@ -1,58 +1,109 @@
 ---
-title: Mobile app
-description: The Android and iPhone apps
+title: Phone app
+description: The app for iPhone and Android
 icon: Smartphone
 ---
 
-There are phone apps for Android and iPhone. Both connect to the same server
-and account as the website, so your notebooks are the same everywhere.
-
-## What it does
-
-- **Notebooks:** browse, search, create, rename and delete them. The search
-  also looks inside notebooks' sources and notes, under **Found inside
-  notebooks**.
-- **Sources:** tick sources on and off, see indexing status, add a web link,
-  upload files from the phone (with the Local or Cloud parser), and read
-  source guides. Long-press a source to remove it from the notebook.
-- **Chat:** the notebook's chat, with citations you can tap, suggested
-  questions and follow-ups, and **@** to ask about one or more sources.
-  Answers have **Stop**, **Try again** and **Copy**, and say so when they were
-  cut off at the model's limit.
-- **Studio:** every output type, with the same options as on the web.
-  Audio plays in the background with lock-screen controls, at 0.75× to 2×
-  speed, with buttons to go back 15 seconds or forward 30, and the transcript
-  below. Video, flashcards, quizzes, mind maps, infographics and interactive
-  reports open in the app. Documents, slides and tables show their text in the
-  app, and can be opened in another app or shared. Each output can be renamed,
-  deleted or tried again, and says which model made it.
-- **Settings:** account, server, theme and language. **Sign out** and the
-  version number are at the bottom.
-
-## Not in the app
-
-These are on the website only, which also works on a phone: notes,
-notifications, [automations](/docs/automations), [email](/docs/email) and the
-other connectors (Google Drive, Nextcloud), **Search the web for new
-sources**, picking documents from your library as sources, the model picker,
-**/** prompts, **Save to note**, **Delete chat history**, public links,
-Settings, API keys and **Connect your agent**, and password reset.
+<BrandName /> has an app for iPhone and Android. It signs in to the same server and
+account as the website, so your notebooks are the same everywhere.
 
 ## Getting it
 
-The Android app is installed from an APK file, which you can ask the owner
-for (the Play Store release is pending). The iPhone app is on the App Store:
-[apps.apple.com/app/soloclef](https://apps.apple.com/app/soloclef/id6821393434).
+- iPhone: [<BrandName /> on the App Store](https://apps.apple.com/app/id6821393434).
+- Android: there is no Play Store listing yet. Ask the site's administrator
+  for the APK file.
 
-When you sign in, the server address is already filled in; sign in with the
-same email and password as on the web.
+On a phone browser, the website works too, with Sources, Chat and Studio
+tabs.
 
-Signing in opens the server's own sign-in page in a browser sheet, so use
-whatever that server offers: single sign-on, if it is set up, or your email
-and password. Password reset is on the website. It allows 5 sign-in attempts a
-minute, and changing
-the server signs you out. You stay signed in as long as you open the app at
-least every 14 days, for up to 60 days.
+## Signing in
 
-On a phone browser, the website works too: it switches to a phone layout with
-Sources, Chat and Studio tabs.
+The sign-in screen shows which server it will use, with Change server below
+it. To use your own server, choose Change server and enter its address, such
+as `notes.example.org`. The app checks that it is a <BrandName /> server and that
+it is reachable over https. Changing servers later signs you out of the old
+one and removes everything the app kept from it.
+
+If the server has single sign-on, its button comes first. The email and
+password form is under Other ways to sign in. Forgot password, Create an
+account and Request access open the website, when the server offers them.
+
+The app stays signed in while you use it, and signs out after 180 days
+without use. See [Account and security](/docs/account-and-security#staying-signed-in).
+
+## What it does
+
+The app has five tabs: Notebooks, Notes, Automations, Inbox and More.
+
+### Notebooks
+
+Browse, search, create, rename, pin, copy and delete notebooks. The search
+also looks inside sources and notes.
+
+In a notebook:
+
+- Sources: tick sources on and off, read source guides, and add sources from
+  files, photos, the camera, a folder, your library, Google Drive, Nextcloud,
+  a link, or a web search with Fast or Deep research. Uploads offer the same
+  Vision switch and parsers as the website. Each source's … menu has Remove
+  from notebook.
+- Chat: answers with citations you can tap, suggested and follow-up
+  questions, @ for sources and / for prompts, the model picker, Tools, and
+  the approval cards for tools marked Ask first. Under an answer: Copy,
+  Download as Markdown, Save to note and Regenerate.
+- Studio: every output kind, with the same options as the website. Audio
+  plays in the background with lock-screen controls, at 0.75× to 2× speed,
+  with a mini player that keeps playing when you leave the page. Video plays
+  full screen or picture in picture. Reports, decks, documents and tables
+  open in the app. Share publicly makes a public link, and Keep offline
+  keeps an output on the phone.
+
+### Notes
+
+Your [notes](/docs/notes), with search, pinned notes first, and an editor with
+a Markdown toolbar and a preview. Notes save as you type.
+
+### Automations
+
+Your [automations](/docs/automations), their runs, and a form to make or change
+one.
+
+### Inbox
+
+Your [notifications](/docs/notifications), with an unread count on the tab. Swipe
+an item left to delete it. Tapping a mail draft's notification opens Drafts
+waiting, where you can check the draft and press Send or Discard.
+
+### More
+
+- Settings: Connectors, Automations, Models, System instructions, Prompts,
+  Memory, Activity log and Public links.
+- You: Profile, Appearance, Notifications, API access, Connect your agent,
+  Signed-in devices, Offline and storage, and App lock.
+- Server: the server's address, to change it.
+- Help: Help and docs, Report an issue, and the server's privacy policy.
+- Sign out.
+
+Connectors in the app covers Google Drive, Nextcloud, Email (IMAP) with
+Microsoft sign-in, and MCP servers. Stalwart mailboxes and Exa and Tavily
+keys are added on the website.
+
+App lock asks for Face ID, Touch ID or the fingerprint sensor before the app
+shows anything, and can hide the app's contents in the app switcher.
+
+Report an issue opens your mail app with a report addressed to the server's
+contact address.
+
+## Working offline
+
+Outputs you keep offline open without a connection. Changes you make offline,
+such as note edits, source switches and quiz progress, wait on the phone and
+are sent when you are back online. Chat questions are never queued. If the
+server refuses a change, it is listed under More, Not saved, with the reason.
+
+## Notifications on the phone
+
+The app asks to show notifications after your first answer or output, not
+when it starts. Under More, Notifications you choose which kinds are pushed.
+Quiet hours are set on the website. A push says only what happened, never
+what is in it.

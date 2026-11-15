@@ -9,36 +9,23 @@ import (
 	"context"
 )
 
-const searchServerConfigs = `-- name: SearchServerConfigs :many
-SELECT config FROM search_source_connectors
-WHERE user_id = $1
-  AND connector_type = 'MCP_CONNECTOR'
-  AND enabled
-ORDER BY id
+const sealedKey = `-- name: SealedKey :one
+SELECT api_key FROM web_search_connections
+WHERE user_id = $1::uuid
+  AND provider = $2
 `
 
-// The account's connected MCP servers that are switched on, oldest first: a
-// web search provider's key is the one the person entered when they
-// connected that provider's server, and the oldest matching connection
-// wins. A connector switched off keeps its credentials and is left alone by
-// the chat, so its key is not used. The config is read here and nowhere
-// answered.
-func (q *Queries) SearchServerConfigs(ctx context.Context, userID string) ([][]byte, error) {
-	rows, err := q.db.Query(ctx, searchServerConfigs, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items [][]byte
-	for rows.Next() {
-		var config []byte
-		if err := rows.Scan(&config); err != nil {
-			return nil, err
-		}
-		items = append(items, config)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+type SealedKeyParams struct {
+	UserID   string
+	Provider string
+}
+
+// The account's sealed key for one provider (web_search_connections). Read
+// at the moment of a search and opened for that search alone; never
+// answered. No row is "not connected".
+func (q *Queries) SealedKey(ctx context.Context, arg SealedKeyParams) (string, error) {
+	row := q.db.QueryRow(ctx, sealedKey, arg.UserID, arg.Provider)
+	var api_key string
+	err := row.Scan(&api_key)
+	return api_key, err
 }

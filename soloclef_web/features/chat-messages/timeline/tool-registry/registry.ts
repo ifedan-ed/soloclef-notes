@@ -17,11 +17,6 @@ const UpdateMemoryToolUI = dynamic(
 	() => import("@/components/tool-ui/user-memory").then((m) => ({ default: m.UpdateMemoryToolUI })),
 	{ ssr: false }
 );
-const CreateAutomationToolUI = dynamic(
-	() =>
-		import("@/components/tool-ui/automation").then((m) => ({ default: m.CreateAutomationToolUI })),
-	{ ssr: false }
-);
 const SandboxExecuteToolUI = dynamic(
 	() =>
 		import("@/components/tool-ui/sandbox-execute").then((m) => ({
@@ -78,7 +73,6 @@ const NullApprovalBody: TimelineToolComponent = () => null;
  */
 const TOOLS_BY_NAME = {
 	task: NullApprovalBody,
-	create_automation: CreateAutomationToolUI,
 	update_memory: UpdateMemoryToolUI,
 	execute: SandboxExecuteToolUI,
 	execute_code: SandboxExecuteToolUI,

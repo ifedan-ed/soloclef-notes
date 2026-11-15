@@ -57,8 +57,8 @@ type storedMessage struct {
 
 // rows is the chat's database in memory, behind the interface the routes
 // use. It keeps the two rules of the real tables that a route could break:
-// one row per (thread, turn, role), a trust row per (account, tool), and a
-// thread that is answered only to its owner.
+// one row per (thread, turn, role), an "ask first" mark per (account, tool),
+// and a thread that is answered only to its owner.
 type rows struct {
 	mu         sync.Mutex
 	threads    map[int64]*Thread
@@ -68,7 +68,7 @@ type rows struct {
 	touched    map[int64]int
 	titles     map[int64]string
 	usage      map[int64]Usage
-	trust      map[string]bool
+	askFirst   map[string]bool
 	prompt     string
 	// about is the rest of a turn's context: the asker, the memory, the
 	// notebook. Its instructions are taken from prompt.
@@ -154,7 +154,7 @@ func newRows() *rows {
 			3: {ID: 3, UserID: dee},
 		},
 		nextID: 100, responding: map[int64]string{}, touched: map[int64]int{}, titles: map[int64]string{},
-		usage: map[int64]Usage{}, trust: map[string]bool{},
+		usage: map[int64]Usage{}, askFirst: map[string]bool{},
 	}
 }
 
@@ -436,19 +436,38 @@ func menu(m model.Model) (*Models, *offeredModels, *chosenModels) {
 		Own: ownmodels.NoConnections{}}, list, chosen
 }
 
-func trustKey(userID, name string) string { return userID + "|" + name }
-
-func (r *rows) Trusted(_ context.Context, userID, name string) (bool, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.trust[trustKey(userID, name)], nil
+// markKey is how a mark is filed: the account, the app's connection (0 for
+// the chat's own tools) and the tool.
+func markKey(userID string, tool MarkedTool) string {
+	return userID + "|" + strconv.FormatInt(tool.Connector, 10) + "|" + tool.Name
 }
 
-func (r *rows) Trust(_ context.Context, userID, name string) error {
+func (r *rows) AsksFirst(_ context.Context, userID string, tool MarkedTool) (bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.trust[trustKey(userID, name)] = true
+	return r.askFirst[markKey(userID, tool)], nil
+}
+
+func (r *rows) StopAsking(_ context.Context, userID string, tool MarkedTool) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.askFirst, markKey(userID, tool))
 	return nil
+}
+
+// mark marks one of the chat's own tools "ask first" for the account, as
+// the settings page would.
+func (r *rows) mark(userID, name string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.askFirst[markKey(userID, MarkedTool{Name: name})] = true
+}
+
+// marked reports whether one of the chat's own tools is marked.
+func (r *rows) marked(userID, name string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.askFirst[markKey(userID, MarkedTool{Name: name})]
 }
 
 // assistant returns the thread's assistant rows, oldest first.
@@ -464,6 +483,13 @@ func (r *rows) assistant(threadID int64) []storedMessage {
 	return out
 }
 
+// marks is where a scripted turn reads and takes off "ask first" marks: the
+// in-memory rows, or the real Store.
+type marks interface {
+	AsksFirst(ctx context.Context, userID string, tool MarkedTool) (bool, error)
+	StopAsking(ctx context.Context, userID string, tool MarkedTool) error
+}
+
 // scripted is an Assembler over a scripted model and hand-made tools: the
 // routes' own logic is under test, not the production tool set.
 type scripted struct {
@@ -474,8 +500,8 @@ type scripted struct {
 	// delegates are added to every agent, for the nested-run tests.
 	delegates func(turn Turn) []agent.Delegate
 	maxSteps  int
-	// trusted answers "always allow"; nil reads the in-memory rows.
-	trusted func(ctx context.Context, userID, name string) (bool, error)
+	// marks holds the "ask first" marks; nil is the in-memory rows.
+	marks marks
 	// models, when set, picks the turn's model as a deployment does.
 	models *Models
 	// activities are the turn's own tools for the step display.
@@ -491,9 +517,9 @@ func (s *scripted) Build(_ context.Context, turn Turn) (Built, error) {
 	s.mu.Lock()
 	s.builds = append(s.builds, turn)
 	s.mu.Unlock()
-	trusted := s.trusted
-	if trusted == nil {
-		trusted = s.rows.Trusted
+	var held marks = s.rows
+	if s.marks != nil {
+		held = s.marks
 	}
 	chat, name := s.model, "test-model"
 	if s.models != nil {
@@ -505,8 +531,8 @@ func (s *scripted) Build(_ context.Context, turn Turn) (Built, error) {
 	cfg := agent.Config{
 		Model: chat, System: "You are a test.", Tools: s.tools,
 		MaxSteps: s.maxSteps, MaxParallelTools: 4, Store: s.store,
-		Trusted: func(ctx context.Context, call tool.Call) (bool, error) {
-			return trusted(ctx, turn.UserID, call.Name)
+		AskFirst: func(ctx context.Context, call tool.Call) (bool, error) {
+			return held.AsksFirst(ctx, turn.UserID, MarkedTool{Name: call.Name})
 		},
 	}
 	if s.delegates != nil {
@@ -515,8 +541,8 @@ func (s *scripted) Build(_ context.Context, turn Turn) (Built, error) {
 	built, err := agent.New(cfg)
 	return Built{
 		Agent: built, Chat: chat, Model: name, Preface: assembly.Preface(turn.PreferredTool, map[string]bool{}), Activities: s.activities,
-		Trust: func(ctx context.Context, name string) error {
-			return s.rows.Trust(ctx, turn.UserID, name)
+		StopAsking: func(ctx context.Context, name string) error {
+			return held.StopAsking(ctx, turn.UserID, MarkedTool{Name: name})
 		},
 		Close: func() {
 			s.mu.Lock()

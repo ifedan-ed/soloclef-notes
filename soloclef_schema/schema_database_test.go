@@ -13,7 +13,15 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	schema "git.danvics.com/danvics/soloclef/soloclef_schema"
+	"git.danvics.com/danvics/soloclef/soloclef_schema/migrations"
 	"git.danvics.com/danvics/soloclef/soloclef_schema/schemaversion"
+)
+
+// testKeys stand in for the deployment's secrets: the credential migration
+// (00012) refuses to run without one.
+var (
+	testKeys     = migrations.Keys{SecretKey: "fake-deployment-secret-for-tests"}
+	testKeysNone = migrations.Keys{}
 )
 
 // serverVariable names a throwaway Postgres server (pgvector/pgvector:pg17 is
@@ -68,7 +76,7 @@ func emptyDatabase(t *testing.T) *pgxpool.Pool {
 func migrated(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	pool := emptyDatabase(t)
-	if _, err := schema.Migrate(context.Background(), pool); err != nil {
+	if _, err := schema.Migrate(context.Background(), pool, testKeys); err != nil {
 		t.Fatalf("migrating: %v", err)
 	}
 	return pool
@@ -130,7 +138,7 @@ func TestMigrateBuildsAnEmptyDatabaseAndIsSafeToRepeat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	applied, err := schema.Migrate(ctx, pool)
+	applied, err := schema.Migrate(ctx, pool, testKeys)
 	if err != nil {
 		t.Fatalf("the first run: %v", err)
 	}
@@ -141,7 +149,7 @@ func TestMigrateBuildsAnEmptyDatabaseAndIsSafeToRepeat(t *testing.T) {
 		t.Fatalf("a freshly migrated database was refused: %v", err)
 	}
 
-	again, err := schema.Migrate(ctx, pool)
+	again, err := schema.Migrate(ctx, pool, testKeys)
 	if err != nil || len(again) != 0 {
 		t.Fatalf("the second run applied %v, %v; it should find nothing to do", again, err)
 	}
@@ -208,7 +216,7 @@ func TestRollingBackToZeroLeavesNothingAndTheMigrationsApplyAgain(t *testing.T) 
 	ctx := context.Background()
 	expected, _ := schemaversion.Expected()
 
-	rolled, err := schema.DownTo(ctx, pool, 0)
+	rolled, err := schema.DownTo(ctx, pool, 0, testKeys)
 	if err != nil || len(rolled) != len(expected) {
 		t.Fatalf("down to 0 rolled back %v, %v", rolled, err)
 	}
@@ -230,7 +238,7 @@ func TestRollingBackToZeroLeavesNothingAndTheMigrationsApplyAgain(t *testing.T) 
 		t.Fatal("a rolled-back database was accepted")
 	}
 
-	if _, err := schema.Migrate(ctx, pool); err != nil {
+	if _, err := schema.Migrate(ctx, pool, testKeys); err != nil {
 		t.Fatalf("applying the migrations again: %v", err)
 	}
 	if err := schemaversion.Check(ctx, pool); err != nil {
@@ -243,7 +251,6 @@ func TestRollingBackToZeroLeavesNothingAndTheMigrationsApplyAgain(t *testing.T) 
 var ownedThroughAParent = map[string]string{
 	"user":                       "the account itself",
 	"site_settings":              "the operator's, not an account's",
-	"site_announcements":         "the operator's, addressed to everyone",
 	"push_tickets":               "keyed by a device's token; the provider's receipt names no account",
 	"models":                     "owned through its connection, which is the operator's or one account's",
 	"connections":                "user_id is NULL for the operator's own connection",
@@ -255,6 +262,7 @@ var ownedThroughAParent = map[string]string{
 	"automation_triggers":        "owned through its automation",
 	"automation_runs":            "owned through its automation",
 	"soloclef_agent_checkpoints": "the agent library's table, keyed by a thread's name",
+	"app_store_versions":         "the deployment's, keyed by the iPhone app's bundle id: the App Store's version is no account's",
 }
 
 func TestEveryTableIsKeyedByItsOwner(t *testing.T) {
@@ -486,12 +494,10 @@ func TestTheConstraintsThatHadHoles(t *testing.T) {
 	// The same name is free under another parent and for another account.
 	exec(t, pool, `INSERT INTO folders (user_id, parent_id, name, "position") VALUES ($1, 10, 'Biology', 'a0')`, ada)
 
-	// An account-wide rule (no thread), stored twice.
-	exec(t, pool, `INSERT INTO agent_permission_rules (user_id, permission, action) VALUES ($1, 'edit', 'allow')`, ada)
-	refused(t, pool, "uq_agent_permission_rules_scope",
-		`INSERT INTO agent_permission_rules (user_id, permission, action) VALUES ($1, 'edit', 'allow')`, ada)
-	refused(t, pool, "ck_agent_permission_rules_action",
-		`INSERT INTO agent_permission_rules (user_id, permission, action) VALUES ($1, 'edit', 'maybe')`, ada)
+	// A mark on one of the chat's own tools (no connection), stored twice.
+	exec(t, pool, `INSERT INTO agent_ask_first_tools (user_id, tool) VALUES ($1, 'edit')`, ada)
+	refused(t, pool, "uq_agent_ask_first_tools_tool",
+		`INSERT INTO agent_ask_first_tools (user_id, tool) VALUES ($1, 'edit')`, ada)
 
 	// Two accounts whose addresses differ only by case.
 	refused(t, pool, "uq_user_email_lower", `INSERT INTO "user" (email) VALUES ('ADA@example.org')`)

@@ -23,6 +23,7 @@ import (
 	"github.com/valkey-io/valkey-go"
 
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/requestcontext"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/signin"
 )
 
 // The phone app's single sign-on.
@@ -398,7 +399,7 @@ func (r Routes) appExchange(response http.ResponseWriter, request *http.Request)
 	if device == "" {
 		device = grant.Device
 	}
-	pair, err := r.Sessions.StartPhoneSession(request.Context(), grant.UserID, &device)
+	pair, err := r.Sessions.StartPhoneSession(request.Context(), grant.UserID, &device, signin.ProvedBySSO)
 	if err != nil {
 		r.Logger.ErrorContext(request.Context(), "an app sign-in's session could not be made", "request_id", requestID, "error", err.Error())
 		refuse(http.StatusInternalServerError, codeServerError)

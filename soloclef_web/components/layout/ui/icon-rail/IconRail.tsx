@@ -81,7 +81,7 @@ export function IconRail({
 				showConnectAgent
 				onSettings={onSettings}
 				onNotifications={notifications ? () => setNotificationsOpen(true) : undefined}
-				notificationsUnreadCount={notifications?.totalUnreadCount}
+				notificationsUnreadCount={notifications?.unreadCount}
 				onLogout={onLogout}
 				isCollapsed
 				theme={theme}

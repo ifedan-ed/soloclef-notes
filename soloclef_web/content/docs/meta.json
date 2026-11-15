@@ -9,16 +9,23 @@
 		"studio",
 		"notes",
 		"search",
-		"mobile-app",
-		"connect-your-agent",
-		"---Your account---",
-		"account-and-sharing",
 		"automations",
 		"email",
+		"---Your account---",
+		"connections",
+		"models",
+		"memory-and-instructions",
 		"notifications",
+		"account-and-security",
 		"privacy-and-data",
+		"---Apps and agents---",
+		"mobile-app",
+		"connect-your-agent",
 		"faq",
 		"---Running a server---",
-		"self-hosting"
+		"self-hosting",
+		"optional-features",
+		"operations",
+		"settings-reference"
 	]
 }

@@ -1,0 +1,29 @@
+{
+  "status": 200,
+  "body": {
+    "methodResponses": [
+      [
+        "Identity/get",
+        {
+          "accountId": "c",
+          "state": "sae",
+          "list": [
+            {
+              "id": "b",
+              "name": "ada@example.test",
+              "email": "ada@example.test",
+              "replyTo": null,
+              "bcc": null,
+              "textSignature": "",
+              "htmlSignature": "",
+              "mayDelete": true
+            }
+          ],
+          "notFound": []
+        },
+        "i"
+      ]
+    ],
+    "sessionState": "3f4a7bc7"
+  }
+}

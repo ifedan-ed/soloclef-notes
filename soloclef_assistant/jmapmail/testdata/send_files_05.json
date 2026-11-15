@@ -1,0 +1,9 @@
+{
+  "status": 200,
+  "body": {
+    "accountId": "c",
+    "blobId": "edkcduvx3zm9c7v3217v0jtu1sabjpoka1ky0thj2jqutfhydrm17awc3pm0obq",
+    "type": "application/pdf",
+    "size": 125
+  }
+}

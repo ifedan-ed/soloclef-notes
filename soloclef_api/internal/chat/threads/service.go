@@ -2,8 +2,6 @@ package threads
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -19,7 +17,19 @@ type Tool struct {
 	Description string `json:"description"`
 	// EnabledByDefault says the tool is on until a person switches it off.
 	EnabledByDefault bool `json:"enabled_by_default"`
+	// Group is the connection a tool belongs to, as the menu heads it:
+	// "Mail", "Google Drive", "Nextcloud" or a connected app's own name.
+	// Absent for the chat's own tools, which the apps group themselves.
+	Group string `json:"group,omitempty"`
+	// Connector is the kind of that connection ("mail", "google_drive",
+	// "nextcloud" or "mcp"), which picks the group's icon. Absent with
+	// Group.
+	Connector string `json:"connector,omitempty"`
 }
+
+// ToolLister answers GET /agent/tools for one account: the chat's own tools
+// and the ones the account's connections add (assembly.Assembly.Menu).
+type ToolLister func(ctx context.Context, userID string) ([]Tool, error)
 
 // Turns is the part of the running-turn registry a delete needs:
 // *turns.Registry, the one the turn routes use.
@@ -48,17 +58,13 @@ type Service struct {
 	// nothing for.
 	Forget func(ctx context.Context, threadID int64) error
 
-	// Tools is what GET /agent/tools answers: the chat's own tools as the
-	// tool picker names them. It is handed in, not written here, so that
-	// the list is made where the tools are and cannot name one the chat
-	// does not have.
-	Tools []Tool
-
-	// FrontendURL is the web app's address, which a public link's address
-	// starts with. Empty is valid in this tier, as it is for the
-	// account's list of links (internal/publiclinks): the address is
-	// then a path.
-	FrontendURL string
+	// Tools is what GET /agent/tools answers for the caller: the tools a
+	// chat turn of theirs is offered, each of which the picker may switch
+	// off. It is handed in, not written here, so that the list is made
+	// where the tools are and cannot name one the chat does not have. It
+	// is per account because a connected mailbox, Drive or app adds tools
+	// that only that account's turns have.
+	Tools ToolLister
 
 	// Events records "chat_created". The zero value records nothing, which
 	// is a deployment with no analytics key.
@@ -90,29 +96,7 @@ func (s *Service) Check() error {
 	case s.Now == nil:
 		return errors.New("threads: Now is not set")
 	}
-	seen := map[string]bool{}
-	for _, tool := range s.Tools {
-		if tool.Name == "" || tool.Description == "" {
-			return fmt.Errorf("threads: a tool in the list has no name or no description: %+v", tool)
-		}
-		if seen[tool.Name] {
-			return fmt.Errorf("threads: the tool %q is listed twice", tool.Name)
-		}
-		seen[tool.Name] = true
-	}
 	return nil
-}
-
-// newToken is a public link's secret: 48 random bytes, as 64 characters
-// that are safe in an address. It is the only thing between a stranger and
-// the conversation, so it comes from the system's generator and a failure
-// to read that is a failure, never a weaker token.
-func newToken() (string, error) {
-	raw := make([]byte, 48)
-	if _, err := rand.Read(raw); err != nil {
-		return "", fmt.Errorf("threads: no randomness for a link's token: %w", err)
-	}
-	return base64.RawURLEncoding.EncodeToString(raw), nil
 }
 
 // errStillStopping says a delete could not have the thread in time.

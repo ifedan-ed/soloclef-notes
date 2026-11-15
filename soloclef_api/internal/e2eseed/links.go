@@ -7,18 +7,12 @@ import (
 )
 
 // A share link expires at a time its owner chose, days ahead. A test of
-// the expired page cannot wait days, so these two move a link's expiry to
-// a second ago; everything that then refuses the link is the product's.
+// the expired page cannot wait days, so this moves a link's expiry to a
+// second ago; everything that then refuses the link is the product's.
 
 func (r Routes) expireSnapshot(x *exchange) {
 	r.expire(x, "snapshot_id", "no such public link", func(ctx context.Context, id int64, at time.Time) (int64, error) {
 		return New(r.Pool).ExpireSnapshotLink(ctx, ExpireSnapshotLinkParams{ID: id, ExpiredAt: at})
-	})
-}
-
-func (r Routes) expireNotebookLink(x *exchange) {
-	r.expire(x, "link_id", "no such notebook link", func(ctx context.Context, id int64, at time.Time) (int64, error) {
-		return New(r.Pool).ExpireNotebookLink(ctx, ExpireNotebookLinkParams{ID: id, ExpiredAt: at})
 	})
 }
 

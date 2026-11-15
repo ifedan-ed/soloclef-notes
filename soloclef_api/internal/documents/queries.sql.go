@@ -502,7 +502,7 @@ type StatusOfDocumentsRow struct {
 }
 
 // ---------------------------------------------------------------------------
-// The four reads about all of the caller's documents. Each ends on an ORDER
+// The three reads about all of the caller's documents. Each ends on an ORDER
 // BY that is total, so two requests for one page read the same rows.
 // The caller's documents among the ids given, in id order: the status poll.
 // An id that is another account's is simply not among the rows.
@@ -676,57 +676,6 @@ func (q *Queries) VersionsOfDocument(ctx context.Context, documentID int64) ([]V
 			&i.Title,
 			&i.ContentHash,
 			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const watchedFoldersOfOwner = `-- name: WatchedFoldersOfOwner :many
-SELECT id, name, position, parent_id, created_at, updated_at, metadata
-FROM folders
-WHERE user_id = $1::uuid
-  AND parent_id IS NULL
-  AND metadata IS NOT NULL
-  AND (metadata ->> 'watched') = 'true'
-ORDER BY id
-`
-
-type WatchedFoldersOfOwnerRow struct {
-	ID        int64
-	Name      string
-	Position  string
-	ParentID  *int64
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	Metadata  []byte
-}
-
-// The caller's top-level folders marked as watched, in id order. `->>` reads
-// the value as text, so a folder whose metadata says "watched": "true" is
-// found as well as one that says true.
-func (q *Queries) WatchedFoldersOfOwner(ctx context.Context, userID string) ([]WatchedFoldersOfOwnerRow, error) {
-	rows, err := q.db.Query(ctx, watchedFoldersOfOwner, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []WatchedFoldersOfOwnerRow
-	for rows.Next() {
-		var i WatchedFoldersOfOwnerRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.Position,
-			&i.ParentID,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.Metadata,
 		); err != nil {
 			return nil, err
 		}

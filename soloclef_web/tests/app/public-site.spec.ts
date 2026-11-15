@@ -124,7 +124,8 @@ test.describe("public site, signed out", () => {
 			"Bring in what you are reading",
 			"Ask, and see where the answer came from",
 			"Make something from your sources",
-			"Notes, search and tidy notebooks",
+			"Tasks that run without you",
+			"Notes, search and sharing",
 		]) {
 			await expect(page.getByRole("heading", { level: 2, name: heading })).toBeVisible();
 		}
@@ -179,8 +180,8 @@ test.describe("public site, signed out", () => {
 		}
 		await page.goto("/privacy");
 		await expect(page.getByText("Datalab").first()).toBeVisible();
-		await expect(page.getByText("LlamaCloud").first()).toBeVisible();
-		await expect(page.getByText("BGE-M3").first()).toBeVisible();
+		await expect(page.getByText("LlamaParse").first()).toBeVisible();
+		await expect(page.getByText(/embedding model/).first()).toBeVisible();
 	});
 
 	test("upstream-only pages are gone", async ({ request }) => {

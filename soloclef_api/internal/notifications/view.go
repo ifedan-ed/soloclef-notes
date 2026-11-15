@@ -14,9 +14,16 @@ import (
 // view is the filters of one inbox view, checked. The zero value is the
 // caller's whole inbox.
 type view struct {
-	// types is the types the view keeps; empty keeps every type. A `type`
-	// and a `category` together keep their intersection.
+	// types is the types the view keeps; nil keeps every type. A `type`,
+	// a `category` and a `source_type` together keep their intersection.
 	types []string
+	// none says the view matches no row: filters with no type in common, or
+	// the retired announcements tab. The routes answer it without a query.
+	// It is a flag, not a made-up type in types, because a placeholder type
+	// has to reach Postgres to match nothing, and the one used before
+	// ("\x00none") was refused there (a NUL is not valid text), so every
+	// such view was a 500 (2026-11-13).
+	none bool
 	// sourceKey is the metadata key a source filter compares ("" for no
 	// filter) and sourceValue what it must equal.
 	sourceKey, sourceValue string
@@ -46,22 +53,24 @@ func readView(query url.Values, paging bool) (view, []errorenvelope.Failure) {
 	out := view{limit: defaultPageSize}
 
 	if name := query.Get("type"); name != "" {
-		if !knownType(name) {
-			fail("type", "type must be one of connector_indexing, connector_deletion, document_processing or site_announcement")
+		if !contains(statusTypes, name) {
+			fail("type", "type must be one of "+strings.Join(statusTypes, ", "))
 		}
 		out.types = []string{name}
 	}
 	if name := query.Get("category"); name != "" {
-		kept, known := categories[name]
-		if !known {
-			fail("category", "category must be status or announcements")
-		}
-		if out.types == nil {
-			out.types = kept
-		} else if !contains(kept, out.types[0]) {
-			// A type outside the tab: the view is empty, which a type no
-			// row has says without a second flag.
-			out.types = []string{"\x00none"}
+		switch name {
+		case statusCategory:
+			out.narrow(statusTypes)
+		case retiredAnnouncementsCategory:
+			// Announcements are gone, but the phone builds 1.0.0 and 1.1.0 in
+			// the App Store still ask for (and clear) this tab every time the
+			// Inbox opens and show an error on a 422. It is an empty view:
+			// no rows, nothing to clear.
+			// installed-builds: notifications-announcements-tab
+			out.none = true
+		default:
+			fail("category", "category must be "+statusCategory)
 		}
 	}
 	if source := query.Get("source_type"); source != "" {
@@ -77,7 +86,7 @@ func readView(query url.Values, paging bool) (view, []errorenvelope.Failure) {
 		}
 		out.sourceValue = value
 		if of != nil {
-			out.types = intersect(out.types, of)
+			out.narrow(of)
 		}
 	}
 	switch preset := query.Get("filter"); preset {
@@ -143,21 +152,24 @@ func contains(list []string, name string) bool {
 	return false
 }
 
-// intersect narrows kept to the types also in of; a nil kept is every type.
-func intersect(kept, of []string) []string {
-	if kept == nil {
-		return of
+// narrow keeps only the types also in of. A view left with no type in
+// common matches nothing, which is the none flag, never an empty types (an
+// empty list means every type to the statements).
+func (v *view) narrow(of []string) {
+	if v.types == nil {
+		v.types = of
+		return
 	}
-	out := []string{}
-	for _, name := range kept {
+	kept := []string{}
+	for _, name := range v.types {
 		if contains(of, name) {
-			out = append(out, name)
+			kept = append(kept, name)
 		}
 	}
-	if len(out) == 0 {
-		return []string{"\x00none"}
+	v.types = kept
+	if len(kept) == 0 {
+		v.none = true
 	}
-	return out
 }
 
 // typesArgument is the view's types as the statements take them: never nil,

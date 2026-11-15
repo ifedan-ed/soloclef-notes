@@ -26,9 +26,12 @@ type Outcome struct {
 	Answer string
 }
 
-// Save is app/services/memory/service.py:save_memory with llm=None, which is
-// how all six routes call it — so the forced LLM rewrite is unreachable and no
-// model is involved.
+// Save is the assistant's write: the chat's update_memory tool calls it, and
+// it holds the model to the format the tool's prompt asks for, refusing a
+// document with no "## " heading so the model is told to write one. A
+// person's write from Settings is SaveWrittenByPerson instead. It is
+// app/services/memory/service.py:save_memory with llm=None, so the forced LLM
+// rewrite is unreachable and no model is involved.
 //
 // The order is the Python function's and is load-bearing: the preamble is
 // stripped before the sentinel is looked for, so "  no update  " is a no-op;

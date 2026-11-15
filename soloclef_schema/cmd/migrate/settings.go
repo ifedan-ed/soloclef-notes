@@ -25,7 +25,35 @@ const (
 	// permission is for one database and a `true` left behind in an
 	// environment file cannot empty another.
 	DevelopmentDatabase = "SOLOCLEF_MIGRATE_DEVELOPMENT_DATABASE"
+	// SecretKeyFile names a file holding the deployment's secret, the one
+	// the services seal stored credentials with (the API's session secret
+	// file; the worker's secret key file is the same file). It is read only
+	// by `up` and `down-to`, and only a migration that seals or opens a
+	// credential needs it: such a migration stops, naming this setting, when
+	// it is not set. No other migration reads it.
+	SecretKeyFile = "SOLOCLEF_MIGRATE_SECRET_KEY_FILE"
 )
+
+// secretKey is the deployment's secret from its file, or "" when the
+// setting is not given. A named file that cannot be read, or is empty, is
+// an error at once: a deployment that named one meant to give it.
+func secretKey(env func(string) string, readFile func(string) ([]byte, error)) (string, error) {
+	file := strings.TrimSpace(env(SecretKeyFile))
+	if file == "" {
+		return "", nil
+	}
+	content, err := readFile(file)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", SecretKeyFile, err)
+	}
+	// The services strip the whole of the surrounding whitespace from this
+	// file (soloclef_api/internal/config), so the same bytes are the key here.
+	key := strings.TrimSpace(string(content))
+	if key == "" {
+		return "", fmt.Errorf("%s names %s, which is empty", SecretKeyFile, file)
+	}
+	return key, nil
+}
 
 // databaseURL returns the address to connect to, with the password from its
 // file written in when a file is named. No error quotes the URL: it may

@@ -15,6 +15,7 @@ require (
 	github.com/hhrutter/lzw v1.0.0 // indirect
 	github.com/hhrutter/pkcs7 v0.2.0 // indirect
 	github.com/hhrutter/tiff v1.0.2 // indirect
+	github.com/ifedan-ed/figures-go v0.4.1 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
@@ -56,6 +57,7 @@ require (
 	git.danvics.com/danvics/soloclef/soloclef_connectors v0.0.0
 	git.danvics.com/danvics/soloclef/soloclef_filestore v0.0.0
 	git.danvics.com/danvics/soloclef/soloclef_ingest v0.0.0
+	git.danvics.com/danvics/soloclef/soloclef_notify v0.0.0
 	git.danvics.com/danvics/soloclef/soloclef_schema v0.0.0
 	git.danvics.com/danvics/soloclef/soloclef_studio v0.0.0
 	github.com/google/uuid v1.6.0
@@ -118,3 +120,9 @@ replace git.danvics.com/danvics/soloclef/soloclef_automations => ../soloclef_aut
 // brings the MCP client and valkey-go, both pure Go, so cmd/worker still
 // builds with CGO_ENABLED=0. Its go directive is why this module's is 1.25.
 replace git.danvics.com/danvics/soloclef/soloclef_assistant => ../soloclef_assistant
+
+// The one notification step (an inbox row, then a push) and the push
+// delivery, shared by the API, the worker and the indexer: every tier that
+// finishes work for a person notifies through the same code. From this
+// checkout for the reason soloclef_celery is.
+replace git.danvics.com/danvics/soloclef/soloclef_notify => ../soloclef_notify

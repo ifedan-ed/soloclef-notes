@@ -32,6 +32,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -41,6 +42,23 @@ import (
 
 // AgentTask is the one action a step may name.
 const AgentTask = "agent_task"
+
+// What a definition may name, as lists. They are the rules Parse,
+// ParseTask and ParseTrigger apply, and they are exported so that what the
+// chat tells a person an automation can do (soloclef_assistant/
+// automationdrafts) is read from the same lists: a trigger type added here
+// is refused by that package's test until it is described there.
+var (
+	// Actions are the actions a step may run.
+	Actions = []string{AgentTask}
+	// TriggerTypes are the triggers a person may add.
+	TriggerTypes = []string{TriggerSchedule, TriggerEvent}
+	// EventTypes are the events an event trigger may wait for.
+	EventTypes = []string{DocumentEnteredFolder}
+	// RetrievalScopes are what a task may read: the account's documents
+	// (the default), the web, or both.
+	RetrievalScopes = []string{"documents", "web", "all"}
+)
 
 // MaxTimeoutSeconds is the longest a run may be given: a day. A larger
 // value is lowered to it, not refused, so a definition written for a longer
@@ -349,7 +367,7 @@ func Parse(raw []byte) (Definition, []string) {
 		if step.TimeoutSeconds != nil && *step.TimeoutSeconds < 1 {
 			say("%s.timeout_seconds must be at least 1", at)
 		}
-		if step.Action != AgentTask {
+		if !slices.Contains(Actions, step.Action) {
 			say("%s.action is %q; the one action a step may run is %s", at, step.Action, AgentTask)
 			continue
 		}
@@ -375,7 +393,7 @@ func ParseTask(raw json.RawMessage) (Task, []string) {
 	if strings.TrimSpace(task.Query) == "" {
 		problems = append(problems, "query is required: it is what the assistant is asked")
 	}
-	if scope := task.Scope(); scope != "documents" && scope != "web" && scope != "all" {
+	if !slices.Contains(RetrievalScopes, task.Scope()) {
 		problems = append(problems, "retrieval_scope must be documents, web or all")
 	}
 	positive := func(name string, ids []int64) {
@@ -473,7 +491,7 @@ func ParseTrigger(kind string, raw json.RawMessage) (Trigger, error) {
 		if err := strict(raw, &params); err != nil {
 			return Trigger{}, fmt.Errorf("the event trigger could not be read: %w", err)
 		}
-		if params.EventType != DocumentEnteredFolder {
+		if !slices.Contains(EventTypes, params.EventType) {
 			return Trigger{}, fmt.Errorf("unknown event type %q; the event a trigger may wait for is %s", params.EventType, DocumentEnteredFolder)
 		}
 		if params.Filter == nil {

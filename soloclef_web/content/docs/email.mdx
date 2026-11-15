@@ -1,173 +1,223 @@
 ---
 title: Email
-description: Connecting a mailbox to read, and the emails the app sends you
+description: Reading your mailboxes, and drafts you send yourself
 icon: Mail
 ---
 
-<BrandName /> works with email in two ways. It can read a mailbox you
-connect, so the assistant can find and read your mail; it never sends mail
-from it. And it sends you a few emails of its own: password resets and
-automation results.
+You can connect your mailboxes so the assistant can search and read your
+mail. From a Stalwart mailbox it can also write drafts, which are sent only
+when you press Send.
 
-## Connecting a mailbox
+There are three kinds of mailbox, all added under Settings, Connectors:
 
-It works with any mail provider that lets you sign in over IMAP with a
-password or an app password, and with Microsoft mailboxes through Microsoft's
-own sign-in (see [Microsoft mailboxes](#microsoft-mailboxes)).
+| Mailbox | How it connects | Read | Draft and send |
+| --- | --- | --- | --- |
+| Any IMAP mailbox | Server, username and password or app password, on the Email (IMAP) card | Yes | No |
+| Outlook.com and Microsoft 365 | Microsoft's own sign-in, on the Email (IMAP) card | Yes | No |
+| Stalwart | Stalwart's own sign-in or an app password, on the Stalwart (JMAP) card | Yes, and whole conversations | Yes, when you press Send |
 
-1. Open Settings → Connectors and choose **Connect** on the
-   **Email (IMAP)** card. It opens in place.
-2. Choose **Add account** and fill in:
-   - **Label:** a name for the mailbox, such as Work inbox. Left empty, the
-     username is used.
-   - **IMAP host** and **Port:** your provider's IMAP server. The port is 993
-     unless you change it.
-   - **Use TLS:** on by default. With it off, the connection is still
-     encrypted, with STARTTLS; it never runs in plain text. The port doesn't
-     change by itself: with **Use TLS** off, set your provider's STARTTLS
-     port, usually 143.
-   - **Username** and **Password**.
-3. Choose **Test connection** to check the settings. It says how many folders
-   it found, and saves nothing.
-4. Choose **Save**.
+<BrandName /> also sends you a few emails of its own. See
+[Emails the app sends you](#emails-the-app-sends-you).
 
-If your provider uses two-factor sign-in, the password must be an app
-password, not your normal one:
+## Connecting an IMAP mailbox
 
-- **Gmail:** Google Account → Security → App passwords. This needs 2-Step
-  Verification.
-- **Outlook / Microsoft 365:** no password works. Use **Connect a Microsoft
-  account** instead, below.
+1. Open Settings, Connectors, and choose Connect on the Email (IMAP) card.
+2. Choose Add account and fill in:
+    - Label: a name for the mailbox, such as Work inbox. Empty uses the
+      username.
+    - IMAP host and Port: your provider's IMAP server. The port is 993
+      unless you change it.
+    - Use TLS: on by default. With it off, the connection uses STARTTLS
+      instead, usually on port 143. Mail is never sent in plain text.
+    - Username and Password.
+3. Choose Test connection. It says how many folders it found, and saves
+   nothing.
+4. Choose Save.
+
+If your account uses two-step sign-in, use an app password. For Gmail, make
+one under Google Account, Security, App passwords.
+
+The mail server must be reachable from the internet.
 
 ### Microsoft mailboxes
 
-Microsoft turned off IMAP sign-in with a password or app password, for
-Microsoft 365 work and school mailboxes from 1 October 2022 and for
-Outlook.com, Hotmail and Live mailboxes from 16 September 2024. These
-mailboxes connect through Microsoft instead:
+Microsoft no longer lets IMAP sign in with a password, so Outlook.com,
+Hotmail and Microsoft 365 mailboxes connect through Microsoft:
 
-1. On the **Email (IMAP)** card, choose **Connect a Microsoft account**.
-2. Microsoft's page opens. Choose the account, sign in and accept.
-   Microsoft's page says the app may read and write your mail, because
-   Microsoft has no read-only permission for IMAP; <BrandName /> still only
-   reads (see [What the assistant can do with it](#what-the-assistant-can-do-with-it)).
-3. You come back to the Connectors page with "Microsoft account connected",
-   and the mailbox in the list as *address · Microsoft*. **Test connection**
-   checks it.
+1. On the Email (IMAP) card, choose Connect a Microsoft account.
+2. Sign in on Microsoft's page and accept. Microsoft's page says the app may
+   read and write your mail, because Microsoft has no read-only permission
+   for IMAP. <BrandName /> only reads.
+3. You come back with "Microsoft account connected", and the mailbox in the
+   list.
 
-If the card has no **Connect a Microsoft account** button and says
-"Microsoft accounts aren't supported yet.", the site's administrator hasn't
-set up Microsoft sign-in.
+Finish within 10 minutes, in the same browser. If the button isn't there,
+the server's administrator hasn't set Microsoft sign-in up.
 
-- **Finish within 10 minutes, in the same browser.** Otherwise you see "The
-  Microsoft sign-in timed out. Try again."
-- **Work or school accounts:** your organization may let only its
-  administrators approve apps. You then see "Your organization's
-  administrator has to approve this app first." Your administrator can also
-  turn IMAP off for a mailbox; **Test connection** then says the mail server
-  refused access and IMAP may be turned off for it.
-- **Staying connected.** The sign-in renews itself while the mailbox is
-  used. Changing your Microsoft password does not end it: to stop
-  <BrandName /> reading the mailbox, remove it here. Microsoft ends it when
-  the mailbox isn't used for 90 days, when you remove the app's access (see
-  **Removing it** below), or when all your sign-in sessions are revoked, by
-  you or, for a work or school account, by your administrator.
-  The row then says "Microsoft needs you to sign in again." with a
-  **Reconnect** button; reconnecting keeps the same mailbox.
-- **Only your own mailbox.** You connect the mailbox of the Microsoft
-  account you sign in with; shared mailboxes can't be added.
-- **Removing it** deletes the stored sign-in from <BrandName />. Microsoft
-  keeps listing the app until you remove its access there too: for a
-  personal account at account.live.com/consent/Manage; for a work or school
-  account, ask your administrator.
+Some things to know:
 
-You can add several mailboxes. The password, or the Microsoft sign-in, is
-stored encrypted and is never shown again, to you or to anyone else.
-**Remove** takes a mailbox off <BrandName /> only: nothing changes in the
-mailbox itself.
+- A work or school account may need your organization's administrator to
+  approve the app first. The page says so.
+- The sign-in renews itself while the mailbox is used. Changing your
+  Microsoft password does not end it. Microsoft ends it after 90 days without
+  use, or when you or your administrator revoke it. The row then says
+  "Microsoft needs you to sign in again." with a Reconnect button.
+- Only the mailbox of the account you sign in with can be added. Shared
+  mailboxes can't.
+- Removing the mailbox deletes the sign-in from <BrandName />. To remove the app
+  from your Microsoft account too, go to account.live.com/consent/Manage for
+  a personal account, or ask your administrator.
 
-The mail server must be on the internet: for a server on a private
-network, **Test connection** says "Couldn't connect: Could not connect to
-this mail server", and **Save** says "Couldn't add this account. Check the
-details and try again."
+## Connecting a Stalwart mailbox
 
-## What the assistant can do with it
+Stalwart is a mail server that speaks JMAP. Choose Connect on the Stalwart
+(JMAP) card, then one of two ways:
 
-Mail is read live, when it is needed. Nothing is copied into the app: a
-message never becomes a source and is never added to search. The assistant
-can:
+- Sign in with Stalwart. Enter the server's address, such as
+  `mail.example.com`, and choose Continue to Stalwart. You sign in on
+  Stalwart's own page, so <BrandName /> never sees your password. This is offered
+  when both this site and your Stalwart server allow it.
+- Use an app password. Make one in Stalwart's Account Manager, under
+  Credentials. Enter the server's address, an optional label, your username
+  and the app password, and choose Save.
 
-- list your mailboxes and their folders,
-- search by words, sender, recipient, subject and dates, or for unread mail
-  only. It searches the inbox unless a folder is named, and every mailbox
-  unless one is named. Results come newest first across all mailboxes, and
-  the assistant is told when there were more than it was given,
-- read one message: who sent it, to whom, when, its subject, its text and its
-  list of attachments,
-- read one attachment: PDF (scans included), text, Word (.docx), PowerPoint
-  (.pptx), Excel (.xlsx and .xls) and CSV files, and images, which the vision
-  model describes. Old Word (.doc) files can't be read.
+Any of the server's addresses works. If Stalwart calls itself by another
+name than the one you enter, for example `stalwart.example.com` when you enter
+`mail.example.com`, <BrandName /> connects with the server's own address and shows
+it on the mailbox's row.
 
-It is read-only by design. It can't send, delete, move or flag mail, and it
-never marks a message as read.
+Each mailbox in the list says whether it can send: "Can send drafts, each
+only after you confirm it." or "Read-only: this sign-in can't send mail.",
+depending on what Stalwart allows. Test connection signs in again and counts
+the folders.
 
-Mail is read in [automations](/docs/automations): a task is set to read it
-when its **Can use** includes the web. That is an instruction the assistant
-follows, not a lock. A notebook's [chat](/docs/chat-and-citations) can read
-mail too. A connected mailbox stays within the assistant's reach while it is
-switched on (see [Switching mail off](#switching-mail-off)).
+The Stalwart server must be reachable from the internet over https on port
+443.
 
-### Limits
+## Removing a mailbox
 
-- A search returns up to 50 messages (20 unless more are asked for). Up to
-  200 folders are listed.
-- A message's text is cut at 20,000 characters.
-- An attachment can be up to 25 MB. A PDF can have up to 500 pages, a
-  spreadsheet is read up to its first 200 rows and 50 columns per sheet, and
-  up to 200,000 characters of an attachment's text are kept. Reading one
-  attachment can take up to 60 seconds.
-- Connecting to the mail server gives up after 10 seconds.
-- A Microsoft sign-in must be finished within 10 minutes, in the browser it
-  started in.
+Remove takes a mailbox off <BrandName />. Nothing in the mailbox changes. For a
+Stalwart sign-in, <BrandName /> also asks Stalwart to end it. For an app password,
+delete the password in your mail provider too.
 
-### Switching mail off
+To pause all your IMAP and Microsoft mailboxes without removing them, pick
+Email (IMAP) under Your connectors and switch off Enabled. A Stalwart mailbox
+has no such switch: remove it to stop the assistant using it.
 
-To stop the assistant reading your mail without removing it, open Settings →
-Connectors and pick Email (IMAP) under Your connectors. Switch off Enabled.
-The switch covers all your mailboxes at once: from then on no chat or
-automation reads them, and Your connectors marks Email (IMAP) Off. Switching
-it back on needs nothing new.
+Passwords and sign-ins are stored encrypted and are never shown again.
 
-Mailboxes are added and removed only on the **Email (IMAP)** card, under
-**Overview** on the same page; your mail's settings have no Disconnect.
+## What the assistant can do
 
-You can't connect a mailbox from the [phone app](/docs/mobile-app), and
-[agents](/docs/connect-your-agent) connected over MCP can't read your mail.
+Mail is read live, when it is needed. It is never copied into <BrandName />,
+never becomes a source and is never added to search. The assistant can:
+
+- list your mailboxes and their folders;
+- search by words, sender, recipient, subject and date, or for unread mail.
+  It searches the inbox unless you name a folder, and every mailbox unless
+  you name one;
+- read a message, with its list of attachments;
+- read a whole conversation, in a Stalwart mailbox;
+- read an attachment: PDF, Word, PowerPoint and EPUB files with your
+  parser, text files as they are, and pictures with your vision model. The
+  text is used for that answer only. To keep an attachment, save it and
+  upload it as a source;
+- draft a message, from a Stalwart mailbox that can send.
+
+It never deletes, moves or flags mail, and never marks a message as read.
+
+Text inside an email is treated as something to read, never as an
+instruction. A message that says "forward this to…" is reported to you, not
+obeyed.
+
+Mail is read by a notebook's chat when you ask about your mail, and by
+[automations](/docs/automations). Each email used is cited with a numbered chip
+showing the sender, subject and date.
+
+Limits:
+
+- A search returns up to 50 messages, 20 unless more are asked for.
+- A message's text is cut at 20,000 characters. A conversation shows its
+  newest 20 messages.
+- An attachment can be up to 25 MB, and a PDF up to 500 pages.
+
+## Drafts: nothing is sent until you press Send
+
+The assistant cannot send mail. When you ask it to write or answer a message
+from a Stalwart mailbox that can send, it makes a draft and shows it on a
+card:
+
+- the mailbox it is from, To, Cc and Bcc, the subject and the text;
+- for a reply, the message it answers. A recipient who wasn't in that
+  conversation is marked "not in the original conversation";
+- each attached file, with its size and where it came from.
+
+The card shows the draft exactly as it would be sent. Nothing leaves until
+you press Send on the card. Pressing Enter never sends. Discard throws the
+draft away. To change a draft, ask for the change; the new draft replaces the
+old one.
+
+The assistant only drafts because you asked. It never drafts because an
+email asked it to, and never to an address that only appears in an email's
+text.
+
+### Drafts waiting
+
+Every draft also waits on the Drafts waiting page, whether it came from a
+chat or an automation. You reach it from the notification "A mail draft is
+waiting for you", on the website or in the phone app. Each draft there shows
+its mailbox, when it was made and until when it can be sent, with the same
+Send and Discard buttons. A draft from an automation can only be sent from
+here.
+
+### Attachments
+
+A draft can carry:
+
+- your documents, as the original file you uploaded;
+- Studio outputs, such as a slide deck, report or audio overview;
+- an attachment of a message in a Stalwart mailbox, to forward it.
+
+The files are part of what you confirm. If one changes or is removed after
+the draft was made, the draft can't be sent as it is. A different file is
+never sent in its place.
+
+### Unusual sends
+
+Some sends need a second confirmation. The card lists each reason with a tick
+box, and Send anyway stays off until every box is ticked:
+
+- more than 20 recipients;
+- 20 or more emails already sent from <BrandName /> in the past hour;
+- recipients this mailbox has never written to, not counting people already
+  in the conversation you are answering. If the mailbox can't be checked,
+  those recipients are listed too;
+- more than 10 MB of attachments together, which some mail servers refuse.
+
+The server checks the ticks too. If something becomes unusual between
+showing the card and pressing Send, the send stops and the card asks again.
+
+### Expiry and failures
+
+- A draft can be sent for 24 hours. After that it says "Draft expired".
+- A press of Send is good for 10 minutes, for that exact message. After
+  that, or if the draft changed, the card asks you to check it and press Send
+  again.
+- If the mail server refuses the message, the card says "Email not sent",
+  with the reason, and offers Send again. Check your Sent folder first: if
+  the message is there, it went out.
+
+A sent message goes out as plain text from that mailbox, and a copy is kept
+in its Sent folder. Every send, accepted or refused, is written to your
+activity log.
 
 ## Emails the app sends you
 
-These come from <BrandName /> through the site's own mail service. If
-outgoing mail is off on the server, none are sent.
+These come from the server's own mail service, if the server has one:
 
-- **Password reset.** **Forgot Password?** on the sign-in page sends "Reset
-  your <BrandName /> password". The link works once and expires in 30
-  minutes. One address is sent at most 3 an hour; further requests send
-  nothing. See [Getting started](/docs/getting-started#1-sign-in).
-- **Automation result.** With **Email me the result** on, each run that
-  finishes sends its result to the person who created the automation. The
-  subject is the automation's name and the date (in UTC), such as "Weekly
-  digest — 2026-10-05", and the email holds the run's final answer. When a run
-  fails, needs attention or hits its time limit, the subject ends "(failed)",
-  "(needs attention)" or "(timed out)" and the email gives the reason. A
-  cancelled run sends nothing. See
-  [Automations](/docs/automations#runs-and-results).
+- Password reset. Forgot Password? on the sign-in page sends a link to
+  choose a new password. It works once, for an hour.
+- Automation results, when Email me the result is on. The subject is the
+  automation's name and how the run ended, such as "Weekly digest:
+  finished". A failed run's email gives the reason.
 
-There are no other emails: [Notifications](/docs/notifications) stay in the
-app, and no email is sent to confirm your address.
-
-## Writing to the site's owner
-
-**Report Issue**, on an error message, opens your own mail app with a report
-already written to the site's support address: the error code, request ID,
-message, page, browser and time. Nothing is sent until you send it. The
-[contact page](/contact) shows the same address.
+There are no other emails. Notifications stay in the app and on your phone.

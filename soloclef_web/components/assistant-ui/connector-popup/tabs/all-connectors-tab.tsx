@@ -6,8 +6,14 @@ import { EnumConnectorName } from "@/contracts/enums/connector";
 import type { SearchSourceConnector } from "@/contracts/types/connector.types";
 import { EmailImapConnectorCard } from "@/features/email-imap-connect/ui/email-imap-connector-card";
 import { GoogleDriveConnectorCard } from "@/features/google-drive-connect/ui/google-drive-connector-card";
+import { JMAP_MAIL_CATALOG_ENTRY } from "@/features/jmap-mail-connect/lib/catalog-entry";
+import { JmapMailConnectorCard } from "@/features/jmap-mail-connect/ui/jmap-mail-connector-card";
 import { NextcloudConnectorCard } from "@/features/nextcloud-connect/ui/nextcloud-connector-card";
-import { usePlatform } from "@/hooks/use-platform";
+import {
+	WEB_SEARCH_PROVIDER_INFO,
+	WEB_SEARCH_PROVIDERS,
+} from "@/features/web-search-connect/model/web-search-providers";
+import { WebSearchConnectorCard } from "@/features/web-search-connect/ui/web-search-connector-card";
 import { ConnectorCard } from "../components/connector-card";
 import {
 	CRAWLERS,
@@ -23,7 +29,6 @@ type CrawlerConnector = (typeof CRAWLERS)[number];
 type DeploymentFilterableConnector = {
 	readonly id: string;
 	readonly selfHostedOnly?: boolean;
-	readonly desktopOnly?: boolean;
 };
 
 /**
@@ -63,14 +68,13 @@ export const AllConnectorsTab: FC<AllConnectorsTabProps> = ({
 	onManage,
 }) => {
 	const selfHosted = useIsSelfHosted();
-	const { isDesktop } = usePlatform();
 
 	const matchesSearch = (title: string, description: string) =>
 		title.toLowerCase().includes(searchQuery.toLowerCase()) ||
 		description.toLowerCase().includes(searchQuery.toLowerCase());
 
 	const passesDeploymentFilter = (c: DeploymentFilterableConnector) =>
-		(!c.selfHostedOnly || selfHosted) && (!c.desktopOnly || isDesktop);
+		!c.selfHostedOnly || selfHosted;
 
 	// Filter connectors based on search and deployment mode
 	const filteredOAuth = OAUTH_CONNECTORS.filter(
@@ -190,6 +194,7 @@ export const AllConnectorsTab: FC<AllConnectorsTabProps> = ({
 
 	const hasAnyResults =
 		NATIVE_CONNECTORS.some((c) => matchesSearch(c.title, c.description)) ||
+		matchesSearch(JMAP_MAIL_CATALOG_ENTRY.title, JMAP_MAIL_CATALOG_ENTRY.description) ||
 		available.oauth.length > 0 ||
 		available.other.length > 0 ||
 		available.crawlers.length > 0;
@@ -231,6 +236,19 @@ export const AllConnectorsTab: FC<AllConnectorsTabProps> = ({
 		)
 	) {
 		nativeCards.push(<EmailImapConnectorCard key="email-imap-connector" />);
+	}
+	if (matchesSearch(JMAP_MAIL_CATALOG_ENTRY.title, JMAP_MAIL_CATALOG_ENTRY.description)) {
+		nativeCards.push(<JmapMailConnectorCard key="jmap-mail-connector" />);
+	}
+	for (const provider of WEB_SEARCH_PROVIDERS) {
+		const connectorType = WEB_SEARCH_PROVIDER_INFO[provider].connectorType;
+		if (
+			NATIVE_CONNECTORS.some(
+				(c) => c.connectorType === connectorType && matchesSearch(c.title, c.description)
+			)
+		) {
+			nativeCards.push(<WebSearchConnectorCard key={provider} provider={provider} />);
+		}
 	}
 
 	return (

@@ -11,10 +11,10 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/requestnumber"
 )
 
-// All six routes of this slice are gated the same way, so the gate lives here
+// All four routes of this slice are gated the same way, so the gate lives here
 // rather than once per route.
 
-// requireSession is require_session_context, which is a *dependency* on all six
+// requireSession is require_session_context, which is a *dependency* on all four
 // routes: these are a person's own prompts, so an API key and an agent are
 // refused in that tier's own words.
 //
@@ -42,7 +42,7 @@ func requireSession(ctx huma.Context, errors errorenvelope.Writer, logger *slog.
 	return caller, true
 }
 
-// promptID reads the one path parameter three of the six routes share, as
+// promptID reads the one path parameter the update and the delete share, as
 // FastAPI coerces it (internal/requestnumber).
 func promptID(ctx huma.Context) (int64, *errorenvelope.Failure, error) {
 	return requestnumber.Parse(ctx.Param("prompt_id"), "path", "prompt_id")

@@ -45,9 +45,10 @@
 // A chat turn that reaches a tool needing approval stops and shows a card.
 // A run has nobody to show it to, so:
 //
-//   - A tool that asks first runs only if the step says so itself
-//     (auto_approve_all, the automation's own trust rule). The account's
-//     standing "always allow" answers from chat are not consulted.
+//   - A tool declared tool.Ask runs only if the step says so itself
+//     (auto_approve_all, the automation's own trust rule). The person's
+//     chat policy (every tool runs unless marked "ask first") is not
+//     consulted: it is about a chat they watch.
 //   - A tool that must always ask (the page reader) is never run. The agent
 //     loop does not consult trust for one, and this package refuses it.
 //   - Each refusal is told to the model, so it finishes with what it has,
@@ -94,6 +95,7 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_automations/runqueue"
 	"git.danvics.com/danvics/soloclef/soloclef_celery/celery"
 	"git.danvics.com/danvics/soloclef/soloclef_celery/produce"
+	"git.danvics.com/danvics/soloclef/soloclef_notify/notify"
 )
 
 // Task is the message this job reads.
@@ -203,6 +205,12 @@ type Sender interface {
 	Send(ctx context.Context, message produce.Message) (string, error)
 }
 
+// Notifier tells the automation's owner how a run ended
+// (soloclef_notify/notify), beside the email the run may also send.
+type Notifier interface {
+	AutomationFinished(ctx context.Context, run notify.AutomationRun) error
+}
+
 // Timing is how the job paces itself: decisions about the job, made in
 // cmd/worker with their reasons.
 type Timing struct {
@@ -230,15 +238,25 @@ type Job struct {
 	Store     checkpoint.Store
 	Publisher Sender
 	Indexer   Indexer
-	Timing    Timing
-	Log       *slog.Logger
-	Now       func() time.Time
+	// Notifier is told of every ending this job writes; an ending written
+	// from elsewhere first (a cancel) is not this job's to report.
+	Notifier Notifier
+	// ReleaseSandbox removes the run's thread's sandbox when the run ends
+	// (deliverables.NewSpecialist's forget). The thread is the run's own
+	// and nothing resumes it, so its place in the account's sandbox limit
+	// is given back at once, to a Studio output or another run that may be
+	// waiting for it, rather than at the sandbox's idle time to live.
+	ReleaseSandbox func(ctx context.Context, threadID int64) error
+	Timing         Timing
+	Log            *slog.Logger
+	Now            func() time.Time
 }
 
 // Check reports what is missing. Called once at start-up.
 func (j *Job) Check() error {
 	switch {
-	case j.Rows == nil || j.Assembler == nil || j.Store == nil || j.Publisher == nil || j.Indexer == nil || j.Log == nil || j.Now == nil:
+	case j.Rows == nil || j.Assembler == nil || j.Store == nil || j.Publisher == nil || j.Indexer == nil || j.Notifier == nil ||
+		j.ReleaseSandbox == nil || j.Log == nil || j.Now == nil:
 		return errors.New("automationrun: a dependency is missing")
 	case j.Timing.StatusInterval <= 0 || j.Timing.RetryStep <= 0 || j.Timing.MaxPauses < 1 || j.Timing.ResultChars < 1:
 		return errors.New("automationrun: the timing is incomplete")
@@ -269,11 +287,24 @@ func (j *Job) Run(ctx context.Context, msg *celery.Message) error {
 
 	closing, cancel := context.WithTimeout(context.WithoutCancel(ctx), closingWrite)
 	defer cancel()
+	if err := j.ReleaseSandbox(closing, run.ThreadID); err != nil {
+		// It expires at its idle time to live instead.
+		j.Log.Warn("the run's sandbox was not released", "run", run.ID, "error", err.Error())
+	}
 	written, err := j.Rows.Finish(closing, run.ID, ending)
 	if err != nil {
 		return fmt.Errorf("automationrun: writing run %d's ending: %w", run.ID, err)
 	}
 	j.Log.Info("an automation run ended", "run", run.ID, "automation", run.AutomationID, "status", ending.Status, "kept", written)
+	if written {
+		// A notification that cannot be written is logged; the run's
+		// ending, and its email, stand.
+		if err := j.Notifier.AutomationFinished(closing, notify.AutomationRun{
+			UserID: run.UserID, AutomationID: run.AutomationID, RunID: run.ID, Name: run.Name, Status: ending.Status,
+		}); err != nil {
+			j.Log.Error("the run's notification could not be written", "run", run.ID, "error", err.Error())
+		}
+	}
 	// The run behind this one, for an automation that queues: started now
 	// rather than at the next tick.
 	if next, waiting, err := j.Rows.NextWaiting(closing, run.AutomationID); err != nil {

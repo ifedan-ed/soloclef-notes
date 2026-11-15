@@ -30,10 +30,12 @@ var foldedDefaults = func() map[string]bool {
 	return folded
 }()
 
-// isDefaultTitle is whether a title is one of the apps' own "Untitled
+// IsDefaultTitle is whether a title is one of the apps' own "Untitled
 // notebook" strings, which is what lets a new notebook name itself later.
 // Case and spacing do not count: "  UNTITLED   notebook" is the default.
-func isDefaultTitle(title string) bool {
+// Exported for the Studio (internal/studiogenerate), which must not head an
+// output "Untitled notebook": a default title names no subject.
+func IsDefaultTitle(title string) bool {
 	return foldedDefaults[foldTitle(title)]
 }
 

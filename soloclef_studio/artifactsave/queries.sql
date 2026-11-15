@@ -4,6 +4,13 @@
 -- Every row is the saving account's: the composite keys (document, owner)
 -- refuse an artifact that names another account's document.
 
+-- name: LockAccountNames :exec
+-- Saves in one account choose their document's name one at a time, until
+-- the transaction ends: two artifacts of one title finishing together
+-- (two Studio runs of an account at once) would otherwise both find the
+-- same name free and the second fail on the owner-and-identity key.
+SELECT pg_advisory_xact_lock(hashtextextended('artifactsave.names:' || sqlc.arg(user_id)::text, 0));
+
 -- name: DocumentPathTaken :one
 SELECT EXISTS (
     SELECT 1 FROM documents

@@ -3,27 +3,6 @@ import { modelConnectionsApiService } from "@/lib/apis/model-connections-api.ser
 import { isAuthenticated } from "@/lib/auth-utils";
 import { cacheKeys } from "@/lib/query-client/cache-keys";
 
-export const globalModelConnectionsAtom = atomWithQuery(() => ({
-	queryKey: cacheKeys.modelConnections.global(),
-	enabled: isAuthenticated(),
-	staleTime: 10 * 60 * 1000,
-	queryFn: () => modelConnectionsApiService.getGlobalConnections(),
-}));
-
-export const globalLlmConfigStatusAtom = atomWithQuery(() => ({
-	queryKey: cacheKeys.modelConnections.globalConfigStatus(),
-	enabled: isAuthenticated(),
-	staleTime: 60 * 60 * 1000,
-	queryFn: () => modelConnectionsApiService.getGlobalLlmConfigStatus(),
-}));
-
-export const modelProvidersAtom = atomWithQuery(() => ({
-	queryKey: cacheKeys.modelConnections.providers(),
-	enabled: isAuthenticated(),
-	staleTime: 60 * 60 * 1000,
-	queryFn: () => modelConnectionsApiService.getModelProviders(),
-}));
-
 // The signed-in account's own connections.
 export const modelConnectionsAtom = atomWithQuery(() => ({
 	queryKey: cacheKeys.modelConnections.all(),

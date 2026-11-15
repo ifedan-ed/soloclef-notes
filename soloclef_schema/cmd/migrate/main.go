@@ -26,6 +26,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	schema "git.danvics.com/danvics/soloclef/soloclef_schema"
+	"git.danvics.com/danvics/soloclef/soloclef_schema/migrations"
 )
 
 func main() {
@@ -67,6 +68,11 @@ func run(arguments []string) error {
 	if err != nil {
 		return err
 	}
+	key, err := secretKey(os.Getenv, readFile)
+	if err != nil {
+		return err
+	}
+	keys := migrations.Keys{SecretKey: key}
 	pool, err := pgxpool.New(ctx, address)
 	if err != nil {
 		// pgx's parse error repeats the URL, password included.
@@ -80,12 +86,12 @@ func run(arguments []string) error {
 
 	switch command {
 	case "up":
-		applied, err := schema.Migrate(ctx, pool)
+		applied, err := schema.Migrate(ctx, pool, keys)
 		for _, migration := range applied {
 			fmt.Printf("applied %s\n", migration.Name)
 		}
 		if err != nil {
-			return err
+			return withSetting(err)
 		}
 		if len(applied) == 0 {
 			fmt.Printf("%s is already at the newest version; nothing was applied\n", database)
@@ -111,16 +117,25 @@ func run(arguments []string) error {
 		if err := allowDown(os.Getenv, database); err != nil {
 			return err
 		}
-		rolled, err := schema.DownTo(ctx, pool, target)
+		rolled, err := schema.DownTo(ctx, pool, target, keys)
 		for _, migration := range rolled {
 			fmt.Printf("rolled back %s\n", migration.Name)
 		}
 		if err != nil {
-			return err
+			return withSetting(err)
 		}
 		if len(rolled) == 0 {
 			fmt.Printf("%s is already at version %d or below; nothing was rolled back\n", database, target)
 		}
 		return nil
 	}
+}
+
+// withSetting names the setting when a migration stopped for want of the
+// deployment's secret, so the operator reads what to set rather than why.
+func withSetting(err error) error {
+	if errors.Is(err, migrations.ErrNoSecretKey) {
+		return fmt.Errorf("%w: set %s to the file holding it (the services' session secret file)", err, SecretKeyFile)
+	}
+	return err
 }

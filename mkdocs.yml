@@ -1,5 +1,5 @@
 site_name: Soloclef Notes
-site_description: A self-hosted NotebookLM-style workspace for your own documents, with an iPhone app.
+site_description: A self-hosted research notebook for your own documents, with an iPhone app.
 site_url: https://ifedan-ed.github.io/soloclef-notes/
 repo_url: https://github.com/ifedan-ed/soloclef-notes
 repo_name: ifedan-ed/soloclef-notes
@@ -42,14 +42,11 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Self-hosting:
-      - Run your own server: self-hosting.md
-      - Sign-in: sign-in.md
-      - Usage and limits: usage.md
-      - Phone app: phone-app.md
+      - Install: self-hosting.md
+      - Optional features: optional-features.md
       - Updating and backups: operations.md
-      - Every setting: guide/settings-reference.md
+      - Settings reference: settings-reference.md
   - User guide:
-      - Overview: guide/overview.md
       - Getting started: guide/getting-started.md
       - Notebooks and sources: guide/notebooks-and-sources.md
       - Chat and citations: guide/chat-and-citations.md
@@ -58,9 +55,12 @@ nav:
       - Search: guide/search.md
       - Automations: guide/automations.md
       - Email: guide/email.md
-      - Workspaces and sharing: guide/workspaces-and-sharing.md
-      - Connect your agent: guide/connect-your-agent.md
-      - Mobile app: guide/mobile-app.md
+      - Connectors: guide/connections.md
+      - Models: guide/models.md
+      - Memory and instructions: guide/memory-and-instructions.md
       - Notifications: guide/notifications.md
+      - Account and security: guide/account-and-security.md
+      - Phone app: guide/mobile-app.md
+      - Connect your agent: guide/connect-your-agent.md
       - Privacy and data: guide/privacy-and-data.md
       - FAQ: guide/faq.md

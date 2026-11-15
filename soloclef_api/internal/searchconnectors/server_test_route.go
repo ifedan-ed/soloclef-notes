@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 
@@ -15,16 +16,21 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/pythonjson"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/requestcontext"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/mcptools"
+	"git.danvics.com/danvics/soloclef/soloclef_connectors/mcpserver"
 )
 
 // ServerProbe connects to a server once and lists its tools.
 // mcptools.Probe in a deployment.
 type ServerProbe interface {
-	Tools(ctx context.Context, address string, headers map[string]string, hosts []string) ([]mcptools.ProbedTool, error)
+	Tools(ctx context.Context, address, transport string, headers map[string]string, hosts []string) ([]mcptools.ProbedTool, error)
 }
 
 // testFailed is the one sentence every failed test is answered with.
 const testFailed = "Could not connect to the MCP server. Check the URL and key."
+
+// testNeedsSignIn is a test of an OAuth server before anyone has signed in:
+// there is no token to test with. It says nothing about the server.
+const testNeedsSignIn = "Sign in to this server first: the test connects with your sign-in."
 
 // ServerTestRoute serves POST /api/v1/connectors/mcp/test: connect to a
 // server the form describes, before it is saved, and list its tools.
@@ -48,6 +54,11 @@ type ServerTestRoute struct {
 	Rows   Rows
 	Policy ServerPolicy
 	Probe  ServerProbe
+	// OAuth and Tokens renew a saved OAuth server's access token when it
+	// has run out, as the chat would (mcptools.FreshTokens).
+	OAuth  mcptools.OAuth
+	Tokens mcptools.TokenRows
+	Now    func() time.Time
 	Errors errorenvelope.Writer
 	Logger *slog.Logger
 }
@@ -132,8 +143,9 @@ func (r ServerTestRoute) serve(ctx huma.Context) {
 	}
 
 	var (
-		stored *storedServer
-		origin string
+		previous *mcpserver.Stored
+		origin   string
+		savedID  int64
 	)
 	if saved != nil {
 		var server *Connection
@@ -147,8 +159,10 @@ func (r ServerTestRoute) serve(ctx huma.Context) {
 			r.Errors.Write(response, http.StatusNotFound, serverAbsent, requestID)
 			return
 		}
-		held := storedServerOf(*server)
-		stored, origin = &held, originOf(*server)
+		if held, found := storedServerOf(*server); found {
+			previous = &held
+		}
+		origin, savedID = originOf(*server), server.ID
 	} else if origin, err = r.Policy.originForNew(ctx.Context(), caller.UserID); err != nil {
 		failed.caught("could not read the caller's standing", err)
 		return
@@ -156,7 +170,15 @@ func (r ServerTestRoute) serve(ctx huma.Context) {
 
 	answer := testAnswer{Status: "error", Message: testFailed, Tools: []testedTool{}}
 	why := ""
-	settings, refusal = restoreMasked(settings, stored)
+	// The form's settings in their stored form, masks standing for what is
+	// stored, and then opened for this one connection: the very path a
+	// saved server takes to the chat, so a test that passes is a server
+	// that will work.
+	stored, refusal, err := sealSettings(r.Policy.Seal, caller.UserID, settings, previous)
+	if err != nil {
+		failed.caught("could not seal the server's settings", err)
+		return
+	}
 	var hosts []string
 	if refusal == "" {
 		if hosts, refusal, err = r.Policy.hostsFor(ctx.Context(), origin, settings.Address); err != nil {
@@ -164,9 +186,20 @@ func (r ServerTestRoute) serve(ctx huma.Context) {
 			return
 		}
 	}
+	var tokens *mcpserver.Tokens
+	if refusal == "" && stored.Auth.Type == mcpserver.AuthOAuth {
+		if saved == nil || !stored.Auth.OAuth.Authorized() {
+			answer.Message, refusal = testNeedsSignIn, "the OAuth server has no sign-in yet"
+		} else if tokens, refusal, err = r.tokens(ctx.Context(), caller.UserID, savedID, origin, stored); err != nil {
+			failed.caught("could not renew the server's sign-in", err)
+			return
+		}
+	}
 	if refusal != "" {
 		why = refusal
-	} else if tools, err := r.Probe.Tools(ctx.Context(), settings.Address, settings.Headers, hosts); err != nil {
+	} else if target, err := mcpserver.Open(r.Policy.Seal, caller.UserID, stored, tokens); err != nil {
+		why = "the stored settings could not be opened: " + err.Error()
+	} else if tools, err := r.Probe.Tools(ctx.Context(), target.Address, stored.Transport, target.Headers, hosts); err != nil {
 		// The error is the library's or the guard's and neither quotes a
 		// header. The address is not logged: it can hold the key.
 		why = err.Error()
@@ -189,15 +222,41 @@ func (r ServerTestRoute) serve(ctx huma.Context) {
 	pythonjson.Send(response, http.StatusOK, rendered)
 }
 
+// tokens is a saved OAuth server's current tokens for a test, renewed
+// first when they have run out. A sign-in that has ended is a refusal, in
+// the test's own words.
+func (r ServerTestRoute) tokens(ctx context.Context, ownerID string, connectorID int64, origin string, stored mcpserver.Stored) (*mcpserver.Tokens, string, error) {
+	hosts, err := r.Policy.oauthHosts(ctx, origin)
+	if err != nil {
+		return nil, "", err
+	}
+	tokens, err := mcptools.FreshTokens(ctx, mcptools.TokenRenewal{
+		OAuth: r.OAuth, Seal: r.Policy.Seal, Rows: r.Tokens, Now: r.Now().Unix(), Hosts: hosts,
+	}, ownerID, connectorID, stored.Auth.OAuth)
+	if mcptools.IsSignInNeeded(err) {
+		return nil, "the OAuth sign-in has ended", nil
+	}
+	if err != nil {
+		// Unreachable or refusing: a failed test like any other.
+		return nil, "the OAuth sign-in could not be renewed: " + err.Error(), nil
+	}
+	return tokens, "", nil
+}
+
 // PolicyRoute serves GET /api/v1/connectors/mcp/policy: what the "add an
 // MCP server" form needs to know before it is filled in. `can_add` is
 // whether this caller may add one at all (a person in a session), and
 // `allow_list_applies` whether the server would be a site server, held to
-// the site's allowed hosts (an administrator's), or the caller's own.
+// the site's allowed hosts (an administrator's), or the caller's own, and
+// `oauth_available` whether an OAuth sign-in can be offered at all.
 type PolicyRoute struct {
 	Policy ServerPolicy
-	Errors errorenvelope.Writer
-	Logger *slog.Logger
+	// OAuthAvailable is whether this deployment can sign in to an OAuth
+	// server: it names the callback the authorization server sends the
+	// person back to (MCP_OAUTH_REDIRECT_URI).
+	OAuthAvailable bool
+	Errors         errorenvelope.Writer
+	Logger         *slog.Logger
 }
 
 func (r PolicyRoute) Register(api huma.API) {
@@ -228,7 +287,8 @@ func (r PolicyRoute) serve(ctx huma.Context) {
 	answer := struct {
 		CanAdd           bool `json:"can_add"`
 		AllowListApplies bool `json:"allow_list_applies"`
-	}{CanAdd: caller.IsSession()}
+		OAuthAvailable   bool `json:"oauth_available"`
+	}{CanAdd: caller.IsSession(), OAuthAvailable: r.OAuthAvailable}
 	if answer.CanAdd {
 		administers, err := r.Policy.administers(ctx.Context(), caller.UserID)
 		if err != nil {

@@ -28,25 +28,8 @@ func (q *Queries) AccountByAddress(ctx context.Context, email string) (string, e
 	return id, err
 }
 
-const expireNotebookLink = `-- name: ExpireNotebookLink :execrows
-UPDATE notebook_public_links SET expires_at = $1::timestamptz WHERE id = $2
-`
-
-type ExpireNotebookLinkParams struct {
-	ExpiredAt time.Time
-	ID        int64
-}
-
-func (q *Queries) ExpireNotebookLink(ctx context.Context, arg ExpireNotebookLinkParams) (int64, error) {
-	result, err := q.db.Exec(ctx, expireNotebookLink, arg.ExpiredAt, arg.ID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const expireSnapshotLink = `-- name: ExpireSnapshotLink :execrows
-UPDATE public_chat_snapshots SET expires_at = $1::timestamptz WHERE id = $2
+UPDATE output_public_links SET expires_at = $1::timestamptz WHERE id = $2
 `
 
 type ExpireSnapshotLinkParams struct {
@@ -276,6 +259,31 @@ func (q *Queries) SeedChunk(ctx context.Context, arg SeedChunkParams) (int64, er
 	return id, err
 }
 
+const seedJMAPMailbox = `-- name: SeedJMAPMailbox :one
+INSERT INTO jmap_mail_accounts (user_id, label, server_url, username, auth, credentials, can_send)
+VALUES ($1, $2, 'https://mail.e2e.invalid', $3, 'app_password', 'not-a-sealed-secret', true)
+ON CONFLICT (user_id, server_url, username) DO UPDATE SET label = EXCLUDED.label
+RETURNING id
+`
+
+type SeedJMAPMailboxParams struct {
+	UserID   string
+	Label    string
+	Username string
+}
+
+// A JMAP mailbox that can send, for a waiting draft to be from. Its
+// credentials are not a sealed secret: nothing in the suite signs in to
+// it, and a card that asks it whether a recipient was mailed before is
+// told it could not be reached, which the card shows as a point to tick.
+// Seeding it twice for one owner is the same mailbox.
+func (q *Queries) SeedJMAPMailbox(ctx context.Context, arg SeedJMAPMailboxParams) (string, error) {
+	row := q.db.QueryRow(ctx, seedJMAPMailbox, arg.UserID, arg.Label, arg.Username)
+	var id string
+	err := row.Scan(&id)
+	return id, err
+}
+
 const seedJob = `-- name: SeedJob :one
 INSERT INTO deliverable_jobs (user_id, kind, title, tool_call_id, request, status, phase, progress,
                               artifact_id, failure_code, finished_at, heartbeat_at)
@@ -319,6 +327,35 @@ func (q *Queries) SeedJob(ctx context.Context, arg SeedJobParams) (int64, error)
 		arg.HeartbeatAt,
 	)
 	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const seedMailDraft = `-- name: SeedMailDraft :one
+INSERT INTO mail_drafts (user_id, provider, jmap_account_id, message, content_hash, expires_at)
+VALUES ($1, 'jmap', $2, $3::jsonb, $4, $5)
+RETURNING id
+`
+
+type SeedMailDraftParams struct {
+	UserID        string
+	JmapAccountID *string
+	Message       []byte
+	ContentHash   string
+	ExpiresAt     time.Time
+}
+
+// A draft waiting for its owner, stored as the send guard stores one
+// (soloclef_assistant/maildrafts): the canonical message and its hash.
+func (q *Queries) SeedMailDraft(ctx context.Context, arg SeedMailDraftParams) (string, error) {
+	row := q.db.QueryRow(ctx, seedMailDraft,
+		arg.UserID,
+		arg.JmapAccountID,
+		arg.Message,
+		arg.ContentHash,
+		arg.ExpiresAt,
+	)
+	var id string
 	err := row.Scan(&id)
 	return id, err
 }

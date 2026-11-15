@@ -99,7 +99,7 @@ var servers = map[string]string{"biorxiv": "bioRxiv", "medrxiv": "medRxiv"}
 // both and, unlike the servers' own API, searches by words. server confines
 // it to one of them; "" searches both.
 func (s *Sources) Preprints(ctx context.Context, query, server string, limit int) ([]Paper, error) {
-	publisher := `(PUBLISHER:"medRxiv" OR PUBLISHER:"bioRxiv")`
+	publisher := bothServers
 	if server != "" {
 		name, known := servers[strings.ToLower(server)]
 		if !known {
@@ -107,8 +107,34 @@ func (s *Sources) Preprints(ctx context.Context, query, server string, limit int
 		}
 		publisher = `PUBLISHER:"` + name + `"`
 	}
+	return s.preprintsWhere(ctx, "("+query+") AND SRC:PPR AND "+publisher, limit)
+}
+
+// bothServers is the preprint index's condition for "on bioRxiv or medRxiv".
+const bothServers = `(PUBLISHER:"medRxiv" OR PUBLISHER:"bioRxiv")`
+
+// PreprintsByDOI is the bioRxiv and medRxiv preprints among the DOIs given,
+// each with its abstract, from the same index the search reads. A DOI that
+// is no preprint on either server is simply not among them: the caller
+// asked which of its DOIs are preprints, and that is the answer.
+func (s *Sources) PreprintsByDOI(ctx context.Context, dois []string) ([]Paper, error) {
+	if len(dois) == 0 {
+		return nil, nil
+	}
+	terms := make([]string, len(dois))
+	for i, doi := range dois {
+		// A quote would end the term early; no DOI the caller checked has
+		// one, and this keeps any that did from changing the query.
+		terms[i] = `DOI:"` + strings.ReplaceAll(doi, `"`, "") + `"`
+	}
+	return s.preprintsWhere(ctx, "("+strings.Join(terms, " OR ")+") AND SRC:PPR AND "+bothServers, len(dois))
+}
+
+// preprintsWhere asks the preprint index one query and keeps the bioRxiv
+// and medRxiv papers in its answer.
+func (s *Sources) preprintsWhere(ctx context.Context, query string, limit int) ([]Paper, error) {
 	raw, err := s.get(ctx, s.europePMC, url.Values{
-		"query":  {"(" + query + ") AND SRC:PPR AND " + publisher},
+		"query":  {query},
 		"format": {"json"}, "pageSize": {strconv.Itoa(limit)}, "resultType": {"core"},
 	})
 	if err != nil {
@@ -148,6 +174,7 @@ func (s *Sources) Preprints(ctx context.Context, query, server string, limit int
 			Title: flatten(r.Title),
 			// doi.org resolves to whichever server holds the preprint.
 			URL:      "https://doi.org/" + r.DOI,
+			DOI:      strings.ToLower(r.DOI),
 			Venue:    name + " (preprint)",
 			Abstract: flatten(r.Abstract),
 		}
@@ -162,4 +189,21 @@ func (s *Sources) Preprints(ctx context.Context, query, server string, limit int
 		papers = append(papers, paper)
 	}
 	return papers, nil
+}
+
+// ArxivByID is arXiv's record of each paper named by its arXiv id ("2401.00001",
+// "hep-th/9901001", with or without a version), in one request. An id arXiv
+// does not know is not among them; arXiv answers it with an error entry,
+// which carries no abstract page and so is not read as a paper.
+func (s *Sources) ArxivByID(ctx context.Context, ids []string) ([]Paper, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	raw, err := s.get(ctx, s.arxiv, url.Values{
+		"id_list": {strings.Join(ids, ",")}, "start": {"0"}, "max_results": {strconv.Itoa(len(ids))},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return parseArxiv(raw)
 }

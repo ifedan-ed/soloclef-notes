@@ -65,7 +65,7 @@ func BenchmarkRenderOfATenMinuteEpisode(b *testing.B) {
 			for n := 0; n < b.N; n++ {
 				rows := &memoryRows{run: Run{ID: 5, UserID: "u", Status: statusRendering, Title: "Bench", Spec: []byte(twoSpeakerBrief), Transcript: transcript}}
 				job := &Job{
-					Rows: rows, Models: fakeModels{&scriptedModel{}}, Audio: tools, Indexer: &recordingIndexer{},
+					Rows: rows, Models: fakeModels{&scriptedModel{}}, Audio: tools, Indexer: &recordingIndexer{}, Notifier: &recordingNotifier{},
 					Voicer: speech.Client{BaseURL: stub.BaseURL(), Key: "k", Service: service, HTTP: &http.Client{}, Audio: tools,
 						AttemptTimeout: 10 * time.Second, MaxAttempts: 1, Log: log},
 					Config: Config{CallTimeout: time.Second, Speech: service, Concurrency: 8, WorkDirectory: b.TempDir(), StatusInterval: time.Second},

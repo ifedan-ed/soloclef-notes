@@ -44,7 +44,7 @@ func mintAccess(secret, userID, sessionID string, now time.Time) (string, int64,
 // one, so the suite's tokens are exactly what a sign-in hands out and end
 // the same ways.
 func MintSession(ctx context.Context, pool *pgxpool.Pool, secret, userID string, now time.Time) (string, error) {
-	started, err := startFamily(ctx, pool, userID, kindWeb, nil, now)
+	started, err := startFamily(ctx, pool, userID, kindWeb, nil, ProvedByPassword, now)
 	if err != nil {
 		return "", err
 	}

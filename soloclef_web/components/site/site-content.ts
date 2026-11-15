@@ -2,7 +2,7 @@
  * The public site's links and copy, in one module.
  *
  * Every sentence here describes the app as it runs on this server today; check
- * the code before adding a claim. The copy is kept apart from the components
+ * the code, and the README's "What it does" table, before adding a claim. The copy is kept apart from the components
  * so it can move into an admin-edited store without touching the layout: the
  * app has no site-content table yet, so for now it ships in the bundle.
  */
@@ -63,7 +63,7 @@ export const ADVANTAGES: Advantage[] = [
 	{
 		key: "research",
 		title: "Research that lands in the notebook",
-		body: "Search PubMed, arXiv, medRxiv and bioRxiv, Google Scholar, Google and the open web, or Exa and Tavily, and import the results you pick as sources.",
+		body: "Search PubMed, arXiv and medRxiv / bioRxiv, or the web through Exa and Tavily with your own key, and import the results you pick as sources. A paper or link that is a PDF is stored and read like an upload.",
 		href: "/docs/notebooks-and-sources",
 	},
 	{
@@ -73,15 +73,15 @@ export const ADVANTAGES: Advantage[] = [
 		href: "/docs/notebooks-and-sources",
 	},
 	{
-		key: "nextcloud",
-		title: "Your files from Nextcloud",
-		body: "Pick files and folders straight from a connected Nextcloud and add them to a notebook, with the same parser and vision choices as an upload.",
+		key: "drives",
+		title: "Your files from Google Drive and Nextcloud",
+		body: "Pick files and folders from a connected Google Drive or Nextcloud and add them to a notebook, with the same parser and vision choices as an upload.",
 		href: "/docs/notebooks-and-sources",
 	},
 	{
 		key: "phone",
-		title: "A phone app",
-		body: "The Android app covers notebooks, sources, chat and Studio, with audio overviews that keep playing in the background. An iOS build uses the same code.",
+		title: "An iPhone app",
+		body: "The iPhone app, on the App Store, has notebooks, sources, chat, Studio, notes, automations and the inbox, with audio overviews that keep playing in the background.",
 		href: "/docs/mobile-app",
 	},
 ];
@@ -112,12 +112,12 @@ export const STUDIO_OUTPUTS: StudioOutput[] = [
 	{
 		key: "quiz",
 		name: "Quiz",
-		body: "Multiple-choice questions with the reasoning behind every option, right or wrong.",
+		body: "Single-answer questions with the reasoning behind every option, right or wrong.",
 	},
 	{
 		key: "slides",
 		name: "Slides",
-		body: "A presentation deck drafted from your sources, ready to download.",
+		body: "An editable PowerPoint deck drafted from your sources, ready to download.",
 	},
 	{
 		key: "table",
@@ -127,12 +127,12 @@ export const STUDIO_OUTPUTS: StudioOutput[] = [
 	{
 		key: "audio",
 		name: "Audio overview",
-		body: "A deep dive, brief, critique or debate about your sources, spoken by natural voices, with a transcript.",
+		body: "A two-host podcast about your sources: a deep dive, brief, critique or debate, with a transcript.",
 	},
 	{
 		key: "video",
 		name: "Video overview",
-		body: "A narrated, animated video in a visual style you choose, up to ten minutes long.",
+		body: "A narrated, animated explainer in a visual style you choose, or a short of about a minute.",
 	},
 ];
 
@@ -148,12 +148,12 @@ export const PRIVACY_POINTS: PrivacyPoint[] = [
 		body: `${BRAND.name} runs on its owner's own server, not on a shared cloud platform. Your files, notes, chats and outputs are stored there.`,
 	},
 	{
-		title: "Search index built on the server",
-		body: "Documents are split and embedded with a BGE-M3 model running on the server. Only if that service is down does the same model on OpenRouter step in.",
+		title: "Search index kept on the server",
+		body: "Documents are split into passages and indexed on the server, by meaning and by keyword. No model runs on the server itself: to index a passage, its text is sent to an embedding model.",
 	},
 	{
 		title: "What does leave the server",
-		body: "To answer a question or build a Studio output, the relevant passages are sent to the language model provider. A hosted parser uploads the file to the service you chose (Datalab, LlamaParse or Unstructured) and to no other, and research searches send your query to the search provider you picked. The Local parser keeps the file on the server.",
+		body: "Every model call (answers, Studio outputs, embeddings, image descriptions, speech) sends the passages it needs to the model provider. A model API you connect yourself is called directly with your key. A hosted parser uploads the file to the service you chose (Datalab, LlamaParse or Unstructured) and to no other, and research searches send your query to the search provider you picked. The Local parser keeps the file on the server.",
 	},
 ];
 
@@ -167,12 +167,12 @@ export const HOME_FAQ: Faq[] = [
 	{
 		question: "Does the chat answer from the internet?",
 		answer:
-			"No. A notebook's chat answers from that notebook's enabled sources only. You can pick a web search from the Tools menu for a single message. To keep something from the web, import it as a source with Search the web for new sources.",
+			"Not on its own. A notebook's chat answers from that notebook's enabled sources. With your own Exa or Tavily key, you can pick a web search from the Tools menu for a single message. If you connect your mail, Google Drive, Nextcloud or an MCP server, the chat can use them when you ask about them. To keep something from the web, import it as a source with Search the web for new sources.",
 	},
 	{
 		question: "Which files can I add?",
 		answer:
-			"PDFs, Word, PowerPoint and Excel files, text and Markdown, images, audio and video, web pages and YouTube links, and files from Nextcloud.",
+			"PDF, Word, PowerPoint and EPUB files, text, Markdown, CSV and HTML, and pictures. You can also import web pages, links to PDFs, papers from PubMed, arXiv and medRxiv / bioRxiv, and files from Google Drive and Nextcloud.",
 	},
 	{
 		question: "Can I sign up?",
@@ -183,7 +183,7 @@ export const HOME_FAQ: Faq[] = [
 	{
 		question: "Is there an app?",
 		answer:
-			"Yes. The Android app covers notebooks, sources, chat, Studio and the output viewers, and an iOS build is made from the same code. See the phone app page in the docs for how to install it.",
+			"Yes, for iPhone, on the App Store. It has notebooks, sources, chat, Studio, notes, automations and the inbox, and stays signed in. See the phone app page in the docs.",
 	},
 ];
 
@@ -207,7 +207,7 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
 		points: [
 			{
 				title: "Upload or drop files",
-				body: "Drag files onto a notebook or pick them from your device: PDFs, Word, PowerPoint, Excel, text and Markdown, images, audio and video.",
+				body: "Drag files onto a notebook or pick them from your device: PDF, Word, PowerPoint and EPUB files, text, Markdown, CSV and HTML, and pictures.",
 			},
 			{
 				title: "Four parsers to choose from",
@@ -218,16 +218,16 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
 				body: "Turn on image understanding and a vision model describes pictures, charts and figures so they can be searched and cited.",
 			},
 			{
-				title: "Nextcloud",
-				body: "Browse a connected Nextcloud and add files or whole folders, with the same parser and vision choices.",
+				title: "Google Drive and Nextcloud",
+				body: "Browse a connected Google Drive or Nextcloud and add files or whole folders, with the same parser and vision choices.",
 			},
 			{
 				title: "Research",
-				body: "Search Exa or Tavily with your own key, or papers on PubMed, arXiv, medRxiv and bioRxiv or Google Scholar. Import the results you choose.",
+				body: "Search the web through Exa or Tavily with your own key, or papers on PubMed, arXiv, medRxiv and bioRxiv. Import the results you choose; arXiv papers are read from their PDF.",
 			},
 			{
-				title: "Links and videos",
-				body: "Paste a web page or a YouTube link and it is imported as a source, transcript included.",
+				title: "Web pages and PDF links",
+				body: "Paste a web page and it is imported as a source. A link to a PDF is stored as the file and read like an upload.",
 			},
 		],
 		docs: "/docs/notebooks-and-sources",
@@ -245,7 +245,7 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
 			},
 			{
 				title: "Citations you can open",
-				body: "Numbered citations open the exact passage in the source, so you can check a claim in one click.",
+				body: "Citations are numbered 1, 2, 3 in the order they appear in each answer, and a click opens the passage or page they point to.",
 			},
 			{
 				title: "Point at one source",
@@ -253,7 +253,7 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
 			},
 			{
 				title: "Your choice of model",
-				body: "You pick your chat and Studio models in Settings.",
+				body: "Choose from the server's models, or connect your own OpenAI-compatible API with your own key (OpenAI, Anthropic, Gemini, OpenRouter, Requesty) and use its models too.",
 			},
 		],
 		docs: "/docs/chat-and-citations",
@@ -279,40 +279,82 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
 			},
 			{
 				title: "Slides and data tables",
-				body: "A presentation deck and a table of extracted facts, both downloadable.",
+				body: "An editable PowerPoint deck, and a workbook of facts pulled from the sources, both downloadable.",
 			},
 			{
 				title: "Audio overviews",
-				body: "Deep dive, brief, critique or debate, short to long, spoken with natural voices, with a transcript.",
+				body: "A two-host podcast: deep dive, brief, critique or debate, short to long, with a transcript.",
 			},
 			{
 				title: "Video overviews",
-				body: "A narrated, animated video in a visual style you pick, up to ten minutes.",
+				body: "A narrated, animated explainer in a visual style you pick, or a short of about a minute.",
 			},
 		],
 		docs: "/docs/studio",
 	},
 	{
+		key: "automations",
+		eyebrow: "Automations",
+		title: "Tasks that run without you",
+		intro:
+			"An automation is a task the assistant runs on a schedule or when something happens, with the chat's own tools.",
+		points: [
+			{
+				title: "On a schedule or an event",
+				body: "Results are saved as notes, and can be emailed to you as well.",
+			},
+			{
+				title: "Your mail, in the chat and in automations",
+				body: "Connect an IMAP, Microsoft or Stalwart mailbox. A notebook's chat and your automations search and read mail and its PDF, Word and PowerPoint attachments live, and cite each email they use; nothing is copied in.",
+			},
+			{
+				title: "Drafts you send yourself",
+				body: "The assistant can only draft. A draft goes out when you press Send on its card, and an unusual send, such as many recipients or new addresses, asks you to confirm each point.",
+			},
+			{
+				title: "Notifications",
+				body: "An inbox entry and a phone push when an output is ready, an import fails, a run ends or a draft is waiting, with quiet hours in your own time zone.",
+			},
+			{
+				title: "Your MCP servers",
+				body: "Add an MCP server with an API key, a token or its own sign-in, and its tools join the assistant's, in a notebook's chat and in automations. Switch any of them off from the chat's Tools menu. Secrets are stored encrypted.",
+			},
+			{
+				title: "Use it from other agents",
+				body: `Claude, ChatGPT, Cursor and other agents can search and read your notebooks and notes through ${BRAND.name}'s MCP server.`,
+			},
+		],
+		docs: "/docs/automations",
+	},
+	{
 		key: "organise",
 		eyebrow: "Organise",
-		title: "Notes, search and tidy notebooks",
+		title: "Notes, search and sharing",
 		intro: "The small things that keep a lot of notebooks usable.",
 		points: [
 			{
 				title: "Notes",
-				body: "Write notes beside the sources and outputs in a notebook's Studio panel.",
+				body: "Save an answer as a note, write your own, and turn a note into a source.",
 			},
 			{
 				title: "Search inside notebooks",
-				body: "The home search looks through what notebooks contain, not only their titles.",
+				body: "One search, by meaning and by keyword, over a notebook's sources and notes. The chat uses the same search.",
 			},
 			{
 				title: "Notebooks name themselves",
 				body: "An untitled notebook takes a name from its first source or question. Rename it any time.",
 			},
 			{
-				title: "Phone app",
-				body: "The Android app has notebooks, sources, chat, Studio and the output viewers; an iOS build uses the same code.",
+				title: "Copy an answer",
+				body: "Copy keeps headings, lists, tables and maths, with [1], [2] citations and a list of sources at the end. Or download it as Markdown.",
+			},
+			{
+				title: "Public links",
+				body: "Share a read-only link to a chat, a Studio output or a whole notebook.",
+			},
+			{
+				title: "iPhone app",
+				body: "The iPhone app on the App Store has notebooks, sources, chat, Studio, notes, automations and the inbox.",
 			},
 		],
 		docs: "/docs/notes",

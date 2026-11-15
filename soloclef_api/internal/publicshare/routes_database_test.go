@@ -19,7 +19,6 @@ import (
 
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/errorenvelope"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/principal"
-	"git.danvics.com/danvics/soloclef/soloclef_api/internal/publicchat"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/testpostgres"
 	filestore "git.danvics.com/danvics/soloclef/soloclef_filestore"
 )
@@ -36,8 +35,6 @@ const (
 	pdfBytes     = "%PDF-1.7 0123456789 abcdefghij the end"
 	htmlBytes    = "<script>alert(1)</script>"
 	podcastBytes = "ID3 a podcast's audio"
-	slideBytes   = "ID3 slide one"
-	legacyBytes  = "ID3 an older podcast"
 	bobsBytes    = "Bob's private file"
 )
 
@@ -60,15 +57,11 @@ func newWorld(t *testing.T) *world {
 INSERT INTO documents (id, user_id, title, document_type, content, content_hash, source_markdown) VALUES
  (500, '`+alice+`', 'Tide report', 'ARTIFACT', 'plain', 'd500', '# Tides'||chr(10)||'Twice a day.'),
  (501, '`+alice+`', 'Tide talk', 'ARTIFACT', 'Host: hello', 'd501', NULL),
- (502, '`+alice+`', 'Tide film', 'ARTIFACT', '', 'd502', NULL),
  (503, '`+alice+`', 'Private', 'ARTIFACT', '', 'd503', NULL),
  (600, '`+bob+`',   'His', 'ARTIFACT', '', 'd600', NULL);
 INSERT INTO artifacts (id, document_id, user_id, format, generation, metadata) VALUES
  (70, 500, '`+alice+`', 'report', 2, NULL),
  (71, 501, '`+alice+`', 'podcast', 1, NULL),
- (72, 502, '`+alice+`', 'video', 1, '{"slides":[
-    {"slide_number":1,"audio_storage_key":"video/72/s1.mp3","storage_backend":"local"},
-    {"slide_number":2,"audio_file":"/srv/render/s2.mp3"}],"scene_codes":[]}'),
  (73, 503, '`+alice+`', 'report', 1, NULL),
  (80, 600, '`+bob+`',   'report', 1, NULL);
 INSERT INTO artifact_files (id, artifact_id, role, storage_backend, storage_key, original_filename, mime_type, size_bytes, checksum_sha256) VALUES
@@ -88,29 +81,20 @@ INSERT INTO notebook_outputs (id, notebook_id, user_id, kind, title, deliverable
  (1002, 10, '`+alice+`', 'report', 'Draft', 81, NULL),
  (1003, 10, '`+alice+`', 'audio', 'Tide talk', NULL, 90),
  (2001, 20, '`+bob+`',   'report', 'His', 82, NULL);
-INSERT INTO new_chat_threads (id, user_id, title) VALUES (30, '`+alice+`', 'About tides');
-INSERT INTO new_chat_messages (id, thread_id, role, content, author_id) VALUES
- (300, 30, 'USER', '[{"type":"text","text":"Why two tides?"}]', '`+alice+`'),
- (301, 30, 'ASSISTANT', '[{"type":"text","text":"The moon. private note"}]', NULL);
-INSERT INTO public_chat_snapshots (id, user_id, thread_id, share_token, content_hash, snapshot_data, message_ids, expires_at) VALUES
- (40, '`+alice+`', 30, 'chat-live', 'h40', '{
-   "title":"About tides","snapshot_at":"2026-11-01T10:00:00+00:00",
-   "author":{"display_name":"Alice","avatar_url":null},
-   "messages":[
-     {"id":300,"role":"user","content":[{"type":"text","text":"Why two tides?"}],"author":{"display_name":"Alice","avatar_url":null},"created_at":"2026-11-01T09:00:00+00:00"},
-     {"id":301,"role":"assistant","content":[{"type":"text","text":"The moon."},{"type":"tool-call","toolName":"generate_podcast","result":{"podcast_id":90,"artifact_id":71,"status":"ready"}}],"author":null,"created_at":"2026-11-01T09:00:05+00:00"},
-     {"id":302,"role":"narrator","content":[],"author":null,"created_at":null}],
-   "podcasts":[
-     {"original_id":90,"title":"Tide talk","transcript":null,"artifact_id":71},
-     {"original_id":91,"title":"Older talk","storage_key":"podcasts/legacy/91.mp3"},
-     {"original_id":92,"title":"Oldest talk","file_path":"/srv/podcasts/92.mp3"}],
-   "video_presentations":[{"original_id":5,"title":"Old film","user_id":"`+alice+`",
-     "slides":[
-       {"slide_number":1,"title":"One","duration_in_frames":300,"audio_storage_key":"video/72/s1.mp3","storage_backend":"local","audio_file":"/srv/render/s1.mp3"},
-       {"slide_number":2,"title":"Two","audio_file":"/srv/render/s2.mp3"}],
-     "scene_codes":[{"slide_number":1,"code":"scene()"}]}],
-   "artifact_ids":[70,71,72,80]}', '{300,301}', NULL),
- (41, '`+alice+`', 30, 'chat-expired', 'h41', '{"title":"About tides","messages":[],"podcasts":[{"original_id":90,"artifact_id":71}],"artifact_ids":[70,71,72]}', '{300}', '2026-11-12 08:59:59+00');`)
+INSERT INTO output_public_links (id, user_id, notebook_output_id, share_token, content_hash, snapshot_data, expires_at) VALUES
+ (40, '`+alice+`', 1001, 'out-live', 'h40', '{
+   "kind":"output","title":"Tide report","snapshot_at":"2026-11-01T10:00:00+00:00",
+   "output":{"title":"Tide report","kind":"report","format":"report","markdown":"# Tides [citation:481]","artifact_id":70,
+     "file":{"filename":"Tide report.pdf","mime_type":"application/pdf","size_bytes":38,"display":"pdf"}},
+   "artifact_ids":[70,80]}', NULL),
+ (41, '`+alice+`', 1001, 'out-expired', 'h41', '{
+   "kind":"output","title":"Tide report",
+   "output":{"title":"Tide report","kind":"report","format":"report","markdown":"# Tides","artifact_id":70,"file":null},
+   "artifact_ids":[70]}', '2026-11-12 08:59:59+00'),
+ (42, '`+alice+`', 1003, 'out-gone', 'h42', '{
+   "kind":"output","title":"Old talk",
+   "output":{"title":"Old talk","kind":"audio","format":"podcast","markdown":"Host: hello","artifact_id":999,"file":null},
+   "artifact_ids":[999]}', NULL);`)
 
 	directory := t.TempDir()
 	for key, content := range map[string]string{
@@ -119,8 +103,6 @@ INSERT INTO public_chat_snapshots (id, user_id, thread_id, share_token, content_
 		"artifacts/71/talk.mp3":    podcastBytes,
 		"artifacts/73/private.pdf": pdfBytes,
 		"artifacts/80/his.pdf":     bobsBytes,
-		"video/72/s1.mp3":          slideBytes,
-		"podcasts/legacy/91.mp3":   legacyBytes,
 	} {
 		path := filepath.Join(directory, filepath.FromSlash(key))
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -144,10 +126,6 @@ INSERT INTO public_chat_snapshots (id, user_id, thread_id, share_token, content_
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	Routes{Pool: pool, Files: stores, StallTimeout: time.Minute, FrontendURL: "https://notes.example.test/",
 		Errors: errorenvelope.Writer{}, Logger: logger, Now: func() time.Time { return testNow }}.Register(api)
-	// The page route a link opens with, so a link this package makes is
-	// read back the way the web page reads it.
-	publicchat.PageRoute{Rows: publicchat.Store{Pool: pool}, Errors: errorenvelope.Writer{}, Logger: logger,
-		Now: func() time.Time { return testNow }}.Register(api)
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		if caller := request.Header.Get("X-Test-Caller"); caller != "" {
 			method := principal.MethodSession
@@ -198,7 +176,7 @@ func (w *world) count(query string, arguments ...any) (n int) {
 
 func TestALinksFilesAreReachedByItsTokenAlone(t *testing.T) {
 	w := newWorld(t)
-	const base = "/api/v1/public/chat-live"
+	const base = "/api/v1/public/out-live"
 
 	t.Run("a stranger reads the main file, with ranges and a validator", func(t *testing.T) {
 		response, body := w.ask("", "GET", base+"/artifacts/70/content", "")
@@ -250,8 +228,8 @@ func TestALinksFilesAreReachedByItsTokenAlone(t *testing.T) {
 			"his file by id":                 base + "/artifacts/80/files/800/content",
 			"a file of another artifact":     base + "/artifacts/70/files/730/content",
 			"an artifact that never existed": base + "/artifacts/999/content",
-			"an expired link":                "/api/v1/public/chat-expired/artifacts/70/content",
-			"an expired link's file by id":   "/api/v1/public/chat-expired/artifacts/70/files/700/content",
+			"an expired link":                "/api/v1/public/out-expired/artifacts/70/content",
+			"an expired link's file by id":   "/api/v1/public/out-expired/artifacts/70/files/700/content",
 			"a token that names nothing":     "/api/v1/public/no-such-link/artifacts/70/content",
 			"an id too wide to be a row":     base + "/artifacts/99999999999999999999/content",
 		} {
@@ -269,99 +247,9 @@ func TestALinksFilesAreReachedByItsTokenAlone(t *testing.T) {
 		}
 	})
 
-	t.Run("a video slide's narration, from the store and never from a path", func(t *testing.T) {
-		response, body := w.ask("", "GET", base+"/artifacts/72/slides/1/audio", "")
-		if response.StatusCode != 200 || body != slideBytes || response.Header.Get("Content-Type") != "audio/mpeg" {
-			t.Errorf("%d %q %q", response.StatusCode, body, response.Header.Get("Content-Type"))
-		}
-		if disposition := response.Header.Get("Content-Disposition"); !strings.Contains(disposition, "slide-1.mp3") {
-			t.Errorf("the audio is named for where it is stored: %q", disposition)
-		}
-		for name, path := range map[string]string{
-			"a slide that names only a server path": base + "/artifacts/72/slides/2/audio",
-			"a slide that is not there":             base + "/artifacts/72/slides/9/audio",
-			"an artifact that is not a video":       base + "/artifacts/70/slides/1/audio",
-			"an expired link":                       "/api/v1/public/chat-expired/artifacts/72/slides/1/audio",
-		} {
-			if response, body := w.ask("", "GET", path, ""); response.StatusCode != 404 || strings.Contains(body, "/srv/") {
-				t.Errorf("%s: %d %s", name, response.StatusCode, body)
-			}
-		}
-	})
-
-	t.Run("a shared podcast's audio by the podcast's id", func(t *testing.T) {
-		response, body := w.ask("", "GET", base+"/podcasts/90/stream", "", "Range", "bytes=0-2")
-		if response.StatusCode != 206 || body != "ID3" || response.Header.Get("Content-Type") != "audio/mpeg" {
-			t.Errorf("the artifact's audio: %d %q", response.StatusCode, body)
-		}
-		response, body = w.ask("", "GET", base+"/podcasts/91/stream", "")
-		if response.StatusCode != 200 || body != legacyBytes {
-			t.Errorf("an older link's stored audio: %d %q", response.StatusCode, body)
-		}
-		for name, path := range map[string]string{
-			"a podcast frozen with a server path": base + "/podcasts/92/stream",
-			"a podcast the link does not hold":    base + "/podcasts/99/stream",
-			"an expired link":                     "/api/v1/public/chat-expired/podcasts/90/stream",
-		} {
-			if response, body := w.ask("", "GET", path, ""); response.StatusCode != 404 || strings.Contains(body, "/srv/") {
-				t.Errorf("%s: %d %s", name, response.StatusCode, body)
-			}
-		}
-	})
-
-	t.Run("a frozen presentation, with nothing internal in it", func(t *testing.T) {
-		response, body := w.ask("", "GET", base+"/video-presentations/5", "")
-		if response.StatusCode != 200 {
-			t.Fatalf("%d %s", response.StatusCode, body)
-		}
-		var payload struct {
-			ID     int64  `json:"id"`
-			Title  string `json:"title"`
-			Status string `json:"status"`
-			Slides []struct {
-				SlideNumber int     `json:"slide_number"`
-				AudioURL    *string `json:"audio_url"`
-			} `json:"slides"`
-			SceneCodes []map[string]any `json:"scene_codes"`
-			SlideCount int              `json:"slide_count"`
-		}
-		if err := json.Unmarshal([]byte(body), &payload); err != nil {
-			t.Fatal(err)
-		}
-		if payload.ID != 5 || payload.Title != "Old film" || payload.Status != "ready" || payload.SlideCount != 2 ||
-			len(payload.Slides) != 2 || len(payload.SceneCodes) != 1 {
-			t.Errorf("the payload: %s", body)
-		}
-		if payload.Slides[0].AudioURL == nil || *payload.Slides[0].AudioURL != base+"/video-presentations/5/slides/1/audio" ||
-			payload.Slides[1].AudioURL != nil {
-			t.Errorf("only stored narration has an address: %s", body)
-		}
-		for _, internal := range []string{"/srv/", "audio_storage_key", "storage_backend", "audio_file", "user_id", testpostgres.Alice} {
-			if strings.Contains(body, internal) {
-				t.Errorf("the payload discloses %q: %s", internal, body)
-			}
-		}
-		response, body = w.ask("", "GET", *payload.Slides[0].AudioURL, "")
-		if response.StatusCode != 200 || body != slideBytes {
-			t.Errorf("the address it gave: %d %q", response.StatusCode, body)
-		}
-		for name, path := range map[string]string{
-			"a slide with only a server path":   base + "/video-presentations/5/slides/2/audio",
-			"a presentation the link lacks":     base + "/video-presentations/6",
-			"a presentation of an expired link": "/api/v1/public/chat-expired/video-presentations/5",
-		} {
-			if response, body := w.ask("", "GET", path, ""); response.StatusCode != 404 {
-				t.Errorf("%s: %d %s", name, response.StatusCode, body)
-			}
-		}
-	})
-
 	t.Run("a revoked link serves nothing more", func(t *testing.T) {
-		testpostgres.Exec(t, w.pool, `DELETE FROM public_chat_snapshots WHERE share_token = 'chat-live'`)
-		for _, path := range []string{
-			base + "/artifacts/70/content", base + "/artifacts/70/files/700/content",
-			base + "/artifacts/72/slides/1/audio", base + "/podcasts/90/stream", base + "/video-presentations/5",
-		} {
+		testpostgres.Exec(t, w.pool, `DELETE FROM output_public_links WHERE share_token = 'out-live'`)
+		for _, path := range []string{base, base + "/artifacts/70/content", base + "/artifacts/70/files/700/content"} {
 			// The validator a browser kept does not help it either.
 			if response, body := w.ask("", "GET", path, "", "If-None-Match", `"c700"`); response.StatusCode != 404 {
 				t.Errorf("%s after the revoke: %d %s", path, response.StatusCode, body)
@@ -370,99 +258,75 @@ func TestALinksFilesAreReachedByItsTokenAlone(t *testing.T) {
 	})
 }
 
-func TestACopyOfASharedChatIsTheCallersOwn(t *testing.T) {
+// The page is the output and nothing around it: the frozen text, the
+// artifact's files at the link's own addresses, and none of the notebook,
+// the output's row, the account or the chat it was made in.
+func TestThePageShowsTheOutputAndNothingElse(t *testing.T) {
 	w := newWorld(t)
-	const alice, bob = testpostgres.Alice, testpostgres.Bob
-	const clone = "/api/v1/public/chat-live/clone"
+	page := func(token string) (int, map[string]any, string) {
+		t.Helper()
+		response, body := w.ask("", "GET", "/api/v1/public/"+token, "")
+		var answer map[string]any
+		if response.StatusCode == 200 {
+			if err := json.Unmarshal([]byte(body), &answer); err != nil {
+				t.Fatalf("%s: %v", body, err)
+			}
+			if got := response.Header.Get("Cache-Control"); got != "private, no-store" {
+				t.Errorf("a page that a revoke must end is cached: %q", got)
+			}
+		}
+		return response.StatusCode, answer, body
+	}
 
-	for name, refused := range map[string]struct {
-		caller, path string
-		headers      []string
-		status       int
-		says         string
-	}{
-		"an expired link":            {bob, "/api/v1/public/chat-expired/clone", nil, 404, linkAbsent},
-		"a token that names nothing": {bob, "/api/v1/public/no-such-link/clone", nil, 404, linkAbsent},
-		"an API key":                 {bob, clone, []string{"X-Test-Key", "1"}, 403, sessionRequired},
+	status, answer, body := page("out-live")
+	if status != 200 {
+		t.Fatalf("the page: %d %s", status, body)
+	}
+	want := `{"kind":"output","thread":{"title":"Tide report","created_at":"`
+	if !strings.HasPrefix(body, want) {
+		t.Errorf("the page starts %.80s, want %s", body, want)
+	}
+	if messages, _ := answer["messages"].([]any); messages == nil || len(messages) != 0 {
+		t.Errorf("a page carries messages: %v", answer["messages"])
+	}
+	output, _ := answer["output"].(map[string]any)
+	files, _ := output["files"].([]any)
+	if output["artifact_id"] != float64(70) || output["generation"] != float64(2) || len(files) != 2 || output["markdown"] != "# Tides" {
+		t.Fatalf("the output: %v", output)
+	}
+	first, _ := files[0].(map[string]any)
+	if first["file_id"] != float64(700) || first["role"] != "primary" ||
+		first["content_url"] != "/api/v1/public/out-live/artifacts/70/files/700/content" {
+		t.Errorf("the main file is not first, at the link's address: %v", first)
+	}
+	// Bob's artifact 80 is in the forged list, and still nothing of it is
+	// on the page; nor is anything that names the notebook, the output's
+	// row, the account, where a file is stored, or the chat.
+	for _, kept := range []string{
+		"his.pdf", "artifacts/70/report.pdf", "c700", `"notebook`, "1001", testpostgres.Alice,
+		"About tides", "Why two tides", "user_id", "storage", "checksum", "citation", "481",
 	} {
-		response, body := w.ask(refused.caller, "POST", refused.path, "", refused.headers...)
-		if response.StatusCode != refused.status || !strings.Contains(body, refused.says) {
-			t.Errorf("%s: %d %s", name, response.StatusCode, body)
+		if strings.Contains(body, kept) {
+			t.Errorf("the page discloses %q: %s", kept, body)
 		}
-	}
-	if w.count(`new_chat_threads WHERE user_id = $1`, bob) != 0 || w.count(`notebooks WHERE user_id = $1`, bob) != 1 {
-		t.Fatal("a refused copy wrote something")
 	}
 
-	response, body := w.ask(bob, "POST", clone, "")
-	if response.StatusCode != 200 {
-		t.Fatalf("his copy: %d %s", response.StatusCode, body)
+	// An artifact deleted since it was shared: the frozen text, no files,
+	// and no generation to claim.
+	status, answer, body = page("out-gone")
+	output, _ = answer["output"].(map[string]any)
+	if status != 200 || output["markdown"] != "Host: hello" || len(output["files"].([]any)) != 0 {
+		t.Errorf("a link whose artifact is gone: %d %s", status, body)
 	}
-	var first copied
-	if err := json.Unmarshal([]byte(body), &first); err != nil || first.ThreadID == 0 || first.NotebookID == 0 {
-		t.Fatalf("his copy's answer: %s (%v)", body, err)
-	}
-	// Everything the copy made is his.
-	if w.count(`new_chat_threads WHERE id = $1 AND user_id = $2 AND notebook_id = $3 AND title = 'About tides'
-		AND cloned_from_thread_id = 30 AND cloned_from_snapshot_id = 40 AND cloned_at IS NOT NULL`, first.ThreadID, bob, first.NotebookID) != 1 {
-		t.Error("the copied thread is not his, in his notebook, recording where it came from")
-	}
-	if w.count(`notebooks WHERE id = $1 AND user_id = $2 AND title = $3`, first.NotebookID, bob, earlierChatsTitle) != 1 ||
-		w.count(`notebook_earlier_chats WHERE thread_id = $1 AND notebook_id = $2 AND user_id = $3`, first.ThreadID, first.NotebookID, bob) != 1 {
-		t.Error("the copy is not filed in a notebook of his own")
-	}
-	// The public copy's messages, in order, and only those with a real role;
-	// what the public copy left out (the private note) is not in his copy.
-	rows, err := w.pool.Query(context.Background(),
-		`SELECT role::text, content::text, author_id IS NULL FROM new_chat_messages WHERE thread_id = $1 ORDER BY created_at, id`, first.ThreadID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var seen []string
-	for rows.Next() {
-		var role, content string
-		var noAuthor bool
-		if err := rows.Scan(&role, &content, &noAuthor); err != nil {
-			t.Fatal(err)
-		}
-		if !noAuthor {
-			t.Error("a copied message names an author")
-		}
-		if strings.Contains(content, "private note") {
-			t.Error("the copy holds text the public copy did not")
-		}
-		seen = append(seen, role)
-	}
-	rows.Close()
-	if strings.Join(seen, ",") != "USER,ASSISTANT" {
-		t.Errorf("the copied messages are %v", seen)
-	}
-	// Hers are as they were.
-	if w.count(`new_chat_threads WHERE user_id = $1`, alice) != 1 || w.count(`new_chat_messages WHERE thread_id = 30`) != 2 ||
-		w.count(`notebooks WHERE user_id = $1`, alice) != 1 || w.count(`public_chat_snapshots WHERE user_id = $1`, alice) != 2 {
-		t.Error("the copy changed the sharer's rows")
+	if _, named := output["generation"]; named {
+		t.Errorf("a gone artifact was given a generation: %s", body)
 	}
 
-	// A second copy is a second thread in the same notebook.
-	response, body = w.ask(bob, "POST", clone, "")
-	var second copied
-	if err := json.Unmarshal([]byte(body), &second); err != nil || response.StatusCode != 200 {
-		t.Fatalf("his second copy: %d %s", response.StatusCode, body)
+	if status, _, body := page("out-expired"); status != 410 || !strings.Contains(body, pageExpired) {
+		t.Errorf("an expired link: %d %s", status, body)
 	}
-	if second.NotebookID != first.NotebookID || second.ThreadID == first.ThreadID ||
-		w.count(`notebooks WHERE user_id = $1 AND title = $2`, bob, earlierChatsTitle) != 1 {
-		t.Errorf("a second copy made a second notebook: %+v then %+v", first, second)
-	}
-
-	// A link to a Studio output is not a chat.
-	response, body = w.ask(alice, "POST", "/api/v1/notebooks/10/studio/outputs/1001/public-link", "")
-	var link createdLink
-	if err := json.Unmarshal([]byte(body), &link); err != nil || response.StatusCode != 200 {
-		t.Fatalf("her output link: %d %s", response.StatusCode, body)
-	}
-	response, body = w.ask(bob, "POST", "/api/v1/public/"+link.ShareToken+"/clone", "")
-	if response.StatusCode != 400 || !strings.Contains(body, notAChat) {
-		t.Errorf("copying an output link: %d %s", response.StatusCode, body)
+	if status, _, body := page("no-such-link"); status != 404 || !strings.Contains(body, pageAbsent) {
+		t.Errorf("a token that names nothing: %d %s", status, body)
 	}
 }
 
@@ -499,7 +363,9 @@ func TestAnOutputIsSharedByItsOwnerAlone(t *testing.T) {
 			t.Errorf("%s: %d %s", name, status, body)
 		}
 	}
-	if w.count(`public_chat_snapshots WHERE notebook_output_id IS NOT NULL`) != 0 {
+	// Made here, as opposed to seeded: a real link's hash is a sha256.
+	const made = ` AND length(content_hash) = 64`
+	if w.count(`output_public_links WHERE true`+made) != 0 {
 		t.Fatal("a refused share made a link")
 	}
 
@@ -509,7 +375,7 @@ func TestAnOutputIsSharedByItsOwnerAlone(t *testing.T) {
 		first.ExpiresAt == nil || *first.ExpiresAt != "2026-11-19T09:00:00Z" {
 		t.Fatalf("her first share: %d %s", status, body)
 	}
-	if w.count(`public_chat_snapshots WHERE id = $1 AND user_id = $2 AND notebook_output_id = 1001 AND thread_id IS NULL`, first.SnapshotID, alice) != 1 {
+	if w.count(`output_public_links WHERE id = $1 AND user_id = $2 AND notebook_output_id = 1001`, first.SnapshotID, alice) != 1 {
 		t.Error("the link is not hers, or not the output's")
 	}
 
@@ -551,13 +417,13 @@ func TestAnOutputIsSharedByItsOwnerAlone(t *testing.T) {
 	if status != 200 || again.IsNew || again.ShareToken != first.ShareToken || again.SnapshotID != first.SnapshotID || again.ExpiresAt != nil {
 		t.Errorf("her second share: %d %s", status, body)
 	}
-	if w.count(`public_chat_snapshots WHERE id = $1 AND snapshot_data ->> 'title' = 'Tides, final'
+	if w.count(`output_public_links WHERE id = $1 AND snapshot_data ->> 'title' = 'Tides, final'
 		AND snapshot_data #>> '{output,title}' = 'Tides, final' AND expires_at IS NULL`, first.SnapshotID) != 1 {
 		t.Error("the renewed link did not take the new title and expiry")
 	}
 
 	// An expired link stays dead: the same content gets a new address.
-	testpostgres.Exec(t, w.pool, `UPDATE public_chat_snapshots SET expires_at = '2026-11-12 08:00:00+00' WHERE notebook_output_id = 1001`)
+	testpostgres.Exec(t, w.pool, `UPDATE output_public_links SET expires_at = '2026-11-12 08:00:00+00' WHERE notebook_output_id = 1001`+made)
 	if response, _ := w.ask("", "GET", "/api/v1/public/"+first.ShareToken+"/artifacts/70/content", ""); response.StatusCode != 404 {
 		t.Errorf("an expired output link still serves its file: %d", response.StatusCode)
 	}
@@ -566,14 +432,14 @@ func TestAnOutputIsSharedByItsOwnerAlone(t *testing.T) {
 		fresh.ExpiresAt == nil || *fresh.ExpiresAt != "2026-12-12T09:00:00Z" {
 		t.Errorf("sharing after the expiry: %d %s", status, body)
 	}
-	if w.count(`public_chat_snapshots WHERE notebook_output_id = 1001`) != 1 {
+	if w.count(`output_public_links WHERE notebook_output_id = 1001`+made) != 1 {
 		t.Error("the expired link's row was kept beside the new one")
 	}
 
 	// Changed content is a new link, and the old one keeps its copy.
 	testpostgres.Exec(t, w.pool, `UPDATE artifacts SET generation = 3 WHERE id = 70`)
 	status, changed, body := share(alice, hers, "")
-	if status != 200 || !changed.IsNew || changed.ShareToken == fresh.ShareToken || w.count(`public_chat_snapshots WHERE notebook_output_id = 1001`) != 2 {
+	if status != 200 || !changed.IsNew || changed.ShareToken == fresh.ShareToken || w.count(`output_public_links WHERE notebook_output_id = 1001`+made) != 2 {
 		t.Errorf("sharing a changed output: %d %s", status, body)
 	}
 

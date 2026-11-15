@@ -3,22 +3,23 @@ package deliverables
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"image/color"
 	"os"
-	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"git.danvics.com/danvics/soloclef/soloclef_filestore"
+	"git.danvics.com/danvics/soloclef/soloclef_studio/posterrender"
 )
 
 // TestPicturesAndVideosOverARealDatabase runs this file's statements against
 // the real schema and its constraints: a queued video as the render worker
-// will find it, and the two picture formats read back through the package
-// that serves them to the page. It needs the throwaway Postgres
+// will find it, and an infographic read back through the package that
+// serves it to the page. It needs the throwaway Postgres
 // database_test.go describes (databaseVariable), and truncates what it
 // seeds.
 func TestPicturesAndVideosOverARealDatabase(t *testing.T) {
@@ -133,61 +134,42 @@ INSERT INTO new_chat_threads (id, title, user_id) VALUES
 	owner := Owner{ThreadID: 1, UserID: ben}
 	read := savedRows{Pool: pool}
 
-	t.Run("an image is rows and a file the artifact routes read", func(t *testing.T) {
-		data := picture(64, 64, color.NRGBA{G: 200, A: 255})
-		saved, err := saver.SaveImage(ctx, owner, "d1/g1", "A green square", "gpt-image-test", GeneratedImage{Data: data, MimeType: "image/png", Extension: "png", RevisedPrompt: "A flat green square."})
+	t.Run("an infographic is its PNG, its SVG and its content, as the artifact routes read them", func(t *testing.T) {
+		checked, err := NewInfographic("Photosynthesis", json.RawMessage(testPoster))
+		if err != nil {
+			t.Fatal(err)
+		}
+		drawn, err := posterrender.Draw(checked.Poster, "sketch-note", "landscape")
+		if err != nil {
+			t.Fatal(err)
+		}
+		data := picture(64, 48, color.NRGBA{B: 200, A: 255})
+		saved, err := saver.SaveInfographic(ctx, owner, "d2/s1", checked, InfographicRecord{RequestedStyle: "auto", Style: "sketch-note", Orientation: "landscape"}, drawn, data)
 		if err != nil {
 			t.Fatalf("saving: %v", err)
 		}
 		manifest, err := read.ManifestOf(ctx, ben, saved.ArtifactID)
-		if err != nil || manifest == nil || manifest.Format != "image" || manifest.Title != "A green square" || len(manifest.Files) != 1 {
+		if err != nil || manifest == nil || manifest.Format != "infographic" || manifest.Markdown != posterrender.Markdown(checked.Poster) || len(manifest.Files) != 2 {
 			t.Fatalf("manifest = %+v, %v", manifest, err)
 		}
-		file := manifest.Files[0]
-		if file.Filename != "a-green-square.png" || file.MimeType != "image/png" || file.Size != int64(len(data)) ||
-			file.Key != "artifacts/"+ben+"/"+strconv.FormatInt(saved.ArtifactID, 10)+"/primary/00000000000000000000000000000abc.png" {
-			t.Errorf("file = %+v", file)
+		for _, file := range manifest.Files {
+			want := map[string]string{"primary": "photosynthesis.png image/png", "preview": "photosynthesis.svg image/svg+xml"}[file.Role]
+			if file.Filename+" "+file.MimeType != want {
+				t.Errorf("%s file = %+v", file.Role, file)
+			}
+			stored := storedFile(t, local, file.Key)
+			if file.Role == "primary" && !bytes.Equal(stored, data) || file.Role == "preview" && string(stored) != drawn.Kept {
+				t.Errorf("the stored %s file is not what was drawn", file.Role)
+			}
 		}
-		if stored := storedFile(t, local, file.Key); !bytes.Equal(stored, data) {
-			t.Errorf("the stored file is %d bytes, the image %d", len(stored), len(data))
-		}
-		var model, revised string
-		if err := pool.QueryRow(ctx, `SELECT metadata ->> 'model', metadata ->> 'revised_prompt' FROM artifacts WHERE id = $1`, saved.ArtifactID).Scan(&model, &revised); err != nil || model != "gpt-image-test" || revised != "A flat green square." {
-			t.Errorf("metadata: %s, %s, %v", model, revised, err)
-		}
-	})
-
-	t.Run("an infographic keeps its infographicPlan, its PNG and what the check found", func(t *testing.T) {
-		checked, err := NewInfographic("Photosynthesis", infographicPlan)
-		if err != nil {
-			t.Fatal(err)
-		}
-		data, width, height, err := normalisedPNG(picture(640, 400, color.NRGBA{B: 200, A: 128}))
-		if err != nil {
-			t.Fatal(err)
-		}
-		score := 0.5
-		check := TextCheck{Score: &score, Checked: 4, Missing: []string{"Calvin cycle"}, Garbled: []string{`"95%" (reads "59%")`}}
-		saved, err := saver.SaveInfographic(ctx, owner, "d2/s1", checked, InfographicRecord{
-			RequestedStyle: "auto", Style: "sketch-note", Model: "gpt-image-test", Width: width, Height: height, Attempts: 2, Check: check,
-		}, data)
-		if err != nil {
-			t.Fatalf("saving: %v", err)
-		}
-		manifest, err := read.ManifestOf(ctx, ben, saved.ArtifactID)
-		if err != nil || manifest == nil || manifest.Format != "infographic" || manifest.Markdown != checked.Markdown || len(manifest.Files) != 1 ||
-			manifest.Files[0].Filename != "photosynthesis.png" || manifest.Files[0].MimeType != "image/png" {
-			t.Fatalf("manifest = %+v, %v", manifest, err)
-		}
-		var verified, resolved, warning, missing string
+		var verified, resolved, orientation, heading string
 		if err := pool.QueryRow(ctx, `SELECT metadata -> 'verification' ->> 'verified', metadata -> 'generation' ->> 'resolved_style_id',
-				metadata -> 'verification' -> 'warnings' ->> 0, metadata -> 'generation' -> 'text_check' -> 'missing' ->> 0
-			FROM artifacts WHERE id = $1`, saved.ArtifactID).Scan(&verified, &resolved, &warning, &missing); err != nil {
+				metadata -> 'generation' ->> 'orientation', metadata -> 'poster' -> 'sections' -> 1 ->> 'heading'
+			FROM artifacts WHERE id = $1`, saved.ArtifactID).Scan(&verified, &resolved, &orientation, &heading); err != nil {
 			t.Fatal(err)
 		}
-		if verified != "true" || resolved != "sketch-note" || missing != "Calvin cycle" ||
-			warning != `Only 50% of the planned text reads correctly in the image after one regeneration. Check: Calvin cycle; "95%" (reads "59%")` {
-			t.Errorf("metadata: verified %s, style %s, warning %q, missing %q", verified, resolved, warning, missing)
+		if verified != "true" || resolved != "sketch-note" || orientation != "landscape" || heading != "Calvin cycle" {
+			t.Errorf("metadata: verified %s, style %s, orientation %s, heading %s", verified, resolved, orientation, heading)
 		}
 	})
 }

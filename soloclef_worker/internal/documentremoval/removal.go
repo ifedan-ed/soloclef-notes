@@ -204,10 +204,11 @@ func (r Removal) removeFiles(ctx context.Context, files []StoredFile) error {
 // so an active one means the message is not the one the person asked for.
 var ErrStillActive = errors.New("documentremoval: the account is still active, and is not erased")
 
-// EraseAccount removes everything an account has stored outside its rows,
-// then the account, whose rows cascade with it. It is the whole account at
-// once rather than document by document: the chunks are taken by owner, in
-// batches, which is a few rounds for an account of thousands of documents.
+// EraseAccount removes everything an account has stored outside its rows
+// (vectors, files, saved conversations), then the account, whose rows
+// cascade with it. It is the whole account at once rather than document by
+// document: the chunks are taken by owner, in batches, which is a few
+// rounds for an account of thousands of documents.
 //
 // Run again after a failure, it carries on; run for an account already
 // gone, it does nothing.
@@ -246,6 +247,11 @@ func (r Removal) EraseAccount(ctx context.Context, userID string) error {
 	}
 	if err := r.removeFiles(ctx, files); err != nil {
 		return fmt.Errorf("the account's files: %w", err)
+	}
+	// Its saved conversations, which no row cascades to (conversations.go):
+	// before the account row, whose threads and jobs name them.
+	if err := r.eraseConversations(ctx, userID); err != nil {
+		return err
 	}
 	// Everything the account owns cascades from this row. Only a locked-out
 	// account: one reactivated meanwhile is left as it is.

@@ -18,7 +18,8 @@ import { BACKEND_URL, mintTestToken } from "./auth";
  */
 
 const SESSION_COOKIE_NAME = process.env.SESSION_COOKIE_NAME || "surfsense_session";
-const PASSWORD = "E2eOwnAccount123!";
+/** Every such account's password, for a test that signs in with it (a phone, a password change). */
+export const OWN_ACCOUNT_PASSWORD = "E2eOwnAccount123!";
 
 export type OwnAccount = { email: string; token: string };
 
@@ -32,7 +33,7 @@ export async function signInAsNewAccount(
 	// CSRF check wants a write with a cookie to name its origin, as a
 	// browser's registration form does.
 	const registered = await request.post(`${BACKEND_URL}/auth/register`, {
-		data: { email, password: PASSWORD },
+		data: { email, password: OWN_ACCOUNT_PASSWORD },
 		headers: { "Content-Type": "application/json", Origin: new URL(BACKEND_URL).origin },
 	});
 	if (registered.status() !== 201) {

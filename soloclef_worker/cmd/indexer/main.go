@@ -46,6 +46,7 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/metrics"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/namerequest"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/process"
+	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/pushdelivery"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/vectorindex"
 )
 
@@ -196,7 +197,19 @@ func run() error {
 		return err
 	}
 	jobs := indexing.NewStatistics()
-	runner, err := indextask.New(indexer, jobs.Observe, naming)
+	// The one notification step: a source that failed to index, or a large
+	// or slow one that is ready, tells its owner (soloclef_notify/notify).
+	// Its push is published to the worker's default queue, which the
+	// worker, not this process, consumes.
+	notices, err := pushdelivery.Producer(rdb, config.DefaultQueue)
+	if err != nil {
+		return err
+	}
+	notifier, err := pushdelivery.Notifier(pool, notices, log)
+	if err != nil {
+		return err
+	}
+	runner, err := indextask.New(indexer, jobs.Observe, naming, notifier)
 	if err != nil {
 		return err
 	}

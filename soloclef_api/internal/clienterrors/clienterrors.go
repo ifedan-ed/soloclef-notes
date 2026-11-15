@@ -112,6 +112,11 @@ type report struct {
 	Digest    string `json:"digest"`
 	Build     string `json:"build"`
 	RequestID string `json:"request_id"`
+	// The page reloaded itself to get past the error: a tab older than a
+	// deploy that could not load its own code (the web app's
+	// lib/chunk-reload). Logged so it can be counted, marked so it is not
+	// read as a crash someone saw.
+	RecoveredByReload bool `json:"recovered_by_reload"`
 }
 
 func (r Route) serve(ctx huma.Context) {
@@ -189,6 +194,9 @@ func lineOf(sent report, userID, requestID string) []slog.Attr {
 	// is how this line is joined to that request's own.
 	if failed := flat(sent.RequestID, buildMax); failed != "" {
 		line = append(line, slog.String("failed_request", failed))
+	}
+	if sent.RecoveredByReload {
+		line = append(line, slog.Bool("recovered_by_reload", true))
 	}
 	if frames := stackExcerpt(sent.Stack); len(frames) > 0 {
 		line = append(line, slog.Any("stack", frames))

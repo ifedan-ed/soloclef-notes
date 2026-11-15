@@ -76,17 +76,6 @@ function describeArtifact(kind: ArtifactToolKind, result: Record<string, unknown
 				failed,
 			};
 		}
-		case "video": {
-			const artifactId = numericId(result.artifact_id) ?? undefined;
-			const legacyEntityId = numericId(result.video_presentation_id) ?? undefined;
-			const entityId = artifactId ?? legacyEntityId ?? null;
-			return {
-				entityId,
-				artifactId,
-				legacyEntityId,
-				failed,
-			};
-		}
 		case "image": {
 			const artifactId = numericId(result.artifact_id) ?? undefined;
 			return {
@@ -121,11 +110,6 @@ function extractMetadataWithLegacyFormatCompatibility(
 			return {
 				title: text(result.title) ?? text(args.podcast_title) ?? "Podcast",
 				format: "podcast",
-			};
-		case "video":
-			return {
-				title: text(result.title) ?? text(args.video_title) ?? "Video presentation",
-				format: "video",
 			};
 		case "image":
 			return {

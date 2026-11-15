@@ -157,37 +157,6 @@ func readAppend(raw []byte) (appendRequest, []errorenvelope.Failure) {
 	return request, failures
 }
 
-// readExpiry reads the body of POST /threads/{id}/snapshots: for how many
-// days the link lives. The second result is false for a link that never
-// expires.
-//
-// No body, an empty one, and one without the field all mean seven days; an
-// explicit null means never. The two are different requests, so the field
-// is read as present-or-not and not as a number that is zero when missing.
-func readExpiry(raw []byte) (days int, expires bool, failures []errorenvelope.Failure) {
-	const standard = 7
-	if len(bytes.TrimSpace(raw)) == 0 {
-		return standard, true, nil
-	}
-	var body map[string]json.RawMessage
-	if failures := decode(raw, &body); failures != nil {
-		return 0, false, failures
-	}
-	value, sent := body["expires_in_days"]
-	if !sent {
-		return standard, true, nil
-	}
-	switch strings.TrimSpace(string(value)) {
-	case "null":
-		return 0, false, nil
-	case "7":
-		return 7, true, nil
-	case "30":
-		return 30, true, nil
-	}
-	return 0, false, []errorenvelope.Failure{failure("expires_in_days", "expires_in_days must be 7, 30 or null")}
-}
-
 // queryNumber reads a whole number from the query string. absent is true
 // when the parameter was not sent.
 func queryNumber(query url.Values, name string) (value int64, absent bool, bad *errorenvelope.Failure) {

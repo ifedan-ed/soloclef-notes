@@ -2,7 +2,6 @@
 
 import type { ToolCallMessagePartProps } from "@assistant-ui/react";
 import { Loader2, RotateCcw, Undo2, X } from "lucide-react";
-import { usePathname } from "next/navigation";
 import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 import { TextShimmerLoader } from "@/components/prompt-kit/loader";
@@ -296,17 +295,14 @@ function LivePodcastCard({
 /**
  * Tool UI for `generate_podcast`. The tool only prepares the podcast (it
  * returns with the brief awaiting review), so this card follows the lifecycle
- * by Zero push, rendering the brief form inline at the gate. Public shared
- * chats have no Zero session; their snapshots only ever contain finished
- * episodes, so the player renders directly against the share-token endpoints.
+ * by Zero push, rendering the brief form inline at the gate. It only ever
+ * runs in the owner's own chat: a chat has no public page.
  */
 export const GeneratePodcastToolUI = ({
 	args,
 	result,
 	status,
 }: ToolCallMessagePartProps<GeneratePodcastArgs, GeneratePodcastResult>) => {
-	const pathname = usePathname();
-	const isPublicRoute = !!pathname?.startsWith("/public/");
 	const title = args.podcast_title || `${BRAND.name} Podcast`;
 
 	if (status.type === "running" || status.type === "requires-action") {
@@ -332,9 +328,6 @@ export const GeneratePodcastToolUI = ({
 	}
 
 	if (result.podcast_id) {
-		if (isPublicRoute) {
-			return <PodcastPlayer podcastId={result.podcast_id} title={result.title || title} />;
-		}
 		return <LivePodcastCard podcastId={result.podcast_id} fallbackTitle={result.title || title} />;
 	}
 

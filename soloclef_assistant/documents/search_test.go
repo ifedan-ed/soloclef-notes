@@ -559,3 +559,21 @@ func BenchmarkNearest(b *testing.B) {
 		}
 	}
 }
+
+// A source the turn added after its limit was read is searched as part of
+// the limit: a notebook that had nothing enabled finds the paper the chat
+// has just added, and still finds nothing outside the two.
+func TestASourceJoinedDuringTheTurnIsSearched(t *testing.T) {
+	c := library()
+	c.nearest = []Neighbor{{ChunkID: 10, Score: 0.9}, {ChunkID: 20, Score: 0.8}}
+	joined := &Joined{}
+	scope := Scope{Limited: true, Joined: joined}
+	if _, outcome, _ := searcher(t, c, roomy).SearchScoped(context.Background(), ada, "x", scope, 5); outcome != NoSources {
+		t.Fatalf("before anything joined: %v", outcome)
+	}
+	joined.Add(2)
+	hits, outcome, err := searcher(t, c, roomy).SearchScoped(context.Background(), ada, "x", scope, 5)
+	if err != nil || outcome != Searched || len(hits) != 1 || hits[0].DocumentID != 2 {
+		t.Fatalf("hits=%+v outcome=%v err=%v", hits, outcome, err)
+	}
+}

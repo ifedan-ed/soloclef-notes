@@ -13,8 +13,13 @@ import (
 //
 // `created_by_user_id` is the owner, and so always the caller. It is kept
 // because the panel offers the revoke button for a link whose maker is the
-// viewer; `created_by_name` is gone, because the only name it could now hold
-// is the reader's own.
+// viewer.
+//
+// `kind`, `message_count`, `thread_id` and `thread_title` are from when a
+// link could also share a chat. Installed web and phone builds parse them
+// (the phone requires `message_count` and `thread_title`), so every link is
+// sent as what it now always is: an output's, with no messages and no
+// thread, its title under the old key.
 func Build(link Link, frontendURL string, now time.Time) *pythonjson.Object {
 	rendered := pythonjson.NewObject()
 	rendered.Set("id", link.ID)
@@ -27,15 +32,11 @@ func Build(link Link, frontendURL string, now time.Time) *pythonjson.Object {
 		rendered.Set("expires_at", pythonjson.PydanticDateTime(*link.ExpiresAt))
 	}
 	rendered.Set("is_expired", Expired(link.ExpiresAt, now))
-	if link.NotebookOutputID != nil {
-		rendered.Set("kind", "output")
-	} else {
-		rendered.Set("kind", "chat")
-	}
-	rendered.Set("message_count", link.Messages)
-	rendered.Set("thread_id", orNull(link.ThreadID))
+	rendered.Set("kind", "output")
+	rendered.Set("message_count", 0)
+	rendered.Set("thread_id", nil)
 	rendered.Set("thread_title", link.Title())
-	rendered.Set("notebook_id", orNull(link.NotebookID))
+	rendered.Set("notebook_id", link.NotebookID)
 	rendered.Set("created_by_user_id", link.OwnerID)
 	return rendered
 }
@@ -57,13 +58,4 @@ func Message() *pythonjson.Object {
 	rendered := pythonjson.NewObject()
 	rendered.Set("message", revoked)
 	return rendered
-}
-
-// orNull keeps a nil *int64 from being stored as a non-nil interface, which
-// would render as something other than null.
-func orNull(number *int64) any {
-	if number == nil {
-		return nil
-	}
-	return *number
 }

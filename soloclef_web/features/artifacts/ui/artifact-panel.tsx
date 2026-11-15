@@ -12,7 +12,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { artifactDownloadPath } from "@/features/artifacts/api/artifact-download-path";
 import { artifactManifestQueryOptions } from "@/features/artifacts/api/artifact-queries";
 import { getArtifactFormatMeta } from "@/features/artifacts/lib/artifact-format-catalog";
-import { artifactDownloadFilename } from "@/features/artifacts/lib/artifact-selectors";
+import { artifactDownloads } from "@/features/artifacts/lib/artifact-selectors";
 import {
 	ArtifactRenderer,
 	resolveArtifactPresentation,
@@ -23,7 +23,7 @@ import {
 } from "@/features/artifacts/state/artifact-panel.atom";
 import { extension } from "@/features/file-viewers/file-format";
 import { useMediaQuery } from "@/hooks/use-media-query";
-import { ArtifactDownloadButton } from "./artifact-download-button";
+import { ArtifactDownloads } from "./artifact-downloads";
 
 function ArtifactRefreshWarning({
 	isRefreshing,
@@ -74,7 +74,6 @@ export function ArtifactViewerContent({
 		refetch,
 	} = useQuery(artifactManifestQueryOptions(artifactId));
 	const resolved = content ? resolveArtifactPresentation(content) : null;
-	const downloadFilename = artifactDownloadFilename(content, artifactId);
 	const artifactType =
 		content && resolved?.resolution.kind === "semantic"
 			? getArtifactFormatMeta(content.format).detailLabel
@@ -104,10 +103,9 @@ export function ArtifactViewerContent({
 					<div className="flex items-center gap-1">
 						<div ref={setZoomControlsContainer} className="flex items-center gap-1" />
 						{Actions && content ? <Actions manifest={content} /> : null}
-						{resolved?.renderer.downloadable ? (
-							<ArtifactDownloadButton
-								path={artifactDownloadPath(artifactId)}
-								filename={downloadFilename}
+						{content && resolved?.renderer.downloadable ? (
+							<ArtifactDownloads
+								downloads={artifactDownloads(content, artifactId, artifactDownloadPath(artifactId))}
 								className="size-6 shrink-0 rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
 							/>
 						) : null}

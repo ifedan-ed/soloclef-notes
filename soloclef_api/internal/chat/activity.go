@@ -10,8 +10,10 @@ import (
 
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/chat/parts"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/academic"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/addsources"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/deliverables"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/documents"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/figuretool"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/pagereader"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/websearch"
 )
@@ -54,7 +56,7 @@ var builtInActivities = map[string]Activity{
 	deliverables.SaveTool:         {Kind: "artifact.save", Active: "Preparing the file", Completed: "Presented file", Category: "artifact", Icon: "file-output"},
 	deliverables.PodcastTool:      {Kind: "artifact.podcast", Active: "Creating the podcast", Completed: "Created the podcast", Category: "artifact", Icon: "microphone"},
 	pagereader.ToolName:           {Kind: "web.read", Active: "Reading the page", Completed: "Read the page", Category: "research", Icon: "scan-text", IntegrationSource: "native", IntegrationKey: "web"},
-	deliverables.ImageTool:        {Kind: "generate_image", Active: "Creating an image", Completed: "Created an image", Category: "artifact", Icon: "image"},
+	figuretool.ToolName:           {Kind: "figure.draw", Active: "Drawing a figure", Completed: "Drew a figure", Category: "artifact", Icon: "image"},
 	deliverables.VideoTool:        {Kind: "enqueue_deliverable_job", Active: "Starting video generation", Completed: "Video generation in progress", Category: "artifact", Icon: "clapperboard"},
 	deliverables.ExecuteTool:      {Kind: "sandbox.execute", Active: "Running command", Completed: "Ran command", Category: "action", Icon: "terminal"},
 	deliverables.ReadFileTool:     {Kind: "artifact.review", Active: "Reviewing the artifact", Completed: "Reviewed the artifact", Category: "artifact", Icon: "file-text"},
@@ -244,14 +246,31 @@ func (j *journal) move(ev event.Event, status string) (activitySnapshot, bool) {
 	if !known || terminal(snapshot.Status) || snapshot.Status == status {
 		return activitySnapshot{}, false
 	}
-	j.set(id, snapshot, status)
+	j.setWith(id, snapshot, status, ev.Text)
 	return *snapshot, true
 }
 
 func (j *journal) set(id string, snapshot *activitySnapshot, status string) {
+	j.setWith(id, snapshot, status, "")
+}
+
+// finishedLines word a finished call's line from what it answered, for a
+// tool whose outcome is a count the person wants to see ("Added 2
+// sources"), by the activity's kind. They are kept here, and not on
+// Activity, so that an Activity stays a plain value the journal can compare.
+var finishedLines = map[string]func(result string) string{
+	addsources.ActivityKind: addsources.Finished,
+}
+
+// setWith is set for a call whose answer is known: a tool with a finished
+// line of its own (finishedLines) is worded from it.
+func (j *journal) setWith(id string, snapshot *activitySnapshot, status, result string) {
 	snapshot.Status = status
 	if spec, described := j.spec[id]; described {
 		snapshot.Title = activityTitle(spec, status)
+		if words, own := finishedLines[spec.Kind]; own && status == activityCompleted {
+			snapshot.Title = words(result)
+		}
 	}
 	if terminal(status) {
 		snapshot.CompletedAt = j.stamp()

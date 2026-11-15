@@ -18,12 +18,14 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_agent/model/openaicompat"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/assembly"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/deliverables"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/maildraftnotice"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/mailsignin"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/ownmodels"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/voices"
 	"git.danvics.com/danvics/soloclef/soloclef_celery/produce"
 	"git.danvics.com/danvics/soloclef/soloclef_celery/routing"
 	filestore "git.danvics.com/danvics/soloclef/soloclef_filestore"
+	"git.danvics.com/danvics/soloclef/soloclef_notify/notify"
 
 	"git.danvics.com/danvics/soloclef/soloclef_ingest/parserconfig"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/automationrun"
@@ -94,8 +96,12 @@ type automationParts struct {
 // automationJobs builds the two automation jobs: the run and the schedule
 // tick. On a deployment that switched automations off it is the one job
 // that ends each run with a sentence saying so, and no parts.
-func automationJobs(settings workerconfig.Config, pool *pgxpool.Pool, rdb redis.UniversalClient, writer filestore.Writer,
-	indexer *indexrequest.Publisher, log *slog.Logger) ([]jobs.Job, *automationParts, error) {
+//
+// stores is the worker's file store, every backend its rows name: a mail
+// draft a run makes may attach the owner's documents and Studio outputs,
+// read from there when the owner sends it.
+func automationJobs(settings workerconfig.Config, pool *pgxpool.Pool, rdb redis.UniversalClient, stores *filestore.Stores, writer filestore.Writer,
+	indexer *indexrequest.Publisher, notifier *notify.Notifier, log *slog.Logger) ([]jobs.Job, *automationParts, error) {
 	cfg, err := automationrun.LoadConfig(os.Getenv)
 	if err != nil {
 		return nil, nil, err
@@ -152,39 +158,7 @@ func automationJobs(settings workerconfig.Config, pool *pgxpool.Pool, rdb redis.
 	if err := checkpoints.EnsureSchema(starting); err != nil {
 		return nil, nil, fmt.Errorf("the agent's checkpoint table: %w", err)
 	}
-	// The parsers a run's mail and Drive tools read a fetched file with:
-	// the block the API and the indexer are given (x-parsers), so a file
-	// reads the same in a run as in a chat and as an upload.
-	parsers, err := parserconfig.Load(os.Getenv)
-	if err != nil {
-		return nil, nil, err
-	}
-	tools, closeTools, err := assembly.NewTools(assembly.ToolSettings{
-		ModelURL: settings.ProxyURL, ModelKey: settings.ProxyKey,
-		EmbeddingModel: cfg.EmbeddingModel, EmbeddingDimension: cfg.EmbeddingDimension,
-		QdrantURL: settings.QdrantURL, QdrantAPIKey: settings.QdrantKey, QdrantCollection: cfg.QdrantCollection,
-		QdrantHNSWEf: cfg.QdrantHNSWEf, QdrantQuantized: cfg.QdrantQuantized,
-		QdrantRescore: cfg.QdrantRescore, QdrantOversampling: cfg.QdrantOversampling,
-		NCBITool: cfg.NCBITool, NCBIEmail: cfg.NCBIEmail, NCBIAPIKey: cfg.NCBIAPIKey,
-		ValkeyURL: cfg.AppRedisURL, Brand: cfg.Brand,
-		// A run reads its owner's mail and Drive with the chat's own tools:
-		// the deployment's secret key opens the credentials the API sealed
-		// (automationrun.SecretKeyFile, read and checked with the rest of
-		// the automation settings), and each kind is renewed through the
-		// registration the API connected it with.
-		SecretKey:     cfg.SecretKey,
-		MicrosoftMail: microsoftMail(cfg),
-		GoogleDrive:   assembly.GoogleDriveSettings{ClientID: cfg.GoogleClientID, ClientSecret: cfg.GoogleClientSecret},
-		// The API's Nextcloud: a run reads and writes its owner's Nextcloud
-		// files with the chat's own tools; none offers a run no such tools.
-		NextcloudURL: cfg.NextcloudURL,
-		// A fetched file is read by the parser its connection chose, and a
-		// picture described by the account's vision model, else this one.
-		Parsers: parsers, VisionModel: cfg.VisionModel,
-		// The name this tier offers beyond the assembly's own, so that a
-		// connected app's tool of the same name is given another.
-		ReservedNames: []string{deliverables.DelegateName},
-	}, assembly.ToolDeps{Pool: pool, HTTP: httpClient, Logger: log, Own: own})
+	tools, closeTools, err := automationTools(settings, cfg, pool, stores, httpClient, own, notifier, log)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -214,14 +188,12 @@ func automationJobs(settings workerconfig.Config, pool *pgxpool.Pool, rdb redis.
 	if err != nil {
 		return fail(err)
 	}
-	specialist, _, err := deliverables.NewSpecialist(deliverables.Settings{
+	specialist, releaseSandbox, err := deliverables.NewSpecialist(deliverables.Settings{
 		ModelURL: settings.ProxyURL, ModelKey: settings.ProxyKey,
-		ImageModel: cfg.ImageModel, VisionModel: cfg.VisionModel,
+		Resvg: cfg.FiguresResvg, FigureFonts: cfg.FiguresFontDir,
 		SandboxEnabled: cfg.SandboxEnabled, Sandbox: cfg.Sandbox,
 	}, deliverables.Parts{
 		Pool: pool, Store: checkpoints, Files: writer, HTTP: httpClient, Voices: catalogueOfVoices, Logger: log,
-		// An account's own vision model, for reading an infographic back.
-		Own: own,
 		// A video a run asks for is rendered by this tier's own video job,
 		// from the message every tier publishes for one.
 		PublishVideo: func(ctx context.Context, jobID int64, taskID string) error {
@@ -233,6 +205,11 @@ func automationJobs(settings workerconfig.Config, pool *pgxpool.Pool, rdb redis.
 	if err != nil {
 		return fail(err)
 	}
+	// Nobody watches a run: a step whose account has no sandbox free waits
+	// for one, as a Studio output does, instead of failing at once
+	// (deliverables/sandboxwait.go). The run's row has no phase to show the
+	// wait on; its status stays "running".
+	specialist.SandboxWait = deliverables.SandboxWait{For: deliverables.UnattendedSandboxWait}
 
 	// The chat's assembly with this tier's rows. Memory is left out on
 	// purpose; internal/automationrun says why.
@@ -249,7 +226,8 @@ func automationJobs(settings workerconfig.Config, pool *pgxpool.Pool, rdb redis.
 	}
 
 	run := &automationrun.Job{
-		Rows: rows, Assembler: agents, Store: checkpoints, Publisher: publisher, Indexer: indexer,
+		Rows: rows, Assembler: agents, Store: checkpoints, Publisher: publisher, Indexer: indexer, Notifier: notifier,
+		ReleaseSandbox: releaseSandbox,
 		Timing: automationrun.Timing{
 			StatusInterval: automationStatusInterval, RetryStep: automationRetryStep,
 			MaxPauses: automationMaxPauses, ResultChars: automationResultChars,
@@ -300,6 +278,54 @@ func automationJobs(settings workerconfig.Config, pool *pgxpool.Pool, rdb redis.
 			_ = stream.Close()
 			closeTools()
 		}}, nil
+}
+
+// automationTools is the chat's tools as a run is given them: the
+// assembly every tier builds (soloclef_assistant/assembly), with this
+// tier's settings. A run reads its owner's mail with the chat's own tools,
+// Stalwart (JMAP) mailboxes included, and may leave a draft, with files
+// attached, waiting on its card for the owner's Send.
+func automationTools(settings workerconfig.Config, cfg automationrun.Config, pool *pgxpool.Pool, stores *filestore.Stores,
+	httpClient *http.Client, own ownmodels.Connections, notifier *notify.Notifier, log *slog.Logger) (assembly.Tools, func(), error) {
+	// The parsers a run's mail and Drive tools read a fetched file with:
+	// the block the API and the indexer are given (x-parsers), so a file
+	// reads the same in a run as in a chat and as an upload.
+	parsers, err := parserconfig.Load(os.Getenv)
+	if err != nil {
+		return assembly.Tools{}, nil, err
+	}
+	return assembly.NewTools(assembly.ToolSettings{
+		ModelURL: settings.ProxyURL, ModelKey: settings.ProxyKey,
+		EmbeddingModel: cfg.EmbeddingModel, EmbeddingDimension: cfg.EmbeddingDimension,
+		QdrantURL: settings.QdrantURL, QdrantAPIKey: settings.QdrantKey, QdrantCollection: cfg.QdrantCollection,
+		QdrantHNSWEf: cfg.QdrantHNSWEf, QdrantQuantized: cfg.QdrantQuantized,
+		QdrantRescore: cfg.QdrantRescore, QdrantOversampling: cfg.QdrantOversampling,
+		NCBITool: cfg.NCBITool, NCBIEmail: cfg.NCBIEmail, NCBIAPIKey: cfg.NCBIAPIKey,
+		ValkeyURL: cfg.AppRedisURL, Brand: cfg.Brand,
+		// A run reads its owner's mail and Drive with the chat's own tools:
+		// the deployment's secret key opens the credentials the API sealed
+		// (automationrun.SecretKeyFile, read and checked with the rest of
+		// the automation settings), and each kind is renewed through the
+		// registration the API connected it with.
+		SecretKey:     cfg.SecretKey,
+		MicrosoftMail: microsoftMail(cfg),
+		GoogleDrive:   assembly.GoogleDriveSettings{ClientID: cfg.GoogleClientID, ClientSecret: cfg.GoogleClientSecret},
+		// The API's Nextcloud: a run reads and writes its owner's Nextcloud
+		// files with the chat's own tools; none offers a run no such tools.
+		NextcloudURL: cfg.NextcloudURL,
+		// A fetched file is read by the parser its connection chose, and a
+		// picture described by the account's vision model, else this one.
+		Parsers: parsers, VisionModel: cfg.VisionModel,
+		// The name this tier offers beyond the assembly's own, so that a
+		// connected app's tool of the same name is given another.
+		ReservedNames: []string{deliverables.DelegateName},
+	}, assembly.ToolDeps{Pool: pool, HTTP: httpClient, Logger: log, Own: own,
+		// An automation runs with nobody watching: a draft one made waits
+		// on its card in the run's conversation, and the notification step
+		// tells its owner so.
+		DraftNotifier: maildraftnotice.Notifier{Drafts: notifier, Log: log},
+		// A run's draft may attach the owner's files, read from here.
+		FileStore: stores})
 }
 
 // microsoftMail is where a Microsoft mailbox's token is refreshed, or

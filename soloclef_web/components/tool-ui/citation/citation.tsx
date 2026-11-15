@@ -28,10 +28,16 @@ export interface CitationProps extends SerializableCitation {
 	variant?: CitationVariant;
 	className?: string;
 	onNavigate?: (href: string, citation: SerializableCitation) => void;
+	/**
+	 * Inline variant only: what the chip shows in place of favicon and
+	 * domain, which move to the hover card. A chat answer's web citations
+	 * show their number, in one sequence with the passages'.
+	 */
+	inlineLabel?: string;
 }
 
 export function Citation(props: CitationProps) {
-	const { variant = "default", className, onNavigate, ...serializable } = props;
+	const { variant = "default", className, onNavigate, inlineLabel, ...serializable } = props;
 
 	const {
 		id,
@@ -103,8 +109,12 @@ export function Citation(props: CitationProps) {
 							className
 						)}
 					>
-						{iconElement}
-						<span>{domain}</span>
+						{inlineLabel ?? (
+							<>
+								{iconElement}
+								<span>{domain}</span>
+							</>
+						)}
 					</Button>
 				)}
 			>

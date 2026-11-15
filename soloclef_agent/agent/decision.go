@@ -17,9 +17,10 @@ const (
 	Approve Verdict = "approve"
 
 	// ApproveAlways runs the call and stops asking about that tool for the
-	// rest of the turn. It is refused for a tool.AlwaysAsk tool. Remembering
-	// the choice beyond the turn is the caller's job, done before it calls
-	// Resume; the loop then learns of it through Config.Trusted.
+	// rest of the turn. It is refused for a call its tool's MustAsk picked
+	// out, and, without Config.AskFirst, for a tool.AlwaysAsk tool. Remembering the choice beyond the turn is the
+	// caller's job, done before it calls Resume; the loop then learns of it
+	// through Config.AskFirst or Config.Trusted.
 	ApproveAlways Verdict = "approve_always"
 
 	// Reject does not run the call. The model is told, with Decision.Reason
@@ -155,7 +156,7 @@ func (s *State) applyOne(c *Call, d Decision) {
 	case Reject:
 		c.Status, c.Result = CallRejected, rejectionText(d.Reason)
 	case Approve, ApproveAlways:
-		c.Status = CallApproved
+		c.Status, c.Approved = CallApproved, true
 		if d.Args != nil {
 			c.Args = string(d.Args)
 		}

@@ -21,6 +21,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"git.danvics.com/danvics/soloclef/soloclef_agent/tool"
+	"git.danvics.com/danvics/soloclef/soloclef_connectors/mcpserver"
+	"git.danvics.com/danvics/soloclef/soloclef_connectors/sealedsecret"
 )
 
 // The two accounts of the tests. Each has its own connections and can
@@ -57,7 +59,67 @@ func (m *memoryRows) add(userID string, id int64, name, config string) {
 	if m.connections[userID] == nil {
 		m.connections[userID] = map[int64]Connection{}
 	}
-	m.connections[userID][id] = Connection{ID: id, Name: name, Config: []byte(config)}
+	m.connections[userID][id] = Connection{ID: id, Name: name, Config: []byte(sealedForTest(userID, config))}
+}
+
+// testSeal is the seal of the tests' "deployment".
+var testSeal = func() sealedsecret.Seal {
+	seal, err := sealedsecret.New("fake-deployment-secret", sealedsecret.MCPServerSecret)
+	if err != nil {
+		panic(err)
+	}
+	return seal
+}()
+
+// sealedForTest is a config written the readable way a test writes it
+// (server_config holding url, headers and transport in the clear) as it is
+// stored: sealed for its owner, as the API seals a form. A server_config
+// that is not a remote server's (a local command, a header that is not
+// text, no address) is left exactly as written, so the tests that check it
+// is refused still see it refused.
+func sealedForTest(owner, config string) string {
+	var top map[string]json.RawMessage
+	if json.Unmarshal([]byte(config), &top) != nil || top[keyServer] == nil {
+		return config
+	}
+	if _, err := mcpserver.Parse(top[keyServer]); err == nil {
+		// Already stored as the API stores it.
+		return config
+	}
+	var legacy struct {
+		URL       *string           `json:"url"`
+		Headers   map[string]string `json:"headers"`
+		Transport *string           `json:"transport"`
+	}
+	if json.Unmarshal(top[keyServer], &legacy) != nil || legacy.URL == nil || strings.TrimSpace(*legacy.URL) == "" ||
+		legacy.Transport == nil || !map[string]bool{"streamable-http": true, "http": true, "sse": true}[*legacy.Transport] {
+		return config
+	}
+	transport := mcpserver.StreamableHTTP
+	if *legacy.Transport == "sse" {
+		transport = mcpserver.SSE
+	}
+	stored, err := mcpserver.Build(testSeal, owner, mcpserver.Settings{
+		Address: *legacy.URL, Transport: transport, Auth: mcpserver.Auth{Kind: mcpserver.AuthNone}, Headers: legacy.Headers,
+	}, nil)
+	if err != nil {
+		panic(err)
+	}
+	top[keyServer], _ = json.Marshal(stored)
+	sealed, _ := json.Marshal(top)
+	return string(sealed)
+}
+
+// testOAuth is the OAuth client of the tests, over loopback.
+func testOAuth() OAuth {
+	return OAuth{Network: loopback{}, Timeout: 5 * time.Second, ClientName: "chat-under-test"}
+}
+
+// openedTarget is what a connection with this config is opened to, for the
+// owner: the path every build and call takes.
+func openedTarget(owner, config string) (target, error) {
+	source := &Source{seal: testSeal, now: time.Now}
+	return source.target(context.Background(), owner, Connection{ID: 1, Config: []byte(config)})
 }
 
 func (m *memoryRows) remove(userID string, id int64) {
@@ -121,23 +183,6 @@ func (m *memoryRows) Connection(_ context.Context, userID string, connectorID in
 	return &row, nil
 }
 
-func (m *memoryRows) AddTrusted(_ context.Context, userID string, connectorID int64, toolName string) (bool, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	row, found := m.connections[owner(userID)][connectorID]
-	if !found {
-		return false, nil
-	}
-	trusted := readTrusted(row.Config)
-	for _, name := range trusted {
-		if name == toolName {
-			return true, nil
-		}
-	}
-	list, _ := json.Marshal(append(trusted, toolName))
-	return m.set(owner(userID), connectorID, keyTrusted, list), nil
-}
-
 func (m *memoryRows) StoreDefinitions(_ context.Context, userID string, connectorID int64, cached []byte) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -152,6 +197,23 @@ func (m *memoryRows) MarkAuthExpired(_ context.Context, userID string, connector
 		return false, nil
 	}
 	return m.set(owner(userID), connectorID, "auth_expired", []byte("true")), nil
+}
+
+func (m *memoryRows) StoreTokens(_ context.Context, userID string, connectorID int64, previous, sealed string, expiresAt int64) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	row, found := m.connections[owner(userID)][connectorID]
+	if !found {
+		return false, nil
+	}
+	top := keys(row.Config)
+	stored, err := mcpserver.Parse(top[keyServer])
+	if err != nil || stored.Auth.OAuth == nil || stored.Auth.OAuth.Tokens != previous {
+		return false, nil
+	}
+	stored.Auth.OAuth.Tokens, stored.Auth.OAuth.ExpiresAt = sealed, expiresAt
+	raw, _ := json.Marshal(stored)
+	return m.set(owner(userID), connectorID, keyServer, raw), nil
 }
 
 func (m *memoryRows) counts() (lists, reads int) {
@@ -275,7 +337,8 @@ func newWorld(t testing.TB, rows *memoryRows, shared *counter, change func(*Sett
 	t.Helper()
 	w := &world{rows: rows, counter: shared, clock: newClock(), logs: &logs{}}
 	settings := Settings{
-		Rows: rows, Generations: shared, Network: loopback{},
+		Rows: rows, Generations: shared, Network: loopback{}, Seal: testSeal,
+		OAuth:  testOAuth(),
 		Logger: slog.New(slog.NewTextHandler(w.logs, nil)), Now: w.clock.Now,
 		ClientName: "chat-under-test", SiteHostsWhenUnset: []string{}, ReservedNames: []string{"search_knowledge_base"},
 		Limits: testLimits(),

@@ -19,9 +19,9 @@ const WEB = path.resolve(__dirname, "../..");
 const dockerfile = readFileSync(path.join(WEB, "Dockerfile"), "utf8");
 const compose = readFileSync(path.join(WEB, "../docker/docker-compose.go.yml"), "utf8");
 
-/** The frontend service's build args in docker-compose.go.yml, name -> value. */
+/** The proxy service's build args (it is built from this app) in docker-compose.go.yml, name -> value. */
 function composeBuildArgs(): Map<string, string> {
-	const service = compose.split(/^ {2}frontend:\n/m)[1] ?? "";
+	const service = compose.split(/^ {2}proxy:\n/m)[1] ?? "";
 	const block = service.split(/^ {6}args:\n/m)[1] ?? "";
 	const args = new Map<string, string>();
 	for (const line of block.split("\n")) {
@@ -35,7 +35,7 @@ function composeBuildArgs(): Map<string, string> {
 
 test("every build arg compose passes reaches next build", () => {
 	const args = composeBuildArgs();
-	assert.ok(args.has("NEXT_PUBLIC_SITE_URL"), "the compose file's frontend build args were found");
+	assert.ok(args.has("NEXT_PUBLIC_SITE_URL"), "the compose file's site build args were found");
 	for (const name of args.keys()) {
 		assert.match(dockerfile, new RegExp(`^ARG ${name}=`, "m"), `${name} is declared`);
 		assert.match(dockerfile, new RegExp(`\\b${name}="\\$\\{${name}\\}"`), `${name} is exported`);
@@ -55,4 +55,17 @@ test("the website offers sign-up from the same setting the API reads", () => {
 		readFileSync(path.join(WEB, "lib/signups.ts"), "utf8"),
 		/process\.env\.NEXT_PUBLIC_SIGNUPS_OPEN === "true"/
 	);
+});
+
+test("the site is served by Caddy, and no service runs the web app on Node", () => {
+	// The proxy is built from this app's Dockerfile, from its Caddy stage.
+	const proxy = compose.split(/^ {2}proxy:\n/m)[1]?.split(/^ {2}\S/m)[0] ?? "";
+	assert.match(proxy, /^ {6}context: \.\.\/soloclef_web$/m);
+	assert.match(proxy, /^ {6}target: site$/m);
+	assert.match(dockerfile, /^FROM caddy:[^\s]+ AS site$/m);
+	// The last stage is the site, so a plain `docker build` makes it too.
+	const stages = [...dockerfile.matchAll(/^FROM \S+ AS (\S+)$/gm)].map((m) => m[1]);
+	assert.equal(stages.at(-1), "site");
+	assert.doesNotMatch(compose, /^ {2}frontend:$/m);
+	assert.doesNotMatch(dockerfile, /CMD \["node"/);
 });

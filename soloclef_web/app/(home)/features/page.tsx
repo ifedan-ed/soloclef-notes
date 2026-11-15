@@ -11,7 +11,7 @@ import { ArrowRightIcon } from "@/components/ui/icons";
 import { BRAND, brandTitle, OG_IMAGES, siteUrl } from "@/lib/brand";
 
 const TITLE = brandTitle("Features");
-const DESCRIPTION = `What ${BRAND.name} does: sources and research, cited chat, Studio outputs, notes, search and the phone app.`;
+const DESCRIPTION = `What ${BRAND.name} does: sources and research, cited chat, Studio outputs, automations and mail, notes, search and sharing.`;
 
 export const metadata: Metadata = {
 	title: TITLE,

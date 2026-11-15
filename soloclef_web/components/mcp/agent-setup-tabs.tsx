@@ -52,12 +52,8 @@ const TRANSPORTS: { id: McpTransport; label: string; hint: string }[] = [
  * has them.
  */
 /**
- * `selfHosted` is a prop rather than a `useIsSelfHosted()` call because this
- * component is also rendered on the public /mcp-server page, which Next
- * prerenders at build time with no RuntimeConfigProvider around it — reading
- * the runtime config here failed the build outright. The in-app dialog knows
- * the answer and passes it; the marketing page keeps the hosted-first default
- * it is written for.
+ * `selfHosted` is a prop: the in-app dialog knows the answer and passes it;
+ * a page that does not keeps the hosted-first default it is written for.
  */
 export function AgentSetupTabs({
 	options,

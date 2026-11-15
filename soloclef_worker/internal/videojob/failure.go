@@ -18,6 +18,10 @@ const (
 	codeVerification = "verification_failed"
 	codeDuration     = "duration_limit"
 	codeQuota        = "quota_exceeded"
+	// codeInterrupted: the worker making it stopped (a deploy) on every
+	// run the attempt is allowed (Store.Release). The Studio's artifact jobs
+	// use the same code for the same ending (soloclef_api/internal/studiogenerate).
+	codeInterrupted = "interrupted"
 )
 
 // failure is an error with the code the job is marked with. Each stage

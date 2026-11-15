@@ -1,11 +1,10 @@
 // Package threads serves a chat thread's own routes: making one, listing
 // and searching an account's, loading one's messages, renaming, archiving,
-// deleting, the public links to it, and the list of tools the composer's
-// tool picker shows.
+// deleting, and the list of tools the composer's tool picker shows.
 //
-// A thread is its owner's and nobody else's. There is no sharing a thread
-// with other accounts; a public link is a frozen copy (a snapshot), not
-// access to the thread.
+// A thread is its owner's and nobody else's. There is no sharing a thread,
+// with other accounts or by public link: only a Studio output can be shared
+// (internal/publicshare), by the owner's decision of 2026-11-13.
 //
 // The turn routes (ask, resume, regenerate, stop) are package chat's. This
 // package never runs a model; it is the rows around a conversation.
@@ -13,7 +12,7 @@
 // # The contracts kept
 //
 // The shapes the web and phone apps read are in render.go, which names the
-// reader of each. A message record and a link are as they have always been.
+// reader of each. A message record is as it has always been.
 // A thread record is what is left once nothing is shared: its title, its
 // archive flag, its id and its two times, with no visibility and no
 // creator, because a thread is only ever answered to its owner.
@@ -31,18 +30,6 @@
 //   - One access rule, in one place (gate.go) and again in every statement
 //     (queries.sql): the thread is the caller's, or it is "Thread not
 //     found", the same as for an id that does not exist.
-//   - A public link embeds only podcasts and artifacts of the thread's own
-//     account. The ids come from message content, which a client can
-//     write, and used to be trusted as they were.
-//   - A public link's text has every source marker removed. Only the old
-//     numeric form was removed, so an answer of this engine kept its
-//     markers, which name document passages and addresses.
-//   - A public link's text is otherwise the author's. Removing markers
-//     used to collapse every run of spaces and strip the spaces around
-//     every line break, which flattened code blocks and nested lists.
-//   - Two requests sharing one unchanged thread at the same moment get the
-//     one link. It used to be a race for a unique constraint.
-//   - An expired link is not listed as if it worked.
 //   - The list's limit and the search are done by the database. Every
 //     thread used to be read and the list cut in memory, and a search
 //     for "%" matched every thread.
@@ -62,8 +49,6 @@ const (
 	ThreadPath   = "/api/v1/threads/{thread_id}"
 	FullPath     = "/api/v1/threads/{thread_id}/full"
 	MessagesPath = "/api/v1/threads/{thread_id}/messages"
-	LinksPath    = "/api/v1/threads/{thread_id}/snapshots"
-	LinkPath     = "/api/v1/threads/{thread_id}/snapshots/{snapshot_id}"
 	ToolsPath    = "/api/v1/agent/tools"
 )
 
@@ -75,11 +60,8 @@ const codeTurnCancelling = "TURN_CANCELLING"
 // What a person is told.
 const (
 	threadAbsent       = "Thread not found"
-	linkAbsent         = "Snapshot not found"
-	emptyChat          = "Cannot share an empty chat"
 	stillStopping      = "This chat is still stopping its answer. Try again in a moment."
 	threadDeleted      = "Thread deleted successfully"
-	linkDeleted        = "Snapshot deleted successfully"
 	defaultThreadTitle = "New Chat"
 )
 

@@ -27,7 +27,10 @@ import {
 import type {
 	CreateMCPConnectorRequest,
 	MCPConnectorRead,
+	MCPOAuthDiscovery,
+	MCPPolicy,
 	MCPServerConfig,
+	MCPTestConnectionRequest,
 	MCPTestConnectionResponse,
 	UpdateMCPConnectorRequest,
 } from "@/contracts/types/mcp.types";
@@ -273,14 +276,13 @@ class ConnectorsApiService {
 	 * Test MCP server connection and retrieve available tools
 	 */
 	testMCPConnection = async (serverConfig: MCPServerConfig, connectorId?: number) => {
+		const body: MCPTestConnectionRequest =
+			connectorId === undefined ? serverConfig : { ...serverConfig, connector_id: connectorId };
 		return baseApiService.post<MCPTestConnectionResponse>(
 			`/api/v1/connectors/mcp/test`,
 			undefined,
-			{
-				// connector_id lets a saved server be tested with its masked keys.
-				body:
-					connectorId === undefined ? serverConfig : { ...serverConfig, connector_id: connectorId },
-			}
+			// connector_id lets a saved server be tested with its masked keys.
+			{ body }
 		);
 	};
 
@@ -290,16 +292,36 @@ class ConnectorsApiService {
 	 * anyone else's is their own, on any public https address).
 	 */
 	getMCPPolicy = async () => {
-		return baseApiService.get<{ can_add: boolean; allow_list_applies?: boolean }>(
-			`/api/v1/connectors/mcp/policy`
+		return baseApiService.get<MCPPolicy>(`/api/v1/connectors/mcp/policy`);
+	};
+
+	/**
+	 * What OAuth sign-in a server offers: its authorization server, and
+	 * whether this app can register itself there or needs a client id. The
+	 * server asks through the same destination guard every call goes through.
+	 */
+	discoverMCPOAuth = async (url: string, connectorId?: number) => {
+		return baseApiService.post<MCPOAuthDiscovery>(
+			`/api/v1/connectors/mcp/oauth/discover`,
+			undefined,
+			{
+				body: connectorId === undefined ? { url } : { url, connector_id: connectorId },
+			}
 		);
 	};
 
-	/** Revoke a previously-trusted MCP tool so the next call asks again. */
-	untrustMCPTool = async (connectorId: number, toolName: string): Promise<void> => {
-		await baseApiService.post(`/api/v1/connectors/mcp/${connectorId}/untrust-tool`, undefined, {
-			body: { tool_name: toolName },
-		});
+	/**
+	 * Starts a saved server's OAuth sign-in. The answer's address is the
+	 * provider's sign-in page; the attempt is bound to this browser by an
+	 * HttpOnly cookie the same answer sets, and the provider sends the person
+	 * back to `returnPath`.
+	 */
+	startMCPOAuth = async (connectorId: number, returnPath: string) => {
+		return baseApiService.post<{ authorization_url: string }>(
+			`/api/v1/connectors/mcp/${connectorId}/oauth/start`,
+			undefined,
+			{ body: { return_path: returnPath } }
+		);
 	};
 }
 

@@ -1,0 +1,54 @@
+{
+  "status": 200,
+  "body": {
+    "methodResponses": [
+      [
+        "Mailbox/get",
+        {
+          "accountId": "c",
+          "state": "sam",
+          "list": [
+            {
+              "id": "d",
+              "name": "Drafts",
+              "role": "drafts",
+              "totalEmails": 0,
+              "unreadEmails": 0
+            },
+            {
+              "id": "c",
+              "name": "Junk Mail",
+              "role": "junk",
+              "totalEmails": 0,
+              "unreadEmails": 0
+            },
+            {
+              "id": "e",
+              "name": "Sent Items",
+              "role": "sent",
+              "totalEmails": 1,
+              "unreadEmails": 0
+            },
+            {
+              "id": "a",
+              "name": "Inbox",
+              "role": "inbox",
+              "totalEmails": 0,
+              "unreadEmails": 0
+            },
+            {
+              "id": "b",
+              "name": "Deleted Items",
+              "role": "trash",
+              "totalEmails": 0,
+              "unreadEmails": 0
+            }
+          ],
+          "notFound": []
+        },
+        "m"
+      ]
+    ],
+    "sessionState": "e8a8b15b"
+  }
+}

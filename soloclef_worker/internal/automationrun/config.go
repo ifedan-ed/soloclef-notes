@@ -56,8 +56,12 @@ const (
 
 	// SecretKeyFile is the file holding the deployment's secret key, the
 	// API's SOLOCLEF_API_SESSION_SECRET: it is what the API sealed an
-	// account's mailbox passwords and Drive grant with, and what a run's
-	// mail and Drive tools open them with.
+	// account's mailbox passwords, its Stalwart (JMAP) sign-ins and its
+	// Drive grant with, and what a run's mail and Drive tools open them
+	// with. A Stalwart token is refreshed from here as the API refreshes
+	// it (soloclef_assistant/jmapaccounts): at the token endpoint and with
+	// the client id its own row recorded when it was connected, so the
+	// worker needs no Stalwart setting of its own.
 	SecretKeyFile = "SOLOCLEF_WORKER_SECRET_KEY_FILE"
 	// The Microsoft app registration a Microsoft mailbox's token is
 	// refreshed at (SOLOCLEF_API_MICROSOFT_MAIL_CLIENT_ID,
@@ -82,24 +86,27 @@ const (
 	// the chat's specialist, named beside it, because an artifact a run
 	// makes is the artifact a chat makes.
 	//
-	// ImageModel (SOLOCLEF_API_CHAT_IMAGE_MODEL) and VisionModel
-	// (SOLOCLEF_API_CHAT_VISION_MODEL) are optional: empty, a run that is
-	// asked for a picture says this server draws none, and no other model
-	// is tried. A built document needs no vision model: it is measured.
-	ImageModel  = "SOLOCLEF_WORKER_AUTOMATIONS_IMAGE_MODEL"
+	// VisionModel (SOLOCLEF_API_CHAT_VISION_MODEL) is optional: empty, a
+	// fetched file's pictures are described only for an account that chose
+	// a vision model. A built document needs no vision model: it is
+	// measured.
 	VisionModel = "SOLOCLEF_WORKER_AUTOMATIONS_VISION_MODEL"
+	// FiguresResvg (SOLOCLEF_API_FIGURES_RESVG) and FiguresFontDir
+	// (SOLOCLEF_API_FIGURES_FONT_DIR) are what an infographic's PNG is drawn
+	// with: the image's resvg and figures-go's fonts. Required: a run may
+	// make an infographic, which is drawn by code, never by a model.
+	FiguresResvg   = "SOLOCLEF_WORKER_AUTOMATIONS_FIGURES_RESVG"
+	FiguresFontDir = "SOLOCLEF_WORKER_AUTOMATIONS_FIGURES_FONT_DIR"
 	// PodcastVoices (SOLOCLEF_API_TTS_PODCAST_VOICES) is the voices a new
 	// podcast's speakers are proposed with, comma-separated. Optional.
 	PodcastVoices = "SOLOCLEF_WORKER_AUTOMATIONS_TTS_PODCAST_VOICES"
 	// SandboxEnabled (SOLOCLEF_API_SANDBOX_ENABLED) is "true" or "false":
 	// whether a run can build reports, slides, spreadsheets and pages. It
-	// must be said. True, the nine settings after it are required
+	// must be said. True, the seven settings after it are required
 	// (SOLOCLEF_API_SANDBOX_URL and the rest).
 	SandboxEnabled        = "SOLOCLEF_WORKER_AUTOMATIONS_SANDBOX_ENABLED"
-	SandboxStack          = "SOLOCLEF_WORKER_AUTOMATIONS_SANDBOX_STACK"
 	SandboxURL            = "SOLOCLEF_WORKER_AUTOMATIONS_SANDBOX_URL"
 	SandboxAPIKeyFile     = "SOLOCLEF_WORKER_AUTOMATIONS_SANDBOX_API_KEY_FILE"
-	SandboxImage          = "SOLOCLEF_WORKER_AUTOMATIONS_SANDBOX_IMAGE"
 	SandboxCPU            = "SOLOCLEF_WORKER_AUTOMATIONS_SANDBOX_CPU"
 	SandboxMemory         = "SOLOCLEF_WORKER_AUTOMATIONS_SANDBOX_MEMORY"
 	SandboxIdleTTL        = "SOLOCLEF_WORKER_AUTOMATIONS_SANDBOX_IDLE_TTL_SECONDS"
@@ -135,8 +142,9 @@ type Config struct {
 	// NextcloudURL is "" or a server address NormalizeServerURL accepts.
 	NextcloudURL string
 
-	ImageModel     string
 	VisionModel    string
+	FiguresResvg   string
+	FiguresFontDir string
 	PodcastVoices  []string
 	SandboxEnabled bool
 	// Sandbox is read only when SandboxEnabled.
@@ -247,7 +255,8 @@ func LoadConfig(getenv func(string) string) (Config, error) {
 		}
 	}
 
-	c.ImageModel, c.VisionModel = optional(ImageModel), optional(VisionModel)
+	c.VisionModel = optional(VisionModel)
+	c.FiguresResvg, c.FiguresFontDir = text(FiguresResvg), text(FiguresFontDir)
 	for _, voice := range strings.Split(getenv(PodcastVoices), ",") {
 		if voice = strings.TrimSpace(voice); voice != "" {
 			c.PodcastVoices = append(c.PodcastVoices, voice)
@@ -256,9 +265,8 @@ func LoadConfig(getenv func(string) string) (Config, error) {
 	if c.SandboxEnabled = truth(SandboxEnabled); c.SandboxEnabled {
 		seconds := func(name string) time.Duration { return time.Duration(whole(name)) * time.Second }
 		c.Sandbox = sandbox.Settings{
-			Stack: text(SandboxStack),
-			URL:   strings.TrimRight(text(SandboxURL), "/"), APIKey: secret(SandboxAPIKeyFile, true),
-			Image: text(SandboxImage), CPU: text(SandboxCPU), Memory: text(SandboxMemory),
+			URL: strings.TrimRight(text(SandboxURL), "/"), APIKey: secret(SandboxAPIKeyFile, true),
+			CPU: text(SandboxCPU), Memory: text(SandboxMemory),
 			IdleTTL: seconds(SandboxIdleTTL), CommandTimeout: seconds(SandboxCommandTimeout),
 			MaxPerAccount: whole(SandboxMaxPerAccount),
 		}

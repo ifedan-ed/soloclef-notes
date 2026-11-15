@@ -51,24 +51,8 @@ export const deletePromptMutationAtom = atomWithMutation(() => ({
 			if (!old) return old;
 			return old.filter((p) => p.id !== id);
 		});
-		queryClient.invalidateQueries({ queryKey: cacheKeys.prompts.public() });
 	},
 	onError: (error: Error) => {
 		toast.error(error.message || "Failed to delete prompt");
-	},
-}));
-
-export const copyPromptMutationAtom = atomWithMutation(() => ({
-	mutationKey: ["prompts", "copy"],
-	meta: { suppressGlobalErrorToast: true },
-	mutationFn: async (promptId: number) => {
-		return promptsApiService.copy(promptId);
-	},
-	onSuccess: () => {
-		toast.success("Prompt added to your collection");
-		queryClient.invalidateQueries({ queryKey: cacheKeys.prompts.all() });
-	},
-	onError: (error: Error) => {
-		toast.error(error.message || "Failed to copy prompt");
 	},
 }));

@@ -12,12 +12,13 @@
 //
 // # Asking
 //
-// Finding and reading ask first (tool.Ask): they send a request to Google
-// with the person's grant, which is theirs to allow, per call or with
-// "always allow". Making a file and binning one ask every time
-// (tool.AlwaysAsk): each writes to the person's Drive something the model
-// chose, and one approval says nothing about the next file. No trust rule
-// and no automation's setting waives that.
+// Finding and reading are declared tool.Ask: they send a request to Google
+// with the person's grant. Making a file and binning one are declared
+// tool.AlwaysAsk: each writes to the person's Drive something the model
+// chose, and one approval says nothing about the next file, so no
+// automation's setting lets an unattended run do either. In a chat the
+// person's own "ask first" marks decide every tool instead (assembly,
+// policy): each runs unless the person marked it.
 //
 // # Whose Drive
 //

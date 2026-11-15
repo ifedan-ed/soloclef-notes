@@ -25,8 +25,8 @@ import {
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { useDelayedFlag } from "@/features/notebooks/hooks/use-delayed-flag";
-import { cacheKeys } from "@/lib/query-client/cache-keys";
 import { settingsPath } from "@/lib/dashboard-paths";
+import { cacheKeys } from "@/lib/query-client/cache-keys";
 import { publicLinkUrl } from "../lib/public-link-url";
 import type { CreatedLink } from "../model/created-link";
 import {
@@ -36,19 +36,16 @@ import {
 	isExpiryChoice,
 } from "../model/share-expiry";
 
-function shareFailureMessage(
-	failure: unknown,
-	subject: "chat" | "output",
-	t: (key: string) => string
-): string {
+function shareFailureMessage(failure: unknown, t: (key: string) => string): string {
 	const status = (failure as { status?: number } | null)?.status;
-	if (status === 400) return subject === "chat" ? t("empty_chat") : t("output_not_ready");
+	if (status === 400) return t("output_not_ready");
 	if (status === 403) return t("not_allowed");
 	return t("create_failed");
 }
 
 /**
- * Create a read-only public link to a chat or a Studio output.
+ * Create a read-only public link to a Studio output, the one thing that can
+ * be shared: a chat or a notebook never gets a public link.
  *
  * The warning sits above the button, not in a popup: anyone with the link can
  * read what is shared without signing in.
@@ -56,13 +53,11 @@ function shareFailureMessage(
 export function ShareDialog({
 	open,
 	onOpenChange,
-	subject,
 	itemTitle,
 	create,
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	subject: "chat" | "output";
 	itemTitle: string;
 	create: (expiry: ExpiryChoice) => Promise<CreatedLink>;
 }) {
@@ -101,9 +96,9 @@ export function ShareDialog({
 		try {
 			const link = await create(expiry);
 			setCreated(link);
-			void queryClient.invalidateQueries({ queryKey: cacheKeys.publicChatSnapshots.all });
+			void queryClient.invalidateQueries({ queryKey: cacheKeys.publicLinks.all });
 		} catch (failure) {
-			setError(shareFailureMessage(failure, subject, t));
+			setError(shareFailureMessage(failure, t));
 		} finally {
 			setCreating(false);
 		}
@@ -135,7 +130,7 @@ export function ShareDialog({
 				<DialogHeader>
 					<DialogTitle className="flex items-center gap-2">
 						<Globe className="size-4" />
-						{subject === "chat" ? t("title_chat") : t("title_output")}
+						{t("title_output")}
 					</DialogTitle>
 					<DialogDescription className="break-words">
 						{t("description", { title: itemTitle })}

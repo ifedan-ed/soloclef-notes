@@ -8,7 +8,10 @@
 //
 // sqlc reads this same directory as its schema (soloclef_api/sqlc.yaml), so
 // the tables a query is checked against at generate time are the tables the
-// migrate command creates.
+// migrate command creates. A migration that changes rows in a way SQL
+// cannot (sealing a stored credential) is written in Go instead and listed
+// in CodedMigrations (coded.go); a coded migration never changes the schema,
+// so sqlc's view of the tables stays the SQL files'.
 package migrations
 
 import "embed"

@@ -110,7 +110,7 @@ export function MobileSidebar({
 					onBeforeAction={close}
 					onSettings={onSettings}
 					onNotifications={notifications ? () => setNotificationsOpen(true) : undefined}
-					notificationsUnreadCount={notifications?.totalUnreadCount}
+					notificationsUnreadCount={notifications?.unreadCount}
 					onLogout={onLogout}
 					theme={theme}
 					setTheme={setTheme}

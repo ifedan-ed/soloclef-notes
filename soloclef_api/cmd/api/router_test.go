@@ -288,7 +288,7 @@ var fromTheWebApp = map[string]string{"Origin": webOrigin}
 // This is the check that every pattern sits correctly beside all the others
 // on one ServeMux. Two served patterns that ServeMux cannot order stop the
 // stand-ins from registering at all; a literal beside a wildcard
-// (`/prompts/public` beside `/prompts/{prompt_id}`) must go to the
+// (`/podcasts/voices` beside `/podcasts/{podcast_id}`) must go to the
 // literal, which the hand-written cases at the end pin by name.
 func TestEveryServedRouteIsReachedByItsOwnPath(t *testing.T) {
 	server := assembled(t, servedRoutes(), nil)
@@ -311,7 +311,7 @@ func TestEveryServedRouteIsReachedByItsOwnPath(t *testing.T) {
 
 	for _, c := range []struct{ method, path, template string }{
 		// A literal that a wildcard beside it would also take.
-		{http.MethodGet, "/api/v1/prompts/public", "/api/v1/prompts/public"},
+		{http.MethodGet, "/api/v1/podcasts/voices", "/api/v1/podcasts/voices"},
 		// The two connector lists beside the routes for one of each.
 		{http.MethodGet, "/api/v1/connectors/mcp", "/api/v1/connectors/mcp"},
 		{http.MethodGet, "/api/v1/connectors/mcp/7", "/api/v1/connectors/mcp/{connector_id}"},
@@ -482,14 +482,14 @@ func TestAForgedWriteIsRefusedBeforeTheRouterSpeaks(t *testing.T) {
 		"Origin": "https://elsewhere.example.test",
 		"Cookie": sessionCookie + "=anything",
 	}
-	got := ask(t, server, http.MethodPost, "/api/v1/prompts//copy", forged)
+	got := ask(t, server, http.MethodPost, "/api/v1/model-connections//verify", forged)
 	if got.status != http.StatusForbidden || got.standIn != "" {
 		t.Errorf("a forged write to a path with an empty segment answered %d %q", got.status, got.body)
 	}
 	// The same path from the app's own origin is the path's own answer.
 	own := map[string]string{"Origin": webOrigin, "Cookie": sessionCookie + "=anything"}
 	mustBeTheBare404(t, "the same write from the app's own origin",
-		ask(t, server, http.MethodPost, "/api/v1/prompts//copy", own))
+		ask(t, server, http.MethodPost, "/api/v1/model-connections//verify", own))
 }
 
 // TestThePathsTheRoutersAgreeOnAreNotTouched is the other half of the guard's

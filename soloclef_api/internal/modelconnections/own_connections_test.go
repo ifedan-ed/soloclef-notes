@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -14,13 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/danielgtaylor/huma/v2"
-	"github.com/danielgtaylor/huma/v2/adapters/humago"
-	"github.com/jackc/pgx/v5/pgxpool"
-
-	"git.danvics.com/danvics/soloclef/soloclef_api/internal/errorenvelope"
-	"git.danvics.com/danvics/soloclef/soloclef_api/internal/principal"
-	"git.danvics.com/danvics/soloclef/soloclef_api/internal/requestbody"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/testpostgres"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/ownmodels"
 )
@@ -104,27 +96,6 @@ func (s *stub) seen() []seenRequest {
 	return append([]seenRequest(nil), s.requests...)
 }
 
-// ownRoutes is the list and every write route over a real database, as one
-// caller, with the endpoint client given.
-func ownRoutes(t *testing.T, pool *pgxpool.Pool, endpoints Endpoints, caller principal.Principal) http.Handler {
-	t.Helper()
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	envelope := errorenvelope.Writer{ReportURL: "https://notes.example/contact"}
-	mux := http.NewServeMux()
-	api := humago.New(mux, huma.DefaultConfig("test", "0.0.1"))
-	store := Store{Pool: pool}
-	routes := WriteRoutes{Connections: store, Keys: seal(t), Prober: &recorder{}, Catalogue: testShelf(), Endpoints: endpoints, Errors: envelope, Logger: logger}
-	if err := routes.Check(); err != nil {
-		t.Fatal(err)
-	}
-	ConnectionsRoute{Connections: store, Errors: envelope, Logger: logger}.Register(api)
-	routes.Register(api)
-	bodies := requestbody.Middleware{Covers: func(*http.Request) bool { return true }}
-	return bodies.Wrap(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		mux.ServeHTTP(response, request.WithContext(principal.WithPrincipal(request.Context(), caller)))
-	}))
-}
-
 // codeOf is the error envelope's code.
 func codeOf(body string) string {
 	var envelope struct {
@@ -137,13 +108,13 @@ func codeOf(body string) string {
 }
 
 // An account that administers nothing adds, lists, tests and removes its
-// own OpenAI-compatible connection, and is still refused every other
-// provider.
+// own OpenAI-compatible connection, and is refused every other provider,
+// as everyone is.
 func TestAnyAccountManagesItsOwnOpenAICompatibleConnection(t *testing.T) {
 	pool := testpostgres.Open(t, databaseVariable)
 	const bob = testpostgres.Bob
 	endpoint := newStub(t, "stub-large", "stub-small", "stub-small")
-	his := ownRoutes(t, pool, loopbackEndpoints(), sessionOf(bob))
+	his := over(t, pool, loopbackEndpoints(), sessionOf(bob))
 	base := endpoint.URL + "/v1"
 
 	// The endpoint's own list, read with the key and the headers he typed.
@@ -212,7 +183,7 @@ func TestAnyAccountManagesItsOwnOpenAICompatibleConnection(t *testing.T) {
 		t.Fatalf("update removing headers = %d %s", status, body)
 	}
 
-	// Every other provider is still an administrator's.
+	// There is no other provider to connect.
 	for _, call := range []struct{ method, path, body string }{
 		{http.MethodPost, ConnectionsPath, `{"provider":"openai","api_key":"fake-k"}`},
 		{http.MethodPost, TestPreviewPath, `{"provider":"anthropic","model_id":"m"}`},
@@ -220,8 +191,8 @@ func TestAnyAccountManagesItsOwnOpenAICompatibleConnection(t *testing.T) {
 		// Nor may his own connection be moved to one.
 		{http.MethodPut, "/api/v1/model-connections/" + id, `{"provider":"openai"}`},
 	} {
-		if status, body := send(t, his, call.method, call.path, call.body); status != http.StatusForbidden || !strings.Contains(body, "Anyone can add an OpenAI-compatible connection") {
-			t.Errorf("%s %s = %d %s, want 403", call.method, call.path, status, body)
+		if status, body := send(t, his, call.method, call.path, call.body); status != http.StatusUnprocessableEntity || !strings.Contains(body, providerUnknown) {
+			t.Errorf("%s %s = %d %s, want a 422", call.method, call.path, status, body)
 		}
 	}
 
@@ -234,16 +205,15 @@ func TestAnyAccountManagesItsOwnOpenAICompatibleConnection(t *testing.T) {
 // is stored or called.
 func TestWhatAnOpenAICompatibleConnectionMustHold(t *testing.T) {
 	pool := testpostgres.Open(t, databaseVariable)
-	administrators(t, pool)
 	endpoint := newStub(t)
-	hers := ownRoutes(t, pool, loopbackEndpoints(), sessionOf(testpostgres.Alice))
+	hers := over(t, pool, loopbackEndpoints(), sessionOf(testpostgres.Alice))
 	for body, want := range map[string]string{
 		`{"provider":"openai_compatible","api_key":"fake-k"}`:                                                                   "needs the endpoint's base URL",
 		`{"provider":"openai_compatible","base_url":"` + endpoint.URL + `"}`:                                                    "needs the endpoint's API key",
 		`{"provider":"openai_compatible","base_url":"https://u:fake-p@models.example","api_key":"fake-k"}`:                      "base_url must be an http or https address",
 		`{"provider":"openai_compatible","base_url":"` + endpoint.URL + `","api_key":"fake-k","headers":{"Authorization":"x"}}`: "set by Soloclef",
 		`{"provider":"openai_compatible","base_url":"` + endpoint.URL + `","api_key":"fake-k","extra":{"header_names":["X"]}}`:  "send the headers as headers",
-		`{"provider":"openai","api_key":"fake-k","headers":{"X-Org":"o"}}`:                                                      "only to an OpenAI-compatible endpoint",
+		`{"provider":"openai","api_key":"fake-k","headers":{"X-Org":"o"}}`:                                                      providerUnknown,
 	} {
 		if status, answer := send(t, hers, http.MethodPost, ConnectionsPath, body); status != http.StatusUnprocessableEntity || !strings.Contains(answer, want) {
 			t.Errorf("create %s = %d %s, want a 422 with %q", body, status, answer, want)
@@ -267,7 +237,7 @@ func TestDiscoveryOfAnEndpointSaysWhyThereIsNoList(t *testing.T) {
 		return send(t, handler, http.MethodPost, DiscoverPreviewPath,
 			`{"provider":"openai_compatible","base_url":"`+endpoint.URL+`/v1","api_key":"`+key+`"}`)
 	}
-	reach := ownRoutes(t, pool, loopbackEndpoints(), sessionOf(testpostgres.Alice))
+	reach := over(t, pool, loopbackEndpoints(), sessionOf(testpostgres.Alice))
 
 	status, body := preview(reach, "fake-wrong-key")
 	if status != http.StatusBadRequest || codeOf(body) != codeKeyRefused || strings.Contains(body, "fake-") {
@@ -284,7 +254,7 @@ func TestDiscoveryOfAnEndpointSaysWhyThereIsNoList(t *testing.T) {
 	// With no host allowed inside, loopback is refused, as is a name the
 	// resolver says is inside: before any request reaches the stub.
 	called := len(endpoint.seen())
-	guarded := ownRoutes(t, pool, guardedEndpoints(), sessionOf(testpostgres.Alice))
+	guarded := over(t, pool, guardedEndpoints(), sessionOf(testpostgres.Alice))
 	status, body = preview(guarded, "fake-good-key")
 	if status != http.StatusBadRequest || codeOf(body) != codeAddressRefused || !strings.Contains(body, "inside this server's network") {
 		t.Errorf("an inside address = %d %s", status, body)
@@ -311,7 +281,7 @@ func TestOneAccountCannotReachAnothersEndpoint(t *testing.T) {
 INSERT INTO connections (id, provider, base_url, api_key, extra, scope, user_id) VALUES
  (1, 'openai_compatible', '`+endpoint.URL+`/v1', '`+herKey+`', '{}', 'user', '`+alice+`');
 INSERT INTO models (id, connection_id, model_id) VALUES (10, 1, 'm');`)
-	his := ownRoutes(t, pool, loopbackEndpoints(), sessionOf(bob))
+	his := over(t, pool, loopbackEndpoints(), sessionOf(bob))
 	for _, call := range []struct{ method, path string }{
 		{http.MethodPost, "/api/v1/model-connections/1/verify"},
 		{http.MethodPost, "/api/v1/model-connections/1/discover"},

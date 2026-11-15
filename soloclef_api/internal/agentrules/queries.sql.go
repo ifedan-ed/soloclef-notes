@@ -7,115 +7,38 @@ package agentrules
 
 import (
 	"context"
-	"time"
 )
 
-const deleteRule = `-- name: DeleteRule :execrows
-DELETE FROM agent_permission_rules
-WHERE id = $1 AND user_id = $2
+const appsOfOwner = `-- name: AppsOfOwner :many
+SELECT c.id, c.name,
+       COALESCE(c.config -> 'cached_tools' -> 'tools', '[]'::jsonb)::jsonb AS tools
+FROM search_source_connectors c
+WHERE c.user_id = $1
+  AND c.connector_type = 'MCP_CONNECTOR'
+ORDER BY c.id
 `
 
-type DeleteRuleParams struct {
-	ID     int64
-	UserID string
+type AppsOfOwnerRow struct {
+	ID    int64
+	Name  string
+	Tools []byte
 }
 
-// One statement finds the rule and removes it, so there is no moment between
-// a check and a delete. Zero rows means the account has no such rule.
-func (q *Queries) DeleteRule(ctx context.Context, arg DeleteRuleParams) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteRule, arg.ID, arg.UserID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const insertRule = `-- name: InsertRule :one
-INSERT INTO agent_permission_rules (user_id, thread_id, permission, pattern, action)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, thread_id, permission, pattern, action, created_at
-`
-
-type InsertRuleParams struct {
-	UserID     string
-	ThreadID   *int64
-	Permission string
-	Pattern    string
-	Action     string
-}
-
-type InsertRuleRow struct {
-	ID         int64
-	ThreadID   *int64
-	Permission string
-	Pattern    string
-	Action     string
-	CreatedAt  time.Time
-}
-
-// The database mints created_at. A second identical rule is refused by
-// uq_agent_permission_rules_scope, account-wide rules included: the
-// constraint compares NULL thread ids as equal.
-func (q *Queries) InsertRule(ctx context.Context, arg InsertRuleParams) (InsertRuleRow, error) {
-	row := q.db.QueryRow(ctx, insertRule,
-		arg.UserID,
-		arg.ThreadID,
-		arg.Permission,
-		arg.Pattern,
-		arg.Action,
-	)
-	var i InsertRuleRow
-	err := row.Scan(
-		&i.ID,
-		&i.ThreadID,
-		&i.Permission,
-		&i.Pattern,
-		&i.Action,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
-const rulesOfOwner = `-- name: RulesOfOwner :many
-
-SELECT id, thread_id, permission, pattern, action, created_at
-FROM agent_permission_rules
-WHERE user_id = $1
-ORDER BY created_at DESC, id DESC
-`
-
-type RulesOfOwnerRow struct {
-	ID         int64
-	ThreadID   *int64
-	Permission string
-	Pattern    string
-	Action     string
-	CreatedAt  time.Time
-}
-
-// The rules that decide whether the chat's agent may run a tool outright,
-// must ask, or is refused. A rule is its account's: every statement names
-// the account beside the rule, so another account's rule is no row, exactly
-// as a rule that was never written is no row.
-// The account's rules, newest first. `id` breaks ties: two rules written in
-// one instant must come back in one order on every request.
-func (q *Queries) RulesOfOwner(ctx context.Context, userID string) ([]RulesOfOwnerRow, error) {
-	rows, err := q.db.Query(ctx, rulesOfOwner, userID)
+// The account's connected apps (MCP servers) and the tools each last listed,
+// for the list. Switched-off connections too: a mark is kept while one is
+// off and applies again when it is back on. Only the tool list is read out
+// of the config, which also holds the server's key. Oldest first, the order
+// the chat offers their tools in.
+func (q *Queries) AppsOfOwner(ctx context.Context, userID string) ([]AppsOfOwnerRow, error) {
+	rows, err := q.db.Query(ctx, appsOfOwner, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []RulesOfOwnerRow
+	var items []AppsOfOwnerRow
 	for rows.Next() {
-		var i RulesOfOwnerRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.ThreadID,
-			&i.Permission,
-			&i.Pattern,
-			&i.Action,
-			&i.CreatedAt,
-		); err != nil {
+		var i AppsOfOwnerRow
+		if err := rows.Scan(&i.ID, &i.Name, &i.Tools); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -126,73 +49,124 @@ func (q *Queries) RulesOfOwner(ctx context.Context, userID string) ([]RulesOfOwn
 	return items, nil
 }
 
-const threadIsOwners = `-- name: ThreadIsOwners :one
-SELECT EXISTS (
-    SELECT 1 FROM new_chat_threads
-    WHERE id = $1 AND user_id = $2
-)
+const lockAppTool = `-- name: LockAppTool :one
+SELECT c.id
+FROM search_source_connectors c
+WHERE c.id = $1
+  AND c.user_id = $2
+  AND c.connector_type = 'MCP_CONNECTOR'
+  AND c.config -> 'cached_tools' -> 'tools' @> jsonb_build_array(jsonb_build_object('name', $3::text))
+FOR KEY SHARE OF c
 `
 
-type ThreadIsOwnersParams struct {
-	ThreadID int64
-	UserID   string
+type LockAppToolParams struct {
+	ConnectorID int64
+	UserID      string
+	Tool        string
 }
 
-// Whether a thread a rule is to be scoped to is the account's own. A thread
-// of another account and a thread that does not exist are the same "no".
-func (q *Queries) ThreadIsOwners(ctx context.Context, arg ThreadIsOwnersParams) (bool, error) {
-	row := q.db.QueryRow(ctx, threadIsOwners, arg.ThreadID, arg.UserID)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
+// The connection, when it is the account's MCP server and last listed the
+// tool (no row otherwise), held until the mark is written so a removal at
+// the same moment cannot leave a mark that names a deleted row. Containment
+// (@>) is false for a list that is not an array, so a broken config lists
+// no tool rather than failing.
+func (q *Queries) LockAppTool(ctx context.Context, arg LockAppToolParams) (int64, error) {
+	row := q.db.QueryRow(ctx, lockAppTool, arg.ConnectorID, arg.UserID, arg.Tool)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
-const updateRule = `-- name: UpdateRule :one
-UPDATE agent_permission_rules
-SET pattern = CASE WHEN $1::boolean THEN $2::varchar ELSE pattern END,
-    action  = CASE WHEN $3::boolean THEN $4::varchar ELSE action END
-WHERE id = $5 AND user_id = $6
-RETURNING id, thread_id, permission, pattern, action, created_at
+const markTool = `-- name: MarkTool :exec
+INSERT INTO agent_ask_first_tools (user_id, connector_id, tool)
+VALUES ($1, $2, $3::text)
+ON CONFLICT ON CONSTRAINT uq_agent_ask_first_tools_tool DO NOTHING
 `
 
-type UpdateRuleParams struct {
-	SetPattern bool
-	Pattern    string
-	SetAction  bool
-	Action     string
-	ID         int64
-	UserID     string
+type MarkToolParams struct {
+	UserID      string
+	ConnectorID *int64
+	Tool        string
 }
 
-type UpdateRuleRow struct {
-	ID         int64
-	ThreadID   *int64
-	Permission string
-	Pattern    string
-	Action     string
-	CreatedAt  time.Time
+// A second mark writes nothing: the unique constraint compares a NULL
+// connection as equal to itself (NULLS NOT DISTINCT), so the conflict is
+// found.
+func (q *Queries) MarkTool(ctx context.Context, arg MarkToolParams) error {
+	_, err := q.db.Exec(ctx, markTool, arg.UserID, arg.ConnectorID, arg.Tool)
+	return err
 }
 
-// Writes the fields the body mentioned and leaves the rest. A CASE per
-// column and not a COALESCE: a column set to itself is what an unmentioned
-// field means. No row answered means the account has no such rule.
-func (q *Queries) UpdateRule(ctx context.Context, arg UpdateRuleParams) (UpdateRuleRow, error) {
-	row := q.db.QueryRow(ctx, updateRule,
-		arg.SetPattern,
-		arg.Pattern,
-		arg.SetAction,
-		arg.Action,
-		arg.ID,
-		arg.UserID,
-	)
-	var i UpdateRuleRow
-	err := row.Scan(
-		&i.ID,
-		&i.ThreadID,
-		&i.Permission,
-		&i.Pattern,
-		&i.Action,
-		&i.CreatedAt,
-	)
-	return i, err
+const marksOfOwner = `-- name: MarksOfOwner :many
+
+SELECT connector_id, tool
+FROM agent_ask_first_tools
+WHERE user_id = $1
+`
+
+type MarksOfOwnerRow struct {
+	ConnectorID *int64
+	Tool        string
+}
+
+// The "ask first" marks of one account. Every statement names the account,
+// so another account's mark or connection is no row, exactly as one that
+// never existed is no row.
+// Every mark, for the list. A mark is listed by the tool it names, so the
+// order here does not matter.
+func (q *Queries) MarksOfOwner(ctx context.Context, userID string) ([]MarksOfOwnerRow, error) {
+	rows, err := q.db.Query(ctx, marksOfOwner, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MarksOfOwnerRow
+	for rows.Next() {
+		var i MarksOfOwnerRow
+		if err := rows.Scan(&i.ConnectorID, &i.Tool); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const unmarkAppTool = `-- name: UnmarkAppTool :exec
+DELETE FROM agent_ask_first_tools
+WHERE user_id = $1
+  AND connector_id = $2
+  AND tool = $3::text
+`
+
+type UnmarkAppToolParams struct {
+	UserID      string
+	ConnectorID *int64
+	Tool        string
+}
+
+func (q *Queries) UnmarkAppTool(ctx context.Context, arg UnmarkAppToolParams) error {
+	_, err := q.db.Exec(ctx, unmarkAppTool, arg.UserID, arg.ConnectorID, arg.Tool)
+	return err
+}
+
+const unmarkChatTool = `-- name: UnmarkChatTool :exec
+DELETE FROM agent_ask_first_tools
+WHERE user_id = $1
+  AND connector_id IS NULL
+  AND tool = $2::text
+`
+
+type UnmarkChatToolParams struct {
+	UserID string
+	Tool   string
+}
+
+// Removing a mark that is not there writes nothing and is no error: the
+// answer is the same either way.
+func (q *Queries) UnmarkChatTool(ctx context.Context, arg UnmarkChatToolParams) error {
+	_, err := q.db.Exec(ctx, unmarkChatTool, arg.UserID, arg.Tool)
+	return err
 }

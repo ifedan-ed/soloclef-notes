@@ -11,30 +11,29 @@ import (
 
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/errorenvelope"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/requestbody"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/ownmodels"
 )
 
-// RolesRoute serves the two picture models together, as the settings
-// screen shows them:
+// RolesRoute serves the model that looks at pictures, as the settings
+// screen shows it:
 //
 //	GET  -> {"vision": {selected, model, available, default, models},
 //	         "image":  {...}}
-//	PUT  {"vision": "<name>" | null, "image": "<name>" | null}
+//	PUT  {"vision": "<name>" | null}
 //
-// A PUT changes the jobs it names and leaves the other alone; a body that
-// names neither is refused, because a write that changes nothing is a
-// mistake nobody noticed. Both names are checked before either is stored,
-// so a body with one good name and one bad one changes nothing.
+// "image" is answered only for the phone builds already installed, which
+// require it (installedbuilds, model-roles-image): nothing is drawn by a
+// model any more (figures and infographics are drawn by code), so its
+// answer is always "no model, none to choose", and a PUT naming one is
+// refused unless it clears it, which changes nothing.
+//
+// A body that names nothing is refused, because a write that changes
+// nothing is a mistake nobody noticed.
 type RolesRoute struct {
 	Choices Choices
 	Errors  errorenvelope.Writer
 	Logger  *slog.Logger
 }
-
-// roles are the body's fields and the purpose each one sets.
-var roles = []struct {
-	field   string
-	purpose Purpose
-}{{"vision", Vision}, {"image", Image}}
 
 // Register adds the two operations.
 func (r RolesRoute) Register(api huma.API) {
@@ -42,8 +41,8 @@ func (r RolesRoute) Register(api huma.API) {
 		id, method, summary string
 		serve               func(huma.Context)
 	}{
-		{"read-model-roles", http.MethodGet, "The caller's vision and image models", r.read},
-		{"choose-model-roles", http.MethodPut, "Choose the caller's vision or image model", r.choose},
+		{"read-model-roles", http.MethodGet, "The caller's vision model", r.read},
+		{"choose-model-roles", http.MethodPut, "Choose the caller's vision model", r.choose},
 	} {
 		serve := operation.serve
 		huma.Register(api, huma.Operation{
@@ -64,13 +63,18 @@ func (r RolesRoute) read(ctx huma.Context) {
 	r.answer(request, caller.UserID)
 }
 
+// imageChoiceNone is the "image" answer for the installed builds: nothing
+// chosen, no default, nothing to choose.
+// installed-builds: model-roles-image
+var imageChoiceNone = answer{Models: []ownmodels.MenuEntry{}}
+
 func (r RolesRoute) answer(request request, userID string) {
-	looked, err := r.Choices.Look(request.ctx.Context(), userID, Vision, Image)
+	looked, err := r.Choices.Look(request.ctx.Context(), userID, Vision)
 	if err != nil {
 		request.refuse("could not read the models", err)
 		return
 	}
-	request.send(map[string]answer{"vision": answerOf(looked[Vision]), "image": answerOf(looked[Image])})
+	request.send(map[string]answer{"vision": answerOf(looked[Vision]), "image": imageChoiceNone})
 }
 
 func (r RolesRoute) choose(ctx huma.Context) {
@@ -81,44 +85,45 @@ func (r RolesRoute) choose(ctx huma.Context) {
 	}
 	var body map[string]json.RawMessage
 	if err := json.Unmarshal(requestbody.Buffered(ctx.Context()), &body); err != nil {
-		request.invalid("vision", "The body must be a JSON object naming vision, image or both")
+		request.invalid("vision", "The body must be a JSON object naming vision")
 		return
 	}
-	named := 0
-	for _, role := range roles {
-		if _, present := body[role.field]; present {
-			named++
+	// installed-builds: model-roles-image
+	if raw, present := body["image"]; present {
+		// An installed build's image picker can only clear it (its menu is
+		// always empty); a name is refused, as there is nothing to choose.
+		if _, cleared, readable := readName(raw); !readable || !cleared {
+			request.invalid("image", "Pictures are drawn by the application; there is no image model to choose")
+			return
+		}
+		delete(body, "image")
+		if len(body) == 0 {
+			r.answer(request, caller.UserID)
+			return
 		}
 	}
-	if named == 0 {
-		request.invalid("vision", "Name vision, image or both: a model's name, or null for the default")
+	raw, present := body["vision"]
+	if !present {
+		request.invalid("vision", "Name vision: a model's name, or null for the default")
 		return
 	}
-	// Every name is read and held to its list before anything is stored.
-	looked, err := r.Choices.Look(ctx.Context(), caller.UserID, Vision, Image)
+	// The name is held to its list before anything is stored.
+	looked, err := r.Choices.Look(ctx.Context(), caller.UserID, Vision)
 	if err != nil {
 		request.refuse("could not read the proxy's lists", err)
 		return
 	}
-	for _, role := range roles {
-		raw, present := body[role.field]
-		if !present {
-			continue
-		}
-		name, cleared, readable := readName(raw)
-		if !readable {
-			request.invalid(role.field, role.field+" must be a model's name, or null for the default")
-			return
-		}
-		if !cleared && !slices.Contains(looked[role.purpose].Models, name) {
-			request.invalid(role.field, "The model "+name+" is not offered for this. Choose one from the list.")
-			return
-		}
+	name, cleared, readable := readName(raw)
+	if !readable {
+		request.invalid("vision", "vision must be a model's name, or null for the default")
+		return
 	}
-	for _, role := range roles {
-		if raw, present := body[role.field]; present && !store(request, r.Choices, caller.UserID, role.purpose, role.field, raw) {
-			return
-		}
+	if !cleared && !slices.Contains(looked[Vision].Models, name) {
+		request.invalid("vision", "The model "+name+" is not offered for this. Choose one from the list.")
+		return
+	}
+	if !store(request, r.Choices, caller.UserID, Vision, "vision", raw) {
+		return
 	}
 	r.answer(request, caller.UserID)
 }

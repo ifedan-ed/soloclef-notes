@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/academic"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/sourceidentity"
 )
 
 // Paper is what a result knows about itself as a paper: the ids it can be
@@ -34,7 +35,6 @@ var (
 	doiShape   = regexp.MustCompile(`^10\.\d{4,9}/\S{1,190}$`)
 	pmidShape  = regexp.MustCompile(`^\d{1,9}$`)
 	pmcidShape = regexp.MustCompile(`^PMC\d{1,9}$`)
-	arxivShape = regexp.MustCompile(`^(\d{4}\.\d{4,5}|[a-z\-]+(\.[A-Z]{2})?/\d{7})$`)
 	doiPrefix  = regexp.MustCompile(`^(https?://(dx\.)?doi\.org/|doi:)`)
 	arxivVer   = regexp.MustCompile(`v\d+$`)
 )
@@ -80,7 +80,7 @@ func (p Paper) checked() (Paper, string) {
 		out.PMCID = pmcid
 	}
 	if id := arxivVer.ReplaceAllString(strings.TrimSpace(p.ArxivID), ""); id != "" {
-		if !arxivShape.MatchString(id) {
+		if !sourceidentity.IsArxivID(id) {
 			return Paper{}, "arxiv_id"
 		}
 		out.ArxivID = id
@@ -154,6 +154,15 @@ func paperOf(found academic.Paper, source string) *Paper {
 	}
 	if match := doiAddress.FindStringSubmatch(found.URL); match != nil {
 		paper.DOI = match[1]
+	}
+	// The ids the source named itself, where it named them: PubMed names a
+	// paper's DOI too, which its address does not hold, and that DOI is how
+	// the same paper found on a preprint server is one document.
+	if found.PMID != "" {
+		paper.PMID = found.PMID
+	}
+	if found.DOI != "" {
+		paper.DOI = found.DOI
 	}
 	paper.PMCID = found.PMCID
 	switch source {

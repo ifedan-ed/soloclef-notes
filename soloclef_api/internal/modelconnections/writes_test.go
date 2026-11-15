@@ -2,7 +2,6 @@ package modelconnections
 
 import (
 	"context"
-	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -10,7 +9,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humago"
@@ -20,13 +18,18 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/principal"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/requestbody"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/testpostgres"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/ownmodels"
 )
 
-// recorder is a Prober that remembers what it was asked to try and
-// answers that it worked.
+// recorder is an Endpoints that remembers what it was asked and answers
+// from what the test gave it, so a route test needs no server: Try says
+// the model worked, Models lists `models` or fails with `listErr`.
 type recorder struct {
-	mu     sync.Mutex
-	probes []Probe
+	mu      sync.Mutex
+	probes  []Probe
+	listed  int
+	models  []pickedModel
+	listErr error
 }
 
 func (r *recorder) Try(_ context.Context, probe Probe) Verdict {
@@ -34,6 +37,14 @@ func (r *recorder) Try(_ context.Context, probe Probe) Verdict {
 	defer r.mu.Unlock()
 	r.probes = append(r.probes, probe)
 	return Verdict{Status: "OK", OK: true, Message: "Model test succeeded."}
+}
+
+func (r *recorder) Models(_ context.Context, probe Probe) ([]pickedModel, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.probes = append(r.probes, probe)
+	r.listed++
+	return r.models, r.listErr
 }
 
 func (r *recorder) last(t *testing.T) Probe {
@@ -46,6 +57,12 @@ func (r *recorder) last(t *testing.T) Probe {
 	return r.probes[len(r.probes)-1]
 }
 
+func (r *recorder) count() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.probes)
+}
+
 func seal(t *testing.T) KeySeal {
 	t.Helper()
 	keys, err := NewKeySeal("fake-deployment-secret")
@@ -55,21 +72,32 @@ func seal(t *testing.T) KeySeal {
 	return keys
 }
 
-// writes is the list and the write routes over a real database, behind
-// the body reader, as one caller.
-func writes(t *testing.T, pool *pgxpool.Pool, prober Prober, caller principal.Principal) http.Handler {
+// writes is the list, the writes, the tests and the model routes over the
+// given statements, behind the body reader, as one caller, with the endpoint
+// client given.
+func writes(t *testing.T, connections Writer, lister Lister, endpoints Endpoints, caller principal.Principal) http.Handler {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	envelope := errorenvelope.Writer{ReportURL: "https://notes.example/contact"}
 	mux := http.NewServeMux()
 	api := humago.New(mux, huma.DefaultConfig("test", "0.0.1"))
-	store := Store{Pool: pool}
-	ConnectionsRoute{Connections: store, Errors: envelope, Logger: logger}.Register(api)
-	WriteRoutes{Connections: store, Keys: seal(t), Prober: prober, Endpoints: loopbackEndpoints(), Errors: envelope, Logger: logger}.Register(api)
+	routes := WriteRoutes{Connections: connections, Keys: seal(t), Endpoints: endpoints, Errors: envelope, Logger: logger}
+	if err := routes.Check(); err != nil {
+		t.Fatal(err)
+	}
+	ConnectionsRoute{Connections: lister, Errors: envelope, Logger: logger}.Register(api)
+	routes.Register(api)
 	bodies := requestbody.Middleware{Covers: func(*http.Request) bool { return true }}
 	return bodies.Wrap(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		mux.ServeHTTP(response, request.WithContext(principal.WithPrincipal(request.Context(), caller)))
 	}))
+}
+
+// over is writes over a real database.
+func over(t *testing.T, pool *pgxpool.Pool, endpoints Endpoints, caller principal.Principal) http.Handler {
+	t.Helper()
+	store := Store{Pool: pool}
+	return writes(t, store, store, endpoints, caller)
 }
 
 func send(t *testing.T, handler http.Handler, method, path, body string) (int, string) {
@@ -81,11 +109,6 @@ func send(t *testing.T, handler http.Handler, method, path, body string) (int, s
 	recorded := httptest.NewRecorder()
 	handler.ServeHTTP(recorded, request)
 	return recorded.Code, recorded.Body.String()
-}
-
-func administrators(t *testing.T, pool *pgxpool.Pool) {
-	t.Helper()
-	testpostgres.Exec(t, pool, `UPDATE "user" SET is_superuser = true`)
 }
 
 func sessionOf(userID string) principal.Principal {
@@ -126,16 +149,16 @@ func TestTheKeySeal(t *testing.T) {
 
 // Making a connection: the whole answer, the key sealed in the column and
 // absent from the answer, the models stored once each, and a second
-// account's list untouched.
+// account's list untouched. Neither account administers anything: any
+// account adds its own endpoint.
 func TestMakingAConnection(t *testing.T) {
 	pool := testpostgres.Open(t, databaseVariable)
-	administrators(t, pool)
 	const alice, bob = testpostgres.Alice, testpostgres.Bob
-	hers := writes(t, pool, &recorder{}, sessionOf(alice))
+	hers := over(t, pool, &recorder{}, sessionOf(alice))
 
 	status, body := send(t, hers, http.MethodPost, ConnectionsPath, `{
 		"provider":"openai_compatible","base_url":"https://models.example.test/v1","api_key":"fake-alice-key",
-		"extra":{"region":"eu","litellm_params":{"aws_secret_access_key":"fake-bag"}},"scope":"user",
+		"extra":{"region":"eu"},"scope":"user",
 		"models":[
 		 {"model_id":" tiny ","display_name":"Tiny","source":"MANUAL","supports_chat":true,"max_input_tokens":8000,"enabled":true,"metadata":{"family":"t"}},
 		 {"model_id":"tiny"},
@@ -143,7 +166,7 @@ func TestMakingAConnection(t *testing.T) {
 	if status != http.StatusOK {
 		t.Fatalf("create = %d %s", status, body)
 	}
-	if strings.Contains(body, "fake-") || strings.Contains(body, "litellm_params") {
+	if strings.Contains(body, "fake-") {
 		t.Fatalf("a credential was answered: %s", body)
 	}
 	for _, want := range []string{
@@ -175,33 +198,38 @@ func TestMakingAConnection(t *testing.T) {
 	if _, listed := send(t, hers, http.MethodGet, ConnectionsPath, ""); listed != "["+body+"]" {
 		t.Errorf("the list differs from the answer to the create:\n%s\n%s", listed, body)
 	}
-	if _, his := send(t, writes(t, pool, &recorder{}, sessionOf(bob)), http.MethodGet, ConnectionsPath, ""); his != "[]" {
+	if _, his := send(t, over(t, pool, &recorder{}, sessionOf(bob)), http.MethodGet, ConnectionsPath, ""); his != "[]" {
 		t.Errorf("Bob's list after Alice made a connection: %s", his)
 	}
 }
 
-// What a write refuses before any row is touched.
+// What a write refuses before any row is touched or any endpoint called.
 func TestWhatAWriteRefuses(t *testing.T) {
 	pool := testpostgres.Open(t, databaseVariable)
-	administrators(t, pool)
-	hers := writes(t, pool, &recorder{}, sessionOf(testpostgres.Alice))
+	tried := &recorder{}
+	hers := over(t, pool, tried, sessionOf(testpostgres.Alice))
+	const ok = `"provider":"openai_compatible","base_url":"https://models.example.test/v1","api_key":"fake-k"`
 	for name, test := range map[string]struct{ method, path, body, want string }{
-		"no provider":             {http.MethodPost, ConnectionsPath, `{}`, "provider is required"},
-		"an unknown provider":     {http.MethodPost, ConnectionsPath, `{"provider":"made_up"}`, "one of the providers"},
-		"not an object":           {http.MethodPost, ConnectionsPath, `[1]`, "JSON object"},
-		"the operator's scope":    {http.MethodPost, ConnectionsPath, `{"provider":"openai","scope":"global"}`, "configured in the model proxy"},
-		"a file address":          {http.MethodPost, ConnectionsPath, `{"provider":"openai","base_url":"file:///etc/passwd"}`, "http or https"},
-		"credentials in a URL":    {http.MethodPost, ConnectionsPath, `{"provider":"openai","base_url":"https://u:p@models.example.test"}`, "http or https"},
-		"extra a list":            {http.MethodPost, ConnectionsPath, `{"provider":"openai","extra":[]}`, "extra must be an object"},
-		"a blank model id":        {http.MethodPost, ConnectionsPath, `{"provider":"openai","models":[{"model_id":" "}]}`, "model_id"},
-		"an unknown source":       {http.MethodPost, ConnectionsPath, `{"provider":"openai","models":[{"model_id":"m","source":"GUESSED"}]}`, "source"},
-		"update: null provider":   {http.MethodPut, "/api/v1/model-connections/1", `{"provider":null}`, "one of the providers"},
-		"update: null enabled":    {http.MethodPut, "/api/v1/model-connections/1", `{"enabled":null}`, "true or false"},
-		"update: id not a number": {http.MethodPut, "/api/v1/model-connections/abc", `{}`, "connection_id"},
-		"test: no model":          {http.MethodPost, TestPreviewPath, `{"provider":"openai"}`, "model_id is required"},
+		"no provider":              {http.MethodPost, ConnectionsPath, `{}`, "provider is required"},
+		"an unknown provider":      {http.MethodPost, ConnectionsPath, `{"provider":"made_up"}`, providerUnknown},
+		"a provider that is gone":  {http.MethodPost, ConnectionsPath, `{"provider":"bedrock","api_key":"fake-k"}`, providerUnknown},
+		"not an object":            {http.MethodPost, ConnectionsPath, `[1]`, "JSON object"},
+		"the operator's scope":     {http.MethodPost, ConnectionsPath, `{` + ok + `,"scope":"global"}`, "configured in the model proxy"},
+		"a file address":           {http.MethodPost, ConnectionsPath, `{"provider":"openai_compatible","base_url":"file:///etc/passwd","api_key":"fake-k"}`, "http or https"},
+		"credentials in a URL":     {http.MethodPost, ConnectionsPath, `{"provider":"openai_compatible","base_url":"https://u:p@models.example.test","api_key":"fake-k"}`, "http or https"},
+		"extra a list":             {http.MethodPost, ConnectionsPath, `{` + ok + `,"extra":[]}`, "extra must be an object"},
+		"a credential bag":         {http.MethodPost, ConnectionsPath, `{` + ok + `,"extra":{"litellm_params":{"aws_secret_access_key":"fake-s"}}}`, "litellm_params or kwargs"},
+		"a blank model id":         {http.MethodPost, ConnectionsPath, `{` + ok + `,"models":[{"model_id":" "}]}`, "model_id"},
+		"an unknown source":        {http.MethodPost, ConnectionsPath, `{` + ok + `,"models":[{"model_id":"m","source":"GUESSED"}]}`, "source"},
+		"update: null provider":    {http.MethodPut, "/api/v1/model-connections/1", `{"provider":null}`, providerUnknown},
+		"update: another provider": {http.MethodPut, "/api/v1/model-connections/1", `{"provider":"openai"}`, providerUnknown},
+		"update: null enabled":     {http.MethodPut, "/api/v1/model-connections/1", `{"enabled":null}`, "true or false"},
+		"update: id not a number":  {http.MethodPut, "/api/v1/model-connections/abc", `{}`, "connection_id"},
+		"test: no model":           {http.MethodPost, TestPreviewPath, `{` + ok + `}`, "model_id is required"},
+		"test: another provider":   {http.MethodPost, TestPreviewPath, `{"provider":"anthropic","api_key":"fake-k","model_id":"m"}`, providerUnknown},
 	} {
 		status, body := send(t, hers, test.method, test.path, test.body)
-		if status != http.StatusUnprocessableEntity || !strings.Contains(body, test.want) {
+		if status != http.StatusUnprocessableEntity || !strings.Contains(body, test.want) || strings.Contains(body, "fake-") {
 			t.Errorf("%s: %d %s, want a 422 saying %q", name, status, body, test.want)
 		}
 	}
@@ -209,34 +237,36 @@ func TestWhatAWriteRefuses(t *testing.T) {
 	if err := pool.QueryRow(context.Background(), `SELECT count(*) FROM connections`).Scan(&rows); err != nil || rows != 0 {
 		t.Errorf("a refused write stored %d rows, %v", rows, err)
 	}
+	if tried.count() != 0 {
+		t.Errorf("a refused request reached the endpoint: %+v", tried.probes)
+	}
 }
 
-// Only an administrator, in a session, writes or tests a connection to a
-// provider other than an OpenAI-compatible endpoint. Everyone else is
-// refused before a model is tried or anything is stored.
-func TestOnlyAnAdministratorInASessionWrites(t *testing.T) {
+// A person, in a session, writes and tests connections: an API key and an
+// agent acting for the same account are refused before a model is tried
+// or anything is stored, administrator or not.
+func TestOnlyASessionWrites(t *testing.T) {
 	pool := testpostgres.Open(t, databaseVariable)
-	const alice, bob = testpostgres.Alice, testpostgres.Bob
+	const alice = testpostgres.Alice
 	testpostgres.Exec(t, pool, `UPDATE "user" SET is_superuser = true WHERE id = '`+alice+`';
-INSERT INTO connections (id, provider, scope, user_id) VALUES (1, 'openai', 'user', '`+bob+`');
-INSERT INTO models (id, connection_id, model_id) VALUES (10, 1, 'his-model');`)
+INSERT INTO connections (id, provider, base_url, scope, user_id) VALUES (1, 'openai_compatible', 'https://hers.example.test/v1', 'user', '`+alice+`');
+INSERT INTO models (id, connection_id, model_id) VALUES (10, 1, 'her-model');`)
 	tried := &recorder{}
 	calls := []struct{ method, path, body string }{
-		{http.MethodPost, ConnectionsPath, `{"provider":"openai"}`},
+		{http.MethodPost, ConnectionsPath, `{"provider":"openai_compatible","base_url":"https://x.example.test/v1","api_key":"fake-k"}`},
 		{http.MethodPut, "/api/v1/model-connections/1", `{"enabled":false}`},
 		{http.MethodDelete, "/api/v1/model-connections/1", ``},
-		{http.MethodPost, TestPreviewPath, `{"provider":"openai","model_id":"m"}`},
+		{http.MethodPost, TestPreviewPath, `{"provider":"openai_compatible","base_url":"https://x.example.test/v1","api_key":"fake-k","model_id":"m"}`},
 		{http.MethodPost, "/api/v1/model-connections/1/test-update", `{"model_id":"m"}`},
 		{http.MethodPost, "/api/v1/models/10/test", ``},
 	}
 	for name, caller := range map[string]principal.Principal{
-		"an account that is not an administrator": sessionOf(bob),
-		"an administrator's API key":              {UserID: alice, Method: principal.MethodPersonalAccessToken},
-		"an agent acting as an administrator":     {UserID: alice, Method: principal.MethodAgent},
+		"her API key":            {UserID: alice, Method: principal.MethodPersonalAccessToken},
+		"an agent acting as her": {UserID: alice, Method: principal.MethodAgent},
 	} {
-		handler := writes(t, pool, tried, caller)
+		handler := over(t, pool, tried, caller)
 		for _, call := range calls {
-			if status, body := send(t, handler, call.method, call.path, call.body); status != http.StatusForbidden {
+			if status, body := send(t, handler, call.method, call.path, call.body); status != http.StatusForbidden || !strings.Contains(body, sessionRequired) {
 				t.Errorf("%s: %s %s = %d %s, want 403", name, call.method, call.path, status, body)
 			}
 		}
@@ -246,30 +276,33 @@ INSERT INTO models (id, connection_id, model_id) VALUES (10, 1, 'his-model');`)
 		`SELECT count(*), count(*) FILTER (WHERE enabled) FROM connections`).Scan(&connections, &enabled); err != nil || connections != 1 || enabled != 1 {
 		t.Errorf("after the refusals: %d connections, %d enabled, %v", connections, enabled, err)
 	}
-	if len(tried.probes) != 0 {
+	if tried.count() != 0 {
 		t.Errorf("a refused caller had a model tried: %+v", tried.probes)
 	}
 }
 
-// The isolation test of the writes: two administrators, each with a
-// connection. Neither can change, remove or test the other's, by its id or
-// by its model's id, and each refusal is the "not found" of an id that
-// does not exist.
+// The isolation test of the writes: two accounts, each with a connection.
+// Neither can change, remove or test the other's, by its id or by its
+// model's id, and each refusal is the "not found" of an id that does not
+// exist.
 func TestOneAccountCannotWriteAnothersConnection(t *testing.T) {
 	pool := testpostgres.Open(t, databaseVariable)
-	administrators(t, pool)
 	const alice, bob = testpostgres.Alice, testpostgres.Bob
 	keys := seal(t)
 	herKey, _ := keys.Seal(alice, "fake-alice-key")
+	herHeaders, err := ownmodels.SealedHeaders(keys, alice, map[string]string{"X-Org": "fake-alice-org"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	testpostgres.Exec(t, pool, `
 INSERT INTO connections (id, provider, base_url, api_key, extra, scope, user_id) VALUES
- (1, 'openai', 'https://hers.example.test/v1', '`+herKey+`', '{"litellm_params":{"token":"fake-alice-bag"},"region":"eu"}', 'user', '`+alice+`'),
- (2, 'openai', NULL, NULL, '{}', 'user', '`+bob+`'),
+ (1, 'openai_compatible', 'https://hers.example.test/v1', '`+herKey+`', '{"region":"eu"}'::jsonb || '`+string(herHeaders)+`'::jsonb, 'user', '`+alice+`'),
+ (2, 'openai_compatible', 'https://his.example.test/v1', NULL, '{}', 'user', '`+bob+`'),
  (3, 'openai', NULL, 'fake-site-key', '{}', 'global', NULL);
 INSERT INTO models (id, connection_id, model_id) VALUES (10, 1, 'her-model'), (20, 2, 'his-model'), (30, 3, 'site-model');
 SELECT setval('connections_id_seq', 100);`)
 	tried := &recorder{}
-	hers, his := writes(t, pool, tried, sessionOf(alice)), writes(t, pool, tried, sessionOf(bob))
+	hers, his := over(t, pool, tried, sessionOf(alice)), over(t, pool, tried, sessionOf(bob))
 
 	absent := func(status int, body string) bool {
 		return status == http.StatusNotFound && !strings.Contains(body, "fake-")
@@ -292,7 +325,7 @@ SELECT setval('connections_id_seq', 100);`)
 			t.Errorf("Bob testing model %s = %d %s, want a 404", model, status, body)
 		}
 	}
-	if len(tried.probes) != 0 {
+	if tried.count() != 0 {
 		t.Fatalf("Bob had another account's model tried: %+v", tried.probes)
 	}
 	var untouched bool
@@ -302,15 +335,16 @@ SELECT setval('connections_id_seq', 100);`)
 		t.Fatalf("Alice's or the operator's rows changed: %v, %v", untouched, err)
 	}
 
-	// Alice testing her stored model: her own key, opened, her address and
-	// her bag reach the prober, and nothing of them reaches the answer.
+	// Alice testing her stored model: her own key and headers, opened, and
+	// her address reach the endpoint, and nothing of them reaches the
+	// answer.
 	status, body := send(t, hers, http.MethodPost, "/api/v1/models/10/test", "")
 	if status != http.StatusOK || body != `{"status":"OK","ok":true,"message":"Model test succeeded."}` {
 		t.Fatalf("her model test = %d %s", status, body)
 	}
 	if got := tried.last(t); got.Key != "fake-alice-key" || got.BaseURL != "https://hers.example.test/v1" || got.ModelID != "her-model" ||
-		got.Provider != "openai" || string(got.Params) != `{"token": "fake-alice-bag"}` {
-		t.Errorf("her stored model was tried as %+v (params %s)", got, got.Params)
+		got.Headers["X-Org"] != "fake-alice-org" {
+		t.Errorf("her stored model was tried as %+v", got)
 	}
 
 	// A change tested before it is saved: a field the body names is the
@@ -321,40 +355,41 @@ SELECT setval('connections_id_seq', 100);`)
 		want Probe
 	}{
 		"the saved key, a new address": {`{"model_id":"m","base_url":"https://new.example.test/v1"}`,
-			Probe{Provider: "openai", BaseURL: "https://new.example.test/v1", Key: "fake-alice-key", ModelID: "m"}},
+			Probe{BaseURL: "https://new.example.test/v1", Key: "fake-alice-key", ModelID: "m", Headers: map[string]string{"X-Org": "fake-alice-org"}}},
 		"a new key": {`{"model_id":"m","api_key":"fake-new-key"}`,
-			Probe{Provider: "openai", BaseURL: "https://hers.example.test/v1", Key: "fake-new-key", ModelID: "m"}},
-		"the key removed, another provider": {`{"model_id":"m","api_key":null,"provider":"openrouter","base_url":null}`,
-			Probe{Provider: "openrouter", ModelID: "m"}},
+			Probe{BaseURL: "https://hers.example.test/v1", Key: "fake-new-key", ModelID: "m", Headers: map[string]string{"X-Org": "fake-alice-org"}}},
+		"the headers removed": {`{"model_id":"m","headers":null}`,
+			Probe{BaseURL: "https://hers.example.test/v1", Key: "fake-alice-key", ModelID: "m"}},
 	} {
 		if status, body := send(t, hers, http.MethodPost, "/api/v1/model-connections/1/test-update", test.body); status != http.StatusOK {
 			t.Fatalf("%s: %d %s", name, status, body)
 		}
 		got := tried.last(t)
-		got.Params = nil
-		if got.Provider != test.want.Provider || got.BaseURL != test.want.BaseURL || got.Key != test.want.Key || got.ModelID != test.want.ModelID {
+		if got.BaseURL != test.want.BaseURL || got.Key != test.want.Key || got.ModelID != test.want.ModelID ||
+			len(got.Headers) != len(test.want.Headers) || got.Headers["X-Org"] != test.want.Headers["X-Org"] {
 			t.Errorf("%s: tried as %+v, want %+v", name, got, test.want)
 		}
 	}
-	if err := pool.QueryRow(context.Background(), `SELECT api_key = $1 AND base_url = 'https://hers.example.test/v1' AND provider = 'openai'
+	if err := pool.QueryRow(context.Background(), `SELECT api_key = $1 AND base_url = 'https://hers.example.test/v1' AND extra ? 'headers_sealed'
 		FROM connections WHERE id = 1`, herKey).Scan(&untouched); err != nil || !untouched {
 		t.Errorf("a test of a change stored it: %v, %v", untouched, err)
 	}
 
-	// Saving a change: `extra` is replaced, the bag she cannot see is kept,
-	// the key she did not name is kept, and null removes the address.
-	status, body = send(t, hers, http.MethodPut, "/api/v1/model-connections/1", `{"extra":{"region":"us"},"base_url":null,"enabled":false}`)
-	if status != http.StatusOK || !strings.Contains(body, `"base_url":null,"extra":{"region":"us"},`) ||
-		!strings.Contains(body, `"enabled":false,"has_api_key":true`) || strings.Contains(body, "fake-") {
+	// Saving a change: `extra` is replaced, the headers she cannot see are
+	// kept, and so is the key she did not name.
+	status, body = send(t, hers, http.MethodPut, "/api/v1/model-connections/1", `{"extra":{"region":"us"},"base_url":"https://moved.example.test/v1","enabled":false}`)
+	if status != http.StatusOK || !strings.Contains(body, `"base_url":"https://moved.example.test/v1","extra":{"region":"us"},`) ||
+		!strings.Contains(body, `"enabled":false,"has_api_key":true,"header_names":["X-Org"]`) || strings.Contains(body, "fake-") {
 		t.Errorf("her update = %d %s", status, body)
 	}
 	var extra string
 	if err := pool.QueryRow(context.Background(), `SELECT extra::text FROM connections WHERE id = 1 AND api_key = $1`, herKey).Scan(&extra); err != nil ||
-		!strings.Contains(extra, "fake-alice-bag") || !strings.Contains(extra, `"region": "us"`) {
-		t.Errorf("after the update extra is %s, %v: the bag must survive a save that could not have sent it", extra, err)
+		!strings.Contains(extra, "headers_sealed") || !strings.Contains(extra, `"region": "us"`) {
+		t.Errorf("after the update extra is %s, %v: the headers must survive a save that could not have sent them", extra, err)
 	}
-	// Removing the key, then the connection and its models with it.
-	if status, body = send(t, hers, http.MethodPut, "/api/v1/model-connections/1", `{"api_key":null}`); status != http.StatusOK || !strings.Contains(body, `"has_api_key":false`) {
+	// The key cannot be removed: this tier calls the endpoint with it, so a
+	// connection without one could only fail.
+	if status, body = send(t, hers, http.MethodPut, "/api/v1/model-connections/1", `{"api_key":null}`); status != http.StatusUnprocessableEntity || !strings.Contains(body, "needs the endpoint's API key") {
 		t.Errorf("removing her key = %d %s", status, body)
 	}
 	if status, body = send(t, hers, http.MethodDelete, "/api/v1/model-connections/1", ""); status != http.StatusOK || body != `{"status":"deleted"}` {
@@ -373,85 +408,76 @@ SELECT setval('connections_id_seq', 100);`)
 // person can act on, and no model is tried with nothing.
 func TestAStoredKeyThatNoLongerOpens(t *testing.T) {
 	pool := testpostgres.Open(t, databaseVariable)
-	administrators(t, pool)
 	testpostgres.Exec(t, pool, `
-INSERT INTO connections (id, provider, api_key, scope, user_id) VALUES (1, 'openai', 'fake-key-stored-before-sealing', 'user', '`+testpostgres.Alice+`');
+INSERT INTO connections (id, provider, base_url, api_key, scope, user_id) VALUES (1, 'openai_compatible', 'https://hers.example.test/v1', 'fake-key-stored-before-sealing', 'user', '`+testpostgres.Alice+`');
 INSERT INTO models (id, connection_id, model_id) VALUES (10, 1, 'her-model');`)
 	tried := &recorder{}
-	hers := writes(t, pool, tried, sessionOf(testpostgres.Alice))
-	for _, path := range []string{"/api/v1/models/10/test", "/api/v1/model-connections/1/test-update"} {
+	hers := over(t, pool, tried, sessionOf(testpostgres.Alice))
+	for _, path := range []string{"/api/v1/models/10/test", "/api/v1/model-connections/1/test-update", "/api/v1/model-connections/1/discover"} {
 		status, body := send(t, hers, http.MethodPost, path, `{"model_id":"m"}`)
 		if status != http.StatusConflict || !strings.Contains(body, "Enter the key again") || strings.Contains(body, "fake-") {
 			t.Errorf("POST %s = %d %s", path, status, body)
 		}
 	}
-	if len(tried.probes) != 0 {
+	if tried.count() != 0 {
 		t.Errorf("a model was tried without its key: %+v", tried.probes)
 	}
 }
 
-// The prober over a stand-in for the model proxy: what it sends, and how
-// each of the proxy's answers reads.
-func TestTheProxyProber(t *testing.T) {
-	var (
-		got    map[string]any
-		bearer string
-		status = http.StatusOK
-		reply  = `{"choices":[]}`
-	)
-	proxy := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		bearer = request.Header.Get("Authorization")
-		got = nil
-		_ = json.NewDecoder(request.Body).Decode(&got)
-		if request.URL.Path != "/v1/chat/completions" {
-			status = http.StatusTeapot
-		}
-		response.WriteHeader(status)
-		_, _ = io.WriteString(response, reply)
-	}))
-	defer proxy.Close()
-	prober := ProxyProber{URL: proxy.URL + "/v1/", Key: "fake-proxy-key", HTTP: proxy.Client(), Timeout: time.Second}
-	if err := prober.Check(); err != nil {
-		t.Fatal(err)
-	}
-	probe := Probe{Provider: "lm_studio", BaseURL: "http://models.example.test/v1", Key: "fake-user-key", ModelID: "tiny",
-		Params: json.RawMessage(`{"aws_region_name":"eu","model":"smuggled","api_key":"smuggled"}`)}
+// retiredRows is the statements as they answer for a connection stored to
+// a provider that is gone (bedrock), with one model: enough to drive every
+// route to the point where the provider is read. A statement a route must
+// not reach for such a row is not implemented, so reaching it panics.
+type retiredRows struct {
+	Writer
+	deleted bool
+}
 
-	if verdict := prober.Try(context.Background(), probe); verdict != (Verdict{Status: "OK", OK: true, Message: "Model test succeeded."}) {
-		t.Errorf("a 200 read as %+v", verdict)
-	}
-	// The proxy's own key authenticates; the connection's travels in the
-	// body, under the provider's proxy prefix, and the bag cannot replace
-	// what the request sets itself.
-	if bearer != "Bearer fake-proxy-key" || got["model"] != "openai/tiny" || got["api_key"] != "fake-user-key" ||
-		got["api_base"] != "http://models.example.test/v1" || got["aws_region_name"] != "eu" {
-		t.Errorf("the proxy was sent %v with %q", got, bearer)
-	}
-	if prober.Try(context.Background(), Probe{Provider: "openai", ModelID: "m"}); got["api_key"] != nil || got["api_base"] != nil {
-		t.Errorf("a connection with no key or address sent %v", got)
-	}
+func (retiredRows) Provider(context.Context, string, int64) (string, bool, error) {
+	return "bedrock", true, nil
+}
 
-	for name, test := range map[string]struct {
-		status int
-		reply  string
-		want   Verdict
-	}{
-		"the provider refuses the key": {401, `{"error":{"message":"Incorrect API key provided: fake-user-key.\n Check it."}}`,
-			Verdict{Status: "AUTH_FAILED", Message: "Incorrect API key provided: [key]. Check it."}},
-		"no such model":               {404, `{"error":{"message":"model not found"}}`, Verdict{Status: "NOT_FOUND", Message: "model not found"}},
-		"the proxy will not use it":   {400, `{"error":{"message":"api_base not allowed in request body"}}`, Verdict{Status: "UNREACHABLE", Message: "api_base not allowed in request body"}},
-		"an answer that says nothing": {502, `<html>bad gateway</html>`, Verdict{Status: "UNREACHABLE", Message: "The model test failed."}},
-		"a long answer":               {500, `{"error":{"message":"` + strings.Repeat("x", 1000) + `"}}`, Verdict{Status: "UNREACHABLE", Message: strings.Repeat("x", 300) + "…"}},
+func (retiredRows) ModelProvider(context.Context, string, int64) (string, bool, error) {
+	return "bedrock", true, nil
+}
+
+func (retiredRows) Credentials(context.Context, string, int64) (StoredCredentials, bool, error) {
+	return StoredCredentials{Provider: "bedrock", SealedKey: "fake-sealed", Extra: []byte(`{}`)}, true, nil
+}
+
+func (retiredRows) ModelCredentials(context.Context, string, int64) (string, StoredCredentials, bool, error) {
+	return "m", StoredCredentials{Provider: "bedrock", SealedKey: "fake-sealed", Extra: []byte(`{}`)}, true, nil
+}
+
+func (r *retiredRows) Delete(context.Context, string, int64) (bool, error) {
+	r.deleted = true
+	return true, nil
+}
+
+// A row of a provider that is gone can be removed and nothing else: every
+// other route answers the one refusal that says what to do, before the key
+// is opened or an endpoint is asked anything.
+func TestARowOfAProviderThatIsGoneCanOnlyBeRemoved(t *testing.T) {
+	rows, tried := &retiredRows{}, &recorder{}
+	handler := writes(t, rows, emptyLister{}, tried, sessionOf(testpostgres.Alice))
+	for _, call := range []struct{ method, path, body string }{
+		{http.MethodPut, "/api/v1/model-connections/1", `{"enabled":false}`},
+		{http.MethodPost, "/api/v1/model-connections/1/test-update", `{"model_id":"m"}`},
+		{http.MethodPost, "/api/v1/models/10/test", ``},
+		{http.MethodPost, "/api/v1/model-connections/1/verify", ``},
+		{http.MethodPost, "/api/v1/model-connections/1/discover", ``},
+		{http.MethodPatch, "/api/v1/model-connections/1/models", `{"model_ids":[10],"enabled":false}`},
+		{http.MethodPut, "/api/v1/models/10", `{"enabled":false}`},
 	} {
-		status, reply = test.status, test.reply
-		if verdict := prober.Try(context.Background(), probe); verdict != test.want {
-			t.Errorf("%s: read as %+v, want %+v", name, verdict, test.want)
+		status, body := send(t, handler, call.method, call.path, call.body)
+		if status != http.StatusConflict || !strings.Contains(body, providerRetired) || strings.Contains(body, "fake-") {
+			t.Errorf("%s %s = %d %s, want a 409 saying the provider is no longer supported", call.method, call.path, status, body)
 		}
 	}
-
-	// A proxy that is down: said without its address.
-	proxy.Close()
-	if verdict := prober.Try(context.Background(), probe); verdict.Status != "UNREACHABLE" || verdict.OK || strings.Contains(verdict.Message, "127.0.0.1") {
-		t.Errorf("a proxy that is down read as %+v", verdict)
+	if tried.count() != 0 {
+		t.Errorf("a retired row reached an endpoint: %+v", tried.probes)
+	}
+	if status, body := send(t, handler, http.MethodDelete, "/api/v1/model-connections/1", ``); status != http.StatusOK || body != `{"status":"deleted"}` || !rows.deleted {
+		t.Errorf("removing it = %d %s", status, body)
 	}
 }

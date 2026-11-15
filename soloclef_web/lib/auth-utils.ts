@@ -10,10 +10,6 @@ const REDIRECT_PATH_KEY = "surfsense_redirect_path";
 const LEGACY_BEARER_TOKEN_KEY = "surfsense_bearer_token";
 const LEGACY_REFRESH_TOKEN_KEY = "surfsense_refresh_token";
 
-export function isDesktopClient(): boolean {
-	return typeof window !== "undefined" && !!window.electronAPI;
-}
-
 function purgeLegacyStoredTokens(): void {
 	if (typeof window === "undefined") return;
 	localStorage.removeItem(LEGACY_BEARER_TOKEN_KEY);
@@ -21,7 +17,6 @@ function purgeLegacyStoredTokens(): void {
 }
 
 export function getLoginPath(): string {
-	if (typeof window !== "undefined" && window.electronAPI) return "/desktop/login";
 	return "/login";
 }
 
@@ -78,14 +73,6 @@ export function getPostLoginRedirectPath(defaultPath = "/dashboard"): string {
  * Returns true if logout was successful (or tokens were cleared), false otherwise.
  */
 export async function logout(): Promise<boolean> {
-	const isDesktop = isDesktopClient();
-
-	if (isDesktop && window.electronAPI?.logout) {
-		await window.electronAPI.logout();
-		purgeLegacyStoredTokens();
-		return true;
-	}
-
 	try {
 		const response = await fetch(buildBackendUrl("/auth/jwt/revoke"), {
 			method: "POST",
@@ -112,8 +99,6 @@ export async function logout(): Promise<boolean> {
  *
  * Web auth is cookie-backed, so the client cannot synchronously prove whether a
  * session exists. Return true and let `/auth/session` or API 401s settle it.
- * Desktop can synchronously check for the Electron bridge, while the access
- * token itself is resolved asynchronously by auth-fetch.
  */
 export function isAuthenticated(): boolean {
 	return true;
@@ -138,7 +123,6 @@ export function redirectToLogin(): void {
 		"/register",
 		"/forgot-password",
 		"/reset-password",
-		"/desktop/login",
 	];
 	if (!excludedPaths.includes(window.location.pathname)) {
 		setRedirectPath(currentPath);
@@ -148,11 +132,6 @@ export function redirectToLogin(): void {
 }
 
 async function doRefreshSession(): Promise<boolean> {
-	if (isDesktopClient()) {
-		const token = await window.electronAPI?.refreshAccessToken?.();
-		return !!token;
-	}
-
 	try {
 		const response = await fetch(buildBackendUrl("/auth/jwt/refresh"), {
 			method: "POST",

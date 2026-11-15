@@ -1,40 +1,27 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useParams, usePathname } from "next/navigation";
 import { useEffect } from "react";
 import {
 	artifactImageBlobQueryKey,
 	artifactManifestQueryOptions,
 } from "@/features/artifacts/api/artifact-queries";
 import { selectPrimaryArtifactFile } from "@/features/artifacts/lib/artifact-selectors";
-import { baseApiService } from "@/lib/apis/base-api.service";
 import { authenticatedFetch } from "@/lib/auth-fetch";
 import { buildBackendUrl } from "@/lib/env-config";
 
+/**
+ * A chat image card's picture, read from the owner's own artifact routes.
+ * Chats have no public page, so there is no share-token path here.
+ */
 export function useArtifactImage(artifactId: number) {
-	const params = useParams();
-	const pathname = usePathname();
-	const shareToken =
-		pathname?.startsWith("/public/") && typeof params?.token === "string" ? params.token : null;
-
-	const manifestQuery = useQuery({
-		...artifactManifestQueryOptions(artifactId),
-		enabled: shareToken == null,
-	});
+	const manifestQuery = useQuery(artifactManifestQueryOptions(artifactId));
 	const primary = selectPrimaryArtifactFile(manifestQuery.data);
 
 	const imageQuery = useQuery({
-		queryKey: artifactImageBlobQueryKey(artifactId, shareToken, primary?.file_id),
-		enabled: shareToken != null || primary != null,
-		queryFn: async () => {
-			const blob = shareToken
-				? await baseApiService.getBlob(
-						`/api/v1/public/${shareToken}/artifacts/${artifactId}/content`
-					)
-				: await fetchPrimary(primary?.content_url);
-			return URL.createObjectURL(blob);
-		},
+		queryKey: artifactImageBlobQueryKey(artifactId, primary?.file_id),
+		enabled: primary != null,
+		queryFn: async () => URL.createObjectURL(await fetchPrimary(primary?.content_url)),
 		staleTime: 60_000,
 	});
 

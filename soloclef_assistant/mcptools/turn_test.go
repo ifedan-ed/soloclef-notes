@@ -18,7 +18,7 @@ func TestSettingsAreAllSaidOrTheSourceIsNotBuilt(t *testing.T) {
 	if err == nil {
 		t.Fatal("a Source was built from nothing")
 	}
-	for _, name := range []string{"Rows", "Generations", "Network", "Logger", "Now", "ClientName", "SiteHostsWhenUnset", "ToolsPerServer", "Discovery", "Call", "Lifetime", "RetryIncomplete", "Accounts", "ResultBytes"} {
+	for _, name := range []string{"Rows", "Generations", "Network", "Seal", "OAuth", "Logger", "Now", "ClientName", "SiteHostsWhenUnset", "ToolsPerServer", "Discovery", "Call", "Lifetime", "RetryIncomplete", "Accounts", "ResultBytes"} {
 		if !strings.Contains(err.Error(), name) {
 			t.Errorf("the refusal does not name %s: %v", name, err)
 		}
@@ -26,7 +26,8 @@ func TestSettingsAreAllSaidOrTheSourceIsNotBuilt(t *testing.T) {
 	// The production Network is checked with the rest.
 	w := newWorld(t, newRows(), newCounter(), nil)
 	settings := Settings{
-		Rows: newRows(), Generations: newCounter(), Network: PublicInternet{}, Logger: w.source.logger, Now: time.Now,
+		Rows: newRows(), Generations: newCounter(), Network: PublicInternet{}, Seal: testSeal, OAuth: testOAuth(),
+		Logger: w.source.logger, Now: time.Now,
 		ClientName: "x", SiteHostsWhenUnset: []string{}, Limits: testLimits(),
 	}
 	if _, err := NewSource(settings); err == nil || !strings.Contains(err.Error(), "Resolve") {

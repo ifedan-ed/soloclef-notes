@@ -2,11 +2,10 @@ import type { Metadata } from "next";
 import { BRAND } from "@/lib/brand";
 import enMessages from "@/messages/en.json";
 
-/** What a link preview needs of a public link: what was shared and its title. */
+/** What a link preview needs of a public link: the shared output's title and kind. */
 export interface PublicLinkSummary {
-	kind: "chat" | "output";
 	title: string;
-	/** A Studio output's kind ("mindmap", "quiz", ...). */
+	/** The Studio output's kind ("mindmap", "quiz", ...). */
 	outputKind?: string;
 }
 
@@ -25,10 +24,7 @@ export function publicLinkMetadata(summary: PublicLinkSummary | null): Metadata 
 	};
 	if (!summary) return { ...hidden, title: BRAND.name };
 	// The Studio's own name for the kind ("Flashcards", "Reports"), as a label.
-	const what =
-		summary.kind === "chat"
-			? "Chat"
-			: (summary.outputKind && KINDS[summary.outputKind]?.label) || "Studio";
+	const what = (summary.outputKind && KINDS[summary.outputKind]?.label) || "Studio";
 	const description = `${what} · shared read-only from ${BRAND.name}.`;
 	const images = [{ url: BRAND.logo.og, width: 1200, height: 630, alt: BRAND.name }];
 	return {
@@ -46,21 +42,17 @@ export function publicLinkMetadata(summary: PublicLinkSummary | null): Metadata 
 	};
 }
 
-/** The summary of a public link's answer (GET /api/v1/public/{token}), or null for anything else. */
+/**
+ * The summary of a public link's answer (GET /api/v1/public/{token}), or null
+ * for anything that is not a shared output: only outputs can be shared, so
+ * any other answer names nothing and the preview stays the site's own.
+ */
 export function summarizePublicLink(body: unknown): PublicLinkSummary | null {
 	if (!body || typeof body !== "object") return null;
-	const data = body as {
-		kind?: unknown;
-		thread?: { title?: unknown };
-		output?: { title?: unknown; kind?: unknown } | null;
+	const data = body as { kind?: unknown; output?: { title?: unknown; kind?: unknown } | null };
+	if (data.kind !== "output" || !data.output || typeof data.output.title !== "string") return null;
+	return {
+		title: data.output.title,
+		outputKind: typeof data.output.kind === "string" ? data.output.kind : undefined,
 	};
-	if (data.kind === "output" && data.output && typeof data.output.title === "string") {
-		return {
-			kind: "output",
-			title: data.output.title,
-			outputKind: typeof data.output.kind === "string" ? data.output.kind : undefined,
-		};
-	}
-	if (typeof data.thread?.title === "string") return { kind: "chat", title: data.thread.title };
-	return null;
 }

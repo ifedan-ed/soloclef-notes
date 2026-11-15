@@ -1,9 +1,8 @@
 /**
  * Environment configuration for the frontend.
  *
- * Docker deployments use same-origin relative browser URLs behind Caddy.
- * NEXT_PUBLIC_* values remain only as build-time fallbacks for packaged clients
- * like Electron, where there is no bundled Caddy origin.
+ * Docker deployments use same-origin relative browser URLs behind Caddy; a
+ * NEXT_PUBLIC_* value is set only for a build served from another origin.
  */
 
 import packageJson from "../package.json";
@@ -92,12 +91,3 @@ export function detectEnvironment(): "Soloclef Cloud" | "self-hosted" {
 // App version - defaults to package.json version
 // Can be overridden at build time with NEXT_PUBLIC_APP_VERSION for full git tag version
 export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || packageJson.version;
-
-// Global announcement banner. Useful for planned downtime / maintenance notices.
-// Toggle on Vercel via NEXT_PUBLIC_GLOBAL_ANNOUNCEMENT_ENABLED ("true" to show) and
-// set the copy with NEXT_PUBLIC_GLOBAL_ANNOUNCEMENT_MESSAGE.
-export const GLOBAL_ANNOUNCEMENT_ENABLED =
-	process.env.NEXT_PUBLIC_GLOBAL_ANNOUNCEMENT_ENABLED === "true";
-
-export const GLOBAL_ANNOUNCEMENT_MESSAGE =
-	process.env.NEXT_PUBLIC_GLOBAL_ANNOUNCEMENT_MESSAGE ?? "";

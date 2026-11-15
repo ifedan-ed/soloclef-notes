@@ -90,6 +90,11 @@ test("deliverable cards render queued, running, cancelling, cancelled, and faile
 		renderJob({ status: "failed", failureCode: "render_failed" }),
 		/could not be rendered/
 	);
+	// A video the worker was stopped on, by deploys, on every run it may have.
+	assert.match(
+		renderJob({ status: "failed", failureCode: "interrupted" }),
+		/server restarted while it was being made/
+	);
 });
 
 test("failure and phase copy never reflects unknown backend strings", () => {
@@ -103,8 +108,7 @@ test("failure and phase copy never reflects unknown backend strings", () => {
 test("cancel and retry name only the job: the server takes the account from the session", () => {
 	assert.equal(deliverableJobActionPath(42, "cancel"), "/api/v1/deliverable-jobs/42/cancel");
 	assert.equal(deliverableJobActionPath(42, "retry"), "/api/v1/deliverable-jobs/42/retry");
-	assert.deepEqual(deliverableJobActionRequestOptions(false), { sameOrigin: true });
-	assert.deepEqual(deliverableJobActionRequestOptions(true), { sameOrigin: false });
+	assert.deepEqual(deliverableJobActionRequestOptions, { sameOrigin: true });
 	assert.match(renderJob({ status: "queued" }), /Cancel/);
 	assert.match(renderJob({ status: "failed" }), /Retry/);
 });

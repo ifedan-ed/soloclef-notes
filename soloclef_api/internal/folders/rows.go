@@ -39,8 +39,6 @@ type Rows interface {
 	// Reparent can refuse with ErrNameTaken or ErrParentGone.
 	Reparent(ctx context.Context, userID string, folderID int64, parentID *int64, position string, at time.Time) error
 	Reposition(ctx context.Context, userID string, folderID int64, position string, at time.Time) error
-	// ClearWatched turns the folder's `watched` flag off if it is on.
-	ClearWatched(ctx context.Context, userID string, folderID int64, at time.Time) error
 
 	// Documents is the documents among these ids that are the account's,
 	// in id order.

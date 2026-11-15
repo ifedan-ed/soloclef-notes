@@ -10,6 +10,49 @@ import (
 	"time"
 )
 
+const addressesTheUserWrote = `-- name: AddressesTheUserWrote :many
+SELECT address::text FROM unnest($1::text[]) AS address
+WHERE EXISTS (
+    SELECT 1 FROM new_chat_messages AS m
+    JOIN new_chat_threads AS t ON t.id = m.thread_id AND t.user_id = $2
+    CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(m.content) = 'array' THEN m.content ELSE '[]'::jsonb END) AS part
+    WHERE m.thread_id = $3 AND m.role = 'USER'
+      AND part ->> 'type' = 'text' AND strpos(part ->> 'text', address) > 0
+)
+`
+
+type AddressesTheUserWroteParams struct {
+	Addresses []string
+	UserID    string
+	ThreadID  int64
+}
+
+// Of the addresses named, those the account's user wrote in a message of
+// this conversation, as text they typed or pasted (a message's text parts;
+// not the titles of what they mentioned, which come from the documents).
+// The thread is read under its owner, so another account's thread answers
+// nothing. What a chat's add_sources call may keep of a page's address
+// (chat_pages.go): its query and fragment only when the person wrote it so.
+func (q *Queries) AddressesTheUserWrote(ctx context.Context, arg AddressesTheUserWroteParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, addressesTheUserWrote, arg.Addresses, arg.UserID, arg.ThreadID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var address string
+		if err := rows.Scan(&address); err != nil {
+			return nil, err
+		}
+		items = append(items, address)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const claimForReading = `-- name: ClaimForReading :one
 UPDATE documents
 SET status = '{"state": "processing", "stage": "reading"}'::jsonb, updated_at = $1::timestamptz
@@ -36,6 +79,28 @@ func (q *Queries) ClaimForReading(ctx context.Context, arg ClaimForReadingParams
 	var i ClaimForReadingRow
 	err := row.Scan(&i.Title, &i.DocumentMetadata)
 	return i, err
+}
+
+const enabledSource = `-- name: EnabledSource :one
+SELECT EXISTS (
+    SELECT 1 FROM notebook_sources
+    WHERE notebook_id = $1 AND user_id = $2
+      AND document_id = $3 AND enabled
+)
+`
+
+type EnabledSourceParams struct {
+	NotebookID int64
+	UserID     string
+	DocumentID *int64
+}
+
+// Whether the document is already a ticked source of the notebook.
+func (q *Queries) EnabledSource(ctx context.Context, arg EnabledSourceParams) (bool, error) {
+	row := q.db.QueryRow(ctx, enabledSource, arg.NotebookID, arg.UserID, arg.DocumentID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const existingImport = `-- name: ExistingImport :one
@@ -80,6 +145,29 @@ func (q *Queries) ExistingImport(ctx context.Context, arg ExistingImportParams) 
 	var id int64
 	err := row.Scan(&id)
 	return id, err
+}
+
+const importedDocument = `-- name: ImportedDocument :one
+SELECT title, COALESCE(status ->> 'state', '')::text AS state
+FROM documents WHERE id = $1 AND user_id = $2
+`
+
+type ImportedDocumentParams struct {
+	ID     int64
+	UserID string
+}
+
+type ImportedDocumentRow struct {
+	Title string
+	State string
+}
+
+// A document an import linked, as its answer names it.
+func (q *Queries) ImportedDocument(ctx context.Context, arg ImportedDocumentParams) (ImportedDocumentRow, error) {
+	row := q.db.QueryRow(ctx, importedDocument, arg.ID, arg.UserID)
+	var i ImportedDocumentRow
+	err := row.Scan(&i.Title, &i.State)
+	return i, err
 }
 
 const insertOriginal = `-- name: InsertOriginal :exec

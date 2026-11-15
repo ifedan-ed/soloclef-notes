@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"git.danvics.com/danvics/soloclef/soloclef_celery/celery"
+	"git.danvics.com/danvics/soloclef/soloclef_notify/notify"
 
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/broker"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/indexing"
@@ -30,7 +32,7 @@ func TestTheDocumentIdIsReadFromEitherFormOfTheArgument(t *testing.T) {
 	} {
 		job := &indexer{result: indexing.Result{Outcome: indexing.Indexed}}
 		var observed []indexing.Outcome
-		runner, err := New(job, func(result indexing.Result) { observed = append(observed, result.Outcome) }, nil)
+		runner, err := New(job, func(result indexing.Result) { observed = append(observed, result.Outcome) }, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -59,7 +61,7 @@ func TestAMessageThatNamesNoDocumentIsRefusedWithoutIndexing(t *testing.T) {
 		"another task's name": {Task: "process_file_upload", Args: []any{float64(41)}},
 	} {
 		job := &indexer{}
-		runner, _ := New(job, nil, nil)
+		runner, _ := New(job, nil, nil, nil)
 		err := runner.Run(context.Background(), msg)
 		if err == nil || len(job.asked) != 0 {
 			t.Errorf("%s: err = %v, indexed %v", name, err, job.asked)
@@ -74,7 +76,7 @@ func TestAMessageThatNamesNoDocumentIsRefusedWithoutIndexing(t *testing.T) {
 
 func TestOnlyARetryPutsTheMessageBack(t *testing.T) {
 	job := &indexer{result: indexing.Result{Outcome: indexing.Retry}, err: fmt.Errorf("%w: the proxy is down", indexing.ErrRetry)}
-	runner, _ := New(job, nil, nil)
+	runner, _ := New(job, nil, nil, nil)
 	err := runner.Run(context.Background(), &celery.Message{Task: Task, Args: []any{float64(41)}})
 	if !errors.Is(err, broker.ErrRequeue) {
 		t.Fatalf("err = %v, want the message put back", err)
@@ -82,14 +84,14 @@ func TestOnlyARetryPutsTheMessageBack(t *testing.T) {
 
 	// A document that was marked failed is a finished job.
 	job = &indexer{result: indexing.Result{Outcome: indexing.Failed}}
-	runner, _ = New(job, nil, nil)
+	runner, _ = New(job, nil, nil, nil)
 	if err := runner.Run(context.Background(), &celery.Message{Task: Task, Args: []any{float64(41)}}); err != nil {
 		t.Fatalf("err = %v", err)
 	}
 }
 
 func TestARunnerNeedsAnIndexer(t *testing.T) {
-	if _, err := New(nil, nil, nil); err == nil {
+	if _, err := New(nil, nil, nil, nil); err == nil {
 		t.Fatal("a runner with no indexer was built")
 	}
 }
@@ -110,7 +112,7 @@ func TestOnlyADocumentLeftReadyIsToldOf(t *testing.T) {
 		indexing.Retry:   indexing.ErrRetry,
 	} {
 		ready := &readyLog{}
-		runner, _ := New(&indexer{result: indexing.Result{Outcome: outcome}, err: err}, nil, ready)
+		runner, _ := New(&indexer{result: indexing.Result{Outcome: outcome}, err: err}, nil, ready, nil)
 		_ = runner.Run(context.Background(), &celery.Message{Task: Task, Args: []any{float64(7)}})
 		want := 0
 		if outcome == indexing.Indexed {
@@ -118,6 +120,43 @@ func TestOnlyADocumentLeftReadyIsToldOf(t *testing.T) {
 		}
 		if len(ready.documents) != want {
 			t.Errorf("%s: told of %v", outcome, ready.documents)
+		}
+	}
+}
+
+// finishedLog records what the runner reported.
+type finishedLog struct{ outcomes []notify.SourceOutcome }
+
+func (f *finishedLog) SourceIndexed(_ context.Context, outcome notify.SourceOutcome) error {
+	f.outcomes = append(f.outcomes, outcome)
+	return nil
+}
+
+// A verdict is reported with what the notification step decides by (the
+// reason, the size and how long it took); a skipped or handed-back job is
+// not, because nothing has been decided about its document yet.
+func TestOnlyAVerdictIsReportedToTheNotificationStep(t *testing.T) {
+	result := indexing.Result{Reason: "unreadable", Bytes: 2048, Timings: indexing.Timings{Total: 3 * time.Minute}}
+	for outcome, err := range map[indexing.Outcome]error{
+		indexing.Indexed: nil,
+		indexing.Skipped: nil,
+		indexing.Failed:  nil,
+		indexing.Retry:   indexing.ErrRetry,
+	} {
+		finished := &finishedLog{}
+		result.Outcome = outcome
+		runner, _ := New(&indexer{result: result, err: err}, nil, nil, finished)
+		_ = runner.Run(context.Background(), &celery.Message{Task: Task, Args: []any{float64(7)}})
+		switch outcome {
+		case indexing.Indexed, indexing.Failed:
+			want := notify.SourceOutcome{DocumentID: 7, Failed: outcome == indexing.Failed, Reason: "unreadable", Bytes: 2048, Took: 3 * time.Minute}
+			if len(finished.outcomes) != 1 || finished.outcomes[0] != want {
+				t.Errorf("%s: reported %+v", outcome, finished.outcomes)
+			}
+		default:
+			if len(finished.outcomes) != 0 {
+				t.Errorf("%s: reported %+v", outcome, finished.outcomes)
+			}
 		}
 	}
 }

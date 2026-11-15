@@ -17,8 +17,6 @@ import (
 type Lists interface {
 	// Names is the chat models, sorted.
 	Names(ctx context.Context) ([]string, error)
-	// ImageNames is the models that draw, sorted.
-	ImageNames(ctx context.Context) ([]string, error)
 }
 
 // Stored is where an account's choices are kept.
@@ -78,11 +76,10 @@ type Choices struct {
 	// answers an account that chose none, and so the default of quick and
 	// studio for that account.
 	ChatDefault string
-	// VisionDefault and ImageDefault are the deployment's two picture
-	// models. Either may be empty: the deployment then does that job only
-	// for an account that chose a model.
+	// VisionDefault is the deployment's model that looks at pictures. It
+	// may be empty: the deployment then does that job only for an account
+	// that chose a model.
 	VisionDefault string
-	ImageDefault  string
 	// Own is the account's own models, offered beside the proxy's for each
 	// job they can do. Check requires it; it is nil only in a test about
 	// the proxy's lists alone.
@@ -154,11 +151,6 @@ func (c Choices) Look(ctx context.Context, userID string, purposes ...Purpose) (
 			}
 		case Vision:
 			chosen.Default = c.VisionDefault
-		case Image:
-			chosen.Default = c.ImageDefault
-			if chosen.Models, err = c.Lists.ImageNames(ctx); err != nil {
-				return nil, fmt.Errorf("%w: %w", ErrProxyUnreachable, err)
-			}
 		default:
 			return nil, fmt.Errorf("modelchoices: %q is not a purpose", purpose)
 		}
@@ -186,11 +178,8 @@ func withOwn(proxy []string, own []ownmodels.Option, purpose Purpose) ([]string,
 	var fit []ownmodels.Option
 	for _, option := range own {
 		does := option.Chat
-		switch purpose {
-		case Vision:
+		if purpose == Vision {
 			does = option.Vision
-		case Image:
-			does = option.Images
 		}
 		if does {
 			fit = append(fit, option)

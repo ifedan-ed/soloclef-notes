@@ -117,7 +117,7 @@ func (p Probe) Check() error {
 // error may hold the library's text and is for the log; the route answers
 // every failure in the same words so that a test cannot be used to map what
 // this process can reach.
-func (p Probe) Tools(ctx context.Context, address string, headers map[string]string, hosts []string) ([]ProbedTool, error) {
+func (p Probe) Tools(ctx context.Context, address, transport string, headers map[string]string, hosts []string) ([]ProbedTool, error) {
 	ctx, cancel := context.WithTimeout(ctx, p.Timeout)
 	defer cancel()
 	// A Source holding only what open reads: the guard and the client.
@@ -128,7 +128,7 @@ func (p Probe) Tools(ctx context.Context, address string, headers map[string]str
 			&mcp.ClientOptions{Capabilities: &mcp.ClientCapabilities{}},
 		),
 	}
-	opened, err := source.open(ctx, target{address: address, headers: headers}, hosts)
+	opened, err := source.open(ctx, target{address: address, transport: transport, headers: headers}, hosts)
 	if err != nil {
 		return nil, err
 	}

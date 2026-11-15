@@ -14,11 +14,14 @@ go 1.25.0
 
 require (
 	git.danvics.com/danvics/soloclef/soloclef_agent v0.0.0
+	git.danvics.com/danvics/soloclef/soloclef_automations v0.0.0
 	git.danvics.com/danvics/soloclef/soloclef_celery v0.0.0
 	git.danvics.com/danvics/soloclef/soloclef_filestore v0.0.0
 	git.danvics.com/danvics/soloclef/soloclef_ingest v0.0.0
+	git.danvics.com/danvics/soloclef/soloclef_notify v0.0.0
 	git.danvics.com/danvics/soloclef/soloclef_studio v0.0.0
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.0
+	github.com/ifedan-ed/figures-go v0.4.1
 	github.com/jackc/pgx/v5 v5.7.1
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/valkey-io/valkey-go v1.0.69
@@ -92,3 +95,15 @@ replace git.danvics.com/danvics/soloclef/soloclef_connectors => ../soloclef_conn
 replace git.danvics.com/danvics/soloclef/soloclef_ingest => ../soloclef_ingest
 
 replace git.danvics.com/danvics/soloclef/soloclef_chunker => ../soloclef_chunker
+
+// The one notification step, which a mail draft waiting for its owner's
+// confirmation is reported through (maildraftnotice). From this checkout
+// for the reason soloclef_celery is.
+replace git.danvics.com/danvics/soloclef/soloclef_notify => ../soloclef_notify
+
+// What an automation may say and when a schedule fires
+// (soloclef_automations): the chat's create_automation tool drafts
+// definitions in its terms and tells a person what an automation can do
+// from its lists, so a draft and the tiers that save and run it never
+// disagree about what is possible.
+replace git.danvics.com/danvics/soloclef/soloclef_automations => ../soloclef_automations

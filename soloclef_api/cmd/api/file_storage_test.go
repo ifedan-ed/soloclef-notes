@@ -34,6 +34,8 @@ func storageEnvironment(t *testing.T, storage map[string]string) func(string) st
 		"SOLOCLEF_API_QDRANT_SEARCH_RESCORE":      "true",
 		"SOLOCLEF_API_QDRANT_SEARCH_OVERSAMPLING": "2.5",
 		"SOLOCLEF_API_NCBI_TOOL":                  "example-notes",
+		"SOLOCLEF_API_FIGURES_RESVG":              "/usr/local/bin/resvg",
+		"SOLOCLEF_API_FIGURES_FONT_DIR":           "/usr/local/share/figures/fonts",
 		"SOLOCLEF_API_CHAT_MAX_STEPS":             "24",
 		"SOLOCLEF_API_CHAT_MAX_TURN_SECONDS":      "600",
 		"SOLOCLEF_API_UPLOAD_MAX_FILE_BYTES":      "524288000",

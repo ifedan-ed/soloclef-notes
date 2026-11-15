@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
 	buildClientErrorPayload,
+	installGlobalClientErrorHandlers,
 	reportClientError,
 	resetClientErrorReports,
 } from "@/lib/client-error-report";
@@ -92,5 +93,60 @@ test("never throws, even when fetch does", () => {
 	} finally {
 		g.window = prevWindow;
 		g.fetch = prevFetch;
+	}
+});
+
+test("a report says whether the page reloaded itself to recover", () => {
+	assert.equal(
+		buildClientErrorPayload("error-boundary", new Error("x"), "/").recovered_by_reload,
+		false
+	);
+	withBrowser("/dashboard/notebooks/3", (sent) => {
+		const err = Object.assign(new Error("Failed to load chunk a.js from module 1"), {
+			name: "ChunkLoadError",
+		});
+		assert.ok(reportClientError("error-boundary", err, { recoveredByReload: true }));
+		assert.equal(JSON.parse(String(sent[0].init.body)).recovered_by_reload, true);
+		assert.equal(sent[0].init.keepalive, true, "sent even as the page reloads");
+	});
+});
+
+test("the global handlers let the recovery take an error before reporting it", () => {
+	const listeners = new Map<string, (event: unknown) => void>();
+	const g = globalThis as Record<string, unknown>;
+	const prevWindow = g.window;
+	const prevFetch = g.fetch;
+	const sent: string[] = [];
+	g.window = {
+		location: { pathname: "/dashboard" },
+		addEventListener: (type: string, listener: (event: unknown) => void) => {
+			listeners.set(type, listener);
+		},
+	};
+	g.fetch = (_url: string, init: RequestInit) => {
+		sent.push(String(init.body));
+		return Promise.resolve(new Response(null, { status: 204 }));
+	};
+	resetClientErrorReports();
+	const taken = new Set<unknown>();
+	const handled = new Error("handled by a reload");
+	try {
+		installGlobalClientErrorHandlers((_kind, error) => {
+			taken.add(error);
+			return error === handled;
+		});
+		const rejected = listeners.get("unhandledrejection");
+		assert.ok(rejected && listeners.get("error"));
+		rejected({ reason: handled });
+		assert.equal(sent.length, 0, "a recovered error reports itself, not twice");
+		const other = new Error("not a chunk");
+		rejected({ reason: other });
+		listeners.get("error")?.({ error: new Error("thrown") });
+		assert.equal(sent.length, 2);
+		assert.ok(taken.has(handled) && taken.has(other));
+	} finally {
+		g.window = prevWindow;
+		g.fetch = prevFetch;
+		resetClientErrorReports();
 	}
 });

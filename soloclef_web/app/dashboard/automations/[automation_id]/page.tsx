@@ -1,15 +1,11 @@
-import { AutomationDetailContent } from "./automation-detail-content";
+import { STATIC_PLACEHOLDER } from "@/lib/routing/dynamic-segments";
+import { AutomationRoute } from "./automation-route";
 
-export default async function AutomationDetailPage({
-	params,
-}: {
-	params: Promise<{ automation_id: string }>;
-}) {
-	const { automation_id } = await params;
+// One file for every automation, served by Caddy at /dashboard/automations/<id>.
+export function generateStaticParams() {
+	return [{ automation_id: STATIC_PLACEHOLDER }];
+}
 
-	return (
-		<div className="w-full space-y-6">
-			<AutomationDetailContent automationId={Number(automation_id)} />
-		</div>
-	);
+export default function AutomationDetailPage() {
+	return <AutomationRoute />;
 }

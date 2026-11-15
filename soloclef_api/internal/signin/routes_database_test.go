@@ -220,7 +220,9 @@ func TestEveryRefusedSignInIsTheSameAnswer(t *testing.T) {
 	}
 }
 
-func TestThePhoneSignInIsAYearLongSignInNamedForThePhone(t *testing.T) {
+// A phone's sign-in has no cap from the sign-in (a NULL absolute_expiry) and
+// its first token lives 180 days.
+func TestThePhoneSignInIsUncappedAndNamedForThePhone(t *testing.T) {
 	h, count := newHarness(t)
 	pair := pairOf(t, h.phoneSignIn("bob@example.test", bobPassword, "Pixel 9 · Soloclef app"))
 	if pair.TokenType != "bearer" || pair.RefreshToken == nil || pair.SessionID == nil ||
@@ -228,8 +230,9 @@ func TestThePhoneSignInIsAYearLongSignInNamedForThePhone(t *testing.T) {
 		t.Fatalf("pair %+v", pair)
 	}
 	if n := count(`SELECT count(*) FROM refresh_tokens WHERE user_id = $1 AND kind = 'app'
- AND device_label = 'Pixel 9 · Soloclef app' AND family_id = $2 AND absolute_expiry = $3`,
-		testpostgres.Bob, *pair.SessionID, h.clock.Add(phoneLifetime)); n != 1 {
+ AND device_label = 'Pixel 9 · Soloclef app' AND family_id = $2 AND absolute_expiry IS NULL AND expires_at = $3
+ AND sso_proved_at IS NULL`,
+		testpostgres.Bob, *pair.SessionID, h.clock.Add(phoneIdle)); n != 1 {
 		t.Errorf("%d phone sign-ins recorded as asked", n)
 	}
 }
@@ -243,8 +246,8 @@ func TestARefreshRotatesAndASpentTokenUsedLaterEndsOnlyThatSignIn(t *testing.T) 
 	h, count := newHarness(t)
 	bob := pairOf(t, h.phoneSignIn("bob@example.test", bobPassword, "Bob's phone"))
 	alice := pairOf(t, h.phoneSignIn("alice@example.test", alicePassword, "Alice's phone"))
-	h.exec(`INSERT INTO push_devices (user_id, token, platform, session_family_id) VALUES
- ($1, 'ExponentPushToken[bob]', 'ios', $2), ($3, 'ExponentPushToken[alice]', 'ios', $4)`,
+	h.exec(`INSERT INTO push_devices (user_id, token, kind, platform, session_family_id) VALUES
+ ($1, 'ExponentPushToken[bob]', 'expo', 'ios', $2), ($3, 'ExponentPushToken[alice]', 'expo', 'ios', $4)`,
 		testpostgres.Bob, *bob.SessionID, testpostgres.Alice, *alice.SessionID)
 
 	h.clock = h.clock.Add(10 * time.Minute)
@@ -304,7 +307,7 @@ func TestARefreshOutlivesNeitherItsSignInNorItsAccount(t *testing.T) {
 	if answer := h.bodyRefresh(RefreshPath, web); answer.Code != http.StatusUnauthorized {
 		t.Errorf("an idle browser refreshed: %d", answer.Code)
 	}
-	// A phone has no idle limit...
+	// A phone outlives a browser's idle time (its own is 180 days)...
 	still := pairOf(t, h.bodyRefresh(RefreshPath, *phone.RefreshToken))
 	// ...but a deactivated account cannot refresh at all.
 	h.exec(`UPDATE "user" SET is_active = false WHERE id = $1`, testpostgres.Bob)

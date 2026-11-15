@@ -7,7 +7,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -308,62 +307,10 @@ func (t newTrigger) check() (checked, error) {
 	return checked{trigger: parsed, staticInputs: static, enabled: t.Enabled == nil || *t.Enabled}, nil
 }
 
-// errModelsUnreachable is a save that names a model while the model proxy
-// cannot be asked whether it is offered.
-var errModelsUnreachable = errors.New("automations: the model proxy could not be asked")
-
-// vouch checks what a definition names that only this tier can: that each
-// notebook and connected account is the caller's own, that each model is
-// one the proxy offers, and that this server sends mail if the result is
-// to be emailed. The problems are in words for the person saving.
-//
-// Another account's notebook and one that never existed read the same
-// here: neither is "one of yours".
-func (r Routes) vouch(ctx context.Context, userID string, named definition.Named) ([]string, error) {
-	var problems []string
-	q := New(r.Pool)
-	absent := func(what string, wanted, owned []int64) {
-		for _, id := range wanted {
-			if !slices.Contains(owned, id) {
-				problems = append(problems, what+" "+strconv.FormatInt(id, 10)+" is not one of yours")
-			}
-		}
-	}
-	if len(named.NotebookIDs) > 0 {
-		owned, err := q.OwnedNotebooks(ctx, OwnedNotebooksParams{UserID: userID, Ids: named.NotebookIDs})
-		if err != nil {
-			return nil, err
-		}
-		absent("notebook", named.NotebookIDs, owned)
-	}
-	if len(named.ConnectorIDs) > 0 {
-		owned, err := q.OwnedConnections(ctx, OwnedConnectionsParams{UserID: userID, Ids: named.ConnectorIDs})
-		if err != nil {
-			return nil, err
-		}
-		absent("connected account", named.ConnectorIDs, owned)
-	}
-	if named.Email && !r.SendsMail {
-		problems = append(problems, "execution.email_result is not available: this server is not set up to send mail")
-	}
-	withdrawn, err := r.Models.NotOffered(ctx, userID, named.Models)
-	var unanswerable *assembly.ModelError
-	switch {
-	case errors.As(err, &unanswerable):
-		return nil, errModelsUnreachable
-	case err != nil:
-		return nil, err
-	}
-	for _, name := range withdrawn {
-		problems = append(problems, "the model "+strconv.Quote(name)+" is not offered; choose one from the list")
-	}
-	return problems, nil
-}
-
 // vouched answers the request when a definition names something this tier
 // will not vouch for, and reports whether the save may go on.
 func (x *exchange) vouched(parsed definition.Definition) bool {
-	problems, err := x.routes.vouch(x.ctx.Context(), x.userID, parsed.Named())
+	problems, err := x.routes.checker().vouch(x.ctx.Context(), x.userID, parsed.Named())
 	switch {
 	case errors.Is(err, errModelsUnreachable):
 		x.refuse(http.StatusServiceUnavailable, assembly.ModelsUnreachable)
@@ -377,54 +324,65 @@ func (x *exchange) vouched(parsed definition.Definition) bool {
 	return false
 }
 
+// checker is the Checker over this tier's database, models and mail.
+func (r Routes) checker() Checker {
+	return Checker{Pool: r.Pool, Models: r.Models, SendsMail: r.SendsMail}
+}
+
+// The answers about a draft a create names.
+var (
+	errDraftAbsent = errors.New("automations: the draft is not the caller's")
+	errDraftUsed   = errors.New("automations: the draft is no longer pending")
+)
+
 func (r Routes) create(x *exchange) {
-	var request struct {
-		Name        string          `json:"name"`
-		Description *string         `json:"description"`
-		Definition  json.RawMessage `json:"definition"`
-		Triggers    []newTrigger    `json:"triggers"`
-	}
+	var request newAutomation
 	if !x.body(&request) {
 		return
 	}
-	var problems []string
-	if name := strings.TrimSpace(request.Name); name == "" || len([]rune(request.Name)) > definition.MaxNameChars {
-		problems = append(problems, "name must be 1 to "+strconv.Itoa(definition.MaxNameChars)+" characters")
+	// A draft id that is not a UUID names no draft. Said before anything
+	// is checked, so Postgres is never handed text it cannot cast.
+	if request.DraftID != nil && !isUUID(*request.DraftID) {
+		x.refuse(http.StatusNotFound, draftAbsent)
+		return
 	}
-	parsed, definitionProblems := definition.Parse(request.Definition)
-	problems = append(problems, definitionProblems...)
-	triggers := make([]checked, 0, len(request.Triggers))
-	for i, trigger := range request.Triggers {
-		ready, err := trigger.check()
-		if err != nil {
-			problems = append(problems, "triggers["+strconv.Itoa(i)+"]: "+err.Error())
-			continue
-		}
-		triggers = append(triggers, ready)
-	}
-	if len(problems) > 0 {
+	ok, problems, err := r.checker().prepare(x.ctx.Context(), x.userID, request)
+	switch {
+	case errors.Is(err, errModelsUnreachable):
+		x.refuse(http.StatusServiceUnavailable, assembly.ModelsUnreachable)
+		return
+	case err != nil:
+		x.fail("could not check what the definition names", err)
+		return
+	case len(problems) > 0:
 		x.invalid(problems...)
 		return
 	}
-	if !x.vouched(parsed) {
-		return
-	}
-	stored, err := json.Marshal(parsed)
-	if err != nil {
-		x.fail("could not encode the definition", err)
-		return
-	}
 	now := r.Now()
-	// The automation and its first triggers are saved together or not at
-	// all: an automation whose schedule failed to save would look made and
-	// never run.
+	// The automation, its first triggers and the draft it came from are
+	// saved together or not at all: an automation whose schedule failed to
+	// save would look made and never run, and a draft marked created
+	// without its automation (or the reverse) would let Create run twice.
 	id, err := database.Write(x.ctx.Context(), r.Pool, func(ctx context.Context, tx pgx.Tx, _ *database.Effects) (int64, error) {
 		q := New(tx)
-		id, err := q.CreateAutomation(ctx, CreateAutomationParams{UserID: x.userID, Name: request.Name, Description: request.Description, Definition: stored})
+		if request.DraftID != nil {
+			// Locked first, so a second Create of the same draft waits
+			// for this one and then finds it created.
+			status, err := q.LockDraft(ctx, LockDraftParams{ID: *request.DraftID, UserID: x.userID})
+			switch {
+			case errors.Is(err, pgx.ErrNoRows):
+				return 0, errDraftAbsent
+			case err != nil:
+				return 0, err
+			case status != draftPending:
+				return 0, errDraftUsed
+			}
+		}
+		id, err := q.CreateAutomation(ctx, CreateAutomationParams{UserID: x.userID, Name: request.Name, Description: request.Description, Definition: ok.stored})
 		if err != nil {
 			return 0, err
 		}
-		for _, trigger := range triggers {
+		for _, trigger := range ok.triggers {
 			if _, err := q.AddTrigger(ctx, AddTriggerParams{
 				Type: AutomationTriggerType(trigger.trigger.Type), Params: trigger.trigger.Params, StaticInputs: trigger.staticInputs,
 				Enabled: trigger.enabled, NextFireAt: trigger.trigger.NextFire(trigger.enabled, now), AutomationID: id, UserID: x.userID,
@@ -432,9 +390,21 @@ func (r Routes) create(x *exchange) {
 				return 0, err
 			}
 		}
+		if request.DraftID != nil {
+			if err := q.MarkDraftCreated(ctx, MarkDraftCreatedParams{AutomationID: &id, ID: *request.DraftID, UserID: x.userID}); err != nil {
+				return 0, err
+			}
+		}
 		return id, nil
 	})
-	if err != nil {
+	switch {
+	case errors.Is(err, errDraftAbsent):
+		x.refuse(http.StatusNotFound, draftAbsent)
+		return
+	case errors.Is(err, errDraftUsed):
+		x.refuse(http.StatusConflict, draftUsed)
+		return
+	case err != nil:
 		x.fail("could not save the automation", err)
 		return
 	}

@@ -1,100 +1,85 @@
-// Package agentrules serves an account's agent permission rules: the
-// standing answers to "may the assistant run this tool", which are allow,
-// deny or ask, for every chat of the account or for one thread.
+// Package agentrules serves the person's "ask first" choices for the chat's
+// tools:
 //
-//	GET    /api/v1/agent/permissions/rules            the account's rules
-//	POST   /api/v1/agent/permissions/rules            write one
-//	PATCH  /api/v1/agent/permissions/rules/{rule_id}  change its pattern or action
-//	DELETE /api/v1/agent/permissions/rules/{rule_id}  remove it
+//	GET /api/v1/agent/permissions/tools      every tool, and whether it asks first
+//	PUT /api/v1/agent/permissions/ask-first  mark one tool "ask first", or unmark it
 //
-// The table is the one the chat reads at the moment it decides a call and
-// writes when a person answers "always allow" (internal/chat, ToolIsTrusted
-// and TrustTool), so a rule made here is honoured by the next call and a
-// rule made there is listed here.
+// # The rule
 //
-// # Whose a rule is
+// The owner's rule (2026-11-13): "let default be to always allow all, then
+// settings you can change it". Every tool the chat has runs without asking,
+// and a person may mark single tools "ask first"; the chat then pauses for
+// their yes before each call of that tool. A mark is a row of
+// agent_ask_first_tools, and the chat reads it at the moment each call is
+// decided (internal/chat, AsksFirst), so a change here applies from the very
+// next call. Answering "always allow" on an approval card takes the mark off
+// again (internal/chat, StopAsking).
 //
-// The caller's, always. The account comes from the request's principal and
-// from nowhere else: no path, query or body names it, and a body that
-// carries a user_id is read past. Every statement names the account beside
-// the rule's id (queries.sql), so another account's rule is "Rule not
-// found", the same answer as for a rule that was never written, and a rule
-// can only be scoped to a thread that is the caller's own.
+// What a mark does not touch: an automation's unattended run, which goes by
+// the tools' own declarations and the automation's own switch (assembly,
+// policy), and the confirm-to-send card of a mail draft, which is the draft
+// itself rather than a tool's approval.
 //
-// # The feature flag
+// # Which tools
 //
-// All four routes answer 503 naming the setting while the feature is
-// switched off for the deployment, so the settings page can draw an empty
-// state instead of breaking on a missing route (flags.go).
+// The chat's own tools come from the catalogue (catalogue.go), each under
+// the heading the page shows. A connected app's (an MCP server's) tools are
+// the ones its connection last listed (config.cached_tools), under the
+// app's name, and a mark on one is kept by the connection's id and the
+// server's own name for the tool, so it is gone with the connection and does
+// not move when the model's name for the tool does.
 //
-// # What this does better than the routes it replaces
+// A mark can only be set on a tool the list shows: a mark that names no
+// tool would look like a safeguard and do nothing. Taking one off is never
+// refused, so a person can always stop being asked.
 //
-//   - A duplicate is a duplicate. The unique constraint now compares a NULL
-//     thread as equal to a NULL thread, so an account-wide rule cannot be
-//     stored twice; it used to be storable any number of times.
-//   - Only a duplicate is reported as one. Every integrity failure used to
-//     be answered "an identical rule already exists", a foreign key
-//     included.
-//   - A thread id no thread can have is "Thread not found". It used to be
-//     a 500.
-//   - The update and the delete are one statement each, held to the
-//     account. They were a read and then a write.
+// # Whose marks
+//
+// The caller's, always: the account comes from the request's principal and
+// nowhere else, and every statement names it. Setting a mark is for a person
+// in a session; an API key or an agent acting for them is refused, because
+// what runs without asking is the person's decision.
 package agentrules
-
-import (
-	"regexp"
-	"time"
-)
 
 // The paths.
 const (
-	RulesPath = "/api/v1/agent/permissions/rules"
-	RulePath  = "/api/v1/agent/permissions/rules/{rule_id}"
+	ToolsPath    = "/api/v1/agent/permissions/tools"
+	AskFirstPath = "/api/v1/agent/permissions/ask-first"
 )
-
-// Actions is what a rule may answer, in the order a refusal names them.
-var Actions = []string{"allow", "deny", "ask"}
-
-// DefaultPattern is the pattern of a rule that gives none, and what a
-// pattern of only white space becomes: every call of the tool.
-const DefaultPattern = "*"
-
-// The bounds of the two text fields: the columns' own varchar(255).
-const (
-	textMinLength = 1
-	textMaxLength = 255
-)
-
-// PermissionPattern is what a permission (a tool's or a capability's name,
-// with * wildcards) may be made of.
-var PermissionPattern = regexp.MustCompile(`^[a-zA-Z0-9_:.\-*]+$`)
 
 // What a person is told.
 const (
-	// flagOff names the setting, which is what lets an operator read the
-	// answer and act on it.
-	flagOff = "Agent permission rules are not enabled on this deployment. " +
-		"Flip SOLOCLEF_ENABLE_PERMISSION to enable them."
-	permissionMalformed = "permission must contain only alphanumerics, '.', '_', ':', '-', " +
-		"or '*' wildcards."
-	// threadAbsent is one sentence for a thread that is not there and for
-	// one that is another account's, so it says nothing about which.
-	threadAbsent      = "Thread not found."
-	ruleAbsent        = "Rule not found."
-	duplicateOnCreate = "An identical rule already exists for this scope. Update the " +
-		"existing rule instead."
-	duplicateOnUpdate = "Update would create a duplicate rule for this scope."
+	toolAbsent      = "Tool not found."
+	sessionRequired = "Only you, signed in, can choose which tools ask first."
 )
 
-// Rule is an agent_permission_rules row of the caller's.
-type Rule struct {
-	ID int64
-	// ThreadID is the one thread the rule applies in, or nil for a rule
-	// that applies in every chat of the account.
-	ThreadID *int64
-	// Permission is the tool or capability the rule is about.
-	Permission string
-	Pattern    string
-	Action     string
-	CreatedAt  time.Time
+// maxToolName is the column's width, which is also more than any tool name a
+// provider accepts.
+const maxToolName = 255
+
+// Tool is one tool as the page lists it.
+type Tool struct {
+	// Name is the tool's name: the model's for the chat's own tools, the
+	// server's own for a connected app's.
+	Name string `json:"tool"`
+	// Group is the heading the page lists it under: a catalogue heading,
+	// or the connected app's name.
+	Group string `json:"group"`
+	// ConnectorID is the connected app's connection, null for the chat's
+	// own tools.
+	ConnectorID *int64 `json:"connector_id"`
+	AskFirst    bool   `json:"ask_first"`
 }
+
+// Mark is one "ask first" choice: a tool, and for a connected app's tool its
+// connection (0 for one of the chat's own tools).
+type Mark struct {
+	ConnectorID int64
+	Tool        string
+}
+
+// BodyRoutes are the routes whose body the tier's buffered reader holds.
+func BodyRoutes() []string { return []string{"PUT " + AskFirstPath} }
+
+// Served is every route of this package, as "METHOD path".
+func Served() []string { return []string{"GET " + ToolsPath, "PUT " + AskFirstPath} }

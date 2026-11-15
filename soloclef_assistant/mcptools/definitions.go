@@ -14,7 +14,7 @@ import (
 // definition is one tool as its server describes it.
 type definition struct {
 	// name is the server's own name for the tool: what a call is made with
-	// and what trust is recorded under.
+	// and what an "ask first" mark is recorded under.
 	name        string
 	description string
 	// schema is the JSON Schema of the arguments, always a JSON object.
@@ -133,7 +133,7 @@ type offered struct {
 	connectorName string
 	// modelName is what the model calls the tool. Nothing but the model
 	// and the loop's lookup uses it: calls go out under definition.name and
-	// trust is recorded under (connectorID, definition.name).
+	// a mark is recorded under (connectorID, definition.name).
 	modelName string
 	alwaysAsk bool
 }

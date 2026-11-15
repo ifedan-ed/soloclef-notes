@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, ExternalLink, Megaphone } from "lucide-react";
+import { Bell } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -25,16 +25,14 @@ import {
 } from "@/features/inbox-clearing/lib/clear-scope";
 import { ClearAllConfirm } from "@/features/inbox-clearing/ui/clear-all-confirm";
 import { NotificationItemMenu } from "@/features/inbox-clearing/ui/notification-item-menu";
-import {
-	announcementTarget,
-	SITE_ANNOUNCEMENT_TYPE,
-} from "@/features/site-announcements/lib/announcement-inbox";
-import { MarkdownLiteView } from "@/features/site-announcements/ui/markdown-lite-view";
+import { InboxTypeIcon } from "@/features/inbox-item-icons/ui/inbox-type-icon";
+import { inboxStoreLink, inboxTarget, retryHref } from "@/features/inbox-targets/lib/inbox-target";
 import type { InboxItem } from "@/hooks/use-inbox";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
-export interface NotificationsDataSource {
+/** The account's inbox, as the panel draws and changes it. */
+export interface NotificationsDropdownData {
 	items: InboxItem[];
 	unreadCount: number;
 	totalCount?: number;
@@ -47,13 +45,6 @@ export interface NotificationsDataSource {
 	deleteItem: (id: number) => Promise<boolean>;
 	/** Deletes this inbox's items on the server too, loaded or not. */
 	clearAll: (scope: ClearScope) => Promise<boolean>;
-}
-
-export interface NotificationsDropdownData {
-	totalUnreadCount: number;
-	status: NotificationsDataSource;
-	/** Announcements from the site's administrators. */
-	announcements?: NotificationsDataSource;
 }
 
 interface NotificationsDropdownProps {
@@ -93,21 +84,6 @@ function formatTime(dateString: string): string {
 	}
 }
 
-function isAnnouncement(item: InboxItem): boolean {
-	return item.type === SITE_ANNOUNCEMENT_TYPE;
-}
-
-const NO_ANNOUNCEMENTS: NotificationsDataSource = {
-	items: [],
-	unreadCount: 0,
-	totalCount: 0,
-	loading: false,
-	markAsRead: async () => true,
-	markAllAsRead: async () => true,
-	deleteItem: async () => true,
-	clearAll: async () => true,
-};
-
 export function NotificationsDropdown({
 	notifications,
 	onCloseMobileSidebar,
@@ -133,36 +109,31 @@ export function NotificationsDropdown({
 	const scrollContainerRef = useRef<HTMLDivElement>(null);
 	const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
 
-	const announcements = notifications.announcements ?? NO_ANNOUNCEMENTS;
-	// The inboxes each tab draws from; "all" and "unread" read every inbox.
-	const sources = useMemo(() => {
-		if (activeFilter === "announcements") return [announcements];
-		return [notifications.status, announcements];
-	}, [activeFilter, announcements, notifications.status]);
-
-	const unreadLabel = formatNotificationCount(notifications.totalUnreadCount);
-	const allCount = (notifications.status.totalCount ?? 0) + (announcements.totalCount ?? 0);
-	const announcementsCount = announcements.totalCount ?? announcements.items.length;
-	const visibleUnreadCount =
-		activeFilter === "announcements" ? announcements.unreadCount : notifications.totalUnreadCount;
-	const isLoading = sources.some((source) => source.loading);
-	const isLoadingMore = sources.some((source) => !!source.loadingMore);
-	const hasMore = sources.some((source) => !!source.hasMore);
+	const {
+		unreadCount,
+		loading: isLoading,
+		loadMore,
+		markAsRead,
+		markAllAsRead,
+		deleteItem: deleteInboxItem,
+		clearAll,
+	} = notifications;
+	const isLoadingMore = !!notifications.loadingMore;
+	const hasMore = !!notifications.hasMore;
+	const unreadLabel = formatNotificationCount(unreadCount);
+	const allCount = notifications.totalCount ?? 0;
+	// Newest first; the Unread tab hides what has been read.
 	const items = useMemo(
 		() =>
-			sources
-				.flatMap((source) => source.items)
+			notifications.items
 				.filter((item) => activeFilter !== "unread" || !item.read)
 				.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
-		[activeFilter, sources]
+		[activeFilter, notifications.items]
 	);
 
-	const loadMoreForActiveFilter = useCallback(() => {
-		if (isLoadingMore) return;
-		for (const source of sources) {
-			if (source.hasMore) source.loadMore?.();
-		}
-	}, [isLoadingMore, sources]);
+	const loadNextPage = useCallback(() => {
+		if (!isLoadingMore && hasMore) loadMore?.();
+	}, [hasMore, isLoadingMore, loadMore]);
 
 	useEffect(() => {
 		if (!open || isLoading || isLoadingMore || !hasMore) return;
@@ -173,7 +144,7 @@ export function NotificationsDropdown({
 		const observer = new IntersectionObserver(
 			(entries) => {
 				if (entries[0]?.isIntersecting) {
-					loadMoreForActiveFilter();
+					loadNextPage();
 				}
 			},
 			{
@@ -185,69 +156,69 @@ export function NotificationsDropdown({
 
 		observer.observe(target);
 		return () => observer.disconnect();
-	}, [hasMore, isLoading, isLoadingMore, loadMoreForActiveFilter, open]);
-
-	const sourceOf = useCallback(
-		(item: InboxItem) => (isAnnouncement(item) ? announcements : notifications.status),
-		[announcements, notifications.status]
-	);
+	}, [hasMore, isLoading, isLoadingMore, loadNextPage, open]);
 
 	const markItemAsRead = useCallback(
 		async (item: InboxItem) => {
 			if (item.read) return;
 			setMarkingAsReadId(item.id);
 			try {
-				await sourceOf(item).markAsRead(item.id);
+				await markAsRead(item.id);
 			} finally {
 				setMarkingAsReadId(null);
 			}
 		},
-		[sourceOf]
+		[markAsRead]
 	);
 
 	const deleteItem = useCallback(
 		(item: InboxItem) => {
-			void sourceOf(item).deleteItem(item.id);
+			void deleteInboxItem(item.id);
 		},
-		[sourceOf]
+		[deleteInboxItem]
 	);
 
 	const handleItemClick = useCallback(
 		async (item: InboxItem) => {
 			await markItemAsRead(item);
-
-			const target = announcementTarget(item);
-			if (target) {
-				if (target.kind === "web") {
-					window.open(target.href, "_blank", "noopener,noreferrer");
-				} else {
-					setOpen(false);
-					onCloseMobileSidebar?.();
-					router.push(target.href);
-				}
+			// An App Store update opens the listing in a new tab; the inbox stays where it is.
+			const storeLink = inboxStoreLink(item);
+			if (storeLink) {
+				window.open(storeLink, "_blank", "noopener,noreferrer");
 				return;
 			}
+			// An upload or a connector sync has nowhere to go: opening it only marks it read.
+			const target = inboxTarget(item);
+			if (!target) return;
+			setOpen(false);
+			onCloseMobileSidebar?.();
+			router.push(target);
+		},
+		[markItemAsRead, onCloseMobileSidebar, router, setOpen]
+	);
 
-			// Any other notification has nowhere to go: opening it marks it read.
+	// A failed Studio output's "Try again": its notebook's Studio, which runs it again once.
+	const handleRetry = useCallback(
+		async (item: InboxItem, href: string) => {
+			await markItemAsRead(item);
+			setOpen(false);
+			onCloseMobileSidebar?.();
+			router.push(href);
 		},
 		[markItemAsRead, onCloseMobileSidebar, router, setOpen]
 	);
 
 	const handleMarkAllAsRead = useCallback(async () => {
-		if (visibleUnreadCount === 0 || markingAllAsRead) return;
+		if (unreadCount === 0 || markingAllAsRead) return;
 		setMarkingAllAsRead(true);
 		try {
-			await Promise.all(sources.map((source) => source.markAllAsRead()));
+			await markAllAsRead();
 		} finally {
 			setMarkingAllAsRead(false);
 		}
-	}, [markingAllAsRead, sources, visibleUnreadCount]);
+	}, [markAllAsRead, markingAllAsRead, unreadCount]);
 
-	const tabCount = (() => {
-		if (activeFilter === "announcements") return announcementsCount;
-		if (activeFilter === "unread") return notifications.totalUnreadCount;
-		return allCount;
-	})();
+	const tabCount = activeFilter === "unread" ? unreadCount : allCount;
 	// Nothing Clear all would take: no item on the tab, or only running jobs' (never cleared), and none
 	// unloaded (the tab's count no more than the items here; not hasMore, which on Unread counts pages of read ones).
 	const nothingToClear =
@@ -263,34 +234,27 @@ export function NotificationsDropdown({
 		if (clearing) return;
 		setClearing(true);
 		try {
-			const scope = clearScopeFor(activeFilter);
-			await Promise.all(sources.map((source) => source.clearAll(scope)));
+			await clearAll(clearScopeFor(activeFilter));
 		} finally {
 			setClearing(false);
 			setConfirmingClear(false);
 		}
-	}, [activeFilter, clearing, sources]);
+	}, [activeFilter, clearAll, clearing]);
 
 	const emptyStateCopy =
-		activeFilter === "announcements"
+		activeFilter === "unread"
 			? {
-					title: "No announcements",
-					description: "Announcements from the administrators will appear here.",
+					title: "No unread notifications",
+					description: "New status updates will appear here.",
 				}
-			: activeFilter === "unread"
-				? {
-						title: "No unread notifications",
-						description: "New status updates and announcements will appear here.",
-					}
-				: {
-						title: "No notifications",
-						description: "Uploads, connector syncs and announcements will appear here.",
-					};
+			: {
+					title: "No notifications",
+					description: "Uploads, Studio outputs and automation runs will appear here.",
+				};
 
 	const tabs: { value: NotificationFilter; label: string; count: number }[] = [
 		{ value: "all", label: "All", count: allCount },
-		{ value: "announcements", label: "Announcements", count: announcementsCount },
-		{ value: "unread", label: "Unread", count: notifications.totalUnreadCount },
+		{ value: "unread", label: "Unread", count: unreadCount },
 	];
 
 	const triggerButton = (
@@ -305,7 +269,7 @@ export function NotificationsDropdown({
 			)}
 		>
 			<Bell className="h-4 w-4" />
-			{notifications.totalUnreadCount > 0 ? (
+			{unreadCount > 0 ? (
 				<span className="absolute right-1 top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold leading-none text-destructive-foreground">
 					{unreadLabel}
 				</span>
@@ -334,7 +298,7 @@ export function NotificationsDropdown({
 								variant="ghost"
 								size="sm"
 								onClick={handleMarkAllAsRead}
-								disabled={visibleUnreadCount === 0 || markingAllAsRead}
+								disabled={unreadCount === 0 || markingAllAsRead}
 								className="h-8 shrink-0 gap-1.5 px-2 text-xs text-muted-foreground hover:text-accent-foreground"
 							>
 								{markingAllAsRead ? <Spinner size="xs" /> : null}
@@ -395,74 +359,13 @@ export function NotificationsDropdown({
 					<div className="space-y-1">
 						{items.map((item) => {
 							const isMarkingAsRead = markingAsReadId === item.id;
-							if (isAnnouncement(item)) {
-								const target = announcementTarget(item);
-								return (
-									<article
-										key={item.id}
-										aria-label={item.title}
-										className={cn("group rounded-lg px-2 py-2", !item.read && "bg-accent/40")}
-									>
-										<div className="flex min-w-0 items-start gap-2">
-											<Megaphone className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
-											<p
-												className={cn("flex-1 text-sm font-medium", !item.read && "font-semibold")}
-											>
-												{item.title}
-											</p>
-											{!item.read ? (
-												<span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-											) : null}
-											<NotificationItemMenu
-												title={item.title}
-												onDelete={() => deleteItem(item)}
-												className="-mt-1 -mr-1"
-											/>
-										</div>
-										<MarkdownLiteView
-											source={item.message}
-											className="mt-1 select-text pl-5.5 text-xs text-muted-foreground"
-										/>
-										<div className="mt-1 flex items-center gap-1 pl-5.5">
-											<span className="mr-auto text-[11px] text-muted-foreground/70">
-												{formatTime(item.created_at)}
-											</span>
-											{isMarkingAsRead ? <Spinner size="xs" /> : null}
-											{!item.read ? (
-												<Button
-													type="button"
-													variant="ghost"
-													size="sm"
-													disabled={isMarkingAsRead}
-													onClick={() => markItemAsRead(item)}
-													className="h-7 px-2 text-xs text-muted-foreground"
-												>
-													Mark read
-												</Button>
-											) : null}
-											{target ? (
-												<Button
-													type="button"
-													variant="ghost"
-													size="sm"
-													onClick={() => handleItemClick(item)}
-													className="h-7 gap-1 px-2 text-xs text-primary"
-												>
-													Open
-													{target.kind === "web" ? (
-														<ExternalLink className="h-3 w-3" aria-hidden />
-													) : null}
-												</Button>
-											) : null}
-										</div>
-									</article>
-								);
-							}
+							const retry = retryHref(item);
+							const failed = (item.metadata as { status?: unknown }).status === "failed";
 							return (
 								<div
 									key={item.id}
 									className={cn(
-										"group relative flex items-start rounded-lg",
+										"group relative rounded-lg",
 										"hover:bg-accent hover:text-accent-foreground",
 										!item.read && "bg-accent/40"
 									)}
@@ -474,10 +377,11 @@ export function NotificationsDropdown({
 										disabled={isMarkingAsRead}
 										onClick={() => handleItemClick(item)}
 										className={cn(
-											"h-auto min-w-0 flex-1 justify-start rounded-lg px-2 py-2 pr-9 text-left",
+											"h-auto w-full min-w-0 items-start justify-start rounded-lg px-2 py-2 pr-9 text-left whitespace-normal",
 											"hover:bg-transparent hover:text-accent-foreground"
 										)}
 									>
+										<InboxTypeIcon type={item.type} failed={failed} className="mt-0.5" />
 										<div className="min-w-0 flex-1">
 											<div className="flex min-w-0 items-start gap-2">
 												<p
@@ -501,6 +405,20 @@ export function NotificationsDropdown({
 										</div>
 										{isMarkingAsRead ? <Spinner size="xs" className="shrink-0" /> : null}
 									</Button>
+									{retry ? (
+										<div className="-mt-1.5 pb-1.5 pl-6.5">
+											{/* The button's own padding (px-2) sits left of its label, so the wrapper starts two units further in and the label lines up with the title above it. */}
+											<Button
+												type="button"
+												variant="ghost"
+												size="sm"
+												onClick={() => handleRetry(item, retry)}
+												className="h-7 px-2 text-xs text-primary"
+											>
+												Try again
+											</Button>
+										</div>
+									) : null}
 									{/* A running job's item cannot be deleted until it has finished (isRunning). */}
 									{isRunning(item) ? null : (
 										<NotificationItemMenu
@@ -530,7 +448,7 @@ export function NotificationsDropdown({
 								type="button"
 								variant="ghost"
 								size="sm"
-								onClick={loadMoreForActiveFilter}
+								onClick={loadNextPage}
 								disabled={isLoadingMore}
 								className="mt-3 text-xs"
 							>

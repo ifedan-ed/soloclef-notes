@@ -74,7 +74,27 @@ type Config struct {
 	// stops applying the moment the row changes, with nothing to invalidate.
 	// It is never called for a tool.AlwaysAsk tool: that policy is not
 	// something trust can waive.
+	//
+	// Trusted is for a run nobody chose a policy for, an unattended one, say,
+	// where the tools' own Approval is the safest thing to go by. It cannot
+	// be set together with AskFirst.
 	Trusted func(ctx context.Context, call tool.Call) (bool, error)
+
+	// AskFirst is the person's own policy, and when it is set it is the
+	// whole policy: every call runs without asking unless AskFirst says the
+	// person wants to be asked before that tool. The tool's Approval is not
+	// consulted, whatever it says, because the person who will be asked is
+	// the one who has chosen; Approval stays the tool's advice for runs
+	// that have no person's policy (Trusted). Optional, and not together
+	// with Trusted: two policies for one call would need a rule for which
+	// wins, and a reader of the config could not see it.
+	//
+	// Like Trusted it is called at the moment each call is decided and its
+	// answer is remembered nowhere, so a choice changed in settings applies
+	// to the very next call. An "always allow" answered on a card it asked
+	// for is honoured for every tool: it means "stop asking", which the
+	// caller records by taking the tool off its list before Resume.
+	AskFirst func(ctx context.Context, call tool.Call) (bool, error)
 
 	// Prepare builds the messages for a model call from the stored
 	// conversation. Optional: with none, the stored conversation is sent as
@@ -166,6 +186,8 @@ func New(cfg Config) (*Agent, error) {
 		return nil, fmt.Errorf("agent: MaxSteps must be at least 1, got %d", cfg.MaxSteps)
 	case cfg.MaxParallelTools < 1:
 		return nil, fmt.Errorf("agent: MaxParallelTools must be at least 1, got %d", cfg.MaxParallelTools)
+	case cfg.Trusted != nil && cfg.AskFirst != nil:
+		return nil, errors.New("agent: set Trusted or AskFirst, not both: each is a whole approval policy")
 	}
 
 	for i, h := range cfg.ModelHooks {

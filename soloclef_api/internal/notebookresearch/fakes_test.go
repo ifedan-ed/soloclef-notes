@@ -154,3 +154,52 @@ func (i *indexing) Enqueue(_ context.Context, documentID int64, logContext produ
 }
 
 var errUnreachable = errors.New("eutils.ncbi.nlm.nih.gov answered 503")
+
+// The papers' lookups by id, as the chat's add_sources makes them: each
+// answers the papers of the fake's lists whose ids were asked for, the way
+// the sources match an id (a PubMed paper's PMID is in its address).
+
+func (p *papers) PubMedByID(_ context.Context, pmids, dois, pmcids []string) ([]academic.Paper, error) {
+	p.note("pubmed-by-id")
+	if err := p.failing["pubmed"]; err != nil {
+		return nil, err
+	}
+	var out []academic.Paper
+	for _, paper := range p.pubmed {
+		pmid := strings.TrimSuffix(strings.TrimPrefix(paper.URL, "https://pubmed.ncbi.nlm.nih.gov/"), "/")
+		if contains(pmids, pmid) || (paper.DOI != "" && contains(dois, paper.DOI)) || (paper.PMCID != "" && contains(pmcids, paper.PMCID)) {
+			paper.PMID = pmid
+			out = append(out, paper)
+		}
+	}
+	return out, nil
+}
+
+func (p *papers) ArxivByID(_ context.Context, ids []string) ([]academic.Paper, error) {
+	p.note("arxiv-by-id")
+	if err := p.failing["arxiv"]; err != nil {
+		return nil, err
+	}
+	var out []academic.Paper
+	for _, paper := range p.arxiv {
+		if contains(ids, strings.TrimPrefix(paper.URL, "https://arxiv.org/abs/")) {
+			out = append(out, paper)
+		}
+	}
+	return out, nil
+}
+
+func (p *papers) PreprintsByDOI(_ context.Context, dois []string) ([]academic.Paper, error) {
+	p.note("preprints-by-doi")
+	if err := p.failing["medrxiv"]; err != nil {
+		return nil, err
+	}
+	var out []academic.Paper
+	for _, paper := range p.preprints {
+		if contains(dois, strings.TrimPrefix(paper.URL, "https://doi.org/")) {
+			paper.DOI = strings.TrimPrefix(paper.URL, "https://doi.org/")
+			out = append(out, paper)
+		}
+	}
+	return out, nil
+}

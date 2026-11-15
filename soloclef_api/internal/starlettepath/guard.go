@@ -16,8 +16,8 @@ import (
 // It has to be in front and not in a handler for two reasons, and each was
 // measured rather than assumed (cmd/api/router_test.go):
 //
-//   - ServeMux **redirects before it dispatches**. `/api/v1/prompts//copy`
-//     is answered 301 to `/api/v1/prompts/copy` and no handler, and so no
+//   - ServeMux **redirects before it dispatches**. `/api/v1/model-connections//verify`
+//     is answered 301 to `/api/v1/model-connections/verify` and no handler, and so no
 //     wrapper on a handler, ever runs. Starlette cleans nothing and answers
 //     its bare 404.
 //   - most of this tier's routes are behind the credential gate. A request
@@ -313,10 +313,10 @@ func (s Served) starletteMatches(method, decoded string) bool {
 // asked about, because ServeMux does not dispatch them to the route they
 // name:
 //
-//   - `POST /api/v1/prompts//copy`: the redirect's target,
-//     `/api/v1/prompts/copy`, is no POST route of this tier, and yet the
-//     request plainly names one and is answered a 301 by this tier.
-//   - `POST /api/v1/prompts/%2F/copy`: ServeMux unescapes the segment to "/",
+//   - `POST /api/v1/model-connections//verify`: the redirect's target,
+//     `/api/v1/model-connections/verify`, is no POST route of this tier, and
+//     yet the request plainly names one and is answered a 301 by this tier.
+//   - `POST /api/v1/model-connections/%2F/verify`: ServeMux unescapes the segment to "/",
 //     takes that for a trailing slash, and matches nothing (measured when
 //     this guard was written).
 //

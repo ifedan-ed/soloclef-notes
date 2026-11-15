@@ -33,10 +33,12 @@ ends, held by that module's tests.
 | `internal/notebookname` | `notebook_autoname`: a notebook named from its sources or first question. |
 | `internal/folderdeletion` | `delete_folder_documents_background`: a deleted folder's documents, then the folders. |
 | `internal/accounterasure` | `erase_account`: a locked-out account's vectors and files, then the account. |
-| `internal/videojob` | `deliverables.execute_queued`: the narrated video, written, voiced, built and rendered in the sandbox (soloclef_studio/sandbox), checked and kept as an artifact (soloclef_studio/artifactsave). With `SOLOCLEF_WORKER_VIDEO_ENABLED=false`, marks each queued video failed at once. |
+| `internal/videojob` | `deliverables.execute_queued`: the narrated video. The model writes a narrated deck (soloclef_studio/deckspec) with one passage per build step, each passage is voiced on its own and each slide's passages joined with a measured pause (each part comes in as its passage starts), the deck is laid out and animated by soloclef_studio/deckrender, only the moving frames are rasterised by resvg, ffmpeg joins them with the voice, and the MP4 is checked and kept as an artifact (soloclef_studio/artifactsave). No sandbox. With `SOLOCLEF_WORKER_VIDEO_ENABLED=false`, marks each queued video failed at once. |
 | `internal/jobreconcile` | `deliverables.reconcile_queued`: republishes a queued video whose message never reached the queue. A message that schedules its own successor each minute; no beat. |
 | `internal/documentremoval` | Removing documents (points, chunks, files, rows) and whole accounts. |
 | `internal/llm`, `internal/speech`, `internal/audiofile` | The proxy's chat and speech routes, and ffmpeg. |
+| `internal/pushdelivery` | Notifications: the notifier every job that finishes work for a person calls (soloclef_notify/notify), and the two push jobs (`notifications.deliver_push`, `.check_push_receipts`, soloclef_notify/delivery) with their settings and Valkey reads. With `SOLOCLEF_WORKER_PUSH_ENABLED=false` the inbox rows are written and nothing is pushed. iPhones on APNs tokens are pushed straight to Apple when the five `SOLOCLEF_WORKER_APNS_*` are set (all or none); Android phones through Expo. |
+| `internal/appupdate` | `app_store.check_update`: an hourly tick (self-scheduling, like the reconciler's) that asks the App Store once a day for the iPhone app's version (`SOLOCLEF_WORKER_APP_STORE_BUNDLE_ID`, read only with pushes on; empty is no check) and tells each iPhone on an older version once per store version (soloclef_notify/notify `AppUpdated`), holding an account in its quiet hours for a later pass. Android is not told: there is no Play listing. |
 | `internal/indexrequest` | Publishing `index_document` for a document a job wrote. |
 | `internal/workerconfig` | The jobs' settings. All required; no defaults. |
 | `internal/proxystub`, `internal/testdatabase` | Test helpers: a stub proxy speaking the OpenAI shapes, a throwaway database. |
@@ -95,6 +97,10 @@ server (`internal/testredis` lists them), so packages may run side by side.
 - Do not enable beat. The Go stack schedules nothing, and a worker with
   `SOLOCLEF_WORKER_BEAT` on refuses to start.
 - Do not answer a scrape that could not be collected with zeroes.
-- Do not treat `ShutdownGrace` as a drain. A podcast cut off by a restart
-  goes back to its queue and carries on from the lines already voiced; any
-  other job in flight is run again when its message is restored.
+- `ShutdownGrace` is the drain a deploy waits through: the worker's
+  deployment sets 15 minutes (the Compose file says why), the indexer keeps
+  the 30-second default. Work still running at its end is cut off and given
+  `HandBack` (10s) to give its message back: a video releases its attempt
+  (counted with takeovers; the third cut fails it as `interrupted`), a
+  podcast carries on from the lines already voiced. A stop_grace_period must
+  be at least the two together.

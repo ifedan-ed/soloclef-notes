@@ -34,6 +34,11 @@ import (
 type Owner struct {
 	UserID   string
 	ThreadID int64
+	// NotebookID is the notebook whose Studio lists what is made: the
+	// notebook a chat belongs to. Zero lists it nowhere, which is right for
+	// a chat outside any notebook and for a Studio generation, whose output
+	// row the Studio wrote before the run (soloclef_studio/notebookoutput).
+	NotebookID int64
 }
 
 // NewArtifact is what Store.Create writes.
@@ -52,12 +57,15 @@ type NewArtifact struct {
 	Filename string
 	MimeType string
 	Data     []byte
-	// Preview is a PDF rendering of the file, for a format the page cannot
-	// draw itself (a Word document, a deck): the viewer shows it in place
-	// of the file. It is stored as the artifact's second file, role
-	// "preview", under PreviewKey's key. Empty for every other format.
+	// Preview is a second rendering of the file that a viewer may show in
+	// its place: a PDF of a Word document or a deck (the page cannot draw
+	// those itself), or the SVG an infographic's PNG was drawn from (sharp
+	// at any zoom). It is stored as the artifact's second file, role
+	// "preview", of type PreviewMimeType, under PreviewKey's key. Empty for
+	// every other format.
 	Preview         []byte
 	PreviewFilename string
+	PreviewMimeType string
 	PreviewKey      func(artifactID int64) string
 }
 
@@ -75,9 +83,6 @@ type Created struct {
 	// PreviewFileID is 0 for an artifact with no preview.
 	PreviewFileID int64
 }
-
-// previewMime is the type of every preview: a PDF.
-const previewMime = "application/pdf"
 
 // pathAttempts bounds the search for a free document name. An account with
 // fifty decks of one title has a different problem.

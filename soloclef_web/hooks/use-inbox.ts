@@ -8,7 +8,6 @@ import {
 	withoutDeletedElsewhere,
 	withoutHidden,
 } from "@/features/inbox-clearing/lib/zero-deletions";
-import { isExpiredAnnouncement } from "@/features/site-announcements/lib/announcement-inbox";
 import { notificationsApiService } from "@/lib/apis/notifications-api.service";
 import { NotFoundError } from "@/lib/error";
 import { queries } from "@/zero/queries";
@@ -23,9 +22,18 @@ const INITIAL_PAGE_SIZE = 50;
 const SCROLL_PAGE_SIZE = 30;
 const SYNC_WINDOW_DAYS = 4;
 
+// The server's own split (internal/notifications categories); a type left
+// out here is dropped from live updates, so a new status type goes here too.
 const CATEGORY_TYPES: Record<NotificationCategory, string[]> = {
-	status: ["connector_indexing", "connector_deletion", "document_processing"],
-	announcements: ["site_announcement"],
+	status: [
+		"connector_indexing",
+		"connector_deletion",
+		"document_processing",
+		"studio_output",
+		"automation_run",
+		"mail_draft",
+		"app_update",
+	],
 };
 
 const newestFirst = (a: InboxItem, b: InboxItem) =>
@@ -111,7 +119,7 @@ export function useInbox(
 
 				if (cancelled) return;
 
-				setInboxItems(notificationsResponse.items.filter((item) => !isExpiredAnnouncement(item)));
+				setInboxItems(notificationsResponse.items);
 				setTotalCount(notificationsResponse.total);
 				setHasMore(notificationsResponse.has_more);
 				setUnreadCount(unreadResponse.total_unread);
@@ -166,12 +174,9 @@ export function useInbox(
 			}
 		}
 
-		const validItems = withoutHidden(zeroNotifications, hiddenIdsRef.current).filter((item) => {
-			if (item.id == null) return false;
-			if (!categoryTypes.includes(item.type)) return false;
-			if (isExpiredAnnouncement(item)) return false;
-			return true;
-		});
+		const validItems = withoutHidden(zeroNotifications, hiddenIdsRef.current).filter(
+			(item) => item.id != null && categoryTypes.includes(item.type)
+		);
 
 		const recentItems = validItems.filter((item) => new Date(item.createdAt) > cutoff);
 

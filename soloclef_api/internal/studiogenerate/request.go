@@ -51,6 +51,16 @@ var kindChoices = map[string][]choice{
 	"report":      {{"format", []string{"document", "interactive"}}, {"file_type", []string{"pdf", "docx"}}},
 }
 
+// retiredStyles are the image model's illustration styles, which a drawn
+// poster has no counterpart for. The phone builds already installed still
+// offer them, so a request naming one is made in "auto", the style chosen
+// from the content, rather than refused: the person sees a poster, not an
+// error for a choice their app offered.
+// installed-builds: infographic-retired-styles
+var retiredStyles = []string{"kawaii", "clay", "anime", "bricks"}
+
+const retiredStyleAnswer = "auto"
+
 // freeText is the kind's own free-text fields beside the shared ones, and
 // the most characters each may hold.
 var freeText = map[string]map[string]int{
@@ -129,7 +139,10 @@ func parseRequest(raw []byte) (Request, []errorenvelope.Failure) {
 		return Request{}, []errorenvelope.Failure{{Location: []string{"body", "kind"}, Message: "Input should be one of: " + strings.Join(kinds, ", ")}}
 	}
 	request.Focus = strings.TrimSpace(text("focus", maxFocusChars))
-	request.Title = strings.TrimSpace(text("title", maxTitleChars))
+	// The title is cut to its bound, never refused for its length
+	// (title_bound.go): the body's own bound (maxBodyBytes) is what holds
+	// the field while it is read.
+	request.Title = cutTitle(text("title", maxBodyBytes))
 	request.Language = strings.TrimSpace(text("language", maxLanguageChars))
 	request.RequestID = text("request_id", maxRequestID)
 	if request.RequestID != "" && !requestIDShape.MatchString(request.RequestID) {
@@ -152,6 +165,9 @@ func parseRequest(raw []byte) (Request, []errorenvelope.Failure) {
 		value := text(c.field, 64)
 		if value == "" {
 			value = c.values[0]
+		}
+		if request.Kind == "infographic" && c.field == "style" && contains(retiredStyles, value) {
+			value = retiredStyleAnswer
 		}
 		if !contains(c.values, value) {
 			fail(c.field, "Input should be one of: "+strings.Join(c.values, ", "))

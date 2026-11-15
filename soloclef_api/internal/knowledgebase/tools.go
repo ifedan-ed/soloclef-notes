@@ -39,6 +39,17 @@ const (
 // detected" would only pass it on.
 const serverFailure = "The server could not do this just now, and nothing was changed. Say so to the user; it can be tried again."
 
+// ToolNames are the specialist's tools by name, in the order it offers them:
+// the list the settings page shows for a person to mark "ask first"
+// (internal/agentrules). TestToolNamesAreTheToolsOffered holds it to tools.
+func ToolNames() []string {
+	return []string{
+		listFolderTool, findDocumentsTool, readDocumentTool,
+		createNoteTool, editNoteTool, renameDocumentTool, moveDocumentTool, deleteNoteTool,
+		createFolderTool, renameFolderTool, moveFolderTool, deleteFolderTool,
+	}
+}
+
 // tools are the specialist's tools for one owner.
 func (c Changes) tools(who owner) []tool.Tool {
 	read := func(name, description, parameters string, run func(context.Context, tool.Call) (string, error)) tool.Tool {
@@ -134,8 +145,8 @@ func (c Changes) tools(who owner) []tool.Tool {
 			}),
 		write(deleteNoteTool, "Delete a note. Other kinds of document are not deleted from the chat.",
 			`{"type":"object","properties":{"document_id":{"type":"integer"}},"required":["document_id"],"additionalProperties":false}`,
-			// Every time: one approval of a delete says nothing about the
-			// next, and "always allow" must not reach one.
+			// Declared every time: one approval of a delete says nothing
+			// about the next, for any policy that goes by declarations.
 			tool.AlwaysAsk, func(ctx context.Context, call tool.Call) (string, error) {
 				var args struct {
 					DocumentID int64 `json:"document_id"`

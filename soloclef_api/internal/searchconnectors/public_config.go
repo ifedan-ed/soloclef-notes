@@ -44,22 +44,23 @@ var publicKeys = map[string]map[string]bool{
 	mailboxType: {"accounts": true},
 	// The page list. Not the crawler key, which was stored in the clear.
 	"WEBCRAWLER_CONNECTOR": {"INITIAL_URLS": true},
-	// The server settings, which secrets.go then masks; who added it; the
-	// tools that run without asking; the reconnect flag. Not the cached tool
-	// definitions, which are text a remote server chose.
+	// The server settings, shown with their secrets as masks
+	// (server_public.go); who added it; the reconnect flag. Not the cached tool definitions, which are text a
+	// remote server chose.
 	serverTypeTag: {
 		"server_config": true, "server_origin": true,
-		"trusted_tools": true, "auth_expired": true,
+		"auth_expired": true,
 	},
 }
 
 // publicConfig is public_config(connector_type, config): the type's public
 // keys in the order they are stored, then the one reduction the type has --
-// the mask for an MCP server, the nine fields for a mailbox.
+// the masked settings for an MCP server, the nine fields for a mailbox.
 //
 // A key is compared as Python compares two strs, so one holding a lone
 // surrogate (surrogates.go) is simply not one of the names and is left out.
-func publicConfig(connectionType string, config *pythonjson.Object) (*pythonjson.Object, error) {
+func publicConfig(connection Connection, config *pythonjson.Object) (*pythonjson.Object, error) {
+	connectionType := connection.Type
 	allowed, known := publicKeys[connectionType]
 	if !known {
 		return nil, errRowRefused
@@ -73,7 +74,7 @@ func publicConfig(connectionType string, config *pythonjson.Object) (*pythonjson
 	}
 	switch connectionType {
 	case serverTypeTag:
-		return maskConnectorConfig(shown)
+		return publicConnectorConfig(connection, shown)
 	case mailboxType:
 		return publicMailboxConfig(shown), nil
 	}

@@ -94,6 +94,25 @@ func (q *Queries) AccountPasswordState(ctx context.Context, userID string) (Acco
 	return i, err
 }
 
+const changeAccountPassword = `-- name: ChangeAccountPassword :exec
+UPDATE "user"
+SET hashed_password = $1, updated_at = $2
+WHERE id = $3
+`
+
+type ChangeAccountPasswordParams struct {
+	HashedPassword *string
+	ChangedAt      time.Time
+	UserID         string
+}
+
+// A signed-in person's new password (password_change.go). Unlike a reset it
+// verifies nothing: no mail went to the address.
+func (q *Queries) ChangeAccountPassword(ctx context.Context, arg ChangeAccountPasswordParams) error {
+	_, err := q.db.Exec(ctx, changeAccountPassword, arg.HashedPassword, arg.ChangedAt, arg.UserID)
+	return err
+}
+
 const endEverySignIn = `-- name: EndEverySignIn :exec
 UPDATE refresh_tokens
 SET revoked_at = coalesce(revoked_at, $1), expires_at = $1
@@ -141,6 +160,33 @@ func (q *Queries) EndFamily(ctx context.Context, arg EndFamilyParams) (int64, er
 	return result.RowsAffected(), nil
 }
 
+const endOtherSignIns = `-- name: EndOtherSignIns :one
+WITH ended AS (
+    UPDATE refresh_tokens
+    SET revoked_at = coalesce(revoked_at, $1), expires_at = $1
+    WHERE user_id = $2 AND family_id <> $3::uuid
+      AND (revoked_at IS NULL OR expires_at > $1)
+    RETURNING family_id
+)
+SELECT count(DISTINCT family_id)::bigint AS sign_ins FROM ended
+`
+
+type EndOtherSignInsParams struct {
+	EndedAt      time.Time
+	UserID       string
+	KeptFamilyID string
+}
+
+// A new password from a signed-in person ends every sign-in of the account
+// but the one that asked, and says how many it ended. Tokens a rotation spent
+// are capped as EndEverySignIn says why; the count is of sign-ins, not rows.
+func (q *Queries) EndOtherSignIns(ctx context.Context, arg EndOtherSignInsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, endOtherSignIns, arg.EndedAt, arg.UserID, arg.KeptFamilyID)
+	var sign_ins int64
+	err := row.Scan(&sign_ins)
+	return sign_ins, err
+}
+
 const endTokenByHash = `-- name: EndTokenByHash :one
 UPDATE refresh_tokens SET revoked_at = $1, expires_at = $1
 WHERE token_hash = $2
@@ -175,6 +221,25 @@ func (q *Queries) ForgetEveryPushDevice(ctx context.Context, userID string) erro
 	return err
 }
 
+const forgetOtherPushDevices = `-- name: ForgetOtherPushDevices :exec
+DELETE FROM push_devices
+WHERE user_id = $1
+  AND session_family_id IS DISTINCT FROM $2::uuid
+`
+
+type ForgetOtherPushDevicesParams struct {
+	UserID       string
+	KeptFamilyID string
+}
+
+// The phones registered under the sign-ins EndOtherSignIns ended stop getting
+// pushes; so does one registered under no sign-in at all, which nothing ties
+// to the device that asked. The asking device keeps its own.
+func (q *Queries) ForgetOtherPushDevices(ctx context.Context, arg ForgetOtherPushDevicesParams) error {
+	_, err := q.db.Exec(ctx, forgetOtherPushDevices, arg.UserID, arg.KeptFamilyID)
+	return err
+}
+
 const forgetPushDevices = `-- name: ForgetPushDevices :exec
 DELETE FROM push_devices
 WHERE user_id = $1 AND session_family_id = $2
@@ -194,11 +259,12 @@ func (q *Queries) ForgetPushDevices(ctx context.Context, arg ForgetPushDevicesPa
 const insertRefreshToken = `-- name: InsertRefreshToken :exec
 INSERT INTO refresh_tokens (
     user_id, token_hash, expires_at, family_id, absolute_expiry, kind,
-    device_label, signed_in_at, created_at
+    device_label, signed_in_at, sso_proved_at, created_at
 ) VALUES (
     $1, $2, $3,
     $4, $5, $6,
-    $7, $8, $9
+    $7, $8, $9,
+    $10
 )
 `
 
@@ -211,11 +277,14 @@ type InsertRefreshTokenParams struct {
 	Kind           string
 	DeviceLabel    *string
 	SignedInAt     *time.Time
+	SsoProvedAt    *time.Time
 	CreatedAt      time.Time
 }
 
 // created_at is the tier's clock, the one every expiry beside it is
 // computed from: the devices list dates a device's last use by it.
+// sso_proved_at is when single sign-on last proved the sign-in (NULL for a
+// password sign-in); a refresh copies it forward with the rest.
 func (q *Queries) InsertRefreshToken(ctx context.Context, arg InsertRefreshTokenParams) error {
 	_, err := q.db.Exec(ctx, insertRefreshToken,
 		arg.UserID,
@@ -226,6 +295,7 @@ func (q *Queries) InsertRefreshToken(ctx context.Context, arg InsertRefreshToken
 		arg.Kind,
 		arg.DeviceLabel,
 		arg.SignedInAt,
+		arg.SsoProvedAt,
 		arg.CreatedAt,
 	)
 	return err
@@ -253,7 +323,7 @@ func (q *Queries) LockAccountPasswordState(ctx context.Context, userID string) (
 
 const lockRefreshToken = `-- name: LockRefreshToken :one
 SELECT id, user_id, expires_at, revoked_at, absolute_expiry, family_id,
-       kind, device_label, signed_in_at, created_at
+       kind, device_label, signed_in_at, sso_proved_at, created_at
 FROM refresh_tokens
 WHERE token_hash = $1
 FOR UPDATE
@@ -269,6 +339,7 @@ type LockRefreshTokenRow struct {
 	Kind           string
 	DeviceLabel    *string
 	SignedInAt     *time.Time
+	SsoProvedAt    *time.Time
 	CreatedAt      time.Time
 }
 
@@ -287,9 +358,67 @@ func (q *Queries) LockRefreshToken(ctx context.Context, tokenHash string) (LockR
 		&i.Kind,
 		&i.DeviceLabel,
 		&i.SignedInAt,
+		&i.SsoProvedAt,
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const logAccountEvent = `-- name: LogAccountEvent :exec
+INSERT INTO logs (user_id, level, status, message, source, log_metadata, created_at)
+VALUES ($1, $2::loglevel, $3::logstatus,
+        $4, $5, $6::jsonb,
+        $7)
+`
+
+type LogAccountEventParams struct {
+	UserID      string
+	Level       Loglevel
+	Status      Logstatus
+	Message     string
+	Source      *string
+	LogMetadata []byte
+	CreatedAt   time.Time
+}
+
+// One entry in the account's own activity log (the logs table the web's and
+// the app's Activity log read), written in the transaction of the change it
+// records, so the log never says a password changed that did not.
+func (q *Queries) LogAccountEvent(ctx context.Context, arg LogAccountEventParams) error {
+	_, err := q.db.Exec(ctx, logAccountEvent,
+		arg.UserID,
+		arg.Level,
+		arg.Status,
+		arg.Message,
+		arg.Source,
+		arg.LogMetadata,
+		arg.CreatedAt,
+	)
+	return err
+}
+
+const proveSessionBySSO = `-- name: ProveSessionBySSO :execrows
+UPDATE refresh_tokens SET sso_proved_at = $1
+WHERE user_id = $2 AND family_id = $3::uuid
+  AND revoked_at IS NULL AND expires_at > $1
+`
+
+type ProveSessionBySSOParams struct {
+	ProvedAt *time.Time
+	UserID   string
+	FamilyID string
+}
+
+// The phone app confirmed the person through single sign-on without a new
+// sign-in (internal/oidcsignin, the app's confirm): its own live sign-in is
+// stamped. It names the account beside the family, so a code proving one
+// account can stamp no other's sign-in; 0 rows means the sign-in is over.
+func (q *Queries) ProveSessionBySSO(ctx context.Context, arg ProveSessionBySSOParams) (int64, error) {
+	result, err := q.db.Exec(ctx, proveSessionBySSO, arg.ProvedAt, arg.UserID, arg.FamilyID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const recordSignIn = `-- name: RecordSignIn :exec
@@ -383,6 +512,32 @@ type RetireRefreshTokenParams struct {
 func (q *Queries) RetireRefreshToken(ctx context.Context, arg RetireRefreshTokenParams) error {
 	_, err := q.db.Exec(ctx, retireRefreshToken, arg.RevokedAt, arg.ID, arg.UserID)
 	return err
+}
+
+const sessionSSOProof = `-- name: SessionSSOProof :one
+SELECT sso_proved_at
+FROM refresh_tokens
+WHERE user_id = $1 AND family_id = $2::uuid
+  AND revoked_at IS NULL AND expires_at > $3
+ORDER BY created_at DESC, id DESC
+LIMIT 1
+`
+
+type SessionSSOProofParams struct {
+	UserID   string
+	FamilyID string
+	Now      time.Time
+}
+
+// When single sign-on last proved the caller's own sign-in, read from its
+// live token (the one row ix_refresh_tokens_live_family holds for it). No
+// row: the sign-in is over. A NULL proof: it was a password sign-in, never
+// confirmed through the provider.
+func (q *Queries) SessionSSOProof(ctx context.Context, arg SessionSSOProofParams) (*time.Time, error) {
+	row := q.db.QueryRow(ctx, sessionSSOProof, arg.UserID, arg.FamilyID, arg.Now)
+	var sso_proved_at *time.Time
+	err := row.Scan(&sso_proved_at)
+	return sso_proved_at, err
 }
 
 const setAccountPassword = `-- name: SetAccountPassword :one

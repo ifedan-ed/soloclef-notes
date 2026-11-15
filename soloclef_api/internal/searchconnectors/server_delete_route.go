@@ -17,14 +17,17 @@ import (
 // ServerDeleteRoute serves DELETE /api/v1/connectors/mcp/{connector_id}.
 //
 // One statement decides and acts: it deletes the row only if it is an MCP
-// server of the caller's, and the count it returns is the answer. There is
+// server of the caller's, and the row it returns is the answer. There is
 // nothing to check first and so nothing that can change between a check and
-// the delete.
+// the delete. A server signed in to with OAuth then has its tokens revoked
+// at the authorization server, best effort, from the config the delete
+// returned: disconnecting ends the sign-in there too.
 type ServerDeleteRoute struct {
-	Changes Changes
-	Tools   ToolChanges
-	Errors  errorenvelope.Writer
-	Logger  *slog.Logger
+	Changes    Changes
+	Revocation Revoker
+	Tools      ToolChanges
+	Errors     errorenvelope.Writer
+	Logger     *slog.Logger
 }
 
 func (r ServerDeleteRoute) Register(api huma.API) {
@@ -60,20 +63,23 @@ func (r ServerDeleteRoute) serve(ctx huma.Context) {
 		r.Errors.WriteValidation(response, requestID, problems)
 		return
 	}
-	removed := false
+	var config []byte
 	if !connector.tooWide {
 		var err error
-		if removed, err = r.Changes.DeleteServer(ctx.Context(), caller.UserID, connector.value); err != nil {
+		if config, err = r.Changes.DeleteServer(ctx.Context(), caller.UserID, connector.value); err != nil {
 			failed.caught("could not delete the MCP server", err)
 			return
 		}
 	}
-	if !removed {
+	if config == nil {
 		r.Errors.Write(response, http.StatusNotFound, serverAbsent, requestID)
 		return
 	}
 	// After the delete has committed, so no process rebuilds its tool list
 	// from a row that is about to go.
 	toolsChanged(ctx.Context(), r.Tools, r.Logger, requestID, caller.UserID)
+	// The row is gone whatever the provider says; the person is waiting
+	// only for the revocation's bounded time.
+	r.Revocation.Revoke(context.WithoutCancel(ctx.Context()), caller.UserID, connector.value, serverTypeTag, config)
 	pythonjson.SendNoContent(response)
 }

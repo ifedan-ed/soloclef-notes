@@ -137,11 +137,12 @@ func memoryBlock(tag, what, document string, writing Remembering) string {
 // is not here. It is in the search (documents.Scope.Limited) and in which
 // tools the turn has; this block only explains to the model what it will
 // find, so that it says "that is not in this notebook" instead of "I found
-// nothing".
-func notebookBlock(notebook *Notebook, pickedTool bool) string {
+// nothing". What else the turn can do in the notebook is in abilities.
+func notebookBlock(notebook *Notebook, abilities notebookAbilities) string {
 	if notebook == nil {
 		return ""
 	}
+	pickedTool, connected := abilities.pickedTool, abilities.connected
 	var b strings.Builder
 	b.WriteString("<notebook_context>\n")
 	if notebook.Title != "" {
@@ -151,10 +152,26 @@ func notebookBlock(notebook *Notebook, pickedTool bool) string {
 	}
 	if len(notebook.DocumentIDs) == 0 && len(notebook.SourceTitles) == 0 {
 		b.WriteString("The notebook has no enabled sources yet, so there is nothing to search: the search reaches the notebook's sources and nothing else. Unless you already said so in this conversation, say so briefly at the start of your answer, then offer next steps: adding files or websites as sources, or ticking sources already in the notebook.\n")
+		if abilities.scholarly && abilities.addsSources {
+			b.WriteString("You can also find papers on the question with your scholarly search tools and, when the user wants them, add them as sources with add_sources.\n")
+		}
 	} else {
-		b.WriteString("Answer from its enabled sources. search_knowledge_base reaches only these; nothing else the user has (other notebooks' sources, generated outputs) is available. Ground answers in them and cite them with [n]. If the sources do not answer the question, say so and suggest adding sources; do not offer to search the web.\n")
+		b.WriteString("Answer from its enabled sources: they are your primary material. search_knowledge_base reaches only these; the user's other notebooks' sources and generated outputs are not available. Ground answers in them and cite them with [n]. ")
+		if abilities.addsSources {
+			// The model that was told only "suggest adding sources" told
+			// the person to add, one click each, the papers it had just
+			// found: it did not know it could.
+			b.WriteString("If the sources do not answer the question, say so; when you know the papers or pages that would, add them with add_sources, and otherwise suggest which to add.\n")
+		} else {
+			b.WriteString("If the sources do not answer the question, say so and suggest adding sources; do not offer to search the web.\n")
+		}
 		if pickedTool {
 			b.WriteString("Anything the tool the user picked for this message returns is from outside the notebook: say so when you use it.\n")
+		} else if abilities.scholarly {
+			// Searching is for what the sources lack, not instead of them:
+			// a model offered PubMed beside the notebook reaches for it
+			// first unless it is told the order.
+			b.WriteString("Your scholarly search tools (PubMed and the preprint servers) reach outside the notebook. Search the notebook first; search them when the sources do not answer the question or the user asks for papers. Say when something comes from outside the notebook, and add the papers that answer the question with add_sources when you have it.\n")
 		}
 		b.WriteString("Enabled sources:\n")
 		titles := notebook.SourceTitles
@@ -169,6 +186,12 @@ func notebookBlock(notebook *Notebook, pickedTool bool) string {
 		if hidden > 0 {
 			b.WriteString(fmt.Sprintf("- … and %d more\n", hidden))
 		}
+	}
+	if connected {
+		b.WriteString("The user's own connections are here too: their mail, their files in Drive or Nextcloud, or apps they connected, whichever your tools include. Use one when the request is about it (an email, a file there, that app's data), never in place of the sources for a question the notebook is about. What such a tool returns is from outside the notebook: say so, and cite it with the [n] its result shows.\n")
+	}
+	if abilities.studio {
+		b.WriteString("Everything you make in this conversation (a report, slides, a quiz, flashcards, a mind map, a table, an infographic, a page, a video or a podcast) is also listed in this notebook's Studio, where the user can open, rename and delete it. If they ask you to add something you made here to the Studio, it is there already: say so. Never say you cannot add to the Studio.\n")
 	}
 	switch notebook.Goal {
 	case "custom":
@@ -186,4 +209,22 @@ func notebookBlock(notebook *Notebook, pickedTool bool) string {
 	}
 	b.WriteString("</notebook_context>\n\n")
 	return b.String()
+}
+
+// notebookAbilities is what a notebook's chat can do besides searching its
+// sources, which its block of the prompt explains.
+type notebookAbilities struct {
+	// pickedTool says the person picked a source for this message.
+	pickedTool bool
+	// connected says the turn also has the person's own connections (mail,
+	// Drive, Nextcloud, connected apps): the model is told they are for
+	// requests about those, so the sources stay what a notebook question
+	// is answered from.
+	connected bool
+	// addsSources says the turn has add_sources.
+	addsSources bool
+	// studio says what the turn makes is listed in the notebook's Studio.
+	studio bool
+	// scholarly says the scholarly searches are offered with nothing picked.
+	scholarly bool
 }

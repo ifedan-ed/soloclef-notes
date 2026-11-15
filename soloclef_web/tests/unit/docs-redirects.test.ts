@@ -5,28 +5,36 @@ import test from "node:test";
 
 // Run with: pnpm exec tsx --test tests/unit/docs-redirects.test.ts
 
-// The copy Next matches routes with, so these assertions cannot drift from
-// runtime behaviour. There is no standalone `path-to-regexp` in the tree.
-import { compile, pathToRegexp } from "next/dist/compiled/path-to-regexp";
 import brand from "../../lib/brand/brand.json";
-import {
-	docsRedirects,
-	RENAMED_PAGES,
-	RETIRED_SECTIONS,
-	RETIRED_VERSION_SEGMENTS,
-} from "../../lib/docs-redirects";
+import { caddyLines } from "./caddy-routes";
 
-const matchers = docsRedirects.map((rule) => ({
-	regexp: pathToRegexp(rule.source, []),
-	toDestination: compile(rule.destination, { validate: false }),
-}));
+// The rules are Caddy's (docker/proxy-go/routes.caddy, "Old docs
+// addresses"): the site is static files and Caddy answers the redirects.
+// They are read back from that file and applied here the way Caddy applies
+// them, so these assertions check the deployed rules and not a copy.
+const lines = caddyLines();
+const retiredLine = lines.find((line) => line.startsWith("@retiredDocs path_regexp "));
+assert.ok(retiredLine, "routes.caddy has the retired docs rule");
+// RE2 and JavaScript read this pattern (a plain alternation) the same way.
+const RETIRED = new RegExp(retiredLine.slice("@retiredDocs path_regexp ".length));
+assert.ok(lines.includes("redir @retiredDocs /docs 308"), "the retired docs go to /docs");
+const RENAMED_PAGES: Record<string, string> = Object.fromEntries(
+	lines
+		.map((line) => /^redir \/docs\/([a-z0-9-]+) \/docs\/([a-z0-9-]+) 308$/.exec(line))
+		.filter((match): match is RegExpExecArray => match !== null)
+		.map((match) => [match[1], match[2]])
+);
 
-/** Applies the rules the way Next does: first match wins, or no redirect. */
+/** The section names the retired rule lists, as written in it. */
+const RETIRED_NAMES = (/\^\/docs\/\(([^)]*)\)/.exec(retiredLine)?.[1] ?? "").split("|");
+const RETIRED_VERSION_SEGMENTS = ["legacy", "v2"];
+const RETIRED_SECTIONS = RETIRED_NAMES.filter((name) => !RETIRED_VERSION_SEGMENTS.includes(name));
+
+/** Applies the rules the way Caddy does: the retired rule, then the renames. */
 function redirect(pathname: string): string | null {
-	for (const { regexp, toDestination } of matchers) {
-		if (regexp.exec(pathname)) return toDestination({});
-	}
-	return null;
+	if (RETIRED.test(pathname)) return "/docs";
+	const renamed = /^\/docs\/([a-z0-9-]+)$/.exec(pathname)?.[1];
+	return renamed && RENAMED_PAGES[renamed] ? `/docs/${RENAMED_PAGES[renamed]}` : null;
 }
 
 const WEB_ROOT = path.join(__dirname, "../..");
@@ -46,6 +54,16 @@ const pageText = (file: string) => readFileSync(path.join(DOCS_CONTENT, file), "
 const pageUrl = (file: string) =>
 	`/docs/${file.replaceAll(path.sep, "/").replace(/(\/?index)?\.mdx$/, "")}`.replace(/\/$/, "");
 
+test("the rule names the upstream version folders and sections", () => {
+	for (const segment of RETIRED_VERSION_SEGMENTS) assert.ok(RETIRED_NAMES.includes(segment));
+	assert.ok(RETIRED_SECTIONS.includes("installation"));
+	assert.ok(RETIRED_SECTIONS.includes("connectors"));
+	assert.deepEqual(RENAMED_PAGES, {
+		"workspaces-and-sharing": "account-and-security",
+		"account-and-sharing": "account-and-security",
+	});
+});
+
 test("the upstream docs' version folders go to the docs front page", () => {
 	for (const segment of RETIRED_VERSION_SEGMENTS) {
 		assert.equal(redirect(`/docs/${segment}`), "/docs", segment);
@@ -63,7 +81,8 @@ test("pre-versioning upstream URLs go to the docs front page", () => {
 });
 
 test("a renamed page's old address goes to the page that replaced it", () => {
-	assert.equal(redirect("/docs/workspaces-and-sharing"), "/docs/account-and-sharing");
+	assert.equal(redirect("/docs/workspaces-and-sharing"), "/docs/account-and-security");
+	assert.equal(redirect("/docs/account-and-sharing"), "/docs/account-and-security");
 	for (const to of Object.values(RENAMED_PAGES)) {
 		assert.ok(existsSync(path.join(DOCS_CONTENT, `${to}.mdx`)), to);
 	}
@@ -154,12 +173,16 @@ test("the docs name no one server: its address, sign-in and contact come from se
 		//                      into it, so this link is right for all of them.
 		//   litellm:4000       a compose service name in a commented-out env
 		//                      example, so it is the same on every stack.
+		//   127.0.0.1          the reader's own machine, as localhost is: the
+		//                      install guide's reverse proxy examples.
+		//   *.example.org/.com reserved for documentation (RFC 2606): the install
+		//                      guide's sample addresses, which name no server.
 		// Narrowed on 2026-11-11: the pattern forbade all three, so this test had
 		// been failing, and a failing rule guards nothing. Anything else absolute
 		// still fails -- add to this list only with a reason, in writing.
 		assert.doesNotMatch(
 			text,
-			/https?:\/\/(?!localhost[:/]|apps\.apple\.com\/|litellm:)/i,
+			/https?:\/\/(?!localhost[:/]|127\.0\.0\.1[:/]|apps\.apple\.com\/|litellm:|(?:[a-z0-9-]+\.)*example\.(?:org|com)\b)/i,
 			`${file} hardcodes a site address`
 		);
 	}

@@ -54,7 +54,7 @@ func (r ServersRoute) serve(ctx huma.Context) {
 	}
 	shown := make([]*pythonjson.Object, 0, len(servers))
 	for _, server := range servers {
-		masked, err := shownServer(server)
+		masked, err := publicServer(server)
 		if err != nil {
 			failed.caught(rowRefused, err)
 			return
@@ -127,7 +127,7 @@ func (r ServerRoute) serve(ctx huma.Context) {
 		r.Errors.Write(response, http.StatusNotFound, serverAbsent, requestID)
 		return
 	}
-	masked, err := shownServer(*server)
+	masked, err := publicServer(*server)
 	if err != nil {
 		failed.caught(rowRefused, err)
 		return

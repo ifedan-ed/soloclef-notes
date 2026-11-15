@@ -26,9 +26,6 @@ func TestTheStoreOverARealDatabaseKeepsTwoAccountsApart(t *testing.T) {
 	ctx := context.Background()
 	const alice, bob = testpostgres.Alice, testpostgres.Bob
 	testpostgres.Exec(t, pool, `
-INSERT INTO folders (id, user_id, name, position, metadata) VALUES
- (7, '`+alice+`', 'Shore', 'a0', '{"watched": true}'),
- (8, '`+alice+`', 'Unwatched', 'a1', NULL);
 INSERT INTO documents (id, user_id, title, document_type, document_metadata, content, content_hash, source_markdown, status, updated_at) VALUES
  (41, '`+alice+`', 'Tide tables', 'FILE', '{"pages": 2}', 'text', 'hash-41', '# Tides, now', '{"state": "ready"}', now()),
  (42, '`+alice+`', 'Shore notes', 'NOTE', '{}', 'text', 'hash-42', NULL, '{"state": "processing", "stage": "embedding"}', now() - interval '1 hour');
@@ -71,10 +68,6 @@ INSERT INTO document_versions (document_id, version_number, source_markdown, con
 		if err != nil || len(counts) != 2 || counts[0] != (TypeCount{"FILE", 1}) || counts[1] != (TypeCount{"NOTE", 1}) {
 			t.Errorf("TypeCountsOf = %+v, %v", counts, err)
 		}
-		watched, err := store.WatchedFoldersOf(ctx, alice)
-		if err != nil || len(watched) != 1 || watched[0].ID != 7 || watched[0].Name != "Shore" {
-			t.Errorf("WatchedFoldersOf = %+v, %v", watched, err)
-		}
 		// Most recently updated first.
 		recent, err := store.RecentTitles(ctx, alice, 10, 0)
 		if err != nil || len(recent) != 2 || recent[0].ID != 41 || recent[1].ID != 42 {
@@ -114,9 +107,6 @@ INSERT INTO document_versions (document_id, version_number, source_markdown, con
 		}
 		if counts, err := store.TypeCountsOf(ctx, bob); err != nil || len(counts) != 0 {
 			t.Errorf("TypeCountsOf = %+v, %v", counts, err)
-		}
-		if watched, err := store.WatchedFoldersOf(ctx, bob); err != nil || len(watched) != 0 {
-			t.Errorf("WatchedFoldersOf = %+v, %v", watched, err)
 		}
 		if recent, err := store.RecentTitles(ctx, bob, 10, 0); err != nil || len(recent) != 0 {
 			t.Errorf("RecentTitles = %+v, %v", recent, err)

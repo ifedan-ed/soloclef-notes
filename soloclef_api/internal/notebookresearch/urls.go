@@ -10,11 +10,8 @@ import (
 	"strings"
 
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/pagereader"
+	"git.danvics.com/danvics/soloclef/soloclef_assistant/sourceidentity"
 )
-
-// maxURLChars is the longest address taken; browsers and servers agree on
-// about this much.
-const maxURLChars = 2048
 
 // trackers are query parameters that record a click and never change the
 // page, so two addresses differing only in them are one source.
@@ -24,17 +21,10 @@ var trackers = map[string]bool{
 }
 
 // webAddress is the trimmed address when it is an http(s) one with a host,
-// which is the only kind that can be read, cited and opened.
+// which is the only kind that can be read, cited and opened: the chat's
+// reading of an address and the research box's are one (sourceidentity).
 func webAddress(raw string) (*url.URL, string, bool) {
-	text := strings.TrimSpace(raw)
-	if text == "" || len(text) > maxURLChars {
-		return nil, "", false
-	}
-	parsed, err := url.Parse(text)
-	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Hostname() == "" {
-		return nil, "", false
-	}
-	return parsed, text, true
+	return sourceidentity.WebAddress(raw)
 }
 
 // plainlyPrivate reports an address that names this machine or a private

@@ -7,18 +7,18 @@ import (
 
 // Requested is a validated PromptCreate (app/schemas/prompts.py).
 type Requested struct {
-	Name     string
-	Prompt   string
-	Mode     string
-	IsPublic bool
+	Name   string
+	Prompt string
+	Mode   string
 }
 
 // ReadRequest validates the body of a create.
 //
-// The fields are read in declaration order (name, prompt, mode, is_public),
+// The fields are read in declaration order (name, prompt, mode),
 // because that is the order their failures are reported in whatever order the
 // request wrote them, and every field is read even after one has failed: a
-// body with three faults is answered with all three.
+// body with three faults is answered with all three. A field no prompt has
+// (an old client's is_public or workspace_id) is ignored, not refused.
 func ReadRequest(contentType string, body []byte) (Requested, []errorenvelope.Failure, error) {
 	object, failure, err := requestbody.Decode(contentType, body)
 	if err != nil {
@@ -33,8 +33,6 @@ func ReadRequest(contentType string, body []byte) (Requested, []errorenvelope.Fa
 	requested.Name = model.Text("name", nameMinLength, nameMaxLength)
 	requested.Prompt = model.Text("prompt", promptMinLength, 0)
 	requested.Mode = model.TextMatching("mode", 0, 0, ModePattern)
-	// An omission is false and an explicit null is a refusal.
-	requested.IsPublic = model.Truth("is_public", false)
 	if !model.Valid() {
 		return Requested{}, model.Failures(), nil
 	}

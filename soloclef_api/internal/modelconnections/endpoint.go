@@ -23,6 +23,35 @@ import (
 // so the address cannot reach inside this server's network unless the
 // operator allowed that host.
 
+// Probe is one model of one connection, to be listed or tried at the
+// connection's own address.
+type Probe struct {
+	// BaseURL and Key are empty when the connection has none.
+	BaseURL string
+	Key     string
+	// Headers are the connection's own request headers, opened: sent to
+	// the endpoint with every request, as the chat sends them
+	// (soloclef_assistant/ownmodels).
+	Headers map[string]string
+	ModelID string
+}
+
+// Verdict is what a test answers, in the words the settings screen
+// branches on: "OK", "AUTH_FAILED", "NOT_FOUND", "UNREACHABLE", or
+// "NO_MODEL" for a verify of a connection with no model (model_routes.go).
+type Verdict struct {
+	Status  string `json:"status"`
+	OK      bool   `json:"ok"`
+	Message string `json:"message"`
+}
+
+// maxVerdictBody bounds what is read of an endpoint's answer to a test;
+// maxMessage bounds what of its sentence is shown.
+const (
+	maxVerdictBody = 64 << 10
+	maxMessage     = 300
+)
+
 // The codes of a listing that did not produce a list. The settings screen
 // branches on them; each comes with a sentence it shows as it is.
 const (
@@ -213,4 +242,39 @@ func (c EndpointClient) unreached(ctx context.Context, err error, base string) e
 		return &endpointRefusal{http.StatusBadGateway, codeUnreachable, "The endpoint did not answer in time."}
 	}
 	return &endpointRefusal{http.StatusBadGateway, codeUnreachable, "The endpoint could not be reached. Check the base URL."}
+}
+
+// saidBy is the sentence in the endpoint's error body, shortened, with the
+// connection's key and header values struck out wherever the endpoint
+// echoed one back: the verdict is shown on a settings page and must not
+// carry a credential there.
+func saidBy(raw []byte, key string, secrets ...string) string {
+	var reply struct {
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(raw, &reply) != nil {
+		return ""
+	}
+	message := strings.Join(strings.Fields(reply.Error.Message), " ")
+	if key != "" {
+		message = strings.ReplaceAll(message, key, "[key]")
+	}
+	for _, secret := range secrets {
+		if secret != "" {
+			message = strings.ReplaceAll(message, secret, "[header]")
+		}
+	}
+	if utf8.RuneCountInString(message) > maxMessage {
+		message = string([]rune(message)[:maxMessage]) + "…"
+	}
+	return message
+}
+
+func orElse(said, otherwise string) string {
+	if said == "" {
+		return otherwise
+	}
+	return said
 }

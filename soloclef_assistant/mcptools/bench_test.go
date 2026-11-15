@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"git.danvics.com/danvics/soloclef/soloclef_connectors/mcpserver"
 	"os"
 	"testing"
 	"time"
@@ -89,23 +90,6 @@ func BenchmarkATurnBuiltCold(b *testing.B) {
 	}
 }
 
-// A trust decision: one row read and a small list parsed.
-func BenchmarkATrustDecision(b *testing.B) {
-	w := benchWorld(b)
-	ctx := context.Background()
-	set, err := w.source.ForTurn(ctx, ada)
-	if err != nil {
-		b.Fatal(err)
-	}
-	defer set.Close()
-	b.ReportAllocs()
-	for b.Loop() {
-		if _, mcp, err := set.Trusted(ctx, "s1_tool_1"); !mcp || err != nil {
-			b.Fatal(mcp, err)
-		}
-	}
-}
-
 // calling is an account connected to a real MCP server on loopback, and
 // the echo tool's Run.
 func calling(b *testing.B) (*world, func(*Set) tool.Func) {
@@ -184,7 +168,7 @@ func BenchmarkATurnOverARealDatabaseAndValkey(b *testing.B) {
 	}
 	for id, row := range memory.connections[ada] {
 		if _, err := pool.Exec(ctx, `INSERT INTO search_source_connectors (id, name, connector_type, config, user_id)
-			VALUES ($1, $2, 'MCP_CONNECTOR', $3::jsonb, $4)`, 100+id, row.Name, string(row.Config), ben); err != nil {
+			VALUES ($1, $2, 'MCP_CONNECTOR', $3::jsonb, $4)`, 100+id, row.Name, resealedFor(b, ada, ben, row.Config), ben); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -194,7 +178,8 @@ func BenchmarkATurnOverARealDatabaseAndValkey(b *testing.B) {
 	}
 	defer valkey.Close()
 	source, err := NewSource(Settings{
-		Rows: Postgres{Pool: pool}, Generations: valkey, Network: loopback{}, Logger: slogDiscard(), Now: time.Now,
+		Rows: Postgres{Pool: pool}, Generations: valkey, Network: loopback{}, Seal: testSeal, OAuth: testOAuth(),
+		Logger: slogDiscard(), Now: time.Now,
 		ClientName: "chat-under-test", SiteHostsWhenUnset: []string{}, Limits: testLimits(),
 	})
 	if err != nil {
@@ -225,4 +210,27 @@ func BenchmarkATurnOverARealDatabaseAndValkey(b *testing.B) {
 			turn(b)
 		}
 	})
+}
+
+// resealedFor is a config sealed for one account, sealed for another
+// instead: a ciphertext bound to its owner does not open for anyone else.
+func resealedFor(b *testing.B, from, to string, config []byte) string {
+	b.Helper()
+	top := keys(config)
+	stored, err := mcpserver.Parse(top[keyServer])
+	if err != nil {
+		b.Fatal(err)
+	}
+	opened, err := mcpserver.Open(testSeal, from, stored, nil)
+	if err != nil {
+		b.Fatal(err)
+	}
+	resealed, err := mcpserver.Build(testSeal, to, mcpserver.Settings{Address: opened.Address, Transport: stored.Transport,
+		Auth: mcpserver.Auth{Kind: mcpserver.AuthNone}, Headers: opened.Headers}, nil)
+	if err != nil {
+		b.Fatal(err)
+	}
+	top[keyServer], _ = json.Marshal(resealed)
+	raw, _ := json.Marshal(top)
+	return string(raw)
 }

@@ -280,7 +280,7 @@ var createParameters = json.RawMessage(`{"type":"object","properties":{` +
 	`"content":{"type":"string","description":"The file's content: Markdown for a google_doc, CSV (first row the column headers) for a google_sheet."}},` +
 	`"required":["name","file_type","content"]}`)
 
-const createDescription = `Create a Google Doc or a Google Sheet in the user's Google Drive, with the content you write: Markdown for a doc, CSV for a sheet. Only these two kinds can be made. The user is shown the file and approves before it is made, every time: call the tool directly, do not ask in prose first. Give the user the new file's link from the result.`
+const createDescription = `Create a Google Doc or a Google Sheet in the user's Google Drive, with the content you write: Markdown for a doc, CSV for a sheet. Only these two kinds can be made. If the user asked to approve this tool, they are shown the file first: call the tool directly, do not ask in prose first. Give the user the new file's link from the result.`
 
 // created are the two kinds a file can be made as: Drive converts the
 // uploaded text into the Google-native kind.
@@ -328,7 +328,7 @@ func (t *Tools) create(userID string) tool.Tool {
 	}
 }
 
-const trashDescription = `Move one file of the user's Google Drive to Drive's bin, from where they can restore it. Find the file with search_google_drive first. The user is shown the file and approves before it is moved, every time: call the tool directly, do not ask in prose first.`
+const trashDescription = `Move one file of the user's Google Drive to Drive's bin, from where they can restore it. Find the file with search_google_drive first. If the user asked to approve this tool, they are shown the file first: call the tool directly, do not ask in prose first.`
 
 func (t *Tools) trash(userID string) tool.Tool {
 	return tool.Tool{

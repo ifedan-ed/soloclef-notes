@@ -9,11 +9,12 @@ import (
 	"unicode/utf8"
 
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/pythonjson"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/testpostgres"
 )
 
 // pythonValues is testdata/python_values.json, recorded by asking Python
-// itself while the Python version still ran: its real _mask_url, mask_value,
-// always_asks and _SENSITIVE_PARAM, and the interpreter's own str(), bool(),
+// itself while the Python version still ran: its real _mask_url, mask_value
+// and _SENSITIVE_PARAM, and the interpreter's own str(), bool(),
 // slicing and Unicode tables.
 type pythonValues struct {
 	Python  string `json:"python"`
@@ -33,20 +34,12 @@ type pythonValues struct {
 		JSON   string `json:"json"`
 		Raises bool   `json:"raises"`
 	} `json:"integers"`
-	Unprintable [][2]rune `json:"unprintable"`
-	Lowering    []struct {
-		CodePoint rune   `json:"code_point"`
-		Lowered   string `json:"lowered"`
-	} `json:"lowering"`
+	Unprintable    [][2]rune         `json:"unprintable"`
 	Folding        map[string][]rune `json:"folding"`
 	ParameterNames []struct {
 		Name      string `json:"name"`
 		Sensitive bool   `json:"sensitive"`
 	} `json:"parameter_names"`
-	ToolNames []struct {
-		Name       string `json:"name"`
-		AlwaysAsks bool   `json:"always_asks"`
-	} `json:"tool_names"`
 	Windows []struct {
 		Length int    `json:"length"`
 		Skip   string `json:"skip"`
@@ -77,44 +70,14 @@ func readPythonValues(t *testing.T) pythonValues {
 		t.Fatalf("parsing Python's answers: %v", err)
 	}
 	if len(table.URLs) == 0 || len(table.Values) == 0 || len(table.Integers) == 0 || len(table.Unprintable) == 0 ||
-		len(table.Lowering) == 0 || len(table.Folding) == 0 || len(table.ParameterNames) == 0 ||
-		len(table.ToolNames) == 0 || len(table.Windows) == 0 ||
+		len(table.Folding) == 0 || len(table.ParameterNames) == 0 || len(table.Windows) == 0 ||
 		len(table.PublicKeys) == 0 || len(table.Storable) == 0 {
 		t.Fatal("one of Python's tables is empty, so it proves nothing")
 	}
 	return table
 }
 
-// TestAddressesAreMaskedAsPythonMasksThem replays every address: what
-// _mask_url answered, byte for byte, or the fact that urlsplit refused it.
-func TestAddressesAreMaskedAsPythonMasksThem(t *testing.T) {
-	table := readPythonValues(t)
-	raised, masked := 0, 0
-	for _, row := range table.URLs {
-		got, err := maskAddress(row.URL)
-		switch {
-		case row.Raises && err == nil:
-			t.Errorf("%q: Python raised and this tier answered %q", row.URL, got)
-		case !row.Raises && err != nil:
-			t.Errorf("%q: Python answered %q and this tier refused: %v", row.URL, row.Masked, err)
-		case !row.Raises && got != row.Masked:
-			t.Errorf("%q:\n Go     %q\n Python %q", row.URL, got, row.Masked)
-		}
-		if row.Raises {
-			raised++
-		} else if row.Masked != row.URL {
-			masked++
-		}
-	}
-	// A table of addresses that all came back untouched would pass a mirror
-	// that does nothing.
-	if raised < 100 || masked < 1000 {
-		t.Errorf("only %d addresses raise and %d are changed; the table has lost its teeth", raised, masked)
-	}
-	t.Logf("replayed %d addresses: %d refused, %d rewritten", len(table.URLs), raised, masked)
-}
-
-// TestValuesReadAsPythonReadsThem replays str(), mask_value() and bool() of
+// TestValuesReadAsPythonReadsThem replays str() and bool() of
 // every recorded JSON value, read the way a column is read.
 func TestValuesReadAsPythonReadsThem(t *testing.T) {
 	table := readPythonValues(t)
@@ -127,14 +90,11 @@ func TestValuesReadAsPythonReadsThem(t *testing.T) {
 		if got := codePoints(pyStr(read)); !reflect.DeepEqual(got, row.Str) {
 			t.Errorf("str(%s):\n Go     %U\n Python %U", row.JSON, got, row.Str)
 		}
-		if got := codePoints(maskValue(read)); !reflect.DeepEqual(got, row.Masked) {
-			t.Errorf("mask_value(%s):\n Go     %U\n Python %U", row.JSON, got, row.Masked)
-		}
 		if got := truthy(read); got != row.Truthy {
 			t.Errorf("bool(%s): Go %v, Python %v", row.JSON, got, row.Truthy)
 		}
 	}
-	t.Logf("replayed %d values three ways", len(table.Values))
+	t.Logf("replayed %d values two ways", len(table.Values))
 }
 
 // TestIntegersTooLongForPythonFailTheRead replays json.loads' refusal of an
@@ -202,74 +162,10 @@ func TestEveryCodePointIsPrintableAsPythonSaysItIs(t *testing.T) {
 	t.Logf("swept %d code points", checked)
 }
 
-// TestTheLoweringTableIsPythons holds lowersToASCII to Python's sweep: the
-// non-ASCII code points whose lower case holds an ASCII character, and what
-// each lowers to.
-func TestTheLoweringTableIsPythons(t *testing.T) {
-	table := readPythonValues(t)
-	recorded := make(map[rune]string)
-	for _, row := range table.Lowering {
-		recorded[row.CodePoint] = row.Lowered
-	}
-	if !reflect.DeepEqual(recorded, lowersToASCII) {
-		t.Errorf("Python lowers %q to something holding ASCII and this tier's table is %q",
-			recorded, lowersToASCII)
-	}
-}
-
-// TestTheFoldingTableIsPythons holds foldsToASCII to Python's sweep of
-// re.IGNORECASE: for each letter of the sensitive words, exactly the code
-// points that match it.
-func TestTheFoldingTableIsPythons(t *testing.T) {
-	table := readPythonValues(t)
-	letters := map[rune]bool{}
-	for _, word := range sensitiveWords {
-		for _, letter := range word {
-			letters[letter] = true
-		}
-	}
-	if len(table.Folding) != len(letters) {
-		t.Fatalf("Python recorded %d letters and the words have %d", len(table.Folding), len(letters))
-	}
-	for text, matching := range table.Folding {
-		letter := []rune(text)[0]
-		want := map[rune]bool{}
-		for _, point := range matching {
-			want[point] = true
-		}
-		got := map[rune]bool{letter: true, letter - ('a' - 'A'): true}
-		for point, folded := range foldsToASCII {
-			if folded == letter {
-				got[point] = true
-			}
-		}
-		if !reflect.DeepEqual(got, want) {
-			t.Errorf("%q: Python matches %v and this tier matches %v", text, want, got)
-		}
-	}
-	for _, row := range table.ParameterNames {
-		if got := isSensitiveName(row.Name); got != row.Sensitive {
-			t.Errorf("%q: Go says sensitive=%v and Python says %v", row.Name, got, row.Sensitive)
-		}
-	}
-}
-
-// TestToolsThatAlwaysAsk replays always_asks.
-func TestToolsThatAlwaysAsk(t *testing.T) {
-	table := readPythonValues(t)
-	asking := 0
-	for _, row := range table.ToolNames {
-		if got := alwaysAsks(row.Name); got != row.AlwaysAsks {
-			t.Errorf("%q: Go says %v and Python says %v", row.Name, got, row.AlwaysAsks)
-		}
-		if row.AlwaysAsks {
-			asking++
-		}
-	}
-	if asking == 0 || asking == len(table.ToolNames) {
-		t.Errorf("%d of %d names ask; the table cannot tell a constant from the rule", asking, len(table.ToolNames))
-	}
-}
+// retiredKeys are keys Python showed that no longer exist: an MCP server's
+// trusted_tools went with migration 00015, when every tool came to run
+// without asking unless the person marks it (internal/agentrules).
+var retiredKeys = map[string]map[string]bool{serverTypeTag: {"trusted_tools": true}}
 
 // TestAReadShowsTheKeysPythonShows holds publicKeys to the Python list it is
 // a copy of. Python was asked, for every connector type its enum has, which
@@ -297,13 +193,26 @@ func TestAReadShowsTheKeysPythonShows(t *testing.T) {
 		if !isObject {
 			t.Fatalf("%s: the recorded config is not an object", row.ConnectorType)
 		}
-		shown, err := publicConfig(row.ConnectorType, config)
+		if row.ConnectorType == serverTypeTag {
+			// A server's settings are stored sealed now (00012), which the
+			// recorded config predates; the keys are what is compared.
+			config.Set("server_config", sealedServerColumn(t, testpostgres.Alice, "https://mcp.example.com/mcp"))
+		}
+		shown, err := publicConfig(Connection{Type: row.ConnectorType, Config: config}, config)
 		if err != nil {
 			t.Errorf("%s: %v", row.ConnectorType, err)
 			continue
 		}
-		if got := append([]string{}, shown.Keys()...); !reflect.DeepEqual(got, append([]string{}, row.Shown...)) {
-			t.Errorf("%s:\n Go     %q\n Python %q", row.ConnectorType, got, row.Shown)
+		// Python's answer, less the keys this tier stopped showing on
+		// purpose: the recording is Python's and is not rewritten.
+		want := []string{}
+		for _, key := range row.Shown {
+			if !retiredKeys[row.ConnectorType][key] {
+				want = append(want, key)
+			}
+		}
+		if got := append([]string{}, shown.Keys()...); !reflect.DeepEqual(got, want) {
+			t.Errorf("%s:\n Go     %q\n Python %q", row.ConnectorType, got, want)
 		}
 		hidden += len(config.Keys()) - len(row.Shown)
 	}
@@ -316,7 +225,7 @@ func TestAReadShowsTheKeysPythonShows(t *testing.T) {
 	if hidden < 100 {
 		t.Errorf("only %d keys were left out across all types; the table has lost its teeth", hidden)
 	}
-	if _, err := publicConfig("NO_SUCH_CONNECTOR", pythonjson.NewObject()); err == nil {
+	if _, err := publicConfig(Connection{Type: "NO_SUCH_CONNECTOR"}, pythonjson.NewObject()); err == nil {
 		t.Error("a connector type with no entry was shown something; it must be refused")
 	}
 	t.Logf("replayed %d connector types; %d keys left out", len(table.PublicKeys), hidden)

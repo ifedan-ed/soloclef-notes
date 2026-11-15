@@ -7,15 +7,8 @@ import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import {
-	NotebookShareDialog,
-	publicLinksApi,
-	ShareDialog,
-	SharedBadge,
-	useLiveNotebookLink,
-} from "@/features/public-sharing";
-import { cn } from "@/lib/utils";
 import { NOTEBOOKS_HOME } from "@/lib/dashboard-paths";
+import { cn } from "@/lib/utils";
 import { notebookKeys } from "../../api/notebook-query-keys";
 import { type NotebookChanges, notebooksApi } from "../../api/notebooks-api";
 import { useNotebookWithAutoTitle } from "../../hooks/use-auto-title";
@@ -33,6 +26,7 @@ import {
 	withoutFocusParams,
 } from "../../lib/content-search";
 import { enabledCount } from "../../lib/source-selection";
+import { readStudioLink, withoutStudioLinkParams } from "../../lib/studio-link";
 import { NotebookChatProvider } from "../../state/notebook-chat-context";
 import { ChatDropZone } from "../chat/chat-drop-zone";
 import { NotebookChat } from "../chat/notebook-chat";
@@ -45,11 +39,7 @@ import { SidePanel } from "./side-panel";
 
 type MobileTab = "sources" | "chat" | "studio";
 
-export function NotebookWorkspace({
-	notebookId,
-}: {
-	notebookId: number;
-}) {
+export function NotebookWorkspace({ notebookId }: { notebookId: number }) {
 	const t = useTranslations("notebooks");
 	const queryClient = useQueryClient();
 	const { notebook, sources, watchTitle } = useNotebookWithAutoTitle(notebookId);
@@ -60,8 +50,15 @@ export function NotebookWorkspace({
 	// window.location still shows the previous page while this one renders.
 	const searchParams = useSearchParams();
 	const [focus] = useState<NotebookFocus>(() => readNotebookFocus(searchParams.toString()));
+	// A link from the inbox can open Studio (?pane=studio) and run a failed
+	// output again (&retry_output=), read once in the same way.
+	const [studioLink] = useState(() => readStudioLink(searchParams.toString()));
+	// Held here, not in Studio: switching to Notes and back remounts Studio,
+	// which must not run the output again. Cleared once Studio has acted.
+	const [retryOutputId, setRetryOutputId] = useState(studioLink?.retryOutputId ?? null);
+	const retryHandled = useCallback(() => setRetryOutputId(null), []);
 	const [mobileTab, setMobileTab] = useState<MobileTab>(
-		focus?.kind === "source" ? "sources" : focus?.kind === "note" ? "studio" : "chat"
+		focus?.kind === "source" ? "sources" : focus?.kind === "note" || studioLink ? "studio" : "chat"
 	);
 	const [addOpen, setAddOpen] = useState(false);
 	// The latest drop on the Sources panel or chat, pre-filled in the dialog.
@@ -90,17 +87,14 @@ export function NotebookWorkspace({
 	const setFeatured = useSetFeatured();
 	const copyNotebook = useCopyNotebook();
 	const { create, creating } = useCreateNotebook();
-	// The notebook's one running chat (the newest thread) is what "Share chat" shares.
+	// The notebook's one running chat (the newest thread), which the chat panel continues.
 	const threads = useNotebookThreads(notebookId);
 	const chatThreadId = threads.data?.[0]?.id ?? null;
-	const [shareOpen, setShareOpen] = useState(false);
-	// The notebook's live link: "Share notebook…" and the "Shared" badge.
-	const liveLink = useLiveNotebookLink(notebookId);
-	const [notebookShareOpen, setNotebookShareOpen] = useState(false);
 
 	// Before the first paint, so a collapsed panel never flashes shut and then open.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: acts on the link once
 	useLayoutEffect(() => {
+		if (studioLink) setStudioCollapsed(false);
 		if (!focus) return;
 		if (focus.kind === "source") setSourcesCollapsed(false);
 		else setStudioCollapsed(false);
@@ -119,6 +113,19 @@ export function NotebookWorkspace({
 		}, 0);
 		return () => window.clearTimeout(timer);
 	}, [focus]);
+	// The same for a Studio link: above all, a reload must not run the output again.
+	useEffect(() => {
+		if (!studioLink) return;
+		const timer = window.setTimeout(() => {
+			if (readStudioLink(window.location.search) === null) return;
+			window.history.replaceState(
+				window.history.state,
+				"",
+				withoutStudioLinkParams(window.location.href)
+			);
+		}, 0);
+		return () => window.clearTimeout(timer);
+	}, [studioLink]);
 
 	const sourceList = sources.data ?? [];
 	const enabled = enabledCount(sourceList);
@@ -135,6 +142,18 @@ export function NotebookWorkspace({
 		setSourcesCollapsed(false);
 		setMobileTab("sources");
 	}, [setSourcesCollapsed]);
+	// A source the chat's add_sources card asked to open: its document, and a
+	// count, so that asking for the same source again opens it again.
+	const [sourceRequest, setSourceRequest] = useState<{ documentId: number; token: number } | null>(
+		null
+	);
+	const openSource = useCallback(
+		(documentId: number) => {
+			openSources();
+			setSourceRequest((previous) => ({ documentId, token: (previous?.token ?? 0) + 1 }));
+		},
+		[openSources]
+	);
 	const openAddSources = useCallback(() => {
 		openSources();
 		setDropped(null);
@@ -179,6 +198,7 @@ export function NotebookWorkspace({
 			enabledSourceCount: enabled,
 			threadId: chatThreadId,
 			openSources,
+			openSource,
 			addSources: openAddSources,
 			uploadSources,
 			openResearch,
@@ -194,6 +214,7 @@ export function NotebookWorkspace({
 			enabled,
 			chatThreadId,
 			openSources,
+			openSource,
 			openAddSources,
 			uploadSources,
 			openResearch,
@@ -217,23 +238,6 @@ export function NotebookWorkspace({
 
 	return (
 		<NotebookChatProvider value={chatContext}>
-			{chatThreadId !== null ? (
-				<ShareDialog
-					open={shareOpen}
-					onOpenChange={setShareOpen}
-					subject="chat"
-					itemTitle={data?.title ?? ""}
-					create={(expiry) => publicLinksApi.shareChat(chatThreadId, expiry)}
-				/>
-			) : null}
-			<NotebookShareDialog
-				open={notebookShareOpen}
-				onOpenChange={setNotebookShareOpen}
-				notebookId={notebookId}
-				notebookTitle={data?.title ?? ""}
-				link={liveLink.link}
-				onChange={liveLink.set}
-			/>
 			<div className="flex h-full min-h-0 flex-col">
 				<NotebookHeader
 					notebook={data}
@@ -244,23 +248,15 @@ export function NotebookWorkspace({
 					creating={creating}
 					menu={
 						data ? (
-							<>
-								<SharedBadge
-									notebookId={notebookId}
-									link={liveLink.link}
-									onSettings={() => setNotebookShareOpen(true)}
-									onStopped={() => liveLink.set(null)}
-								/>
-								<NotebookMenu
-									notebook={data}
-									onUpdate={update}
-									onCopy={() => copyNotebook(data)}
-									onSetFeatured={(featured) => setFeatured(notebookId, featured)}
-									onDeleteHistory={deleteHistory}
-									onSharePublicly={chatThreadId !== null ? () => setShareOpen(true) : undefined}
-									onShareNotebook={() => setNotebookShareOpen(true)}
-								/>
-							</>
+							// Only Studio outputs can be shared (each from its own view), so the
+							// notebook's menu offers no public link to the notebook or its chat.
+							<NotebookMenu
+								notebook={data}
+								onUpdate={update}
+								onCopy={() => copyNotebook(data)}
+								onSetFeatured={(featured) => setFeatured(notebookId, featured)}
+								onDeleteHistory={deleteHistory}
+							/>
 						) : null
 					}
 				/>
@@ -308,6 +304,7 @@ export function NotebookWorkspace({
 							onDropFiles={dropFiles}
 							researchFocusToken={researchFocusToken}
 							initialOpenSourceId={focus?.kind === "source" ? focus.id : null}
+							openDocument={sourceRequest}
 						/>
 					</SidePanel>
 					<ChatDropZone
@@ -346,6 +343,8 @@ export function NotebookWorkspace({
 						onCollapsedChange={setStudioCollapsed}
 						mobileHidden={mobileTab !== "studio"}
 						focusNoteId={focus?.kind === "note" ? focus.id : null}
+						retryOutputId={retryOutputId}
+						onRetryHandled={retryHandled}
 					/>
 				</div>
 			</div>

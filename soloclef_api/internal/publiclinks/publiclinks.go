@@ -1,33 +1,31 @@
-// Package publiclinks serves the caller's public share links: the list the
-// sharing panel shows, and the revoke that takes one link down.
+// Package publiclinks serves the caller's public links: the list Settings,
+// Public links shows, and the revoke that takes one link down.
 //
 //	GET    /api/v1/snapshots                 every link the caller has made
 //	DELETE /api/v1/snapshots/{snapshot_id}   take one down
 //
-// A public link is a frozen copy of a chat, or of one studio output, behind
-// a token (`public_chat_snapshots`). Whoever holds the token may read the
-// copy; that side is internal/publicchat. This package is the owner's side:
-// which links exist, and removing one.
+// A public link shares one Studio output (`output_public_links`); nothing
+// else can be shared (internal/publicshare, which also serves what a
+// stranger holding the token reads). This package is the owner's side:
+// which links exist, and removing one. The paths keep the word "snapshots"
+// from when a link could also be a frozen chat, because every installed web
+// and phone build calls them by it.
 //
 // # Whose link
 //
 // A link belongs to the account that made it, and both statements name that
-// owner (`WHERE user_id = $1`). There is nothing else to check: no
-// membership, no permission, no rule about whose chat a link points at. The
-// list is "your links", and another account's link is the same `404 Public
-// link not found` as one that was never made.
+// owner (`WHERE user_id = $1`). There is nothing else to check. The list is
+// "your links", and another account's link is the same `404 Public link not
+// found` as one that was never made.
 //
-// # What this does better than the routes it replaces
+// # How it is built
 //
-//   - The list is one statement. It used to be four: the links, then the
-//     threads, the outputs and the accounts they name, joined in memory.
-//   - A link's frozen copy is not read to list it. `snapshot_data` holds a
-//     whole conversation and the list wants one key of it, so the statement
-//     asks Postgres for that key; the column never crosses the wire.
-//   - A copy whose title is not text is listed under its thread's title, or
-//     as "Untitled". It used to fail the whole list with a 500.
-//   - The revoke is one guarded DELETE. It used to read the row and two
-//     more rows of an access gate, and then delete.
+//   - The list is one statement, and it does not read a link's frozen copy:
+//     it asks Postgres for the one key it shows, so the copy never crosses
+//     the wire.
+//   - A copy whose title is not text is listed under its output's title, or
+//     as "Untitled", rather than failing the whole list.
+//   - The revoke is one guarded DELETE.
 //   - A 500 keeps its CORS headers, so a browser can read the envelope.
 package publiclinks
 
@@ -44,7 +42,7 @@ const (
 	linkNotFound = "Public link not found"
 	revoked      = "Public link revoked"
 	// untitled is what a link is listed as when neither its copy nor its
-	// thread has a title.
+	// output has a title.
 	untitled = "Untitled"
 )
 
@@ -57,30 +55,24 @@ type Link struct {
 	// OwnerID is the account the link belongs to, which is always the
 	// caller: the statement that reads it filters on the owner.
 	OwnerID string
-	// ThreadID is set for a shared chat and NotebookOutputID for a shared
-	// studio output; a link is one or the other.
-	ThreadID         *int64
-	NotebookOutputID *int64
-	// NotebookID is the notebook a shared output belongs to, nil for a chat.
-	NotebookID *int64
+	// NotebookID is the notebook the shared output belongs to, for the
+	// owner's own list to open it from; a stranger never sees it.
+	NotebookID int64
 	// StoredTitle is the title frozen into the copy, empty when it has
-	// none. ThreadTitle is the title of the chat it was taken from as it is
-	// now: nil for an output's link, and for a chat that has been deleted.
+	// none. OutputTitle is the output's title as it is now.
 	StoredTitle string
-	ThreadTitle *string
-	// Messages is how many messages the copy holds.
-	Messages int64
+	OutputTitle string
 }
 
-// Title is what the link is listed as: the title frozen into the copy, or
-// failing that the chat's own, or failing that "Untitled". An empty title is
-// no title.
+// Title is what the link is listed as: the title frozen into the copy,
+// which is what its visitors see, or failing that the output's own, or
+// failing that "Untitled". An empty title is no title.
 func (l Link) Title() string {
 	if l.StoredTitle != "" {
 		return l.StoredTitle
 	}
-	if l.ThreadTitle != nil && *l.ThreadTitle != "" {
-		return *l.ThreadTitle
+	if l.OutputTitle != "" {
+		return l.OutputTitle
 	}
 	return untitled
 }
@@ -88,7 +80,7 @@ func (l Link) Title() string {
 // Expired reports whether a link has stopped working: one with no expiry
 // never does, and one whose moment has arrived has. The comparison is `<=`,
 // so the exact instant counts as expired, as it does where the public page
-// is served (internal/publicchat).
+// is served (internal/publicshare).
 func Expired(expiresAt *time.Time, now time.Time) bool {
 	return expiresAt != nil && !expiresAt.After(now)
 }

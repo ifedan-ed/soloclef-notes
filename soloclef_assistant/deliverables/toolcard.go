@@ -83,10 +83,18 @@ func ToolCard(result event.Event) (payload any, ok bool) {
 		}
 		// The message is the model's; the card has no use for it.
 		return PodcastCard{Status: opened.Status, PodcastID: opened.PodcastID, Title: opened.Title}, true
-	case ImageTool:
-		return imageCard(result)
 	case VideoTool:
 		return videoCard(result)
 	}
 	return nil, false
+}
+
+// cardSentence is a failed call's text as a card may show it: without the
+// loop's "error: " prefix and the note meant for the model, and bounded.
+func cardSentence(text, note string) string {
+	reason := strings.TrimSuffix(strings.TrimPrefix(text, "error: "), note)
+	if utf8.RuneCountInString(reason) > maxCardErrorChars {
+		reason = string([]rune(reason)[:maxCardErrorChars])
+	}
+	return reason
 }

@@ -1,0 +1,23 @@
+{
+  "title": "Photosynthesis: how plants turn light into food",
+  "subtitle": "The light reactions, the Calvin cycle, and why it matters for every living thing",
+  "theme": "clinical",
+  "sources": [
+    {"title": "Campbell Biology, chapter 10: Photosynthesis", "detail": "Urry, Cain, Wasserman, Minorsky and Orr, 12th edition, Pearson, 2020"},
+    {"title": "The global carbon budget 2023", "detail": "Friedlingstein and colleagues, Earth System Science Data 15, 5301 to 5369"},
+    {"title": "Rubisco: the most abundant protein on Earth", "detail": "Bar-On and Milo, PNAS 116 (2019)"}
+  ],
+  "slides": [
+    {"kind": "title", "title": "Photosynthesis: how plants turn light into food", "subtitle": "The light reactions, the Calvin cycle, and why it matters for every living thing", "notes": "Welcome. Today we follow a photon from the sun into a sugar molecule."},
+    {"kind": "bullets", "title": "Photosynthesis stores the sun's energy in sugar", "bullets": ["**Inputs:** carbon dioxide from the air and water from the soil", "**Energy:** sunlight, captured by chlorophyll in the chloroplasts", "**Outputs:** glucose for the plant, oxygen released into the air", "Almost all food chains on Earth start here"], "cites": [1], "notes": "Write the overall equation on the board: 6CO2 + 6H2O gives C6H12O6 + 6O2."},
+    {"kind": "section", "title": "Stage one: the light reactions", "subtitle": "In the thylakoid membranes"},
+    {"kind": "diagram", "title": "The light reactions make ATP and NADPH", "style": "flow", "steps": [{"label": "Light absorbed", "text": "Chlorophyll in photosystem II absorbs a photon and excites an electron"}, {"label": "Water split", "text": "The lost electron is replaced by splitting water, which releases oxygen"}, {"label": "Electron transport", "text": "The electron passes along a chain that pumps protons into the thylakoid"}, {"label": "ATP and NADPH", "text": "ATP synthase and photosystem I make the energy carriers the Calvin cycle uses"}], "cites": [1]},
+    {"kind": "diagram", "title": "The Calvin cycle fixes carbon", "style": "cycle", "steps": [{"label": "Carbon fixation", "text": "Rubisco attaches CO2 to RuBP"}, {"label": "Reduction", "text": "ATP and NADPH turn 3-PGA into G3P"}, {"label": "Sugar out", "text": "One G3P in six leaves to build glucose"}, {"label": "Regeneration", "text": "The rest rebuild RuBP, using more ATP"}], "cites": [1, 3]},
+    {"kind": "two_column", "title": "Two stages, two places", "left": {"heading": "Light reactions", "bullets": ["Thylakoid membranes", "Need light directly", "Make ATP, NADPH and oxygen"]}, "right": {"heading": "Calvin cycle", "bullets": ["Stroma of the chloroplast", "Runs on ATP and NADPH", "Makes G3P, then glucose"]}},
+    {"kind": "comparison", "title": "C3, C4 and CAM plants solve the same problem differently", "columns": ["C3", "C4", "CAM"], "rows": [{"aspect": "Example", "cells": ["Wheat, rice", "Maize, sugarcane", "Cacti, pineapple"]}, {"aspect": "First CO2 fixed by", "cells": ["Rubisco", "PEP carboxylase", "PEP carboxylase, at night"]}, {"aspect": "Best climate", "cells": ["Cool and wet", "Hot and sunny", "Hot and dry"]}, {"aspect": "Water use", "cells": ["High", "Medium", "Very low"]}]},
+    {"kind": "stats", "title": "Photosynthesis at the scale of the planet", "stats": [{"value": "123", "label": "billion tonnes of carbon fixed on land each year"}, {"value": "50%", "label": "of the oxygen we breathe comes from ocean plankton"}, {"value": "0.7", "label": "gigatonnes of Rubisco on Earth, the most abundant protein"}], "cites": [2, 3]},
+    {"kind": "timeline", "title": "How we worked it out", "events": [{"label": "1648", "text": "Van Helmont finds a willow gains mass not from the soil"}, {"label": "1771", "text": "Priestley shows a plant restores air a candle has used up"}, {"label": "1779", "text": "Ingenhousz shows plants need light to do it"}, {"label": "1950s", "text": "Calvin traces carbon through the cycle with carbon-14"}]},
+    {"kind": "chart", "title": "Leaves reflect green light and absorb the rest", "bars": [{"label": "Blue (450 nm)", "value": 92}, {"label": "Green (550 nm)", "value": 18}, {"label": "Red (680 nm)", "value": 88}], "unit": "%", "caption": "Share of light absorbed by a typical leaf at each wavelength (illustrative figures from the textbook)", "cites": [1]},
+    {"kind": "quote", "quote": "The leaf is the laboratory of the world, and the sun its only source of power.", "attribution": "Adapted from Justus von Liebig, 1840"}
+  ]
+}

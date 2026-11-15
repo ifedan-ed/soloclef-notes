@@ -163,25 +163,29 @@ func buildConnection(row ListedConnection) (*pythonjson.Object, error) {
 	return item, nil
 }
 
-// credentialBags is _CREDENTIAL_BAGS: the two keys of `extra` that the Python
-// tier merges, unread, into the call it makes to a provider. They are where a
-// credential that is not a plain API key is kept -- Amazon Bedrock's access
-// key, secret and bearer token, and Vertex AI's whole service-account file,
-// all sit in `extra.litellm_params` -- and so neither is answered.
+// credentialBags are the keys of `extra` that are never answered.
 //
-// Both are left out whole. They are not filtered name by name, because
-// anything may be put in them and a list of "the secret names" would always
-// be one short.
+// A connection's headers are kept in `extra`, sealed, with their names
+// beside them (ownmodels.ExtraKeys). The sealed text is a credential's, and
+// the names are answered as `header_names`, so neither key is answered
+// inside `extra`.
 //
-// A connection's headers are kept in `extra` too, sealed, with their names
-// beside them (ownmodels.ExtraKeys). They are left out of `extra` for the
-// same reason: the sealed text is a credential's, and the names are
-// answered as `header_names`.
+// litellm_params and kwargs are where the Python tier, and this one before
+// it offered only OpenAI-compatible connections, kept a credential that is
+// not a plain API key: Bedrock's access key, secret and bearer token,
+// Vertex AI's whole service-account file. A write can no longer put one
+// there (connection_body.go, namesRetiredBag), but a row made before may
+// still hold one, and such a row is still listed (write_routes.go, "A row
+// of a provider that is gone"), so they stay left out.
+//
+// Each key is left out whole. They are not filtered name by name inside,
+// because anything may be put in them and a list of "the secret names"
+// would always be one short.
 var credentialBags = map[string]bool{"litellm_params": true, "kwargs": true, "headers_sealed": true, "header_names": true}
 
-// withoutCredentialBags is _public_extra for an object: a copy without the two
-// bags, every other key kept in its place. Only the top level is looked at,
-// as there: a key of the same name further down is not one of the bags.
+// withoutCredentialBags is a copy of `extra` without credentialBags, every
+// other key kept in its place. Only the top level is looked at: a key of
+// the same name further down is not one of them.
 func withoutCredentialBags(extra *pythonjson.Object) *pythonjson.Object {
 	public := pythonjson.NewObject()
 	for _, key := range extra.Keys() {

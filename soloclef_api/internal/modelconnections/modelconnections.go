@@ -1,12 +1,32 @@
-// Package modelconnections serves the list of providers a connection can be
-// made to, and an account's own connections with their models: reading
-// them, and making, changing, removing and testing one.
+// Package modelconnections serves an account's own model connections: the
+// one provider a connection can be made to, the account's connections with
+// their models, and making, changing, removing and testing one.
 //
-//	GET /api/v1/model-providers     the providers (a constant; session only)
+//	GET /api/v1/model-providers     the provider (a constant; session only)
 //	GET /api/v1/model-connections   the caller's connections and their models
-//	the writes and the tests        write_routes.go
+//	the writes and the tests        write_routes.go, test_routes.go
 //	a connection's models           model_routes.go (verify, list, switch, edit)
-//	the site's own connections      global_routes.go
+//
+// # What a connection is for
+//
+// The deployment's own models are called through the model proxy, by a
+// name the proxy lists (internal/chat/models.go, internal/modelchoices),
+// and need no connection. A connection is the one exception to "every
+// model goes through the proxy": a person's own OpenAI-compatible endpoint
+// (ownmodels.Provider), with its base URL, its key and optional headers.
+// Soloclef calls it itself: its models are listed from its own
+// GET {base}/models, it is tested at its own POST {base}/chat/completions
+// (endpoint.go), and its models join the account's model menus, where a
+// chosen one answers the chat, the studio, the podcasts, the videos and the
+// automations (soloclef_assistant/ownmodels). Any account may add one, and
+// every call goes through the egress guard, so the address cannot reach
+// inside this server's network unless the operator allowed that host.
+//
+// That is the only provider (providers.go says why). A hosted service that
+// speaks OpenAI's protocol, such as OpenRouter or OpenAI itself, is added
+// as an OpenAI-compatible endpoint at its address. A row of another
+// provider left from before can be seen and removed, and nothing else
+// (write_routes.go, "A row of a provider that is gone").
 //
 // A connection is an account's own: the key it holds is that person's key.
 // Every statement is `WHERE user_id = caller`, so one account never sees or
@@ -19,27 +39,24 @@
 //
 // The Python tier stored a provider's API key as it was typed, in a plain
 // column. This tier seals it before storing it (keyseal.go), so the column
-// holds ciphertext bound to its owner.
+// holds ciphertext bound to its owner. The connection's headers are sealed
+// the same way, whole (a header may carry a key as well as the key field
+// does), and only their names are kept in the clear.
 //
-// **The key is never answered**, sealed or not. The answer says whether a
-// key is saved (`has_api_key`) and nothing more. The settings screen does
-// not need it back: an update that leaves `api_key` out keeps the stored
-// key, and POST /model-connections/{id}/test-update tests a change with it.
+// **Neither is ever answered**, sealed or not. The answer says whether a
+// key is saved (`has_api_key`) and which headers are sent (`header_names`),
+// and nothing more (render.go, withoutCredentialBags). The settings screen
+// does not need them back: an update that leaves `api_key` or `headers` out
+// keeps what is stored, and POST /model-connections/{id}/test-update tests
+// a change with it.
 //
-// The same goes for `extra`. For Amazon Bedrock and Vertex AI the
-// credential is not in `api_key` at all: the access key, secret, bearer
-// token or whole service-account file sits in `extra.litellm_params`. The
-// answer therefore leaves `litellm_params` and `kwargs` out (render.go,
-// withoutCredentialBags). Those two bags are still stored as sent; sealing
-// them as the key is sealed is not done yet.
-//
-// **The key is read in one place**: the statements a test runs
-// (queries.sql, ConnectionForTest and ModelForTest), which hand it to the
-// model proxy, or to the OpenAI-compatible endpoint it belongs to, and to
-// nothing else. (A chosen model of such a connection is opened for a call
-// by soloclef_assistant/ownmodels, its one other reader.) The list and the answer to a write ask
-// the database for `has_api_key` as a boolean, so the key is not in memory
-// on those paths to be logged, rendered or left behind by a later change.
+// **The key is read in one place here**: the statements a test or a
+// listing runs (queries.sql, ConnectionForTest and ModelForTest), which
+// hand it to the connection's own endpoint and to nothing else. (A chosen
+// model is opened for a call by soloclef_assistant/ownmodels, its one other
+// reader.) The list and the answer to a write ask the database for
+// `has_api_key` as a boolean, so the key is not in memory on those paths to
+// be logged, rendered or left behind by a later change.
 //
 // Two things follow and both are kept:
 //
@@ -49,34 +66,11 @@
 //     credential inside an `extra`, is invented and written `fake...`, and
 //     the tests refuse an answer in which one came back.
 //
-// # What a connection is for
-//
-// The deployment's own models are called through the model proxy, by a
-// name the proxy lists (internal/chat/models.go, internal/modelchoices).
-// A connection is a person's own key and address, and there are two kinds.
-//
-// An OpenAI-compatible connection (ownmodels.Provider) is called by
-// Soloclef itself, at the address the person gave: its models are listed
-// from its own GET {base}/models, it is tested there (endpoint.go), and its
-// models join the account's model menus, where a chosen one answers the
-// chat, the studio, the podcasts, the videos and the automations
-// (soloclef_assistant/ownmodels). Any account may add one; every call goes
-// through the egress guard, so the address cannot reach inside this
-// server's network unless the operator allowed that host.
-//
-// Every other provider's connection is handed to the proxy: its models are
-// the proxy's catalogue (proxy_catalogue.go) and its test asks through the
-// proxy (proxy_probe.go). Those remain an administrator's (write_routes.go,
-// "Who may").
-//
-// The key, and an OpenAI-compatible connection's headers, are sealed at
-// rest and never answered; `header_names` says which headers are sent.
-//
 // # What is easy to read past
 //
 //   - `has_api_key` is whether a non-empty value is stored, so a removed
 //     key is false.
-//   - `extra` holding only the two credential bags is answered `{}`.
+//   - `extra` holding only keys that are never answered is answered `{}`.
 //   - A jsonb column that should hold an object and does not fails the whole
 //     list with the sanitised 500: a row this package cannot describe
 //     truthfully is not described.

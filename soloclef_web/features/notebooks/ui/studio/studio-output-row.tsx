@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
 import { formatDuration, isInFlight } from "../../lib/output-meta";
 import { knownPhase } from "../../lib/output-phase";
 import { relativeTime } from "../../lib/relative-time";
-import { studioTile } from "../../lib/studio-catalog";
+import { isInfographicStyle, studioTile } from "../../lib/studio-catalog";
 import type { StudioOutput } from "../../model/notebook";
 
 interface StudioOutputRowProps {
@@ -80,15 +80,18 @@ export function StudioOutputRow({
 		: output.status === "ready"
 			? null
 			: t(`status.${output.status}`);
+	// An infographic made in a look that has since been removed is named by its
+	// kind: its style has no label any more, and a missing key would show raw.
 	const format = output.options.format
 		? t(`options.${output.kind}.format.${String(output.options.format)}.label`)
-		: output.kind === "infographic" && output.options.style
-			? t(`options.infographic.style.${String(output.options.style)}.label`)
+		: output.kind === "infographic" && isInfographicStyle(output.options.style)
+			? t(`options.infographic.style.${output.options.style}.label`)
 			: t(`kinds.${output.kind}.label`);
 	const meta = [
 		output.duration_seconds ? formatDuration(output.duration_seconds) : null,
 		format,
-		t("source_count", { count: output.source_count }),
+		// An output a notebook's chat made names no sources of its own: no count.
+		output.source_count > 0 ? t("source_count", { count: output.source_count }) : null,
 		relativeTime(output.created_at, locale),
 	]
 		.filter(Boolean)

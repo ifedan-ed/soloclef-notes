@@ -1,0 +1,14 @@
+{
+  "build": "iPhone 1.0.0 (App Store build 3)",
+  "platform": "ios",
+  "app_version": "1.0.0",
+  "store_build": "3",
+  "update_channel": "production",
+  "source_commit": "a7a0adf689dad274a3f606a5a79348c36f06c3d5",
+  "source_branch": "app/go-api-1.0",
+  "reports_app_version": true,
+  "taken": "2026-11-14",
+  "published": false,
+  "update_ids": [],
+  "openapi_sha256": "b646b49abdfb6663a0a09ce8065890efad4f559e1286e08a47789c3dcd12508a"
+}

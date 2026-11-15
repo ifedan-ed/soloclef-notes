@@ -16,15 +16,10 @@ import (
 //     the phone's messageRecordSchema
 //     (soloclef_mobile/src/lib/api/schemas.ts), for the history a thread is
 //     opened with.
-//   - createdLink: soloclef_web/features/public-sharing/model/created-link.ts
-//     and contracts/types/chat-threads.types.ts.
-//   - listedLink: contracts/types/chat-threads.types.ts
-//     publicChatSnapshotInfo.
 //   - Tool: soloclef_web/lib/apis/agent-tools-api.service.ts.
 //
 // Times are written the way each reader was already being sent them: "Z"
-// with a six-digit fraction for the records, "+00:00" for a link's
-// created_at.
+// with a six-digit fraction.
 
 // encode writes value as JSON without escaping "<", ">" and "&": message
 // content is stored JSON handed on as it is.
@@ -206,26 +201,6 @@ func fullBody(thread Thread, messages []Message) ([]byte, error) {
 	}
 	b.WriteByte('}')
 	return b.Bytes(), nil
-}
-
-type createdLink struct {
-	SnapshotID int64   `json:"snapshot_id"`
-	ShareToken string  `json:"share_token"`
-	PublicURL  string  `json:"public_url"`
-	IsNew      bool    `json:"is_new"`
-	ExpiresAt  *string `json:"expires_at"`
-}
-
-type listedLink struct {
-	ID           int64  `json:"id"`
-	ShareToken   string `json:"share_token"`
-	PublicURL    string `json:"public_url"`
-	CreatedAt    string `json:"created_at"`
-	MessageCount int64  `json:"message_count"`
-}
-
-type linkList struct {
-	Snapshots []listedLink `json:"snapshots"`
 }
 
 type said struct {

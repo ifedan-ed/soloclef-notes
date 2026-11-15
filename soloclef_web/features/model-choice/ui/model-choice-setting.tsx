@@ -123,7 +123,7 @@ export function ModelJobSetting({
 	);
 }
 
-/** The vision or the image model on the model settings page. */
+/** The vision model on the model settings page. */
 export function ModelRoleSetting({
 	kind,
 	label,

@@ -20,6 +20,7 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/broker"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/drivesync"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/proxystub"
+	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/pushdelivery"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/speech"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/testdatabase"
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/testredis"
@@ -85,12 +86,12 @@ func TestTheWorkerRunsWhatTheAPIPublishes(t *testing.T) {
 		DefaultQueue: "probe", SecretKey: "fake-deployment-secret",
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	// The three feature switches have no default and the job table reads
+	// The four feature switches have no default and the job table reads
 	// them from the environment itself, so the test says them as a
 	// deployment must. All off: this test is about the podcast and the
 	// notebook's name, and each switched-on feature needs a service of its
-	// own that is tested where it lives.
-	for _, feature := range []string{videojob.Enabled, automationrun.Enabled, drivesync.Enabled} {
+	// own that is tested where it lives (push: internal/pushdelivery).
+	for _, feature := range []string{videojob.Enabled, automationrun.Enabled, drivesync.Enabled, pushdelivery.Enabled} {
 		t.Setenv(feature, "false")
 	}
 	runner, err := table(settings, pool, rdb, files, log)

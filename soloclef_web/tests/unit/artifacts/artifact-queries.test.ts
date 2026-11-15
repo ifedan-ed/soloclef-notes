@@ -10,18 +10,8 @@ import {
 
 test("artifact query keys preserve cache identity boundaries", () => {
 	assert.deepEqual(artifactManifestQueryKey(11), ["artifact-manifest", 11]);
-	assert.deepEqual(artifactImageBlobQueryKey(11, null), [
-		"artifact-image-blob",
-		11,
-		null,
-		undefined,
-	]);
-	assert.deepEqual(artifactImageBlobQueryKey(11, "share", 3), [
-		"artifact-image-blob",
-		11,
-		"share",
-		3,
-	]);
+	assert.deepEqual(artifactImageBlobQueryKey(11), ["artifact-image-blob", 11, undefined]);
+	assert.deepEqual(artifactImageBlobQueryKey(11, 3), ["artifact-image-blob", 11, 3]);
 	assert.deepEqual(artifactListQueryKey(), ["artifact-list"]);
 	assert.deepEqual(artifactListQueryKey(null), ["artifact-list"]);
 	assert.deepEqual(artifactListQueryKey(13), ["artifact-list", 13]);
@@ -35,22 +25,22 @@ test("publishing removes artifact blobs and invalidates the manifest and every a
 	const otherManifest = artifactManifestQueryKey(12);
 	const accountList = artifactListQueryKey();
 	const threadList = artifactListQueryKey(13);
-	const blob = artifactImageBlobQueryKey(11, null);
-	const sharedBlob = artifactImageBlobQueryKey(11, "share", 3);
-	const otherBlob = artifactImageBlobQueryKey(12, null);
+	const blob = artifactImageBlobQueryKey(11);
+	const newerBlob = artifactImageBlobQueryKey(11, 3);
+	const otherBlob = artifactImageBlobQueryKey(12);
 
 	queryClient.setQueryData(manifest, { revision: "old" });
 	queryClient.setQueryData(otherManifest, { revision: "other" });
 	queryClient.setQueryData(accountList, ["account"]);
 	queryClient.setQueryData(threadList, ["thread"]);
 	queryClient.setQueryData(blob, "blob:private");
-	queryClient.setQueryData(sharedBlob, "blob:shared");
+	queryClient.setQueryData(newerBlob, "blob:newer");
 	queryClient.setQueryData(otherBlob, "blob:other");
 
 	await invalidatePublishedArtifact(queryClient, 11);
 
 	assert.equal(queryClient.getQueryState(blob), undefined);
-	assert.equal(queryClient.getQueryState(sharedBlob), undefined);
+	assert.equal(queryClient.getQueryState(newerBlob), undefined);
 	assert.equal(queryClient.getQueryData(otherBlob), "blob:other");
 	assert.equal(queryClient.getQueryData(manifest), undefined);
 	// Another artifact's manifest is not this one's to reset.

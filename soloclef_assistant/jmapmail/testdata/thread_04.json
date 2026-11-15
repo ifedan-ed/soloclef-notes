@@ -1,0 +1,41 @@
+{
+  "status": 200,
+  "body": {
+    "methodResponses": [
+      [
+        "Email/get",
+        {
+          "accountId": "d",
+          "state": "say",
+          "list": [
+            {
+              "threadId": "d",
+              "id": "maaaaad"
+            }
+          ],
+          "notFound": []
+        },
+        "e"
+      ],
+      [
+        "Thread/get",
+        {
+          "accountId": "d",
+          "state": "say",
+          "list": [
+            {
+              "id": "d",
+              "emailIds": [
+                "maaaaad",
+                "maaaaae"
+              ]
+            }
+          ],
+          "notFound": []
+        },
+        "t"
+      ]
+    ],
+    "sessionState": "3f4a7bc7"
+  }
+}

@@ -37,7 +37,6 @@ INSERT INTO notebook_sources (notebook_id, user_id, document_id, folder_id, enab
  (10, '`+alice+`', 501, NULL, false, '2026-01-02'),
  (10, '`+alice+`', NULL, 5,   true,  '2026-01-03');
 INSERT INTO new_chat_threads (id, user_id, title, notebook_id) VALUES (30, '`+alice+`', 'Chat', 10);
-INSERT INTO notebook_public_links (notebook_id, user_id, share_token) VALUES (10, '`+alice+`', 'tok');
 SELECT setval(pg_get_serial_sequence('notebooks', 'id'), 100);`)
 
 	api := humago.New(http.NewServeMux(), huma.DefaultConfig("test", "0"))
@@ -75,17 +74,17 @@ SELECT setval(pg_get_serial_sequence('notebooks', 'id'), 100);`)
 	if status != 201 || strings.TrimSpace(body) != want {
 		t.Errorf("her copy: %d\n got %s\nwant %s", status, body, want)
 	}
-	// The sources came across with their ticks and dates; the chat, the
-	// link and the pin stayed behind.
+	// The sources came across with their ticks and dates; the chat and the
+	// pin stayed behind.
 	if count(`notebook_sources c JOIN notebook_sources o
 	          ON o.notebook_id = 10 AND o.document_id IS NOT DISTINCT FROM c.document_id
 	         AND o.folder_id IS NOT DISTINCT FROM c.folder_id AND o.enabled = c.enabled AND o.added_at = c.added_at
 	          WHERE c.notebook_id = 101 AND c.user_id = '`+alice+`'`) != 3 {
 		t.Error("the copy's sources are not the original's")
 	}
-	if count("new_chat_threads WHERE notebook_id = 101") != 0 || count("notebook_public_links WHERE notebook_id = 101") != 0 ||
+	if count("new_chat_threads WHERE notebook_id = 101") != 0 ||
 		count("notebooks WHERE id = 101 AND featured_at IS NULL AND title_source = 'user' AND icon_source = 'user'") != 1 {
-		t.Error("the copy took the chat, the link or the pin, or may rename itself")
+		t.Error("the copy took the chat or the pin, or may rename itself")
 	}
 	if count("notebook_sources WHERE notebook_id = 10") != 3 || count("notebooks WHERE id = 10 AND title = 'Tides' AND featured_at IS NOT NULL") != 1 {
 		t.Error("the original was changed")

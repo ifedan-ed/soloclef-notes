@@ -8,7 +8,9 @@ import { expect, openNotebook, test, uniqueName } from "./fixtures";
  * dialog (warning shown, 7 days by default), a signed-out visitor reads it,
  * the owner revokes it from Settings › Public links and the link is
  * gone; a second link expired through the test-only route says it expired.
- * The notebook menu's "Share chat publicly…" refuses an empty chat inline.
+ * Only Studio outputs can be shared: the notebook's menu offers no public link
+ * to the notebook or its chat, and the shared page links to nothing of the
+ * owner's notebook.
  */
 
 const MINT_SECRET = process.env.E2E_MINT_SECRET ?? "";
@@ -61,6 +63,9 @@ test("share an output, read it signed out, revoke it, and see an expired link", 
 		timeout: 30_000,
 	});
 	await expect(visitor.getByTestId("shared-notice")).toContainText("Shared read-only");
+	// Nothing on the page leads into the owner's account: no notebook, no chat.
+	await expect(visitor.locator('a[href*="/dashboard"]')).toHaveCount(0);
+	await expect(visitor.locator(`a[href*="${notebook.id}"]`)).toHaveCount(0);
 
 	await page.goto(`/dashboard/settings/public-links`);
 	const linkRow = page.getByTestId("public-link-row").filter({ hasText: TITLE });
@@ -90,11 +95,13 @@ test("share an output, read it signed out, revoke it, and see an expired link", 
 	await visitor.context().close();
 });
 
-test("an empty notebook chat cannot be shared, and says why inline", async ({ page, notebook }) => {
+test("the notebook menu has no way to share the notebook or its chat", async ({
+	page,
+	notebook,
+}) => {
 	await openNotebook(page, notebook.id, "Chat");
 	await page.getByRole("button", { name: "Notebook options" }).click();
-	await page.getByRole("menuitem", { name: "Share chat publicly…" }).click();
-	const dialog = page.getByTestId("share-dialog");
-	await dialog.getByRole("button", { name: "Create link" }).click();
-	await expect(dialog.getByRole("alert")).toHaveText(/no messages yet/);
+	const menu = page.getByRole("menu");
+	await expect(menu.getByRole("menuitem", { name: "Copy notebook" })).toBeVisible();
+	await expect(menu.getByRole("menuitem", { name: /share/i })).toHaveCount(0);
 });

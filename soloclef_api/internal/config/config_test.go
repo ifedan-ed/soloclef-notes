@@ -49,6 +49,8 @@ func completeEnvironment() map[string]string {
 		"SOLOCLEF_API_QDRANT_SEARCH_RESCORE":      "true",
 		"SOLOCLEF_API_QDRANT_SEARCH_OVERSAMPLING": "2.5",
 		"SOLOCLEF_API_NCBI_TOOL":                  "example-notes",
+		"SOLOCLEF_API_FIGURES_RESVG":              "/usr/local/bin/resvg",
+		"SOLOCLEF_API_FIGURES_FONT_DIR":           "/usr/local/share/figures/fonts",
 		"SOLOCLEF_API_CHAT_MAX_STEPS":             "24",
 		"SOLOCLEF_API_CHAT_MAX_TURN_SECONDS":      "600",
 		// Whether documents are built in a sandbox: said, never assumed.
@@ -219,6 +221,8 @@ func TestLoadReportsEverySettingThatCouldNameAServer(t *testing.T) {
 		"SOLOCLEF_API_QDRANT_SEARCH_RESCORE",
 		"SOLOCLEF_API_QDRANT_SEARCH_OVERSAMPLING",
 		"SOLOCLEF_API_NCBI_TOOL",
+		"SOLOCLEF_API_FIGURES_RESVG",
+		"SOLOCLEF_API_FIGURES_FONT_DIR",
 		"SOLOCLEF_API_CHAT_MAX_STEPS",
 		"SOLOCLEF_API_CHAT_MAX_TURN_SECONDS",
 		"SOLOCLEF_API_SANDBOX_ENABLED",
@@ -376,8 +380,8 @@ func TestLoadRefusesUnusableChatValues(t *testing.T) {
 	}
 }
 
-// With the sandbox off nothing about it is read, and the two picture models
-// are optional.
+// With the sandbox off nothing about it is read, and the vision model is
+// optional. No setting names a model that draws: nothing is drawn by one.
 func TestLoadReadsNoSandboxWhenItIsOff(t *testing.T) {
 	values := completeEnvironment()
 	// Written down but switched off: not read, and not a problem.
@@ -388,18 +392,17 @@ func TestLoadReadsNoSandboxWhenItIsOff(t *testing.T) {
 		t.Fatalf("Load: %v", err)
 	}
 	if config.SandboxEnabled || config.SandboxURL != "" || config.SandboxAPIKey != "" ||
-		config.ChatImageModel != "" || config.ChatVisionModel != "" {
-		t.Errorf("sandbox or picture models appeared from nowhere: %+v", config)
+		config.ChatVisionModel != "" {
+		t.Errorf("sandbox or a vision model appeared from nowhere: %+v", config)
 	}
 
 	values = completeEnvironment()
-	values["SOLOCLEF_API_CHAT_IMAGE_MODEL"] = "example-image-model"
 	values["SOLOCLEF_API_CHAT_VISION_MODEL"] = "example-vision-model"
 	if config, err = Load(fakeEnvironment(values)); err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if config.ChatImageModel != "example-image-model" || config.ChatVisionModel != "example-vision-model" {
-		t.Errorf("picture models: got %q and %q", config.ChatImageModel, config.ChatVisionModel)
+	if config.ChatVisionModel != "example-vision-model" {
+		t.Errorf("the vision model: got %q", config.ChatVisionModel)
 	}
 }
 
@@ -412,10 +415,8 @@ func sandboxEnvironment(t *testing.T) map[string]string {
 	values := completeEnvironment()
 	for name, value := range map[string]string{
 		"SOLOCLEF_API_SANDBOX_ENABLED":                 "true",
-		"SOLOCLEF_API_SANDBOX_STACK":                   "examplestack",
 		"SOLOCLEF_API_SANDBOX_URL":                     "http://sandbox.example.internal:8080/",
 		"SOLOCLEF_API_SANDBOX_API_KEY_FILE":            keyFile,
-		"SOLOCLEF_API_SANDBOX_IMAGE":                   "example/sandbox:1",
 		"SOLOCLEF_API_SANDBOX_CPU":                     "2",
 		"SOLOCLEF_API_SANDBOX_MEMORY":                  "6Gi",
 		"SOLOCLEF_API_SANDBOX_IDLE_TTL_SECONDS":        "900",
@@ -432,8 +433,8 @@ func TestLoadReadsTheWholeSandboxWhenItIsOn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if !config.SandboxEnabled || config.SandboxStack != "examplestack" || config.SandboxURL != "http://sandbox.example.internal:8080" ||
-		config.SandboxAPIKey != "example-sandbox-key" || config.SandboxImage != "example/sandbox:1" ||
+	if !config.SandboxEnabled || config.SandboxURL != "http://sandbox.example.internal:8080" ||
+		config.SandboxAPIKey != "example-sandbox-key" ||
 		config.SandboxCPU != "2" || config.SandboxMemory != "6Gi" || config.SandboxIdleTTL != 15*time.Minute ||
 		config.SandboxCommandTimeout != 5*time.Minute || config.SandboxMaxPerAccount != 3 {
 		t.Errorf("sandbox: got %+v", config)
@@ -442,8 +443,8 @@ func TestLoadReadsTheWholeSandboxWhenItIsOn(t *testing.T) {
 	// Every one of them is required once the switch is on. No vision model
 	// is: what is built is measured, not looked at.
 	for _, name := range []string{
-		"SOLOCLEF_API_SANDBOX_STACK", "SOLOCLEF_API_SANDBOX_URL", "SOLOCLEF_API_SANDBOX_API_KEY_FILE",
-		"SOLOCLEF_API_SANDBOX_IMAGE", "SOLOCLEF_API_SANDBOX_CPU", "SOLOCLEF_API_SANDBOX_MEMORY",
+		"SOLOCLEF_API_SANDBOX_URL", "SOLOCLEF_API_SANDBOX_API_KEY_FILE",
+		"SOLOCLEF_API_SANDBOX_CPU", "SOLOCLEF_API_SANDBOX_MEMORY",
 		"SOLOCLEF_API_SANDBOX_IDLE_TTL_SECONDS", "SOLOCLEF_API_SANDBOX_COMMAND_TIMEOUT_SECONDS",
 		"SOLOCLEF_API_SANDBOX_MAX_PER_ACCOUNT",
 	} {

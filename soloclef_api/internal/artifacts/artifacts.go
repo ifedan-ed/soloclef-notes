@@ -137,7 +137,7 @@ const (
 const (
 	artifactAbsent = "Artifact not found"
 	notAVideo      = "Artifact is not a video"
-	payloadAbsent  = "Video Remotion payload not available"
+	payloadAbsent  = "Video payload not available"
 	// beingGenerated is the delete's refusal of an artifact whose document
 	// is pending or being processed.
 	beingGenerated   = "This artifact is still being generated. Delete it once it has finished."

@@ -194,8 +194,8 @@ class NotificationsApiService {
 	};
 
 	/**
-	 * Get unread counts for all categories in a single request.
-	 * Replaces 2 separate getUnreadCount calls (comments + status).
+	 * Get the unread counts of every inbox category (status is the only one)
+	 * in a single request.
 	 */
 	getBatchUnreadCounts = async (): Promise<GetBatchUnreadCountResponse> => {
 		return baseApiService.get(

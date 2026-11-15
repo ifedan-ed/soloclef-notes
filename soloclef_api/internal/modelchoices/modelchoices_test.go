@@ -21,14 +21,13 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/ownmodels"
 )
 
-// proxy is the model proxy's two lists, or the error it is down with.
+// proxy is the model proxy's chat list, or the error it is down with.
 type proxy struct {
-	chat, images []string
-	down         error
+	chat []string
+	down error
 }
 
-func (p proxy) Names(context.Context) ([]string, error)      { return p.chat, p.down }
-func (p proxy) ImageNames(context.Context) ([]string, error) { return p.images, p.down }
+func (p proxy) Names(context.Context) ([]string, error) { return p.chat, p.down }
 
 // memory is Stored without a database, for the tests of the rules.
 type memory map[string]map[Purpose]string
@@ -50,7 +49,7 @@ func (m memory) Clear(_ context.Context, userID string, purpose Purpose) error {
 	return nil
 }
 
-var offered = proxy{chat: []string{"fast", "site-chat", "smart", "watcher"}, images: []string{"painter", "sketcher"}}
+var offered = proxy{chat: []string{"fast", "site-chat", "smart", "watcher"}}
 
 func choices(stored Stored, lists Lists) Choices {
 	return Choices{Lists: lists, Stored: stored, ChatDefault: "site-chat", VisionDefault: "watcher"}
@@ -114,7 +113,7 @@ func TestEachJobsDefault(t *testing.T) {
 	stored := memory{}
 	c := choices(stored, offered)
 	look := func() map[Purpose]Chosen {
-		looked, err := c.Look(context.Background(), testpostgres.Alice, Chat, Quick, Studio, Vision, Image)
+		looked, err := c.Look(context.Background(), testpostgres.Alice, Chat, Quick, Studio, Vision)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -125,15 +124,11 @@ func TestEachJobsDefault(t *testing.T) {
 		Quick:  {Default: "site-chat", Model: "site-chat", Offered: true},
 		Studio: {Default: "site-chat", Model: "site-chat", Offered: true},
 		Vision: {Default: "watcher", Model: "watcher", Offered: true},
-		Image:  {},
 	} {
 		got := look()[purpose]
 		if got.Selected != "" || got.Default != want.Default || got.Model != want.Model || got.Offered != want.Offered {
 			t.Errorf("%s with nothing chosen = %+v, want %+v", purpose, got, want)
 		}
-	}
-	if got := look()[Image].Models; strings.Join(got, ",") != "painter,sketcher" {
-		t.Errorf("the image job is offered %v, want the proxy's image models", got)
 	}
 
 	_ = stored.Choose(context.Background(), testpostgres.Alice, Chat, "smart")
@@ -166,9 +161,9 @@ func TestAWithdrawnModelIsNotReplaced(t *testing.T) {
 	if name, err := c.ModelFor(context.Background(), testpostgres.Alice, Studio); err != nil || name != "site-chat" {
 		t.Errorf("ModelFor(studio) = %q, %v", name, err)
 	}
-	// No image model chosen and none named by the deployment: nothing draws.
-	if name, err := c.ModelFor(context.Background(), testpostgres.Alice, Image); !errors.Is(err, ErrNotOffered) {
-		t.Errorf("ModelFor(image) = %q, %v with no image model anywhere", name, err)
+	// There is no image job: nothing is drawn by a model.
+	if _, err := c.Look(context.Background(), testpostgres.Alice, Purpose("image")); err == nil {
+		t.Error("an image job was looked up")
 	}
 }
 
@@ -195,16 +190,17 @@ func TestWhatChoosingRefuses(t *testing.T) {
 	stored := memory{}
 	handler := served(choices(stored, offered), session(testpostgres.Alice))
 	for name, test := range map[string]struct{ path, body, want string }{
-		"no field":            {QuickModelPath, `{}`, "model is required"},
-		"not an object":       {QuickModelPath, `[]`, "JSON object"},
-		"a number":            {QuickModelPath, `{"model":7}`, "must be a model's name"},
-		"blank":               {StudioModelPath, `{"model":"  "}`, "must be a model's name"},
-		"not on the proxy":    {StudioModelPath, `{"model":"retired"}`, "is not offered"},
-		"an image model":      {QuickModelPath, `{"model":"painter"}`, "is not offered"},
-		"roles: nothing":      {RolesPath, `{}`, "Name vision, image or both"},
-		"roles: chat as draw": {RolesPath, `{"image":"smart"}`, "is not offered"},
-		// One good name and one bad one: neither is stored.
-		"roles: half good": {RolesPath, `{"vision":"smart","image":"retired"}`, "is not offered"},
+		"no field":             {QuickModelPath, `{}`, "model is required"},
+		"not an object":        {QuickModelPath, `[]`, "JSON object"},
+		"a number":             {QuickModelPath, `{"model":7}`, "must be a model's name"},
+		"blank":                {StudioModelPath, `{"model":"  "}`, "must be a model's name"},
+		"not on the proxy":     {StudioModelPath, `{"model":"retired"}`, "is not offered"},
+		"roles: nothing":       {RolesPath, `{}`, "Name vision"},
+		"roles: a vision name": {RolesPath, `{"vision":"retired"}`, "is not offered"},
+		// The installed builds' image picker can only clear: a name is
+		// refused, and the vision beside it is not stored either.
+		"roles: an image model": {RolesPath, `{"image":"smart"}`, "there is no image model to choose"},
+		"roles: half good":      {RolesPath, `{"vision":"smart","image":"painter"}`, "there is no image model to choose"},
 	} {
 		status, body := call(t, handler, http.MethodPut, test.path, test.body)
 		if status != http.StatusUnprocessableEntity || !strings.Contains(body, test.want) {
@@ -227,7 +223,7 @@ func TestOnlyASessionChooses(t *testing.T) {
 	} {
 		stored := memory{}
 		handler := served(choices(stored, offered), principal.Principal{UserID: testpostgres.Alice, Method: method})
-		for path, body := range map[string]string{QuickModelPath: `{"model":"fast"}`, StudioModelPath: `{"model":"fast"}`, RolesPath: `{"image":"painter"}`} {
+		for path, body := range map[string]string{QuickModelPath: `{"model":"fast"}`, StudioModelPath: `{"model":"fast"}`, RolesPath: `{"vision":"fast"}`} {
 			if status, answered := call(t, handler, http.MethodPut, path, body); status != want {
 				t.Errorf("%s: PUT %s = %d %s, want %d", method, path, status, answered, want)
 			}
@@ -307,9 +303,9 @@ func TestOneAccountsChoicesAreNotAnothers(t *testing.T) {
 		t.Errorf("choosing a quick model answered\n got %s\nwant %s", got, want)
 	}
 	put(hers, StudioModelPath, `{"model":"smart"}`)
-	roles := put(hers, RolesPath, `{"vision":"smart","image":"painter"}`)
-	if !strings.Contains(roles, `"vision":{"selected":"smart"`) || !strings.Contains(roles, `"image":{"selected":"painter"`) {
-		t.Errorf("her roles after choosing both: %s", roles)
+	roles := put(hers, RolesPath, `{"vision":"smart","image":null}`)
+	if !strings.Contains(roles, `"vision":{"selected":"smart"`) || !strings.Contains(roles, `"image":{"selected":null,"model":null,"available":false,"default":null,"models":[]}`) {
+		t.Errorf("her roles after choosing a vision model: %s", roles)
 	}
 
 	// Bob sees his own defaults and none of her choices.
@@ -329,13 +325,14 @@ func TestOneAccountsChoicesAreNotAnothers(t *testing.T) {
 	if got := read(t, get(hers, QuickModelPath)); text(got.Selected) != "fast" {
 		t.Errorf("Alice's quick model after Bob cleared his: %s", text(got.Selected))
 	}
-	if got := get(hers, RolesPath); !strings.Contains(got, `"selected":"painter"`) || !strings.Contains(got, `"selected":"smart"`) {
+	if got := get(hers, RolesPath); !strings.Contains(got, `"selected":"smart"`) {
 		t.Errorf("Alice's roles after Bob cleared his: %s", got)
 	}
 
-	// A PUT that names one role leaves the other as it was.
-	if got := put(hers, RolesPath, `{"image":"sketcher"}`); !strings.Contains(got, `"vision":{"selected":"smart"`) || !strings.Contains(got, `"image":{"selected":"sketcher"`) {
-		t.Errorf("changing only the image model: %s", got)
+	// Clearing the image model, as an installed build may, leaves the
+	// vision model as it was.
+	if got := put(hers, RolesPath, `{"image":null}`); !strings.Contains(got, `"vision":{"selected":"smart"`) {
+		t.Errorf("clearing the image model: %s", got)
 	}
 	// Clearing goes back to the default, with no row left to say so.
 	if got := read(t, put(hers, StudioModelPath, `{"model":null}`)); got.Selected != nil || text(got.Model) != "site-chat" {
@@ -359,10 +356,10 @@ func (o ownMenus) Menu(_ context.Context, userID string) ([]ownmodels.Option, er
 // own, and another account cannot choose them.
 func TestAnAccountsOwnModelsJoinThePickersTheyCanServe(t *testing.T) {
 	const alice, bob = testpostgres.Alice, testpostgres.Bob
-	c := choices(memory{}, proxy{chat: []string{"site-chat", "own:3"}, images: []string{"painter"}})
+	c := choices(memory{}, proxy{chat: []string{"site-chat", "own:3"}})
 	c.Own = ownMenus{alice: {
 		{ID: "own:7", RowID: 7, Label: "Her chat", Connection: "models.example.org", Chat: true, Vision: true},
-		{ID: "own:8", RowID: 8, Label: "Her painter", Connection: "models.example.org", Images: true},
+		{ID: "own:8", RowID: 8, Label: "Her painter", Connection: "models.example.org"},
 	}}
 	if err := c.Check(); err != nil {
 		t.Fatal(err)
@@ -382,8 +379,9 @@ func TestAnAccountsOwnModelsJoinThePickersTheyCanServe(t *testing.T) {
 		`"models":[{"id":"site-chat","label":"site-chat","own":false},{"id":"own:7","label":"Her chat","own":true,"connection":"models.example.org"}]}`) {
 		t.Fatalf("the vision picker = %d %s", status, body)
 	}
-	if !strings.Contains(body, `"image":{"selected":null,"model":null,"available":false,"default":null,"models":[{"id":"painter","label":"painter","own":false},{"id":"own:8","label":"Her painter","own":true,"connection":"models.example.org"}]}`) {
-		t.Fatalf("the image picker = %s", body)
+	// No image picker: the installed builds' answer is empty.
+	if !strings.Contains(body, `"image":{"selected":null,"model":null,"available":false,"default":null,"models":[]}`) {
+		t.Fatalf("the image answer = %s", body)
 	}
 	// A painter is no chat model, so it is not a studio choice.
 	if status, body := call(t, hers, http.MethodPut, StudioModelPath, `{"model":"own:8"}`); status != http.StatusUnprocessableEntity {

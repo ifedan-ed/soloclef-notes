@@ -22,8 +22,8 @@ const bumpTimeout = 5 * time.Second
 // It cannot fail the request: the change is stored, and saying it was not
 // would be untrue. If the counter cannot be moved, the other processes keep
 // their cached definitions until they expire; what a call may do is still
-// read from the row at each call (the address, the key, the trusted list,
-// whether the server is switched on), so nothing stale is acted on. The
+// read from the row at each call (the address, the key, whether the server
+// is switched on), so nothing stale is acted on. The
 // request's own context is not used, because a client that has gone away
 // must not stop the others being told.
 func toolsChanged(ctx context.Context, tools ToolChanges, logger *slog.Logger, requestID, userID string) {

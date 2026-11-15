@@ -8,7 +8,7 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_worker/internal/testdatabase"
 )
 
-// The outbox statement against Postgres: only a job that is queued and has
+// The outbox statement against Postgres: only a video that is queued and has
 // been left alone long enough is taken, each is taken once, and nothing
 // else about any job changes.
 func TestOnlyJobsQueuedTooLongAreTaken(t *testing.T) {
@@ -32,7 +32,8 @@ func TestOnlyJobsQueuedTooLongAreTaken(t *testing.T) {
 		 (9300003, $1::uuid, 'video', 'just queued',  'c', 'queued',  'deliverable-job:9300003:attempt:1', 1, now() - interval '30 seconds'),
 		 (9300004, $1::uuid, 'video', 'running',      'd', 'running', 'deliverable-job:9300004:attempt:1', 1, now() - interval '10 minutes'),
 		 (9300005, $1::uuid, 'video', 'failed',       'e', 'failed',  'deliverable-job:9300005:attempt:1', 1, now() - interval '10 minutes'),
-		 (9300006, $1::uuid, 'video', 'no task id',   'f', 'queued',  NULL,                                1, now() - interval '3 minutes')`,
+		 (9300006, $1::uuid, 'video', 'no task id',   'f', 'queued',  NULL,                                1, now() - interval '3 minutes'),
+		 (9300007, $1::uuid, 'artifact', 'the API''s', 'g', 'queued', NULL,                                1, now() - interval '20 minutes')`,
 		owner, other)
 	store := Store{Pool: pool}
 
@@ -64,11 +65,13 @@ func TestOnlyJobsQueuedTooLongAreTaken(t *testing.T) {
 		   OR (id = 9300001 AND attempt_count <> 2)
 		   OR (id = 9300003 AND status = 'queued' AND updated_at < now() - interval '20 seconds')
 		   OR (id = 9300004 AND status = 'running' AND updated_at < now() - interval '9 minutes')
-		   OR (id = 9300005 AND status = 'failed' AND updated_at < now() - interval '9 minutes')`).Scan(&unchanged); err != nil {
+		   OR (id = 9300005 AND status = 'failed' AND updated_at < now() - interval '9 minutes')
+		   OR (id = 9300007 AND status = 'queued' AND updated_at < now() - interval '19 minutes')`).Scan(&unchanged); err != nil {
 		t.Fatal(err)
 	}
-	if unchanged != 6 {
-		t.Errorf("%d of the 6 rows are as they should be", unchanged)
+	// The artifact job is the API tier's: never taken, never stamped.
+	if unchanged != 7 {
+		t.Errorf("%d of the 7 rows are as they should be", unchanged)
 	}
 }
 

@@ -63,9 +63,9 @@ func TestTheStatementsOverARealDatabase(t *testing.T) {
 		}
 		var got []string
 		for _, option := range menu {
-			got = append(got, fmt.Sprintf("%s %s %s chat=%v images=%v", option.ID, option.Label, option.Connection, option.Chat, option.Images))
+			got = append(got, fmt.Sprintf("%s %s %s chat=%v", option.ID, option.Label, option.Connection, option.Chat))
 		}
-		want := "[own:10 Her chat models.example.org chat=true images=false own:12 her-painter models.example.org chat=false images=true]"
+		want := "[own:10 Her chat models.example.org chat=true own:12 her-painter models.example.org chat=false]"
 		if fmt.Sprint(got) != want {
 			t.Fatalf("Ada's menu\n got %v\nwant %s", got, want)
 		}

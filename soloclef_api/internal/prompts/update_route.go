@@ -18,11 +18,6 @@ import (
 )
 
 // UpdateRoute serves PUT /api/v1/prompts/{prompt_id} (update_prompt).
-//
-// Its refusals are in a fixed order and the order is load-bearing: the absent
-// prompt before the publishing check, because the check reads `prompt.is_public`
-// off the row it just loaded. A request that both names a prompt the caller
-// does not own and asks to publish it is a 404 on both tiers.
 type UpdateRoute struct {
 	Pool   *pgxpool.Pool
 	Errors errorenvelope.Writer
@@ -35,9 +30,8 @@ func (r UpdateRoute) Register(api huma.API) {
 		Method:      http.MethodPut,
 		Path:        UpdatePath,
 		Summary:     "Change one of the caller's own prompts",
-		Description: "The same response as the Python tier's " +
-			"PUT /api/v1/prompts/{prompt_id}, byte for byte, and the same row.",
-		Tags: []string{"prompts"},
+		Description: "Changes the fields the body names and answers the prompt as stored.",
+		Tags:        []string{"prompts"},
 	}, func(ctx context.Context, _ *struct {
 		PromptID string `path:"prompt_id" doc:"The prompt's id"`
 	}) (*huma.StreamResponse, error) {
@@ -80,8 +74,8 @@ func (r UpdateRoute) serve(ctx huma.Context) {
 		return
 	}
 
-	// The lookup, the publishing check and the write are one transaction: the
-	// row the refusal was decided from is the row written.
+	// The lookup and the write are one transaction: the row the 404 was
+	// decided from is the row written.
 	type outcome struct {
 		prompt  Prompt
 		refusal *refusal
@@ -96,20 +90,9 @@ func (r UpdateRoute) serve(ctx huma.Context) {
 				return outcome{refusal: &refusal{
 					Status: http.StatusNotFound, Message: promptAbsent}}, nil
 			}
-			if changes.AsksToPublish(stored.IsPublic) {
-				administrator, err := MayPublish(ctx, tx, caller.UserID)
-				if err != nil {
-					return outcome{}, err
-				}
-				if !administrator {
-					return outcome{refusal: &refusal{
-						Status: http.StatusForbidden, Message: publishingRefused}}, nil
-				}
-			}
 			if !changes.Mentions() {
-				// The Python route has no changed attribute to flush, so it
-				// emits no UPDATE at all and answers with the row as it
-				// stands — and the version is not bumped.
+				// Nothing to change, so no UPDATE: the row as it stands, its
+				// version not bumped.
 				return outcome{prompt: *stored}, nil
 			}
 			written, err := Update(ctx, tx, caller.UserID, id, changes)

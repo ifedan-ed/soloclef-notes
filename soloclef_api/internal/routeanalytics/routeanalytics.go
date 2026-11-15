@@ -65,8 +65,7 @@ func (c Capture) record(
 
 // clientLabel is posthog.py's _client_label, which is not the gated-request
 // middleware's label: that one overrides `client` with "mcp" or "pat_script"
-// from a header, and this one reads only the principal. A session is "web"
-// there because the method alone cannot tell the web app from the desktop app.
+// from a header, and this one reads only the principal: a session is "web".
 func clientLabel(caller principal.Principal) string {
 	switch caller.Method {
 	case principal.MethodPersonalAccessToken:
