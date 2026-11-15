@@ -14,11 +14,9 @@ const (
 	// MethodSession is the interactive session's HS256 access token, as a
 	// bearer header or as the session cookie.
 	MethodSession Method = "session"
-	// MethodPersonalAccessToken is an ss_pat_ API key.
+	// MethodPersonalAccessToken is an ss_pat_ API key: how a script or an AI
+	// agent connects.
 	MethodPersonalAccessToken Method = "pat"
-	// MethodAgent is an AI agent's access token from the identity provider,
-	// verified by internal/agentsignin.
-	MethodAgent Method = "agent"
 )
 
 // Principal is the resolved caller.
@@ -27,7 +25,7 @@ type Principal struct {
 	Method Method
 	// SessionID is the sign-in a session's access token names (its `sid`,
 	// the refresh-token family the gate just found live); empty for an API
-	// key or an agent. A route that acts on "every sign-in but this one"
+	// key. A route that acts on "every sign-in but this one"
 	// (a password change, internal/signin) reads it here rather than parsing
 	// the token a second time and perhaps reading a different one than the
 	// gate accepted.
@@ -35,11 +33,11 @@ type Principal struct {
 }
 
 // IsGated reports whether the caller is a program acting for the account (an
-// API key or an agent's token) and not the person in a session. Such a caller
-// is let in only while the account's API-access switch is on; the resolver
-// checks that once, so no route does (resolve.go, ErrAPIAccessOff).
+// API key) and not the person in a session. Such a caller is let in only
+// while the account's API-access switch is on; the resolver checks that
+// once, so no route does (resolve.go, ErrAPIAccessOff).
 func (p Principal) IsGated() bool {
-	return p.Method == MethodPersonalAccessToken || p.Method == MethodAgent
+	return p.Method == MethodPersonalAccessToken
 }
 
 // IsSession reports whether an interactive session proved this request, matching

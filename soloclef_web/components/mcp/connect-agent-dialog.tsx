@@ -1,7 +1,6 @@
 "use client";
 
 import { AgentSetupTabs } from "@/components/mcp/agent-setup-tabs";
-import { SignInSetup } from "@/components/mcp/sign-in-setup";
 import { useIsSelfHosted } from "@/components/providers/runtime-config";
 import {
 	Dialog,
@@ -29,12 +28,10 @@ export function McpIcon({ className }: { className?: string }) {
 }
 
 /**
- * The MCP setup guide. Claude (web, desktop, mobile) and ChatGPT sign in
- * through single sign-on when the deployment has it on; coding agents (Claude
- * Code, Codex, OpenCode, ...) use an API key: pick one, copy its config.
- * Either way the agent acts for the account only while its API access is on. Opened
- * from "Connect your agent" in the account menu (the user avatar in the
- * rail), so it has no trigger of its own.
+ * The MCP setup guide. Every agent connects with an API key: pick one, copy
+ * its config. The agent acts for the account only while its API access is
+ * on. Opened from "Connect your agent" in the account menu (the user avatar
+ * in the rail), so it has no trigger of its own.
  */
 export function ConnectAgentDialog({
 	open,
@@ -59,9 +56,7 @@ export function ConnectAgentDialog({
 						(Settings, API access).
 					</DialogDescription>
 				</DialogHeader>
-				{remoteUrl && <SignInSetup serverUrl={remoteUrl} />}
 				<section className="min-w-0 space-y-3">
-					<h3 className="text-sm font-medium">Coding agents: API key</h3>
 					<p className="text-sm text-muted-foreground">
 						Create an API key in your settings under API Access, choose your agent, then paste the
 						config.

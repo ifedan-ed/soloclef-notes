@@ -70,8 +70,6 @@ func clientLabel(caller principal.Principal) string {
 	switch caller.Method {
 	case principal.MethodPersonalAccessToken:
 		return "pat"
-	case principal.MethodAgent:
-		return "agent"
 	default:
 		return "web"
 	}

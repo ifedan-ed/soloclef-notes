@@ -244,7 +244,7 @@ func TestWhatCannotBeMarked(t *testing.T) {
 func TestOnlyThePersonChangesAMark(t *testing.T) {
 	w := newWorld(t)
 	testpostgres.Exec(t, w.pool, `INSERT INTO agent_ask_first_tools (user_id, tool) VALUES ('`+alice+`', '`+mailtools.ReadTool+`')`)
-	for _, method := range []principal.Method{principal.MethodPersonalAccessToken, principal.MethodAgent} {
+	for _, method := range []principal.Method{principal.MethodPersonalAccessToken} {
 		w.method = method
 		if status, raw := w.call(alice, http.MethodPut, AskFirstPath, `{"tool": "`+mailtools.ReadTool+`", "ask_first": false}`); status != http.StatusForbidden || !strings.Contains(raw, sessionRequired) {
 			t.Errorf("%s: %d %s", method, status, raw)

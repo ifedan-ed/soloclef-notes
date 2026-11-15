@@ -7,6 +7,7 @@ import (
 
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/config"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/errorenvelope"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/oidc"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/oidcsignin"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/signin"
 	"git.danvics.com/danvics/soloclef/soloclef_mail/mailer/smtp"
@@ -67,14 +68,14 @@ func singleSignOn(settings config.Config, pool *pgxpool.Pool, sessions signin.Ro
 		ClientSecret: settings.OIDCClientSecret,
 		RedirectURL:  settings.OIDCRedirectURL,
 		FrontendURL:  settings.FrontendURL,
-		// The name agent sign-in looks identities up under, so an identity
-		// linked by the web's sign-in is the one an agent's token finds.
-		ProviderName:  settings.AgentProviderName,
+		// The name every identity link is stored under, said by the
+		// deployment so the rows already made keep matching.
+		ProviderName:  settings.OIDCProviderName,
 		SignupAllowed: settings.SignupAllowed,
 		AppRedirects:  settings.OIDCAppRedirects,
 	}
 	routes.Pool = pool
-	routes.Verifier = oidcsignin.NewVerifier(settings.OIDCIssuer, settings.OIDCClientID, settings.AgentProviderName)
+	routes.Verifier = oidc.NewVerifier(settings.OIDCIssuer, settings.OIDCClientID)
 	routes.Sessions = sessions
 	routes.Secret = settings.SessionSecret
 	routes.Codes = codes

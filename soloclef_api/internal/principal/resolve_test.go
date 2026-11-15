@@ -148,10 +148,10 @@ func TestABearerTokenForAnInactiveAccountFallsThroughToTheCookie(t *testing.T) {
 	}
 }
 
-// With no agent provider configured, nothing here can verify an identity
-// provider's token, so it is a 401 — and not a fall-through to the session
-// cookie sent beside it, which would answer as an account the token never named.
-func TestAnIdentityProvidersTokenWithNoAgentProviderIsUnauthorized(t *testing.T) {
+// Nothing here accepts an identity provider's token (an agent connects with
+// an API key), so it is a 401 — and not a fall-through to the session cookie
+// sent beside it, which would answer as an account the token never named.
+func TestAnIdentityProvidersTokenIsUnauthorized(t *testing.T) {
 	_, err := resolverFor(directoryWithLiveKey()).Resolve(context.Background(),
 		requestWith("Bearer "+tokenForeignIssuer, tokenValid))
 	if !errors.Is(err, ErrUnauthorized) {
@@ -182,79 +182,8 @@ func TestADatabaseFailureIsNotMistakenForARefusal(t *testing.T) {
 	}
 }
 
-// foreignIssuer is the issuer tokenForeignIssuer claims.
-const foreignIssuer = "https://sso.example.com/application/o/app/"
-
-// fakeAgents is an agent verifier that owns one issuer, so the branch can be
-// tested without a provider.
-type fakeAgents struct {
-	issuer  string
-	account string
-	// accessOff is the account's API-access switch, inverted so that a fake
-	// which does not mention it is an account that has turned it on.
-	accessOff bool
-	err       error
-	asked     int
-}
-
-func (a *fakeAgents) OwnsIssuer(issuer string) bool { return issuer == a.issuer }
-
-func (a *fakeAgents) Resolve(context.Context, string) (AgentAccount, error) {
-	a.asked++
-	return AgentAccount{UserID: a.account, APIAccessEnabled: !a.accessOff}, a.err
-}
-
-// An agent's token is resolved when the verifier owns its issuer, and is a 401
-// when it does not: no other verifier exists to try.
-func TestAnAgentsTokenIsVerifiedHereWhenThisTierOwnsTheIssuer(t *testing.T) {
-	agents := &fakeAgents{
-		issuer:  foreignIssuer,
-		account: "11111111-1111-1111-1111-111111111111",
-	}
-	resolver := resolverFor(directoryWithLiveKey())
-	resolver.Agents = agents
-
-	caller, err := resolver.Resolve(context.Background(), requestWith("Bearer "+tokenForeignIssuer, ""))
-	if err != nil {
-		t.Fatalf("Resolve: %v", err)
-	}
-	if caller.UserID != agents.account || caller.Method != MethodAgent {
-		t.Errorf("got %v, want the agent's account", caller)
-	}
-	if !caller.IsGated() {
-		t.Error("an agent acts for the account; it must be gated like an API key")
-	}
-
-	// A token from some other issuer is refused, and the verifier is not
-	// asked to judge a token that is not its own.
-	agents.issuer = "https://elsewhere.example.invalid/"
-	asked := agents.asked
-	if _, err := resolver.Resolve(context.Background(), requestWith("Bearer "+tokenForeignIssuer, "")); !errors.Is(err, ErrUnauthorized) {
-		t.Errorf("got %v, want ErrUnauthorized", err)
-	}
-	if agents.asked != asked {
-		t.Error("the verifier was asked about a token whose issuer it does not own")
-	}
-}
-
-// A refusal the verifier reached is answered in its own status and words, and
-// never falls through to the session check.
-func TestAnAgentsRefusalIsNotAFallThrough(t *testing.T) {
-	refusal := Refusal{Status: http.StatusForbidden, Message: "This sign-in may not use Soloclef Notes"}
-	resolver := resolverFor(directoryWithLiveKey())
-	resolver.Agents = &fakeAgents{issuer: foreignIssuer, err: refusal}
-
-	_, err := resolver.Resolve(context.Background(),
-		requestWith("Bearer "+tokenForeignIssuer, tokenValid))
-	var got Refusal
-	if !errors.As(err, &got) || got != refusal {
-		t.Fatalf("got %v, want the verifier's own refusal", err)
-	}
-}
-
 // The account's one access control. The switch is off for a new account, and
-// while it is off neither a key nor an agent's token acts for the account,
-// however valid the credential is.
+// while it is off no key acts for the account, however valid it is.
 func TestAKeyOfAnAccountWithAPIAccessOffIsRefused(t *testing.T) {
 	directory := directoryWithLiveKey()
 	directory.tokens[HashToken(livePersonalAccessToken)] = PersonalAccessTokenOwner{TokenID: 7, UserID: testSubject}
@@ -272,17 +201,6 @@ func TestAKeyOfAnAccountWithAPIAccessOffIsRefused(t *testing.T) {
 	}
 	if len(directory.touched) != 0 {
 		t.Errorf("a refused key was recorded as used: %v", directory.touched)
-	}
-}
-
-func TestAnAgentOfAnAccountWithAPIAccessOffIsRefused(t *testing.T) {
-	resolver := resolverFor(directoryWithLiveKey())
-	resolver.Agents = &fakeAgents{issuer: foreignIssuer, account: testSubject, accessOff: true}
-
-	_, err := resolver.Resolve(context.Background(), requestWith("Bearer "+tokenForeignIssuer, tokenValid))
-	var refusal Refusal
-	if !errors.As(err, &refusal) || refusal != ErrAPIAccessOff {
-		t.Fatalf("got %v, want the API-access refusal", err)
 	}
 }
 

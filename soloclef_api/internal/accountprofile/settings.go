@@ -41,7 +41,7 @@ type Settings struct {
 	// CitationsEnabled is whether answers carry citations.
 	CitationsEnabled bool
 	// APIAccessEnabled is the account's one access control: while it is off,
-	// no API key and no agent's token acts for the account
+	// no API key acts for the account
 	// (principal.ErrAPIAccessOff). Off for a new account.
 	APIAccessEnabled bool
 }

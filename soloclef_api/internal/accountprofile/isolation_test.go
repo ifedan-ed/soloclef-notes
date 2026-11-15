@@ -93,10 +93,10 @@ func TestAnAccountReadsAndChangesOnlyItsOwnProfileAndSettings(t *testing.T) {
 		t.Errorf("a switch that is not a boolean answered %d %s", status, raw)
 	}
 
-	// A key or an agent may read the settings (it passed the gate, so the
+	// A key may read the settings (it passed the gate, so the
 	// switch is on) and may change none of them: a key cannot be the thing
 	// that decides what keys may do, or rewrite every chat's instructions.
-	for _, method := range []principal.Method{principal.MethodPersonalAccessToken, principal.MethodAgent} {
+	for _, method := range []principal.Method{principal.MethodPersonalAccessToken} {
 		gated := principal.Principal{UserID: alice, Method: method}
 		if status, _ := as(gated, http.MethodGet, SettingsReadPath, ""); status != http.StatusOK {
 			t.Errorf("%s could not read the settings: %d", method, status)

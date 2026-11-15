@@ -12,14 +12,13 @@ type Refusal struct {
 
 func (r Refusal) Error() string { return r.Message }
 
-// ErrAPIAccessOff refuses an API key or an agent's token whose account has not
-// switched API access on ("user".api_access_enabled, off for a new account).
+// ErrAPIAccessOff refuses an API key whose account has not switched API
+// access on ("user".api_access_enabled, off for a new account).
 //
-// It is the one access control an account has. A key is something the person
-// made, but an agent's token is issued by the identity provider and matched to
-// an account by a claim, so nothing the person did stands behind it until they
-// turn the switch on. The refusal is a 403 and not a 401 on purpose: the
-// credential is valid, and signing in again would not help. The person turns
+// It is the one access control an account has: a key works only while the
+// person who made it keeps the switch on. The refusal is a 403 and not a
+// 401 on purpose: the credential is valid, and signing in again would not
+// help. The person turns
 // the switch on in a browser session (PATCH /api/v1/users/me/settings).
 var ErrAPIAccessOff = Refusal{
 	Status:  403,

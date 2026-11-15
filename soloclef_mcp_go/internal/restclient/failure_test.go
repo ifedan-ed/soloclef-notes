@@ -143,7 +143,7 @@ func TestTheRequestCredentialWinsOverTheEnvironmentKey(t *testing.T) {
 		t.Errorf("without a request credential the header was %q", seen)
 	}
 
-	ctx := callercredential.Bind(context.Background(), "ss_pat_caller", "")
+	ctx := callercredential.Bind(context.Background(), "ss_pat_caller")
 	if _, err := client.Do(ctx, restclient.Call{Method: "GET", Path: "/x"}); err != nil {
 		t.Fatal(err)
 	}

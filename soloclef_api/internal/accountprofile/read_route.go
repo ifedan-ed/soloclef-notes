@@ -22,8 +22,8 @@ type Profiles interface {
 // ReadRoute serves GET /users/me (get_current_user_profile).
 //
 // It is the only route of this slice behind `get_auth_context` rather than
-// `require_session_context`, so an API key and an agent token both reach it —
-// and both are shown the account's address, its superuser flag.
+// `require_session_context`, so an API key reaches it — and is shown the
+// account's address, its superuser flag.
 // That is the account's own data read with a credential the account
 // minted, and it is the reason the update and the delete beside it are
 // session-only (accountprofile.go).

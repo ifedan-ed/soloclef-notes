@@ -55,7 +55,6 @@ func TestTheClientLabelIsThePrincipalsAlone(t *testing.T) {
 	for method, want := range map[principal.Method]string{
 		principal.MethodSession:             "web",
 		principal.MethodPersonalAccessToken: "pat",
-		principal.MethodAgent:               "agent",
 	} {
 		sink := &recorder{}
 		Capture{Sink: sink}.Record(principal.Principal{UserID: "a", Method: method}, "e", nil)

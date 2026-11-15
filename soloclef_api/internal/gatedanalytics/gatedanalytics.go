@@ -1,8 +1,8 @@
-// Package gatedanalytics counts an API key's and an agent's traffic in PostHog,
+// Package gatedanalytics counts an API key's traffic in PostHog,
 // as app.py's PatApiAnalyticsMiddleware does.
 //
 // The Python tier captures a pat_api_request event for every request whose auth
-// context is gated — an API key or an agent sign-in — with the route template,
+// context is gated (an API key) with the route template,
 // the method, the status and which client sent it. The three moved routes were
 // missing from it, so that traffic was invisible: a reporting gap rather than a
 // behavioural one, which is why nothing broke while it was open.
@@ -28,7 +28,7 @@ type Event struct {
 	Route  string
 	Method string
 	Status int
-	// AuthMethod is the principal's method: "pat" or "agent".
+	// AuthMethod is the principal's method: "pat".
 	AuthMethod string
 	// Client is "mcp" when the MCP server sent it, else "pat_script".
 	Client string

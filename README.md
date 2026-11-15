@@ -99,9 +99,8 @@ app, an iPhone app and an MCP server for AI agents.
   alongside the models the server provides.
 
 **For agents**
-- An MCP server (Streamable HTTP at `/mcp`, or stdio) lets Claude, ChatGPT,
-  Cursor and other agents search and read your notebooks and notes, with an API
-  key or OAuth.
+- An MCP server (Streamable HTTP at `/mcp`, or stdio) lets Claude Code, Cursor
+  and other agents search and read your notebooks and notes, with an API key.
 - Add your own MCP servers (Streamable HTTP or SSE, with API key, bearer token
   or OAuth sign-in). Their secrets are encrypted at rest.
 

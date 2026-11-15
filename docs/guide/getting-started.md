@@ -76,5 +76,5 @@ the Studio list when ready. See [Studio](studio.md).
 
 - Connect your mail, Drive or other services: [Connectors](connections.md).
 - Use your notebooks from your phone: [Phone app](mobile-app.md).
-- Work with your notebooks from Claude, ChatGPT or a coding agent:
+- Work with your notebooks from an AI agent:
   [Connect your agent](connect-your-agent.md).

@@ -547,7 +547,6 @@ func TestAPodcastIsItsOwnersAndNobodyElses(t *testing.T) {
 		}{
 			{"the owner", "41", callerID, principal.MethodSession, 200, ""},
 			{"the owner by an API key", "41", callerID, principal.MethodPersonalAccessToken, 200, ""},
-			{"the owner by an agent", "41", callerID, principal.MethodAgent, 200, ""},
 			// Not theirs: the same answer as a podcast that is not there.
 			{"another account", "41", strangerID, principal.MethodSession, 404, podcastAbsent},
 			{"another account by an API key", "41", strangerID, principal.MethodPersonalAccessToken, 404, podcastAbsent},

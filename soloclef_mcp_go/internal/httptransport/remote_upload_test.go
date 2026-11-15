@@ -49,7 +49,7 @@ func TestARemoteCallerCannotUploadAFileFromTheServersDisk(t *testing.T) {
 
 	configuration := keysOnly()
 	configuration.BaseURL = backend.URL
-	front := served(t, configuration, nil)
+	front := served(t, configuration)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

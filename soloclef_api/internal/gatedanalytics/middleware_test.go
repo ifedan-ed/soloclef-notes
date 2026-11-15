@@ -16,7 +16,7 @@ type recordingSink struct{ events []Event }
 func (s *recordingSink) Record(event Event) { s.events = append(s.events, event) }
 
 // Only a caller this tier resolved and found gated is recorded, which is
-// AuthContext.is_gated: an API key or an agent, never a session.
+// AuthContext.is_gated: an API key, never a session.
 func TestOnlyAGatedCallerIsRecorded(t *testing.T) {
 	cases := map[string]struct {
 		caller   *principal.Principal
@@ -24,7 +24,6 @@ func TestOnlyAGatedCallerIsRecorded(t *testing.T) {
 		method   string
 	}{
 		"an API key":             {&principal.Principal{UserID: "a", Method: principal.MethodPersonalAccessToken}, true, "pat"},
-		"an agent":               {&principal.Principal{UserID: "a", Method: principal.MethodAgent}, true, "agent"},
 		"an interactive session": {&principal.Principal{UserID: "a", Method: principal.MethodSession}, false, ""},
 		"nobody at all":          {nil, false, ""},
 	}

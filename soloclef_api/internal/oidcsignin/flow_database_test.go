@@ -24,6 +24,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/errorenvelope"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/oidc"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/principal"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/signin"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/testpostgres"
@@ -228,7 +229,7 @@ func newHarness(t *testing.T) *harness {
 	h.provider = newStubProvider(t, now)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	envelope := errorenvelope.Writer{ReportURL: "https://notes.example/contact"}
-	verifier := NewVerifier(h.provider.issuer, testClientID, "authentik")
+	verifier := oidc.NewVerifier(h.provider.issuer, testClientID)
 	verifier.Now, verifier.Directory.Now = now, now
 	h.routes = Routes{
 		Enabled: true,
@@ -622,7 +623,7 @@ func TestTheExchangeProvesTheClientAndTheProviderBeingDownIsSaidSo(t *testing.T)
 	// document yet: there is nowhere to send the browser, and the page says
 	// single sign-on is unavailable instead of failing.
 	fresh := h.routes
-	fresh.Verifier = NewVerifier(h.provider.issuer, testClientID, "authentik")
+	fresh.Verifier = oidc.NewVerifier(h.provider.issuer, testClientID)
 	h.serve(fresh)
 	h.provider.mutex.Lock()
 	h.provider.down = true

@@ -170,7 +170,7 @@ test.describe("Settings", () => {
 			await openSection(page, "api-key");
 			const box = page.getByTestId("api-access-switch");
 			await expect(box).toBeVisible();
-			await expect(box).toContainText(/API keys and the AI agents you sign in/);
+			await expect(box).toContainText(/your API keys can read and change everything/);
 			const toggle = box.getByRole("switch");
 			await toggle.click();
 			await expect

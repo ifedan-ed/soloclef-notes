@@ -12,13 +12,13 @@ import (
 // Gate authenticates every request before a route sees it.
 //
 // There are exactly four outcomes: the caller is known and the route runs; the
-// credential was checked and refused, in the refusal's own status and words
-// (an agent provider that cannot be read is one of these, a 503); nothing
+// credential was checked and refused, in the refusal's own status and words;
+// nothing
 // identified the caller and it is a 401; or the account could not be read and
 // it is a 500.
 //
-// One of the refusals is the account's only access control: an API key or an
-// agent's token whose account has API access switched off is answered 403
+// One of the refusals is the account's only access control: an API key whose
+// account has API access switched off is answered 403
 // (ErrAPIAccessOff). It is decided here, once, so that no route has to ask.
 type Gate struct {
 	Resolver Resolver

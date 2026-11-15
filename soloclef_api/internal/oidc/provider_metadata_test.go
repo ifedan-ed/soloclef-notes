@@ -1,11 +1,11 @@
-package agentsignin
+package oidc
 
 import (
 	"slices"
 	"testing"
 )
 
-const discoveryURL = "https://sso.example.invalid/application/o/agents/.well-known/openid-configuration"
+const discoveryURL = "https://sso.example.invalid/application/o/notes/.well-known/openid-configuration"
 
 func TestMetadataIsAcceptedOnlyForTheProviderAsked(t *testing.T) {
 	cases := map[string]struct {
@@ -13,7 +13,7 @@ func TestMetadataIsAcceptedOnlyForTheProviderAsked(t *testing.T) {
 		accepted bool
 	}{
 		"the provider it was fetched from": {
-			`{"issuer":"https://sso.example.invalid/application/o/agents/",
+			`{"issuer":"https://sso.example.invalid/application/o/notes/",
 			  "authorization_endpoint":"https://sso.example.invalid/authorize",
 			  "token_endpoint":"https://sso.example.invalid/token",
 			  "jwks_uri":"https://sso.example.invalid/jwks"}`, true},
@@ -23,11 +23,11 @@ func TestMetadataIsAcceptedOnlyForTheProviderAsked(t *testing.T) {
 			  "token_endpoint":"https://sso.example.invalid/token",
 			  "jwks_uri":"https://sso.example.invalid/jwks"}`, false},
 		"no jwks_uri": {
-			`{"issuer":"https://sso.example.invalid/application/o/agents/",
+			`{"issuer":"https://sso.example.invalid/application/o/notes/",
 			  "authorization_endpoint":"https://sso.example.invalid/authorize",
 			  "token_endpoint":"https://sso.example.invalid/token"}`, false},
 		"an empty jwks_uri": {
-			`{"issuer":"https://sso.example.invalid/application/o/agents/",
+			`{"issuer":"https://sso.example.invalid/application/o/notes/",
 			  "authorization_endpoint":"https://sso.example.invalid/authorize",
 			  "token_endpoint":"https://sso.example.invalid/token","jwks_uri":""}`, false},
 	}

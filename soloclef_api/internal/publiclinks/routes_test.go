@@ -190,7 +190,7 @@ func TestALinkExpiresAtItsInstantAndNotBefore(t *testing.T) {
 // was never made: the same 404, and the link still there.
 func TestALinkIsItsOwnersAndNobodyElses(t *testing.T) {
 	for _, method := range []principal.Method{
-		principal.MethodSession, principal.MethodPersonalAccessToken, principal.MethodAgent,
+		principal.MethodSession, principal.MethodPersonalAccessToken,
 	} {
 		f := &fake{links: shared()}
 		got := ask(t, f, strangerID, method, http.MethodGet, ListPath)

@@ -32,7 +32,7 @@ and comes with a web app, an iPhone app and an MCP server for AI agents.
 | [Notifications](guide/notifications.md) | An inbox and phone pushes, with a switch per kind and quiet hours. |
 | [Sharing](guide/studio.md#sharing-an-output) | Share a Studio output with a read-only public link. Everything else stays private. |
 | [Phone app](guide/mobile-app.md) | Notebooks, chat, Studio with background audio, notes, automations and the inbox, on iPhone and Android. |
-| [Agents](guide/connect-your-agent.md) | Claude, ChatGPT, Claude Code, Cursor and other agents can search and read your documents over MCP. |
+| [Agents](guide/connect-your-agent.md) | Claude Code, Cursor and other agents can search and read your documents over MCP, with an API key. |
 
 ![An answer with a citation](images/screens/chat-answer.png)
 

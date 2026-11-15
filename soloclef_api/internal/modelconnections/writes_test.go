@@ -261,8 +261,7 @@ INSERT INTO models (id, connection_id, model_id) VALUES (10, 1, 'her-model');`)
 		{http.MethodPost, "/api/v1/models/10/test", ``},
 	}
 	for name, caller := range map[string]principal.Principal{
-		"her API key":            {UserID: alice, Method: principal.MethodPersonalAccessToken},
-		"an agent acting as her": {UserID: alice, Method: principal.MethodAgent},
+		"her API key": {UserID: alice, Method: principal.MethodPersonalAccessToken},
 	} {
 		handler := over(t, pool, tried, caller)
 		for _, call := range calls {

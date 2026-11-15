@@ -12,8 +12,8 @@
 // are worth reading before the routes.
 //
 // **The read is the one route of the three a gated credential may use.** It
-// depends on `get_auth_context`, so an API key and an agent token both reach
-// it, and both are shown the account's address, its `is_superuser` flag.
+// depends on `get_auth_context`, so an API key reaches it, and is shown the
+// account's address, its `is_superuser` flag.
 // That is the account's own data, read with a credential
 // the account minted, and it is recorded here rather than changed — but it is
 // the reason the other two are behind `require_session_context`, and it is

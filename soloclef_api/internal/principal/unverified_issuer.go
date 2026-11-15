@@ -6,18 +6,15 @@ import (
 )
 
 // unverifiedIssuer reads a bearer token's iss claim without checking anything.
-// Reading a claim off an unverified token is only ever used to decide which
-// tier can verify it.
+// It only ever decides that a token is not one of this application's own
+// session tokens (which carry no iss), so that it is refused rather than
+// tried against the session secret.
 //
-// It mirrors `jwt.decode(token, options={"verify_signature": False})` and the
-// header validation behind it, because that is the call
-// app.agent_sign_in.principal.is_agent_token makes, and the two tiers have to
-// agree on *which* credential a request carries before they can agree on the
-// answer. Every check PyJWS._load makes is here: three segments, a header and a
-// payload that are JSON objects, a signature segment that is readable base64,
-// and a kid that is a string if it is there at all. A token this says nothing
-// about takes the session path, where it fails and ends as the same 401 — which
-// is what happens there too.
+// It reads the token as `jwt.decode(token, options={"verify_signature":
+// False})` does: three segments, a header and a payload that are JSON
+// objects, a signature segment that is readable base64, and a kid that is a
+// string if it is there at all. A token this says nothing about takes the
+// session path, where it fails and ends as the same 401.
 func unverifiedIssuer(token string) (string, bool) {
 	segments := strings.Split(token, ".")
 	if len(segments) != 3 {
@@ -32,8 +29,8 @@ func unverifiedIssuer(token string) (string, bool) {
 		var keyID string
 		if err := json.Unmarshal(raw, &keyID); err != nil {
 			// PyJWS._validate_headers: "Key ID header parameter must be a
-			// string". The token is then not readable at all, so it is not an
-			// agent's either.
+			// string". The token is then not readable at all, so it names
+			// no issuer either.
 			return "", false
 		}
 	}

@@ -10,10 +10,8 @@ import (
 // so reaching it at all means the credential is good; the answer adds how it
 // was proved and which account it is.
 //
-// The MCP server asks this before it lets an agent's sign-in token through,
-// and keys the agent's state by `user_id`, which stays the same when the
-// agent refreshes its token. It reads `method` too, and lets through only
-// "agent": a browser's session token is not an agent's.
+// It is a plain "who am I" for any credential, such as a script checking
+// its API key; `method` says whether it is a session or an API key.
 func (r Routes) verifyToken(response http.ResponseWriter, request *http.Request) {
 	caller, ok := principal.FromContext(request.Context())
 	if !ok {

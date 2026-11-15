@@ -196,7 +196,6 @@ func TestAnyoneSignedInMayHearAVoiceSample(t *testing.T) {
 	}{
 		{callerID, principal.MethodSession},
 		{callerID, principal.MethodPersonalAccessToken},
-		{callerID, principal.MethodAgent},
 		// An account that has never made a podcast.
 		{strangerID, principal.MethodSession},
 	} {

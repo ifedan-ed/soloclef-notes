@@ -53,8 +53,8 @@ reworked; `custom/docs/soloclef-go-inventory.md` lists which are parity-only.
 | `internal/errorenvelope` | `app.py:_build_error_response` and the 422 handler. |
 | `internal/requestcontext` | `X-Request-ID` and the access line. |
 | `internal/corsmirror` | Starlette's `CORSMiddleware` for a simple request, written when the response **starts** rather than before the handler runs — because Starlette has two error handlers and only one is inside it, so a 500 a route did not catch carries no CORS headers at all. `Suppress` is how a route says so. |
-| `internal/principal` | Who a request is: an API key, this app's own session token (bearer or cookie), or an agent's token from the identity provider, in `get_auth_context`'s order with its fall-throughs. A token naming an issuer goes to the agent verifier and nowhere else; with none configured, or one that does not own the issuer, it is a 401. |
-| `internal/agentsignin` | An AI agent's access token from the identity provider — discovery, JWKS with rotation, the claim checks, the access claim, and which account it acts as. A provider that cannot be read is a 503 (`ErrSignInUnreachable`), never a 401 that would sign every agent out. |
+| `internal/principal` | Who a request is: an API key (how scripts and AI agents connect) or this app's own session token (bearer or cookie), in `get_auth_context`'s order with its fall-throughs. A token naming an issuer is never one of this app's, and is a 401 without trying the cookie. |
+| `internal/oidc` | The single sign-on provider's side of an ID token: discovery, JWKS with rotation and its cooldown, and the signature, issuer, audience and time checks. A provider that cannot be read is `ErrProviderUnavailable`, never a bad token. The sign-in flow itself is `internal/oidcsignin`. |
 | `internal/ratelimit` | `app/rate_limiter.py`'s SlowAPI counter, in the same Redis keys, so a client's budget is one budget across both tiers. |
 | `internal/requestnumber` | FastAPI's integer coercion for a parameter — pydantic-core's `str_as_int`, which takes `1_000`, `1.0` and surrounding whitespace — and the 422 it raises. It also says which of a repeated query parameter's values is the one read: the **last**, as Starlette's `query_params` holds it, not `url.Values.Get`'s first. |
 | `internal/starlettepath` | How the Python tier's **router** reads a path, where Go's `ServeMux` reads it differently: uvicorn decodes before Starlette splits, so `a%2Fb` is two segments there and one here, and `ServeMux` cleans `//` and answers a 301 where Starlette matches nothing. Two halves. A route asks `Unroutable` about its own parameters, answers `WriteRouterNotFound` — Starlette's bare 22-byte `{"detail":"Not Found"}`, which keeps its CORS headers — and reads them through `AsDecodedByTheServer`. And `Guard` stands in front of the whole mux in `cmd/api`, because a handler cannot stop a redirect and a route behind the gate cannot answer before the gate's 401; it touches only a path the two routers disagree about, and decides against the served routes alone. Every served route is held to the guard's rules in `cmd/api/router_test.go`; what it deliberately leaves alone (a trailing slash, a dot where no parameter is) is listed on `Guard`. |
@@ -134,7 +134,7 @@ cd soloclef_api && sqlc generate
   container must refuse to start.
 - Do not "simplify" the mirrors of another library's edge behaviour. The
   lenient base64 in `internal/principal`, the key kept in place that this tier
-  cannot verify with in `internal/agentsignin`, the empty client key in
+  cannot verify with in `internal/oidc`, the empty client key in
   `internal/ratelimit`, pydantic's lax bool in `internal/requestbody`, the
   scheme-blind same-origin test in `internal/csrforigin`, the underscores and
   trailing `.0` accepted in `internal/requestnumber`, and the four C0

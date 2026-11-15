@@ -29,39 +29,17 @@ type Directory interface {
 	TouchPersonalAccessToken(tokenID int64)
 }
 
-// Agents verifies an AI agent's access token from the identity provider. It is
-// an interface so that the resolution order does not depend on the provider
-// being reachable, and so a deployment with no agent provider configured simply
-// has none (internal/agentsignin).
-type Agents interface {
-	// OwnsIssuer reports whether a token claiming this issuer is one this
-	// verifier is for, as is_agent_token does before anything is checked.
-	OwnsIssuer(issuer string) bool
-	// Resolve verifies the token and returns the account it acts as. It returns
-	// a Refusal for every verdict, a provider that cannot be read included
-	// (a 503: the token may be perfectly good, so it is not a 401).
-	Resolve(ctx context.Context, token string) (AgentAccount, error)
-}
-
-// AgentAccount is the account an agent's token acts as, with the account's
-// API-access switch as it was on the row the account was found by.
-type AgentAccount struct {
-	UserID           string
-	APIAccessEnabled bool
-}
-
 // Resolver answers who a request is, in app.users.get_auth_context's order.
 type Resolver struct {
 	SessionTokens     SessionToken
 	Directory         Directory
-	Agents            Agents
 	SessionCookieName string
 	Now               func() time.Time
 }
 
 // Resolve mirrors get_auth_context step for step, including its fall-throughs:
-// an API key that does not resolve, or a bearer token that does not verify,
-// does not end the resolution — the session cookie is still tried.
+// an API key that does not resolve, or a session bearer token that does not
+// verify, does not end the resolution — the session cookie is still tried.
 func (r Resolver) Resolve(ctx context.Context, request *http.Request) (Principal, error) {
 	now := time.Now
 	if r.Now != nil {
@@ -102,11 +80,12 @@ func (r Resolver) Resolve(ctx context.Context, request *http.Request) (Principal
 			switch {
 			case errors.Is(err, ErrForeignIssuer):
 				// A token claiming an issuer is never one of this
-				// application's own, so from here it is an agent's sign-in
-				// or nothing. Either way it never falls through to the
-				// session check: a cookie sent beside a bad agent token must
-				// not quietly answer as the browser's account.
-				return r.resolveAgent(ctx, token)
+				// application's own, and nothing else here accepts one:
+				// an agent connects with an API key. It is a 401 and does
+				// not fall through to the cookie, because a program that
+				// sent a credential must be told that credential does not
+				// work, not be answered quietly as the browser beside it.
+				return Principal{}, ErrUnauthorized
 			case err == nil:
 				live, err := r.Directory.SessionIsLive(ctx, session.UserID, session.SessionID, now())
 				if err != nil {
@@ -134,30 +113,4 @@ func (r Resolver) Resolve(ctx context.Context, request *http.Request) (Principal
 	}
 
 	return Principal{}, ErrUnauthorized
-}
-
-// resolveAgent is the agent branch: a token the agent verifier owns becomes an
-// agent principal or a refusal, and any other token that names an issuer is a
-// 401. Nothing else in this process can verify such a token, so there is no one
-// to hand it to; answering 401 tells the client, in the standard way, that the
-// credential is not accepted here.
-//
-// Reading the issuer unverified is safe for the same reason: it only chooses
-// which check runs, and a token whose issuer cannot be read is refused.
-func (r Resolver) resolveAgent(ctx context.Context, token string) (Principal, error) {
-	issuer, _ := unverifiedIssuer(token)
-	if r.Agents == nil || !r.Agents.OwnsIssuer(issuer) {
-		return Principal{}, ErrUnauthorized
-	}
-	account, err := r.Agents.Resolve(ctx, token)
-	if err != nil {
-		return Principal{}, err
-	}
-	// After every other verdict, so a token that is invalid or matches no
-	// account is told that, and only a token that would otherwise have been
-	// let in learns the switch is off.
-	if !account.APIAccessEnabled {
-		return Principal{}, ErrAPIAccessOff
-	}
-	return Principal{UserID: account.UserID, Method: MethodAgent}, nil
 }

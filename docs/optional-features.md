@@ -51,13 +51,16 @@ Authentik or Keycloak. The password form stays beside it.
     SOLOCLEF_API_OIDC_CLIENT_ID=<client id>
     SOLOCLEF_API_OIDC_CLIENT_SECRET_FILE=/run/secrets/oidc_client_secret
     SOLOCLEF_API_OIDC_REDIRECT_URL=https://notes.example.org/auth/oidc/callback
+    SOLOCLEF_API_OIDC_PROVIDER_NAME=example-sso
     SOLOCLEF_API_OIDC_DISPLAY_NAME=Example SSO
     SOLOCLEF_WEB_SSO_BUTTON_LABEL=Continue with Example SSO
     SOLOCLEF_API_OIDC_APP_REDIRECTS=soloclef://auth
     ```
 
     The issuer must match the provider's discovery document exactly. The
-    display name is how messages refer to the provider. The button label
+    provider name is what each person's sign-in link is stored under: pick
+    one and never change it, or everyone's link is lost. The display name
+    is how messages refer to the provider. The button label
     may be left empty for "Continue with single sign-on". Leave the app
     redirects empty to keep single sign-on to the website only.
 
@@ -211,23 +214,6 @@ callback:
 ```dotenv
 SOLOCLEF_API_MCP_OAUTH_REDIRECT_URI=https://notes.example.org/api/v1/connectors/mcp/oauth/callback
 ```
-
-## Agents that sign in
-
-Coding agents connect to `/mcp` with an API key each person makes. Claude
-and ChatGPT can instead sign in through your OpenID Connect provider. For
-that, create a second client in the provider for the agents, then set:
-
-```dotenv
-SOLOCLEF_API_AGENT_ISSUER=https://id.example.org
-SOLOCLEF_API_AGENT_CLIENT_ID=<the agents' client id>
-SOLOCLEF_API_AGENT_CLIENT_SECRET_FILE=/run/secrets/agent_client_secret
-```
-
-Give its secret to the `api` service as `agent_client_secret`, or leave the
-file setting empty for a client without a secret. People see the client ID
-and secret in Connect your agent, to paste into Claude or ChatGPT. See
-[Connect your agent](guide/connect-your-agent.md).
 
 ## Phone pushes
 

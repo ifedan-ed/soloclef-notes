@@ -180,7 +180,7 @@ func TestWhatIsRefusedAndNeverStored(t *testing.T) {
 		}
 	}
 	// Connecting is a person's decision: an API key or an agent cannot.
-	for _, method := range []principal.Method{principal.MethodPersonalAccessToken, principal.MethodAgent} {
+	for _, method := range []principal.Method{principal.MethodPersonalAccessToken} {
 		h.caller = principal.Principal{UserID: testpostgres.Alice, Method: method}
 		for _, verb := range []string{http.MethodPut, http.MethodDelete} {
 			if status, _ := h.send(verb, exaPath, `{"api_key": "fake-exa-key-123456789"}`); status != http.StatusForbidden {

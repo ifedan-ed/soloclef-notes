@@ -61,9 +61,8 @@ export function ApiAccessSwitch() {
 			<div className="space-y-1">
 				<Label htmlFor="api-access-enabled">API and agent access</Label>
 				<p className="text-sm text-muted-foreground">
-					When this is on, your API keys and the AI agents you sign in (such as Claude or ChatGPT)
-					can read and change everything in your account: your notebooks, documents, notes and
-					chats. When it is off, they are refused, even with a valid key.
+					When this is on, your API keys can read and change everything in your account: your
+					notebooks, documents, notes and chats. When it is off, they are refused.
 				</p>
 			</div>
 			<Switch

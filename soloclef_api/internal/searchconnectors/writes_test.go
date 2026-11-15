@@ -511,9 +511,9 @@ func TestChangingAnMCPServer(t *testing.T) {
 		if status, answered := w.as(alice, http.MethodPost, ServerTestPath, server("https://mcp.example.test/mcp")); status != http.StatusOK || answered != generic {
 			t.Errorf("a server that does not answer: %d %s", status, answered)
 		}
-		w.caller = principal.Principal{UserID: alice, Method: principal.MethodAgent}
+		w.caller = principal.Principal{UserID: alice, Method: principal.MethodPersonalAccessToken}
 		if status, _ := w.send(http.MethodPost, ServerTestPath, server("https://mcp.example.test/mcp")); status != http.StatusForbidden {
-			t.Errorf("an agent's test answered %d, want 403", status)
+			t.Errorf("an API key's test answered %d, want 403", status)
 		}
 	})
 }

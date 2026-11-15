@@ -117,8 +117,8 @@ func (r Routes) issue(ctx huma.Context) {
 		return
 	}
 	// A link lets whoever holds it play the file with no further sign-in.
-	// Only a person in their own session may mint one; an API key or an
-	// agent's token reads files through the artifact routes, as itself.
+	// Only a person in their own session may mint one; an API key reads
+	// files through the artifact routes, as itself.
 	if !caller.IsSession() {
 		r.Errors.Write(response, http.StatusForbidden, sessionRequired, requestID)
 		return

@@ -47,27 +47,14 @@ func TestTheBearerSlotIsReadFirstAndTheCustomHeaderIsTheFallback(t *testing.T) {
 	}
 }
 
-// An API key is its own identity. An agent's token is replaced every hour, so it
-// is bound with the account's stable identity instead and the choice survives.
-func TestTheIdentityIsTheOneGivenThenTheCredentialThenTheLocalCaller(t *testing.T) {
-	cases := []struct {
-		label      string
-		credential string
-		identity   string
-		want       string
-	}{
-		{"an API key is its own identity", "ss_pat_a", "", "ss_pat_a"},
-		{"a sign-in uses the account", "token.one", "user:u-1", "user:u-1"},
-		{"a refreshed sign-in keeps it", "token.two", "user:u-1", "user:u-1"},
+// An API key is its own identity, so what a caller chose stays with its key.
+func TestTheIdentityIsTheCredentialThenTheLocalCaller(t *testing.T) {
+	ctx := callercredential.Bind(context.Background(), "ss_pat_a")
+	if got := callercredential.Identity(ctx); got != "ss_pat_a" {
+		t.Errorf("identity is %q, want the key", got)
 	}
-	for _, each := range cases {
-		ctx := callercredential.Bind(context.Background(), each.credential, each.identity)
-		if got := callercredential.Identity(ctx); got != each.want {
-			t.Errorf("%s: identity is %q, want %q", each.label, got, each.want)
-		}
-		if got := callercredential.Credential(ctx); got != each.credential {
-			t.Errorf("%s: credential is %q, want %q", each.label, got, each.credential)
-		}
+	if got := callercredential.Credential(ctx); got != "ss_pat_a" {
+		t.Errorf("credential is %q, want the key", got)
 	}
 }
 

@@ -1,10 +1,12 @@
-// Package retiredsettings answers four routes of Settings and Admin pages
-// whose features were removed on 2026-11-13, for installed phone builds.
+// Package retiredsettings answers five routes of Settings and Admin pages
+// whose features were removed (on 2026-11-13, and agent sign-in on
+// 2026-11-15), for installed phone builds.
 //
 //	GET  /api/v1/global-model-connections  200 []
 //	GET  /api/v1/prompts/public            200 []
 //	GET  /api/v1/admin/announcements       200 {"announcements": []}
 //	POST /api/v1/admin/announcements       403, the error envelope
+//	GET  /api/v1/agent-sign-in             200 {"enabled": false, ...}
 //
 // # Why they are here
 //
@@ -18,6 +20,12 @@
 // an announcement is refused in the error envelope, which the page shows
 // as its failure. The updates after these bundles remove the pages.
 //
+// Connect your agent asks for the agent sign-in details and shows
+// "Couldn't load the sign-in details." on a 404. Agents connect with an API
+// key only, so the answer is sign-in off, which is what the server always
+// answered with no agent provider configured: the screen then shows the API
+// key steps alone, as it did.
+//
 // Nothing is read or written: the answer is the same for every caller, so
 // it says nothing about anyone. The routes stand behind the gate like every
 // route of an account.
@@ -27,6 +35,7 @@
 // installed-builds: retired-operator-connections
 // installed-builds: retired-community-prompts
 // installed-builds: retired-announcements
+// installed-builds: retired-agent-sign-in
 package retiredsettings
 
 import (
@@ -48,6 +57,7 @@ const (
 	OperatorConnectionsPath = "/api/v1/global-model-connections"
 	CommunityPromptsPath    = "/api/v1/prompts/public"
 	AnnouncementsPath       = "/api/v1/admin/announcements"
+	AgentSignInPath         = "/api/v1/agent-sign-in"
 )
 
 // NotSent is the refusal of a new announcement.
@@ -60,10 +70,11 @@ func Served() []string {
 		http.MethodGet + " " + CommunityPromptsPath,
 		http.MethodGet + " " + AnnouncementsPath,
 		http.MethodPost + " " + AnnouncementsPath,
+		http.MethodGet + " " + AgentSignInPath,
 	}
 }
 
-// Routes is the four routes.
+// Routes is the five routes.
 type Routes struct {
 	Errors errorenvelope.Writer
 	Logger *slog.Logger
@@ -79,6 +90,9 @@ func (r Routes) Register(api huma.API) {
 		{http.MethodGet, CommunityPromptsPath, "retired-community-prompts", "Community prompts (none: for installed phone builds)", empty(`[]`)},
 		{http.MethodGet, AnnouncementsPath, "retired-announcements", "Announcements (none: for installed phone builds)", empty(`{"announcements":[]}`)},
 		{http.MethodPost, AnnouncementsPath, "retired-announcement-send", "Send an announcement (refused: for installed phone builds)", r.refuse},
+		// The bundles read this shape (agentSignInSchema): both values null
+		// when there is nothing to paste.
+		{http.MethodGet, AgentSignInPath, "retired-agent-sign-in", "Agent sign-in details (off: for installed phone builds)", empty(`{"enabled":false,"client_id":null,"client_secret":null}`)},
 	} {
 		answer := route.answer
 		huma.Register(api, huma.Operation{

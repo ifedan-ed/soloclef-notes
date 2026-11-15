@@ -219,7 +219,6 @@ func TestOnlyASessionChooses(t *testing.T) {
 	for method, want := range map[principal.Method]int{
 		principal.MethodSession:             http.StatusOK,
 		principal.MethodPersonalAccessToken: http.StatusForbidden,
-		principal.MethodAgent:               http.StatusForbidden,
 	} {
 		stored := memory{}
 		handler := served(choices(stored, offered), principal.Principal{UserID: testpostgres.Alice, Method: method})

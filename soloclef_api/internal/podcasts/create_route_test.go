@@ -322,7 +322,6 @@ func TestANewPodcastIsItsMakers(t *testing.T) {
 	}{
 		{"a person", callerID, principal.MethodSession},
 		{"an API key", callerID, principal.MethodPersonalAccessToken},
-		{"an agent", callerID, principal.MethodAgent},
 		{"another account", strangerID, principal.MethodSession},
 	} {
 		t.Run(c.name, func(t *testing.T) {

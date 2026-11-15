@@ -474,7 +474,7 @@ func TestTheTenRoutesAreTheOwnersAndNobodyElses(t *testing.T) {
 	// The same words for an id nobody has, and for every way of signing in.
 	t.Run("the owner is told the same of an artifact that was never made", func(t *testing.T) {
 		for _, method := range []principal.Method{
-			principal.MethodSession, principal.MethodPersonalAccessToken, principal.MethodAgent,
+			principal.MethodSession, principal.MethodPersonalAccessToken,
 		} {
 			for _, r := range routes {
 				s := newStudio(t)

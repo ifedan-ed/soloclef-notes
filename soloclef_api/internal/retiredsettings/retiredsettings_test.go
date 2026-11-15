@@ -38,6 +38,9 @@ func TestTheRemovedListsAreEmpty(t *testing.T) {
 		OperatorConnectionsPath: `[]`,
 		CommunityPromptsPath:    `[]`,
 		AnnouncementsPath:       `{"announcements":[]}`,
+		// Agent sign-in is off for good: nothing to paste, so the installed
+		// Connect your agent screen shows the API key steps alone.
+		AgentSignInPath: `{"enabled":false,"client_id":null,"client_secret":null}`,
 	} {
 		if status, body := ask(t, http.MethodGet, path, "", true); status != http.StatusOK || body != want {
 			t.Errorf("%s: %d %s", path, status, body)
@@ -59,11 +62,12 @@ func TestSendingAnAnnouncementIsRefused(t *testing.T) {
 }
 
 // Nothing else of the removed features is answered.
-func TestOnlyTheFourRoutesAreAnswered(t *testing.T) {
+func TestOnlyTheFiveRoutesAreAnswered(t *testing.T) {
 	for _, pair := range [][2]string{
 		{http.MethodPost, "/api/v1/admin/announcements/5/withdraw"},
 		{http.MethodPost, "/api/v1/prompts/5/copy"},
 		{http.MethodPost, OperatorConnectionsPath},
+		{http.MethodPost, AgentSignInPath},
 	} {
 		if status, _ := ask(t, pair[0], pair[1], "", true); status != http.StatusNotFound && status != http.StatusMethodNotAllowed {
 			t.Errorf("%s %s answered %d", pair[0], pair[1], status)

@@ -41,7 +41,7 @@ func TestTheBatchIsTheOneThePythonLibraryPosts(t *testing.T) {
 		Route:      "/api/v1/notebooks/{notebook_id}/feature",
 		Method:     http.MethodGet,
 		Status:     http.StatusOK,
-		AuthMethod: "agent",
+		AuthMethod: "pat",
 		Client:     "mcp",
 	})
 	sink.Close()
@@ -92,7 +92,7 @@ func TestTheBatchIsTheOneThePythonLibraryPosts(t *testing.T) {
 	// These are the properties a PostHog query spans both tiers with.
 	for name, want := range map[string]any{
 		"source":         "backend",
-		"auth_method":    "agent",
+		"auth_method":    "pat",
 		"client":         "mcp",
 		"route":          "/api/v1/notebooks/{notebook_id}/feature",
 		"method":         "GET",

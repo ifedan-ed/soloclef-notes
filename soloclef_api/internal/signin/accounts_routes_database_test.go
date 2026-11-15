@@ -327,7 +327,7 @@ func TestADeploymentThatSendsNoMailSaysSoAndAFailedSendIsNotAnError(t *testing.T
 func TestVerifyTokenNamesTheCallerAndHowTheyProvedIt(t *testing.T) {
 	h, _ := newHarness(t)
 	for _, caller := range []principal.Principal{
-		{UserID: testpostgres.Alice, Method: principal.MethodAgent},
+		{UserID: testpostgres.Alice, Method: principal.MethodPersonalAccessToken},
 		{UserID: testpostgres.Bob, Method: principal.MethodSession},
 	} {
 		request := httptest.NewRequest(http.MethodGet, VerifyPath, nil)

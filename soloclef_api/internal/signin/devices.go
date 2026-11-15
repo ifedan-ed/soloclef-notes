@@ -27,7 +27,7 @@ import (
 // answered; both say the same.
 //
 // All three are a person's own decisions about their sessions, so they take
-// an interactive session only, never an API key or an agent's token: a
+// an interactive session only, never an API key: a
 // program acting for the account must not be able to list where the person
 // is signed in, or sign them out of their phone.
 const (

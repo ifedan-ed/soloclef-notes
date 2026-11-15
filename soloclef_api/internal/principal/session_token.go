@@ -13,9 +13,9 @@ import (
 const tokenAudience = "fastapi-users:auth"
 
 // ErrForeignIssuer means the token is a JWT from somewhere other than this
-// application: an identity provider's access token, which only the agent
-// verifier may judge. This application's own access tokens carry no iss claim,
-// so a token that has one is never one of them.
+// application, such as an identity provider's access token, which nothing
+// here accepts. This application's own access tokens carry no iss claim, so a
+// token that has one is never one of them.
 var ErrForeignIssuer = errors.New("token carries an issuer the session check does not verify")
 
 // SessionToken reads this application's access token and returns the

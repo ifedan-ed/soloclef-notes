@@ -1,4 +1,4 @@
-package agentsignin
+package oidc
 
 import (
 	"context"
@@ -23,7 +23,7 @@ var acceptedAlgorithms = []string{"RS256", "RS384", "RS512", "PS256", "ES256", "
 // provider.
 const keyRefreshCooldown = 60 * time.Second
 
-// Verifier is one provider's keys and access_token.py's rules, shared by every
+// Verifier is one provider's keys and the token rules, shared by every
 // request.
 type Verifier struct {
 	Settings  Settings
@@ -35,30 +35,15 @@ type Verifier struct {
 	lastForcedRefresh *time.Time
 }
 
-// OwnsIssuer reports whether a token's unverified issuer names this provider,
-// as access_token.claims_this_issuer does.
-func (v *Verifier) OwnsIssuer(issuer string) bool { return v.Settings.IsThisIssuer(issuer) }
-
-// Verify checks the token against the provider and returns what it says about
-// the person behind the agent, or ErrRefused when it is not a valid sign-in, or
-// ErrProviderUnavailable when it could not be judged either way.
-func (v *Verifier) Verify(ctx context.Context, token string) (Identity, error) {
-	claims, err := v.claims(ctx, token)
-	if err != nil {
-		return Identity{}, err
-	}
-	return identityFrom(claims), nil
-}
-
-// Claims is the claim set of a token that passed every check Verify makes:
-// the signature against the provider's published keys, the algorithm, the
+// Claims checks a token against the provider and returns its claim set: the
+// signature against the provider's published keys, the algorithm, the
 // issuer, this client as the audience and authorized party, and the times.
+// It returns ErrRefused when the token is not valid, and
+// ErrProviderUnavailable when it could not be judged either way.
 //
-// It is here for the web's single sign-on (internal/oidcsignin), whose ID
-// token is judged by exactly these rules and which then reads claims an
-// agent's token does not carry (the nonce of the sign-in it answers, the
-// person's name). One verifier, so the two sign-ins cannot come to disagree
-// about what a valid token from the provider is.
+// The whole claim set is returned, not a fixed identity, because the caller
+// (internal/oidcsignin) reads claims of its own: the nonce of the sign-in
+// the token answers and the person's name.
 func (v *Verifier) Claims(ctx context.Context, token string) (map[string]json.RawMessage, error) {
 	return v.claims(ctx, token)
 }
@@ -114,9 +99,9 @@ func (v *Verifier) claims(ctx context.Context, token string) (rawClaims, error) 
 	return claims, nil
 }
 
-// checkAuthorizedParty is the check after jwt.decode: the provider always names
-// the client a token was issued to in azp, and with several audiences it must be
-// the agent client (OpenID Connect Core 3.1.3.7).
+// checkAuthorizedParty is the check after the signature: the provider names
+// the client a token was issued to in azp, and with several audiences it must
+// be this client (OpenID Connect Core 3.1.3.7).
 func checkAuthorizedParty(claims rawClaims, clientID string) error {
 	audiences, err := audienceList(claims["aud"])
 	if err != nil {
@@ -133,7 +118,7 @@ func checkAuthorizedParty(claims rawClaims, clientID string) error {
 	return nil
 }
 
-// signingKey is AgentTokenVerifier._signing_key: the key the token names, with
+// signingKey is the key the token names, with
 // one forced re-read of the key set when it is not there, no more often than the
 // cooldown allows.
 func (v *Verifier) signingKey(ctx context.Context, keyID *string) (*signingKey, error) {

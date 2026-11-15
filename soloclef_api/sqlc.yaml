@@ -85,13 +85,6 @@ sql:
         package: activitysummary
         out: internal/activitysummary
   - <<: *slice
-    queries: internal/agentsignin/queries.sql
-    gen:
-      go:
-        <<: *slice_go
-        package: agentsignin
-        out: internal/agentsignin
-  - <<: *slice
     queries: internal/documentdeletion/queries.sql
     gen:
       go:

@@ -50,8 +50,8 @@ func (r Routes) appConfirm(response http.ResponseWriter, request *http.Request) 
 	}
 	caller, ok := principal.FromContext(request.Context())
 	if !ok || !caller.IsSession() || caller.SessionID == "" {
-		// Only the person's own sign-in can be confirmed: an API key or an
-		// agent's token has none.
+		// Only the person's own sign-in can be confirmed: an API key has
+		// none.
 		refuse(http.StatusForbidden, "SESSION_REQUIRED")
 		return
 	}

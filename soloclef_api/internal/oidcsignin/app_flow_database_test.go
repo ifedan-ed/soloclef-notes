@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/oidc"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/principal"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/testpostgres"
 )
@@ -285,7 +286,7 @@ func TestAnAppSignInIsRefusedBackToTheAppOrHereWhenThereIsNowhereSafe(t *testing
 	// The provider being down, for a replica that has not read its
 	// discovery document yet, is said in the app.
 	fresh := h.routes
-	fresh.Verifier = NewVerifier(h.provider.issuer, testClientID, "authentik")
+	fresh.Verifier = oidc.NewVerifier(h.provider.issuer, testClientID)
 	clock := func() time.Time { return h.clock }
 	fresh.Verifier.Now, fresh.Verifier.Directory.Now = clock, clock
 	h.serve(fresh)

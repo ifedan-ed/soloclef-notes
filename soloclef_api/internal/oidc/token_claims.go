@@ -1,4 +1,4 @@
-package agentsignin
+package oidc
 
 import (
 	"encoding/json"
@@ -82,9 +82,10 @@ func checkClaims(claims rawClaims, audience, issuer string, now time.Time) error
 	return nil
 }
 
-// checkIssuer compares the issuer exactly, as PyJWT does. The trailing-slash
-// tolerance of Settings.IsThisIssuer is only for deciding which verifier owns a
-// token; what it is checked against is the issuer the provider itself publishes.
+// checkIssuer compares the issuer exactly, as PyJWT does, against the issuer
+// the provider itself publishes, not the configured address: ParseMetadata
+// already tolerated a trailing-slash difference there, and a token must name
+// the provider exactly as the provider names itself.
 func checkIssuer(raw json.RawMessage, issuer string) error {
 	claimed, ok := jsonString(raw)
 	if !ok {

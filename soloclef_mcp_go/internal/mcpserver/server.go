@@ -2,8 +2,8 @@
 // in every feature slice.
 //
 // The REST client is created from settings, then each slice registers its own
-// tools. There is no selection of any kind: the caller's API key or sign-in is
-// its account, and the account is the whole scope of every tool.
+// tools. There is no selection of any kind: the caller's API key is its
+// account, and the account is the whole scope of every tool.
 package mcpserver
 
 import (

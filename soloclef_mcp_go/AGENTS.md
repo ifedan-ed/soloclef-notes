@@ -32,8 +32,8 @@ All three were first captured from the Python server; they are edited now when
 the surface changes on purpose, in the same change as the code and the
 documentation.
 
-There is no scope argument and no selection. A caller's API key or sign-in is
-its account, and every tool reads and writes that account's data through the
+There is no scope argument and no selection. A caller's API key is its
+account, and every tool reads and writes that account's data through the
 Go API's user-keyed routes (`/api/v1/documents`, not a path with a scope id in
 it).
 
@@ -44,10 +44,8 @@ it).
 | `internal/pythonjson` | JSON as the Python tier handles it: member order kept, `json.dumps(indent=2, ensure_ascii=False)`, `repr()`, and `dict.get` with an f-string. Go's own encoder sorts members, escapes HTML and prints floats its own way, and each of those shows in a tool result. |
 | `internal/toolschema` | One parameter declaration, from which both the published schema and the argument checking come. The schema is pydantic's shape; the refusals are pydantic's sentences, including its 50-character cap on a printed value. |
 | `internal/restclient` | The authenticated REST transport and the one sentence each HTTP failure becomes. |
-| `internal/callercredential` | The caller's credential and identity for one request. |
-| `internal/signincheck` | `GET /verify-token`, with the same short memory of a yes. |
-| `internal/protectedresource` | This server as an OAuth protected resource (RFC 9728). |
-| `internal/httptransport` | The identity middleware, the public paths and CORS. |
+| `internal/callercredential` | The caller's API key for one request. |
+| `internal/httptransport` | The credential check (present, not judged), the health probe and CORS. |
 | `internal/tooldefinition` | A declared tool, published through the SDK with the handler wrapped so a refusal is a text result. |
 | `internal/mcpserver` | The composition root, the instructions, and the two receiving middlewares. |
 
@@ -79,9 +77,8 @@ cd soloclef_mcp_go && go run ./cmd/mcp selfcheck
   body that yields no detail rather than the word `None`, and the query
   parameters kept in written order each look like a quirk, and each is a case
   where the two servers were asked the same thing over HTTP and disagreed.
-- Do not verify a credential here. The backend is the one judge of an API key,
-  and this server only asks about a sign-in token, once, so a bad one earns a
-  401 the client can act on. A second verifier would be a second answer.
+- Do not verify a credential here. The backend is the one judge of an API key;
+  a second verifier would be a second answer.
 - Do not give this server a database, a cache server or a model. It has none of
   those, which is what made it portable.
 - Do not commit a fixture with an account's own text in it. This repository has a

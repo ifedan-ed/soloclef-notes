@@ -1,4 +1,4 @@
-package agentsignin
+package oidc
 
 import (
 	"encoding/base64"
@@ -45,22 +45,4 @@ func readHeader(token string) (tokenHeader, error) {
 		header.KeyID = &keyID
 	}
 	return header, nil
-}
-
-// readPayload is the claim set, read without verifying anything, as
-// jwt.decode(options={"verify_signature": False}) does.
-func readPayload(token string) (map[string]json.RawMessage, error) {
-	segments := strings.Split(token, ".")
-	if len(segments) != 3 {
-		return nil, fmt.Errorf("not enough segments")
-	}
-	decoded, err := base64.RawURLEncoding.DecodeString(segments[1])
-	if err != nil {
-		return nil, fmt.Errorf("invalid payload padding: %w", err)
-	}
-	var claims map[string]json.RawMessage
-	if err := json.Unmarshal(decoded, &claims); err != nil {
-		return nil, fmt.Errorf("invalid payload string: %w", err)
-	}
-	return claims, nil
 }

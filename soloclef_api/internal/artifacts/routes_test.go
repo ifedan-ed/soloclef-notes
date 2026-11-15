@@ -299,7 +299,7 @@ func TestAVideoWithNothingToPlayIsNotFound(t *testing.T) {
 }
 
 // An artifact is its owner's and nobody else's. However the owner signed in
-// -- a browser session, an API key, an agent's token -- the three routes
+// -- a browser session or an API key -- the three routes
 // answer; whether keys may act for the account at all is the sign-in gate's
 // question, asked once before any route (internal/principal).
 //
@@ -326,7 +326,7 @@ func TestAnArtifactIsItsOwnersAndNobodyElses(t *testing.T) {
 		{"delete", http.MethodDelete, deletePath, 204, 404, ""},
 	} {
 		for _, method := range []principal.Method{
-			principal.MethodSession, principal.MethodPersonalAccessToken, principal.MethodAgent,
+			principal.MethodSession, principal.MethodPersonalAccessToken,
 		} {
 			t.Run(route.name+"/the owner by "+string(method), func(t *testing.T) {
 				got := ask(t, stocked(), method, route.verb, route.path)

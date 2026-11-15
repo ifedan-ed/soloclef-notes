@@ -102,18 +102,11 @@ func TestLoadMirrorsThePythonTiersDefaults(t *testing.T) {
 	if config.AllowedOrigins != nil {
 		t.Errorf("allowed origins: got %v, want none", config.AllowedOrigins)
 	}
-	if config.AgentProviderName != "authentik" {
-		t.Errorf("agent provider name: got %q", config.AgentProviderName)
-	}
 	if config.BrandName != "Soloclef Notes" {
 		t.Errorf("brand name: got %q", config.BrandName)
 	}
 	if config.PostHogAPIKey != "" || config.PostHogHost != "" {
 		t.Errorf("posthog: got %q/%q, want telemetry off", config.PostHogAPIKey, config.PostHogHost)
-	}
-	if config.AgentIssuer != "" || config.AgentClientID != "" {
-		t.Errorf("agent provider: got %q/%q, want none configured",
-			config.AgentIssuer, config.AgentClientID)
 	}
 }
 
@@ -132,45 +125,6 @@ func TestLoadRefusesAProjectKeyWithNoHost(t *testing.T) {
 	}
 	if config.PostHogHost != "https://telemetry.example.invalid" {
 		t.Errorf("host: got %q, want it without its trailing slash", config.PostHogHost)
-	}
-}
-
-// Half of the agent provider's settings would leave the audience check — the
-// one thing that stops a token issued to another application being used here —
-// with nothing to check against.
-func TestLoadRefusesHalfOfTheAgentProvider(t *testing.T) {
-	for name, half := range map[string]string{
-		"only the issuer":    "SOLOCLEF_API_AGENT_ISSUER",
-		"only the client id": "SOLOCLEF_API_AGENT_CLIENT_ID",
-	} {
-		values := completeEnvironment()
-		values[half] = "something"
-		if _, err := Load(fakeEnvironment(values)); err == nil {
-			t.Errorf("%s: want an error, got none", name)
-		}
-	}
-
-	values := completeEnvironment()
-	values["SOLOCLEF_API_AGENT_ISSUER"] = "https://sso.example.com/application/o/agents/"
-	values["SOLOCLEF_API_AGENT_CLIENT_ID"] = "agents"
-	if _, err := Load(fakeEnvironment(values)); err != nil {
-		t.Errorf("both set: %v", err)
-	}
-
-	// The client secret is read from its file, and only beside a provider.
-	secret := filepath.Join(t.TempDir(), "agent_client_secret")
-	if err := os.WriteFile(secret, []byte("shown-to-people\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	values["SOLOCLEF_API_AGENT_CLIENT_SECRET_FILE"] = secret
-	loaded, err := Load(fakeEnvironment(values))
-	if err != nil || loaded.AgentClientSecret != "shown-to-people" {
-		t.Errorf("with a secret file: %q, %v", loaded.AgentClientSecret, err)
-	}
-	alone := completeEnvironment()
-	alone["SOLOCLEF_API_AGENT_CLIENT_SECRET_FILE"] = secret
-	if _, err := Load(fakeEnvironment(alone)); err == nil {
-		t.Error("a secret with no provider: want an error, got none")
 	}
 }
 
@@ -965,7 +919,7 @@ func TestLoadReadsSingleSignOnWholeOrNotAtAll(t *testing.T) {
 	values = completeEnvironment()
 	values["SOLOCLEF_API_OIDC_ENABLED"] = "true"
 	_, err := Load(fakeEnvironment(values))
-	for _, name := range []string{"OIDC_ISSUER", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET_FILE", "OIDC_REDIRECT_URL", "OIDC_DISPLAY_NAME", "FRONTEND_URL"} {
+	for _, name := range []string{"OIDC_ISSUER", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET_FILE", "OIDC_REDIRECT_URL", "OIDC_PROVIDER_NAME", "OIDC_DISPLAY_NAME", "FRONTEND_URL"} {
 		if err == nil || !strings.Contains(err.Error(), "SOLOCLEF_API_"+name+" is required") {
 			t.Errorf("single sign-on on, without %s: %v", name, err)
 		}
@@ -980,11 +934,17 @@ func TestLoadReadsSingleSignOnWholeOrNotAtAll(t *testing.T) {
 	values["SOLOCLEF_API_OIDC_CLIENT_SECRET_FILE"] = secret
 	values["SOLOCLEF_API_OIDC_REDIRECT_URL"] = "https://notes.example.com/auth/oidc/callback"
 	values["SOLOCLEF_API_FRONTEND_URL"] = "https://notes.example.com"
+	values["SOLOCLEF_API_OIDC_PROVIDER_NAME"] = " authentik "
 	values["SOLOCLEF_API_OIDC_DISPLAY_NAME"] = " Example   SSO "
 	values["SOLOCLEF_API_OIDC_APP_REDIRECTS"] = "soloclef://auth, soloclef-dev://auth"
 	settings, err := Load(fakeEnvironment(values))
 	if err != nil {
 		t.Fatal(err)
+	}
+	// The name the links are stored under is said, never defaulted, and
+	// taken as written apart from stray spaces.
+	if settings.OIDCProviderName != "authentik" {
+		t.Errorf("provider name: got %q", settings.OIDCProviderName)
 	}
 	// The button's words are optional (the website's own when empty); the
 	// name is said and tidied; the app's addresses are a list.

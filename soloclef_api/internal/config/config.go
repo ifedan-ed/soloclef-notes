@@ -111,26 +111,8 @@ type Config struct {
 	// and heavy queue names are built from, exactly as app/celery_app.py
 	// builds them.
 	CeleryDefaultQueue string
-	// AgentIssuer is the identity provider that signs AI agents' access tokens,
-	// mirroring MCP_OAUTH_ISSUER, exactly as the provider prints it. Empty is
-	// valid and means this tier verifies no agent token itself: such a request
-	// is forwarded to the Python tier, which answers as it always did.
-	AgentIssuer string
-	// AgentClientID mirrors MCP_OAUTH_CLIENT_ID: a token is accepted only when
-	// its audience is this client.
-	AgentClientID string
-	// AgentClientSecret is the *contents* of the file AGENT_CLIENT_SECRET_FILE
-	// names: the agent application's client secret at the provider, which
-	// the settings page shows a signed-in person to paste into claude.ai or
-	// ChatGPT (agentsignin.SetupRoute). Nothing here verifies with it. Empty
-	// is valid: a client registered as public has none.
-	AgentClientSecret string
-	// AgentProviderName mirrors OIDC_PROVIDER_NAME: the oauth_account.oauth_name
-	// the web sign-in links identities under, so an identity linked there is
-	// found here.
-	AgentProviderName string
-	// BrandName mirrors app.brand.BRAND_NAME, which two of the agent refusals
-	// name word for word.
+	// BrandName mirrors app.brand.BRAND_NAME: the product's name as the
+	// assistant and the mail use it.
 	BrandName string
 	// PostHogAPIKey mirrors POSTHOG_API_KEY. Empty is valid and means this
 	// deployment has telemetry off, as there: nothing is queued and nothing is
@@ -187,13 +169,19 @@ type Config struct {
 	// "true" or "false". Any provider that speaks OpenID Connect will do;
 	// nothing here is behind a licence or an edition.
 	//
-	// The four settings below describe that sign-in and every one is
+	// The five settings below describe that sign-in and every one is
 	// required when it is on; with it off none is read, and the secret's
 	// file is not opened. OIDCIssuer is the provider's issuer exactly as it
 	// prints it (the discovery document is read from under it).
 	// OIDCClientSecret is the *contents* of the file OIDC_CLIENT_SECRET_FILE
 	// names. OIDCRedirectURL is this API's own callback as the provider has
 	// it registered: the public address of /auth/oidc/callback.
+	// OIDCProviderName is OIDC_PROVIDER_NAME, the `oauth_account.oauth_name`
+	// every identity this sign-in links is stored under. It is said, not
+	// defaulted: changing it orphans every link already made, so a
+	// deployment names the value its rows carry (the Python tier's default
+	// was "authentik"), and a guess would silently make new accounts for
+	// people who already have one.
 	//
 	// FrontendURL above is required with it too: a finished or refused
 	// sign-in sends the browser back to the web app.
@@ -202,6 +190,7 @@ type Config struct {
 	OIDCClientID     string
 	OIDCClientSecret string
 	OIDCRedirectURL  string
+	OIDCProviderName string
 	// The three below are what single sign-on is *called* and where the
 	// phone app's sign-in may end, read only with OIDCEnabled on. They are
 	// public: GET /api/v1/sign-in-options answers them to anyone, which is
@@ -592,11 +581,7 @@ func Load(env func(string) string) (Config, error) {
 		DatabaseMaxConnections: int32(number("DATABASE_MAX_CONNECTIONS", "10")),
 		// app/config: SESSION_COOKIE_NAME, MIN_ISSUED_AT.
 		SessionCookieName: optional("SESSION_COOKIE_NAME", "surfsense_session"),
-		AgentIssuer:       optional("AGENT_ISSUER", ""),
-		AgentClientID:     optional("AGENT_CLIENT_ID", ""),
-		AgentClientSecret: secretFile("AGENT_CLIENT_SECRET_FILE"),
-		// app/agent_sign_in/settings.py and app/brand.py, same defaults.
-		AgentProviderName: optional("AGENT_PROVIDER_NAME", "authentik"),
+		// app/brand.py, same default.
 		BrandName:         optional("BRAND_NAME", "Soloclef Notes"),
 		PostHogAPIKey:     optional("POSTHOG_API_KEY", ""),
 		PostHogHost:       strings.TrimRight(optional("POSTHOG_HOST", ""), "/"),
@@ -697,6 +682,7 @@ func Load(env func(string) string) (Config, error) {
 		config.OIDCClientID = required("OIDC_CLIENT_ID")
 		config.OIDCClientSecret = requiredSecretFile("OIDC_CLIENT_SECRET_FILE")
 		config.OIDCRedirectURL = required("OIDC_REDIRECT_URL")
+		config.OIDCProviderName = strings.TrimSpace(required("OIDC_PROVIDER_NAME"))
 		webAddress("OIDC_REDIRECT_URL", config.OIDCRedirectURL)
 		config.OIDCButtonLabel = strings.Join(strings.Fields(optional("OIDC_BUTTON_LABEL", "")), " ")
 		config.OIDCDisplayName = strings.Join(strings.Fields(required("OIDC_DISPLAY_NAME")), " ")
@@ -879,18 +865,6 @@ func Load(env func(string) string) (Config, error) {
 		}
 	}
 
-	// Half-configured agent verification would be a guess at which client a
-	// token must be addressed to, and that guess is the audience check.
-	if (config.AgentIssuer == "") != (config.AgentClientID == "") {
-		problems = append(problems,
-			prefix+"AGENT_ISSUER and "+prefix+"AGENT_CLIENT_ID are set together or not at all")
-	}
-	// A secret with no provider beside it is a deployment that believes agent
-	// sign-in is on when it is not.
-	if config.AgentClientSecret != "" && config.AgentIssuer == "" {
-		problems = append(problems,
-			prefix+"AGENT_CLIENT_SECRET_FILE is set without "+prefix+"AGENT_ISSUER and "+prefix+"AGENT_CLIENT_ID")
-	}
 	if config.PostHogAPIKey != "" && config.PostHogHost == "" {
 		problems = append(problems, prefix+"POSTHOG_HOST is required when "+prefix+"POSTHOG_API_KEY is set")
 	}

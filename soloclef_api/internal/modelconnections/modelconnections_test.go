@@ -200,7 +200,6 @@ func TestOnlyASessionReadsTheProviders(t *testing.T) {
 	for method, want := range map[principal.Method]int{
 		principal.MethodSession:             http.StatusOK,
 		principal.MethodPersonalAccessToken: http.StatusForbidden,
-		principal.MethodAgent:               http.StatusForbidden,
 	} {
 		handler := served(emptyLister{}, principal.Principal{UserID: testpostgres.Alice, Method: method})
 		if status, body := get(t, handler, ProvidersPath); status != want {

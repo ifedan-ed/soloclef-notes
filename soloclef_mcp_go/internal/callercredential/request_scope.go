@@ -1,5 +1,5 @@
-// Package callercredential carries the caller's credential and identity for the
-// life of one request.
+// Package callercredential carries the caller's credential for the life of
+// one request.
 //
 // Over streamable HTTP one process serves many users, so the credential cannot
 // be a field on a shared client: it is bound to the request's context by the
@@ -16,19 +16,11 @@ const LocalIdentity = "__local__"
 
 type contextKey int
 
-const (
-	credentialKey contextKey = iota
-	identityKey
-)
+const credentialKey contextKey = 0
 
-// Bind attaches the caller's credential and identity to a request's context.
-//
-// An API key is its own identity. An agent's sign-in token is replaced every
-// hour when it refreshes, so it is bound with the backend's stable
-// "user:<id>" instead, or the choice it made would be lost each refresh.
-func Bind(ctx context.Context, credential, identity string) context.Context {
-	ctx = context.WithValue(ctx, credentialKey, credential)
-	return context.WithValue(ctx, identityKey, identity)
+// Bind attaches the caller's credential to a request's context.
+func Bind(ctx context.Context, credential string) context.Context {
+	return context.WithValue(ctx, credentialKey, credential)
 }
 
 // Credential is the caller's credential for the in-flight request, or empty
@@ -38,12 +30,10 @@ func Credential(ctx context.Context) string {
 	return credential
 }
 
-// Identity is the stable per-caller key that request state is scoped by; it is
-// shared under stdio, where there is one caller.
+// Identity is the stable per-caller key that request state is scoped by: the
+// API key itself, which does not change while it is in use. It is shared
+// under stdio, where there is one caller.
 func Identity(ctx context.Context) string {
-	if identity, _ := ctx.Value(identityKey).(string); identity != "" {
-		return identity
-	}
 	if credential := Credential(ctx); credential != "" {
 		return credential
 	}

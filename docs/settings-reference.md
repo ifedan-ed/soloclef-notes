@@ -52,10 +52,10 @@ How to switch on each optional feature, step by step, is in
 | `SOLOCLEF_API_OIDC_ISSUER` | Required with single sign-on. The provider's issuer, exactly as its discovery document gives it. |
 | `SOLOCLEF_API_OIDC_CLIENT_ID`, `SOLOCLEF_API_OIDC_CLIENT_SECRET_FILE` | Required with single sign-on. This server's client at the provider, and the file holding its secret. |
 | `SOLOCLEF_API_OIDC_REDIRECT_URL` | Required with single sign-on. The public address followed by `/auth/oidc/callback`. |
+| `SOLOCLEF_API_OIDC_PROVIDER_NAME` | Required with single sign-on. The name each person's sign-in link is stored under. Never change it: links made under the old name stop matching. |
 | `SOLOCLEF_API_OIDC_DISPLAY_NAME` | Required with single sign-on. The provider's name as messages use it, such as "Example SSO". |
 | `SOLOCLEF_WEB_SSO_BUTTON_LABEL` | Optional. The words on the sign-in button. Empty is "Continue with single sign-on". |
 | `SOLOCLEF_API_OIDC_APP_REDIRECTS` | Optional. Where the phone app may be sent back to after single sign-on: `soloclef://auth`. Empty keeps single sign-on to the website. |
-| `SOLOCLEF_API_AGENT_ISSUER`, `SOLOCLEF_API_AGENT_CLIENT_ID`, `SOLOCLEF_API_AGENT_CLIENT_SECRET_FILE` | Optional, as a group. Let Claude and ChatGPT sign in at your provider to use the MCP server. The secret file may be empty for a client without a secret. Empty, agents use API keys only. |
 
 A few things are fixed rather than set. A browser stays signed in for 14 days
 without use, and at most 30 days. A phone stays signed in until it goes 180

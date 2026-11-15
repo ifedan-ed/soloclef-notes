@@ -25,9 +25,10 @@
 //     for an ID token (exchange.go).
 //  4. The ID token is verified against the provider's published keys, for
 //     this client, from this issuer, inside its lifetime, and carrying this
-//     sign-in's nonce. The verification is internal/agentsignin's: the same
-//     provider signs an agent's token, and one verifier means the two
-//     sign-ins cannot disagree about what a valid token is.
+//     sign-in's nonce. The signature, issuer, audience and time checks are
+//     internal/oidc's, which owns everything about the provider itself; the
+//     nonce is checked here, because only this flow knows which sign-in a
+//     token answers.
 //  5. The identity is matched to an account by provider and subject in
 //     `oauth_account`, or linked to one, or given a new one (link.go).
 //  6. The session is made by internal/signin (StartWebSession): the same
@@ -75,8 +76,8 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"git.danvics.com/danvics/soloclef/soloclef_api/internal/agentsignin"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/errorenvelope"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/oidc"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/requestcontext"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/signin"
 )
@@ -156,9 +157,8 @@ type Settings struct {
 	// FrontendURL is the web app's address: where a finished sign-in lands
 	// and where a refused one is explained.
 	FrontendURL string
-	// ProviderName is `oauth_account.oauth_name` for every link this makes.
-	// Changing it orphans them all. Agent sign-in finds an identity's
-	// account under the same name (internal/agentsignin).
+	// ProviderName is `oauth_account.oauth_name` for every link this makes
+	// (OIDC_PROVIDER_NAME). Changing it orphans them all.
 	ProviderName string
 	// SignupAllowed says whether a first sign-in with an address no account
 	// has makes one. It is the deployment's SIGNUP_ALLOWED, the switch the
@@ -179,7 +179,7 @@ type Routes struct {
 	Pool     *pgxpool.Pool
 	// Verifier judges the ID token and holds the provider's discovery
 	// document and keys (its Directory).
-	Verifier *agentsignin.Verifier
+	Verifier *oidc.Verifier
 	// Sessions makes the session once the identity is settled.
 	Sessions signin.Routes
 	// Secret seals the attempt cookie: the session secret.
@@ -193,18 +193,6 @@ type Routes struct {
 	Logger     *slog.Logger
 	// Now is nil for the system clock; only a test names another.
 	Now func() time.Time
-}
-
-// NewVerifier is the verifier for a provider, by its issuer exactly as the
-// provider prints it. The discovery document is read from under the issuer
-// and must name that issuer back, so a mistyped address is a refused
-// document and never somebody else's keys.
-func NewVerifier(issuer, clientID, providerName string) *agentsignin.Verifier {
-	settings := agentsignin.Settings{Issuer: issuer, ClientID: clientID, ProviderName: providerName}
-	return &agentsignin.Verifier{
-		Settings:  settings,
-		Directory: &agentsignin.ProviderDirectory{DiscoveryURL: settings.DiscoveryURL()},
-	}
 }
 
 // Register mounts both routes, whether or not single sign-on is on: the
@@ -329,7 +317,7 @@ func (r Routes) signedIn(request *http.Request) (userID string, started attempt,
 	}
 	claims, err := r.Verifier.Claims(ctx, idToken)
 	switch {
-	case errors.Is(err, agentsignin.ErrProviderUnavailable):
+	case errors.Is(err, oidc.ErrProviderUnavailable):
 		return "", started, refused(codeUnavailable, err.Error())
 	case err != nil:
 		return "", started, refused(codeInvalidIDToken, err.Error())

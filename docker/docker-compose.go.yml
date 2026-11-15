@@ -811,6 +811,10 @@ services:
       SOLOCLEF_API_OIDC_CLIENT_ID: ${SOLOCLEF_API_OIDC_CLIENT_ID?}
       SOLOCLEF_API_OIDC_CLIENT_SECRET_FILE: ${SOLOCLEF_API_OIDC_CLIENT_SECRET_FILE?}
       SOLOCLEF_API_OIDC_REDIRECT_URL: ${SOLOCLEF_API_OIDC_REDIRECT_URL?}
+      # The name every identity link is stored under (oauth_account's
+      # oauth_name), required with single sign-on on and never guessed:
+      # changing it orphans every link already made.
+      SOLOCLEF_API_OIDC_PROVIDER_NAME: ${SOLOCLEF_API_OIDC_PROVIDER_NAME?}
       # What single sign-on is called, which GET /api/v1/sign-in-options
       # tells the phone app: the button's words are the website's own
       # setting (so the two screens read the same), and the provider's name
@@ -821,21 +825,6 @@ services:
       SOLOCLEF_API_OIDC_BUTTON_LABEL: ${SOLOCLEF_WEB_SSO_BUTTON_LABEL?}
       SOLOCLEF_API_OIDC_DISPLAY_NAME: ${SOLOCLEF_API_OIDC_DISPLAY_NAME?}
       SOLOCLEF_API_OIDC_APP_REDIRECTS: ${SOLOCLEF_API_OIDC_APP_REDIRECTS?}
-
-      # AI agents (claude.ai, ChatGPT) that sign in at the identity provider
-      # and reach the site through the MCP server. All three may be empty,
-      # and an agent's token is then refused: only API keys work. The issuer
-      # and the client id are given together: the provider's issuer for the
-      # agent application exactly as it prints it, and that application's
-      # client id, which is the audience every agent token is held to. The
-      # third is the file that client's secret is in, which the settings
-      # page shows a signed-in person to paste into their agent's connector
-      # form; leave it empty for a client registered with no secret. The
-      # secret is added in an override, as the single sign-on's is, under
-      # the name agent_client_secret.
-      SOLOCLEF_API_AGENT_ISSUER: ${SOLOCLEF_API_AGENT_ISSUER?}
-      SOLOCLEF_API_AGENT_CLIENT_ID: ${SOLOCLEF_API_AGENT_CLIENT_ID?}
-      SOLOCLEF_API_AGENT_CLIENT_SECRET_FILE: ${SOLOCLEF_API_AGENT_CLIENT_SECRET_FILE?}
 
       # Mail, which is the password-reset link and nothing else. The switch
       # is required and is exactly true or false; with false the reset form
@@ -1251,15 +1240,11 @@ services:
 
   # The MCP server agents connect to (soloclef_mcp_go): streamable HTTP at
   # /mcp, through Caddy. It holds no secret and no database: every request
-  # carries the caller's own API key or, from claude.ai and ChatGPT, a
-  # sign-in token, and it calls the API with that credential and nothing
-  # else, so the API decides what each caller may do.
+  # carries the caller's own API key, and it calls the API with that key and
+  # nothing else, so the API decides what each caller may do.
   #
   # The variable names are the server's (soloclef_mcp_go/internal/settings),
-  # and the image sets its transport, host and port. Agent sign-in is the
-  # API's own pair of settings: with SOLOCLEF_API_AGENT_ISSUER empty only API
-  # keys work, and the protected-resource document is not served. Its
-  # address is the site's own /mcp, which is where Caddy sends it.
+  # and the image sets its transport, host and port.
   mcp:
     image: ${COMPOSE_PROJECT_NAME}-mcp:local
     build:
@@ -1267,9 +1252,6 @@ services:
       target: production
     environment:
       SURFSENSE_BASE_URL: *api-url
-      SURFSENSE_PUBLIC_URL: ${SOLOCLEF_API_PUBLIC_URL:?}
-      SURFSENSE_MCP_PUBLIC_URL: ${SOLOCLEF_API_PUBLIC_URL:?}/mcp
-      MCP_OAUTH_ISSUER: ${SOLOCLEF_API_AGENT_ISSUER?}
     depends_on:
       api:
         condition: service_healthy

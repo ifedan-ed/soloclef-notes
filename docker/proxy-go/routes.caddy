@@ -59,12 +59,6 @@ route {
 		flush_interval -1
 	}
 
-	# The MCP server's protected-resource document (RFC 9728), which
-	# claude.ai and ChatGPT read to find where to sign in. Served only when
-	# agent sign-in is set up (SOLOCLEF_API_AGENT_ISSUER); otherwise it
-	# answers 404.
-	reverse_proxy /.well-known/oauth-protected-resource* {$SOLOCLEF_STACK}-mcp-1:8080
-
 	# What a public link shares, for the link page's template below and
 	# nothing else: the API's own public read, with every refusal turned
 	# into an empty answer, so that a revoked or unknown link is a page with

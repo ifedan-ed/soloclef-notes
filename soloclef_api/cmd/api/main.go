@@ -24,7 +24,6 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humago"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/academicsearch"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/accesstokens"
@@ -34,7 +33,6 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/agentactions"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/agentflags"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/agentrules"
-	"git.danvics.com/danvics/soloclef/soloclef_api/internal/agentsignin"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/apphandoff"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/appreturn"
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/artifacts"
@@ -537,11 +535,13 @@ func serve(ctx context.Context, settings config.Config, parserEnv func(string) s
 	// installed-builds: retired-chat-share
 	retiredshare.Routes{Errors: errors, Logger: logger}.Register(api)
 	// For installed phone builds too: the Settings and Admin pages of
-	// features removed on 2026-11-13 get their lists, empty, where a 404
-	// broke each page (internal/retiredsettings).
+	// removed features get their lists, empty, and Connect your agent gets
+	// agent sign-in off, where a 404 broke each page
+	// (internal/retiredsettings).
 	// installed-builds: retired-operator-connections
 	// installed-builds: retired-community-prompts
 	// installed-builds: retired-announcements
+	// installed-builds: retired-agent-sign-in
 	retiredsettings.Routes{Errors: errors, Logger: logger}.Register(api)
 	// A Studio output's public link, the only thing that can be shared:
 	// making one (its owner), and the page and files a stranger holding the
@@ -1766,17 +1766,6 @@ func serve(ctx context.Context, settings config.Config, parserEnv func(string) s
 		return err
 	}
 	supportContact.Register(api)
-	// What "Connect your agent" shows a signed-in person to paste into
-	// claude.ai or ChatGPT: the agent application's client id and secret,
-	// from the same settings the token verifier is built from.
-	agentsignin.SetupRoute{
-		Settings: agentsignin.Settings{
-			Issuer: settings.AgentIssuer, ClientID: settings.AgentClientID, ProviderName: settings.AgentProviderName,
-		},
-		ClientSecret: settings.AgentClientSecret,
-		Errors:       errors,
-		Logger:       logger,
-	}.Register(api)
 	agentflags.Route{Disabled: settings.DisableNewAgentStack, Errors: errors, Logger: logger}.Register(api)
 	agentactions.Route{Pool: pool, Errors: errors, Logger: logger}.Register(api)
 	// Undoing what the assistant changed: one action, or a turn's.
@@ -1789,7 +1778,6 @@ func serve(ctx context.Context, settings config.Config, parserEnv func(string) s
 				MinIssuedAt: settings.MinIssuedAt,
 			},
 			Directory:         principal.PostgresDirectory{Pool: pool, Logger: logger},
-			Agents:            agentPrincipals(settings, pool, logger),
 			SessionCookieName: settings.SessionCookieName,
 		},
 		Errors: errors,
@@ -2052,30 +2040,6 @@ func newLogger(level string) *slog.Logger {
 	return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: levels[strings.ToLower(level)],
 	}))
-}
-
-// agentPrincipals is the agent-token verifier, or nothing when this deployment
-// names no agent provider — in which case nothing can verify an agent's token
-// and the gate answers it 401.
-func agentPrincipals(settings config.Config, pool *pgxpool.Pool, logger *slog.Logger) principal.Agents {
-	agents := agentsignin.Settings{
-		Issuer:       settings.AgentIssuer,
-		ClientID:     settings.AgentClientID,
-		ProviderName: settings.AgentProviderName,
-	}
-	if !agents.Enabled() {
-		logger.Info("no agent provider configured; agent tokens are refused (401)")
-		return nil
-	}
-	return agentsignin.Principals{
-		Verifier: &agentsignin.Verifier{
-			Settings:  agents,
-			Directory: &agentsignin.ProviderDirectory{DiscoveryURL: agents.DiscoveryURL()},
-		},
-		Accounts:  agentsignin.PostgresAccounts{Pool: pool, ProviderName: agents.ProviderName},
-		BrandName: settings.BrandName,
-		Logger:    logger,
-	}
 }
 
 // How long this tier waits for Nextcloud, beside the stall limit (which is
@@ -2526,7 +2490,6 @@ func servedRoutes() []string {
 	routes = append(routes, clienterrors.Served()...)
 	routes = append(routes, supportcontact.Served()...)
 	// What an AI agent's sign-in form needs pasted.
-	routes = append(routes, agentsignin.SetupServed()...)
 	// The phone app's browser hand-off (internal/apphandoff).
 	routes = append(routes, apphandoff.ServedRoutes()...)
 	// The sign-in routes and the session read, from the package's own list.

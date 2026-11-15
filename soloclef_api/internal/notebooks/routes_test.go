@@ -275,7 +275,7 @@ func TestRoutesOverARealDatabase(t *testing.T) {
 					t.Error("the notebook is not its maker's")
 				}
 			}},
-		{name: "a default title lets the notebook name itself", as: bob, method: principal.MethodAgent, verb: "POST", path: "/api/v1/notebooks",
+		{name: "a default title lets the notebook name itself", as: bob, method: principal.MethodPersonalAccessToken, verb: "POST", path: "/api/v1/notebooks",
 			body: `{}`, status: 201, contains: []string{`"title":"Untitled notebook"`, `"title_source":"auto"`},
 			after: func(t *testing.T) {
 				if count(t, "notebooks WHERE id = 1200 AND user_id = $1 AND icon_source = 'auto'", bob) != 1 {

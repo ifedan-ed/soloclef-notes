@@ -321,7 +321,7 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
 			},
 			{
 				title: "Use it from other agents",
-				body: `Claude, ChatGPT, Cursor and other agents can search and read your notebooks and notes through ${BRAND.name}'s MCP server.`,
+				body: `Claude Code, Cursor and other agents can search and read your notebooks and notes through ${BRAND.name}'s MCP server.`,
 			},
 		],
 		docs: "/docs/automations",

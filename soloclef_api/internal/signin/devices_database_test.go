@@ -126,7 +126,7 @@ func TestTheDevicesRoutesTakeASessionOnly(t *testing.T) {
 		{http.MethodDelete, DevicesPath + "/" + *phone.SessionID},
 		{http.MethodPost, LogoutAllPath},
 	} {
-		for _, method := range []principal.Method{principal.MethodPersonalAccessToken, principal.MethodAgent} {
+		for _, method := range []principal.Method{principal.MethodPersonalAccessToken} {
 			if got := h.as(testpostgres.Alice, method, c.verb, c.path, ""); got.Code != http.StatusForbidden {
 				t.Errorf("%s %s as %s: %d %s", c.verb, c.path, method, got.Code, got.Body)
 			}

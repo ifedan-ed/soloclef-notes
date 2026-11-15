@@ -2,7 +2,7 @@ package knowledgebase
 
 // Knowledge-base read tools: semantic search, list, and read one document.
 //
-// Every one of them reads the caller's own library: the API key or sign-in is
+// Every one of them reads the caller's own library: the API key is
 // the account, and the account is the whole scope.
 
 import (

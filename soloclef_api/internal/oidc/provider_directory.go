@@ -1,4 +1,4 @@
-package agentsignin
+package oidc
 
 import (
 	"context"

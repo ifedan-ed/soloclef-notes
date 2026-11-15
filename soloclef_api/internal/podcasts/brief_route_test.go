@@ -252,7 +252,6 @@ func TestOnlyItsOwnerEditsABrief(t *testing.T) {
 		{"the owner", callerID, principal.MethodSession, 200, ""},
 		{"the owner by an API key", callerID, principal.MethodPersonalAccessToken, 200, ""},
 		{"another account", strangerID, principal.MethodSession, 404, podcastAbsent},
-		{"another account by an agent", strangerID, principal.MethodAgent, 404, podcastAbsent},
 	} {
 		f := newFake(podcast(41, nil))
 		f.asker = c.asker

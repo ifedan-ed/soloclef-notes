@@ -123,18 +123,18 @@ func TestSessionTokenRefusesTokensIssuedBeforeTheEpoch(t *testing.T) {
 func TestSessionTokenReportsAForeignIssuer(t *testing.T) {
 	// Verified or not, a token naming an issuer is not one of this
 	// application's: its own tokens carry no iss claim. It must be reported
-	// as somebody else's rather than refused as a bad session, so the
-	// resolver hands it to the agent verifier and to nothing else.
+	// as somebody else's rather than tried as a session, so the resolver
+	// refuses it without falling through to the cookie.
 	_, err := SessionToken{Secret: testSecret}.Read(tokenForeignIssuer)
 	if !errors.Is(err, ErrForeignIssuer) {
 		t.Errorf("got %v, want ErrForeignIssuer", err)
 	}
 }
 
-// Which tier can verify a token is decided by reading its issuer, and that read
-// has to agree with PyJWT's: a token it cannot read is not an agent's, and takes
-// the session path to the same 401. Each of these was found by asking both tiers
-// and comparing the bytes, not by reading the two libraries.
+// Whether a token names an issuer is decided by reading it as PyJWT does: a
+// token it cannot read names none, and takes the session path to the same
+// 401. Each of these was found by asking both tiers and comparing the bytes,
+// not by reading the two libraries.
 func TestReadingTheIssuerAgreesWithPyJWTsOwnRead(t *testing.T) {
 	cases := map[string]struct {
 		token  string
@@ -147,7 +147,7 @@ func TestReadingTheIssuerAgreesWithPyJWTsOwnRead(t *testing.T) {
 		"a kid that is not a string":   {withHeader(t, tokenForeignIssuer, `{"alg":"RS256","kid":7}`), ""},
 		"a kid that is a string":       {withHeader(t, tokenForeignIssuer, `{"alg":"RS256","kid":"a"}`), "https://sso.example.com/application/o/app/"},
 		// PyJWT discards the junk and reads the token, so this tier does too:
-		// the signature is then checked properly, and refused, on the agent path.
+		// it names an issuer, so it is refused without the session check.
 		"a signature padded out with junk":  {signatureOf(t, tokenForeignIssuer, "QUJD!!!"), "https://sso.example.com/application/o/app/"},
 		"a signature binascii will not pad": {signatureOf(t, tokenForeignIssuer, "QUJDRA!!"), ""},
 		"two segments":                      {"abc.def", ""},

@@ -86,7 +86,7 @@ func at(path string) string { return strings.Replace(path, "{draft_id}", draft, 
 var person = principal.Principal{UserID: ada, Method: principal.MethodSession}
 
 func TestOnlyAPersonInASessionCanConfirmOrSend(t *testing.T) {
-	for _, method := range []principal.Method{principal.MethodPersonalAccessToken, principal.MethodAgent} {
+	for _, method := range []principal.Method{principal.MethodPersonalAccessToken} {
 		g := &guard{}
 		program := principal.Principal{UserID: ada, Method: method}
 		for _, path := range []string{ConfirmationPath, SendPath, DiscardPath} {

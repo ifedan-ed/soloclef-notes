@@ -130,6 +130,14 @@ var Answers = []Answer{
 		Code: []string{"internal/retiredsettings/retiredsettings.go", "cmd/api/main.go"},
 	},
 	{
+		ID:    "retired-agent-sign-in",
+		Needs: []Need{{Operation: "GET /api/v1/agent-sign-in"}},
+		Why: "Connect your agent shows \"Couldn't load the sign-in details.\" on a 404. Agent sign-in was removed " +
+			"on 2026-11-15 (agents use an API key), so the answer is sign-in off, as it always was here: the screen " +
+			"shows the API key steps alone.",
+		Code: []string{"internal/retiredsettings/retiredsettings.go", "cmd/api/main.go"},
+	},
+	{
 		ID:    "retired-notebook-links",
 		Needs: []Need{{Operation: "GET /api/v1/notebook-links"}},
 		Why: "Settings, Public links reads the notebook links beside the output links and shows \"Couldn't load\" " +

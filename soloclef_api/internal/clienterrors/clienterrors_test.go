@@ -118,7 +118,6 @@ func TestACrashReportBecomesOneBoundedLogLine(t *testing.T) {
 		want int
 	}{
 		{"an API key", principal.MethodPersonalAccessToken, string(body), http.StatusForbidden},
-		{"an agent", principal.MethodAgent, string(body), http.StatusForbidden},
 		{"a body over the cap", principal.MethodSession, `{"kind":"window-error","stack":"` + strings.Repeat("s", maxBodyBytes) + `"}`, http.StatusRequestEntityTooLarge},
 		{"not JSON", principal.MethodSession, `kind=window-error`, http.StatusUnprocessableEntity},
 		{"an unknown kind", principal.MethodSession, `{"kind":"anything"}`, http.StatusUnprocessableEntity},

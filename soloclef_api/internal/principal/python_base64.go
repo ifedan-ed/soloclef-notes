@@ -15,8 +15,8 @@ var errUnreadableSegment = errors.New("the segment is not readable base64")
 
 // decodePythonBase64URL decodes a JWT segment as PyJWT's base64url_decode
 // does. That is not what a strict decoder does, and it is not a detail: it
-// decides whether the two tiers agree that a request carries an agent's token
-// at all, and so which 401 a malformed token gets.
+// decides whether a token is read as naming an issuer (refused outright) or
+// as a session token (tried, then refused or let in).
 //
 // PyJWT pads the input to a multiple of four and hands it to binascii in its
 // lenient mode, which has three behaviours a strict decoder does not:

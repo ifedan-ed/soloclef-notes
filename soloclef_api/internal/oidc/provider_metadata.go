@@ -1,4 +1,4 @@
-package agentsignin
+package oidc
 
 import (
 	"encoding/json"
@@ -11,9 +11,8 @@ import (
 type ProviderMetadata struct {
 	Issuer string
 	// AuthorizationEndpoint is where a browser is sent to sign in, and
-	// TokenEndpoint where the code it comes back with is exchanged. Agent
-	// sign-in reads neither; the web's single sign-on (internal/oidcsignin)
-	// reads both, from this same document.
+	// TokenEndpoint where the code it comes back with is exchanged
+	// (internal/oidcsignin).
 	AuthorizationEndpoint string
 	TokenEndpoint         string
 	// JWKSURI is where the signing keys are published.

@@ -28,7 +28,7 @@ import (
 //
 // # Who may
 //
-// Only an interactive session, never an API key or an agent's token: a
+// Only an interactive session, never an API key: a
 // program acting for the account must not be able to take it over.
 //
 // An account with a password must give it (current_password). That is what

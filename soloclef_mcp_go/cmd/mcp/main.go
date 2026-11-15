@@ -76,7 +76,7 @@ func run(arguments []string) error {
 func serveHTTP(server *mcp.Server, configuration settings.Settings) error {
 	address := net.JoinHostPort(configuration.Host, fmt.Sprintf("%d", configuration.Port))
 	slog.Info("serving MCP over streamable HTTP", "address", address)
-	return http.ListenAndServe(address, httptransport.Build(server, configuration, nil))
+	return http.ListenAndServe(address, httptransport.Build(server))
 }
 
 func dumpTools() error {
