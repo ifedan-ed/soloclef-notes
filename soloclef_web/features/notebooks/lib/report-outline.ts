@@ -23,8 +23,10 @@ export interface ReportOutline {
 
 const HEADING = /^(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$/;
 const FENCE = /^[ \t]{0,3}(`{3,}|~{3,})/;
-// "1. ", "2) ", "1.2 ", "IV. ": not a bare number ("2024 in review").
-const NUMBERING = /^(?:\d+(?:\.\d+)*[.)]|\d+(?:\.\d+)+|[IVXLC]+\.)\s+/;
+// "1. ", "2) ", "1.2 ", "01 ", "IV. ": not a bare number ("2024 in review").
+// A zero-padded number ("01 Executive summary", a style reports are often
+// written in) is numbering too: kept, the list read "2. 01 Executive summary".
+const NUMBERING = /^(?:\d+(?:\.\d+)*[.)]|\d+(?:\.\d+)+|0\d+|[IVXLC]+\.)\s+/;
 const EMPHASIS = /[*_`]+/g;
 
 /** The heading as the contents list shows it: no emphasis, no numbering. */

@@ -134,7 +134,7 @@ func TestADeckIsReadCheckedAndLaidOut(t *testing.T) {
 		}
 	}
 	prompt := authorPrompt(90)
-	if !strings.Contains(prompt, "2 to 20 slides") || !strings.Contains(prompt, "under 194 words") || !strings.Contains(prompt, "narration is a list of passages") ||
+	if !strings.Contains(prompt, "2 to 20 slides") || !strings.Contains(prompt, "under 178 words") || !strings.Contains(prompt, "narration is a list of passages") ||
 		!strings.Contains(prompt, "exactly one passage for the slide and one for each part") || !strings.Contains(prompt, "Write exactly one passage per part") {
 		t.Errorf("author prompt:\n%s", prompt)
 	}

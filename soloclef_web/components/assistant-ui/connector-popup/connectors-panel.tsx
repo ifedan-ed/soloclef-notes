@@ -156,7 +156,7 @@ export function ConnectorsSection() {
 			return (
 				<ConnectorAccountsListView
 					connectorType="MCP_CONNECTOR"
-					connectorTitle="MCP Connectors"
+					connectorTitle="MCP connectors"
 					connectors={(allConnectors || []) as SearchSourceConnector[]}
 					indexingConnectorIds={indexingConnectorIds}
 					onBack={handleBackFromMCPList}
@@ -414,10 +414,10 @@ export function ConnectorsSection() {
 
 	return (
 		<section className="flex h-full min-h-[min(680px,calc(100vh-5rem))] w-full select-none flex-col gap-6 md:flex-row">
+			{/* No "Connectors" heading of its own: this panel is only shown inside
+			    Settings, whose shell already titles the page Connectors, and a
+			    second one read "Connectors, Connectors, Overview". */}
 			<div className="md:w-[220px] md:shrink-0">
-				<h1 className="mb-4 px-1 text-xl font-semibold tracking-tight text-foreground md:text-2xl">
-					Connectors
-				</h1>
 				<nav className="hidden flex-col gap-0.5 md:flex">{renderNav()}</nav>
 				<Drawer open={drawerOpen} onOpenChange={setDrawerOpen} shouldScaleBackground={false}>
 					<DrawerTrigger asChild>

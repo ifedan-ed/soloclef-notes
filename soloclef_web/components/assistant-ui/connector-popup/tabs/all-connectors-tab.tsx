@@ -253,7 +253,11 @@ export const AllConnectorsTab: FC<AllConnectorsTabProps> = ({
 
 	return (
 		<div className="space-y-8">
-			<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+			{/* Columns by card width, not by screen width: in Settings the catalog
+			    sits beside two navigation columns, so at 1440px "sm:grid-cols-2"
+			    gave ~260px cards with cut-off names ("Google Dr…") and one-word
+			    lines. 18rem is the narrowest a card reads well at. */}
+			<div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),1fr))] gap-3">
 				{nativeCards}
 				{available.crawlers.map(renderCrawlerCard)}
 				{available.other.map(renderOtherCard)}

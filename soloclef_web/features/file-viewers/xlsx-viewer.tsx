@@ -8,6 +8,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { authenticatedFetch } from "@/lib/auth-fetch";
 import { buildBackendUrl } from "@/lib/env-config";
 import { cannotPreviewMessage } from "./file-format";
+import { gridColumnWidth } from "./grid-column-width";
 import type { FileViewerProps } from "./model";
 import {
 	MAX_VIEWER_BYTES,
@@ -48,6 +49,8 @@ function SpreadsheetGrid({ sheet }: { sheet: SheetView }) {
 				(_, col): Column<GridRow> => ({
 					key: `column-${col}`,
 					name: columnLabel(col),
+					width: gridColumnWidth(sheet.widths[col] ?? null),
+					resizable: true,
 				})
 			),
 		];

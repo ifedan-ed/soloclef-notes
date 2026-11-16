@@ -315,6 +315,15 @@ func (s Specialist) verify(ctx context.Context, owner Owner, bench Bench, name s
 	// being checked again because it may have changed.
 	s.Verified.forget(bench.ID(), where)
 
+	if format.recalculated {
+		finding, err := s.recalculate(ctx, bench, where)
+		if err != nil {
+			return VerifyResult{}, err
+		}
+		if finding != "" {
+			return failedVerification(0, nil, finding), nil
+		}
+	}
 	data, err := bench.ReadFile(ctx, where, MaxDocumentBytes)
 	switch {
 	case errors.Is(err, sandbox.ErrNotFound):

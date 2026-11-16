@@ -71,10 +71,23 @@ test("a stage is kept only for a document that is processing", () => {
 	assert.deepEqual([...stages], [[1, "embedding"]]);
 });
 
-test("the status schema takes the five stages and refuses any other", () => {
-	for (const stage of ["parsing", "chunking", "embedding", "indexing", "retrying"]) {
+test("the status schema takes every stage the server writes and refuses any other", () => {
+	// "reading" is written for a page or paper read from a link
+	// (notebookresearch), "downloading" for a Nextcloud file (nextcloudimport):
+	// a stage left out here failed the whole status read.
+	for (const stage of [
+		"parsing",
+		"chunking",
+		"embedding",
+		"indexing",
+		"retrying",
+		"reading",
+		"downloading",
+	]) {
 		assert.equal(documentStatus.safeParse({ state: "processing", stage }).success, true, stage);
 	}
+	assert.equal(documentStatus.safeParse({ state: "pending", stage: "downloading" }).success, true);
+	assert.equal(documentStatus.safeParse({ state: "deleting" }).success, true);
 	assert.equal(
 		documentStatus.safeParse({ state: "processing", stage: "uploading" }).success,
 		false
@@ -130,6 +143,20 @@ test("a processing source with no stage yet keeps just its spinner", () => {
 	);
 	assert.doesNotMatch(html, /source-stage/);
 	assert.match(html, /Still being indexed/);
+});
+
+test("a page being read from its link names that stage", () => {
+	const html = render(
+		createElement(SourceRow, {
+			source: source({ status: "processing", document_type: "CRAWLED_URL" }),
+			stage: "reading",
+			onToggle: noop,
+			onOpen: noop,
+			onRemove: noop,
+			onReindexed: noop,
+		})
+	);
+	assert.match(html, /data-testid="source-stage"[^>]*>Reading the page</);
 });
 
 test("a source that failed to index says so under its title", () => {

@@ -215,7 +215,7 @@ function LivePodcastCard({
 		}
 		return (
 			<NoticeState
-				title="Podcast Unavailable"
+				title="Podcast unavailable"
 				message="This podcast no longer exists or you don't have access to it."
 			/>
 		);
@@ -292,7 +292,7 @@ function LivePodcastCard({
 		case "failed":
 			return <PodcastErrorState title={title} error={podcast.error || "Generation failed"} />;
 		case "cancelled":
-			return <NoticeState title="Podcast Cancelled" message="This podcast was cancelled." />;
+			return <NoticeState title="Podcast cancelled" message="This podcast was cancelled." />;
 	}
 }
 
@@ -315,7 +315,7 @@ export const GeneratePodcastToolUI = ({
 
 	if (status.type === "incomplete") {
 		if (status.reason === "cancelled") {
-			return <NoticeState title="Podcast Cancelled" message="Podcast preparation was cancelled." />;
+			return <NoticeState title="Podcast cancelled" message="Podcast preparation was cancelled." />;
 		}
 		if (status.reason === "error") {
 			return (
@@ -343,7 +343,7 @@ export const GeneratePodcastToolUI = ({
 	// recovered through the lifecycle API.
 	return (
 		<NoticeState
-			title="Podcast Unavailable"
+			title="Podcast unavailable"
 			message="This podcast was generated with an older version. Please generate a new one."
 		/>
 	);

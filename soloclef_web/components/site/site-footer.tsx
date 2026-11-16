@@ -1,6 +1,9 @@
+"use client";
+
 import Link from "next/link";
 import { BrandMark } from "@/components/Logo";
-import { FOOTER_COLUMNS } from "@/components/site/site-content";
+import { FOOTER_COLUMNS, shownLinks } from "@/components/site/site-content";
+import { useSupportEmail } from "@/hooks/use-support-email";
 import { BRAND } from "@/lib/brand";
 
 /**
@@ -8,6 +11,8 @@ import { BRAND } from "@/lib/brand";
  * It reads the page's palette, so it follows the visitor's light or dark theme.
  */
 export function SiteFooter() {
+	// A client component only for this: the address is read in the browser.
+	const { email } = useSupportEmail();
 	return (
 		<footer className="ss-home-rule bg-[color:var(--app-shell)]">
 			<div className="ss-home-pad flex flex-col gap-10 py-14 lg:flex-row lg:justify-between lg:gap-16">
@@ -33,7 +38,7 @@ export function SiteFooter() {
 								{column.heading}
 							</p>
 							<ul className="mt-3 flex list-none flex-col gap-2.5 p-0">
-								{column.links.map((link) => (
+								{shownLinks(column.links, Boolean(email)).map((link) => (
 									<li key={link.href}>
 										<Link
 											href={link.href}

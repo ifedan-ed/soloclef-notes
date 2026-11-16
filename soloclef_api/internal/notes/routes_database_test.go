@@ -84,6 +84,34 @@ INSERT INTO new_chat_messages (id, thread_id, role, content) VALUES
 		}
 	})
 
+	t.Run("a new, empty note is named by its first line as it is typed", func(t *testing.T) {
+		fresh := s.send(http.MethodPost, "/api/v1/notes", `{}`).expect(t, http.StatusCreated)
+		path := fmt.Sprint("/api/v1/notes/", fresh.id())
+		// A save with nothing that makes a title leaves it untitled.
+		blank := s.send(http.MethodPatch, path, `{"content":"\n---\n"}`).expect(t, http.StatusOK)
+		if blank.body["title"] != untitled {
+			t.Errorf("no words yet: %v", blank.body["title"])
+		}
+		typed := s.send(http.MethodPatch, path, `{"content":"Clinic list\n\nSee Ada first."}`).expect(t, http.StatusOK)
+		if typed.body["title"] != "Clinic list" {
+			t.Errorf("first text save: %v", typed.body["title"])
+		}
+		// Once named, the text no longer renames it: only the untitled name
+		// is replaced.
+		again := s.send(http.MethodPatch, path, `{"content":"Ward list\n\nSee Ada first."}`).expect(t, http.StatusOK)
+		if again.body["title"] != "Clinic list" {
+			t.Errorf("a named note was renamed by its text: %v", again.body["title"])
+		}
+		// A title sent with the text wins over the text's first line.
+		s.send(http.MethodPatch, path, `{"title":"Untitled note"}`).expect(t, http.StatusOK)
+		both := s.send(http.MethodPatch, path, `{"title":"Rounds","content":"Ward list"}`).expect(t, http.StatusOK)
+		if both.body["title"] != "Rounds" {
+			t.Errorf("a typed title: %v", both.body["title"])
+		}
+		s.jobs.taken()
+		s.send(http.MethodDelete, path, "").expect(t, http.StatusNoContent)
+	})
+
 	t.Run("pinned first, then the most recently edited", func(t *testing.T) {
 		s.send(http.MethodPut, fmt.Sprintf("/api/v1/notes/%d/pin", empty.id()), "").expect(t, http.StatusOK)
 		list := s.send(http.MethodGet, "/api/v1/notes", "").expect(t, http.StatusOK)

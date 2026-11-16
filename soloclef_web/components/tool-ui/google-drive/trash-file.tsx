@@ -205,7 +205,7 @@ function ApprovalCard({
 								{account && (
 									<div className="space-y-2">
 										<p className="text-xs font-medium text-muted-foreground">
-											Google Drive Account
+											Google Drive account
 										</p>
 										<div className="w-full rounded-md border border-input bg-muted/50 px-3 py-2 text-sm">
 											{account.name}
@@ -215,7 +215,7 @@ function ApprovalCard({
 
 								{file && (
 									<div className="space-y-2">
-										<p className="text-xs font-medium text-muted-foreground">File to Trash</p>
+										<p className="text-xs font-medium text-muted-foreground">File to trash</p>
 										<div className="w-full rounded-md border border-input bg-muted/50 px-3 py-2 text-sm space-y-0.5">
 											<div className="font-medium">{file.name}</div>
 											<div className="text-xs text-muted-foreground">{fileLabel}</div>

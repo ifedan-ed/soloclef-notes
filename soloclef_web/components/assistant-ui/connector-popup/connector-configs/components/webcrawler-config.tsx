@@ -44,7 +44,7 @@ export const WebcrawlerConfig: FC<ConnectorConfigProps> = ({ connector, onConfig
 	return (
 		<div className="rounded-xl border border-border bg-slate-400/5 dark:bg-white/5 p-3 sm:p-6 space-y-4 sm:space-y-6">
 			<div className="space-y-1 sm:space-y-2">
-				<h3 className="font-medium text-sm sm:text-base">Web Crawler Configuration</h3>
+				<h3 className="font-medium text-sm sm:text-base">Web crawler configuration</h3>
 				<p className="text-xs sm:text-sm text-muted-foreground">
 					Add webpages to your knowledge base for periodic indexing.
 				</p>

@@ -27,6 +27,13 @@ export interface SheetView {
 	name: string;
 	cells: CellView[][];
 	truncated: boolean;
+	/**
+	 * Each column's width as the workbook sets it, in characters, or null
+	 * where it sets none. The grid sizes columns from these: measured from
+	 * their text instead, one long title in a column's first rows made that
+	 * column wider than the viewer and pushed every other one out of sight.
+	 */
+	widths: (number | null)[];
 }
 
 export interface WorkbookView {
@@ -80,7 +87,18 @@ function excelSerialFromDate(date: Date): number {
 	return date.getTime() / 86_400_000 + 25569;
 }
 
-function sheetMatrix(sheet: ExcelJS.Worksheet): { cells: CellView[][]; truncated: boolean } {
+function columnWidths(sheet: ExcelJS.Worksheet, colCount: number): (number | null)[] {
+	return Array.from({ length: colCount }, (_, index) => {
+		const width = sheet.getColumn(index + 1).width;
+		return typeof width === "number" && width > 0 ? width : null;
+	});
+}
+
+function sheetMatrix(sheet: ExcelJS.Worksheet): {
+	cells: CellView[][];
+	truncated: boolean;
+	widths: (number | null)[];
+} {
 	const rowCount = sheet.rowCount || 0;
 	const colCount = sheet.columnCount || 0;
 	const displayRows = Math.min(rowCount, MAX_DISPLAY_ROWS);
@@ -88,11 +106,16 @@ function sheetMatrix(sheet: ExcelJS.Worksheet): { cells: CellView[][]; truncated
 	for (let r = 1; r <= displayRows; r += 1) {
 		const row: CellView[] = [];
 		for (let c = 1; c <= colCount; c += 1) {
-			row.push({ text: cellText(sheet.getCell(r, c)) });
+			const cell = sheet.getCell(r, c);
+			// ExcelJS gives every cell of a merged range the range's value, so a
+			// title merged across A1:K1 was shown eleven times. Only the range's
+			// first cell holds it, as in a spreadsheet.
+			const covered = cell.isMerged && cell.master.address !== cell.address;
+			row.push({ text: covered ? "" : cellText(cell) });
 		}
 		cells.push(row);
 	}
-	return { cells, truncated: rowCount > MAX_DISPLAY_ROWS };
+	return { cells, truncated: rowCount > MAX_DISPLAY_ROWS, widths: columnWidths(sheet, colCount) };
 }
 
 export async function parseWorkbook(data: ArrayBuffer): Promise<WorkbookView> {
@@ -118,8 +141,8 @@ export async function parseWorkbook(data: ArrayBuffer): Promise<WorkbookView> {
 
 	return {
 		sheets: workbook.worksheets.map((sheet) => {
-			const { cells, truncated } = sheetMatrix(sheet);
-			return { name: sheet.name, cells, truncated };
+			const { cells, truncated, widths } = sheetMatrix(sheet);
+			return { name: sheet.name, cells, truncated, widths };
 		}),
 	};
 }

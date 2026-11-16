@@ -11,6 +11,13 @@ type SourceDocument struct {
 	ID    int64
 	Title string
 	Text  string
+	// Read and Version are what readSources knows of the document's
+	// indexing: whether it has been read (a document still being read has
+	// no text yet), and its content hash, which changes when it is read
+	// again. The suggestions use them to write ideas only from text that is
+	// there, and to know when that text changed.
+	Read    bool
+	Version string
 }
 
 // The characters of source text each kind of run is given. An artifact run

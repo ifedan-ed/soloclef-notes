@@ -219,7 +219,7 @@ function GenericApprovalCardView({
 						)}
 						{canApproveAlways && (
 							<Button size="sm" className="rounded-lg" onClick={handleApproveAlways}>
-								Always Allow
+								Always allow
 							</Button>
 						)}
 						{allowedDecisions.includes("reject") && (

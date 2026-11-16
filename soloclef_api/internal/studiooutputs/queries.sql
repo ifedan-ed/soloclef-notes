@@ -12,8 +12,9 @@ SELECT EXISTS (SELECT 1 FROM notebooks WHERE id = sqlc.arg(notebook_id) AND user
 -- `only_id` narrows the list to one output (0 is every output). A run's
 -- status is read as jsonb because the joins are outer: a missing run is
 -- SQL NULL, which a text column of the generated row could not hold.
-SELECT o.id, o.kind, o.title, o.options, o.source_document_ids, o.generated_by, o.created_at,
+SELECT o.id, o.kind, o.title, o.options, o.source_document_ids, o.notebook_source_ids, o.generated_by, o.created_at,
        to_jsonb(p.status) AS podcast_status, p.duration_seconds AS podcast_duration, p.artifact_id AS podcast_artifact,
+       p.error AS podcast_error,
        to_jsonb(j.status) AS job_status, j.phase AS job_phase, j.progress AS job_progress,
        j.failure_code AS job_failure, j.artifact_id AS job_artifact,
        o.artifact_id AS made_artifact,

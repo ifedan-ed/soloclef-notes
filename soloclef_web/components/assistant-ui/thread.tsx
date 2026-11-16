@@ -1058,7 +1058,7 @@ const ComposerAction: FC<ComposerActionProps> = ({
 						>
 							<DropdownMenuItem onSelect={() => openUploadDialog()}>
 								<Upload className="h-4 w-4" />
-								Upload Files
+								Upload files
 							</DropdownMenuItem>
 							<DropdownMenuItem onSelect={() => void handleScreenCapture()}>
 								<Camera className="h-4 w-4" />
@@ -1070,7 +1070,7 @@ const ComposerAction: FC<ComposerActionProps> = ({
 							<DropdownMenuSub>
 								<DropdownMenuSubTrigger>
 									<Unplug className="h-4 w-4" />
-									MCP Connectors
+									MCP connectors
 								</DropdownMenuSubTrigger>
 								<DropdownMenuPortal>
 									<DropdownMenuSubContent
@@ -1104,7 +1104,7 @@ const ComposerAction: FC<ComposerActionProps> = ({
 							>
 								<DropdownMenuSubTrigger>
 									<Settings2 className="h-4 w-4" />
-									Manage Tools
+									Manage tools
 								</DropdownMenuSubTrigger>
 								<DropdownMenuPortal>
 									<DropdownMenuSubContent

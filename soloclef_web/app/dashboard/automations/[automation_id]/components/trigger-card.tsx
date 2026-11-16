@@ -36,6 +36,8 @@ import { DeleteTriggerDialog } from "./delete-trigger-dialog";
 interface TriggerCardProps {
 	trigger: Trigger;
 	automationId: number;
+	/** The automation is paused or archived, so this trigger will not fire. */
+	paused: boolean;
 }
 
 type SimpleFrequency = Extract<ScheduleFrequency, "hourly" | "daily" | "weekdays"> | "custom";
@@ -92,7 +94,7 @@ function clampInt(raw: string, min: number, max: number): number {
  * time, timezone, and raw cron only for schedules outside the simple model.
  * ``enabled`` stays on the Switch so the two surfaces don't fight.
  */
-export function TriggerCard({ trigger, automationId }: TriggerCardProps) {
+export function TriggerCard({ trigger, automationId, paused }: TriggerCardProps) {
 	const { mutateAsync: updateTrigger, isPending: updating } =
 		useAtomValue(updateTriggerMutationAtom);
 	const [deleteOpen, setDeleteOpen] = useState(false);
@@ -209,13 +211,16 @@ export function TriggerCard({ trigger, automationId }: TriggerCardProps) {
 						</div>
 						<div
 							className={
-								trigger.enabled
+								trigger.enabled && !paused
 									? "min-w-0 truncate font-medium text-foreground"
 									: "min-w-0 truncate text-muted-foreground"
 							}
 							title={new Date(trigger.next_fire_at).toLocaleString()}
 						>
-							{formatRelativeFutureDate(trigger.next_fire_at)}
+							{/* The trigger keeps its schedule while the automation is
+							    paused, but nothing fires: the page said "Next fire:
+							    Tomorrow" for a paused automation. */}
+							{paused ? "Not while paused" : formatRelativeFutureDate(trigger.next_fire_at)}
 						</div>
 					</div>
 				) : null}

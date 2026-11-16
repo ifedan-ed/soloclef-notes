@@ -58,7 +58,7 @@ export default function DashboardError({
 					<Link href="/dashboard">Back to dashboard</Link>
 				</Button>
 				<Button asChild variant="ghost">
-					<a href={issueUrl}>Report Issue</a>
+					<a href={issueUrl}>Report issue</a>
 				</Button>
 			</div>
 		</div>

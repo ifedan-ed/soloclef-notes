@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useDelayedFlag } from "../../hooks/use-delayed-flag";
 import { useSourceGuide } from "../../hooks/use-notebook-queries";
 import type { NotebookSource } from "../../model/notebook";
+import { SourceFailure } from "./source-failure";
 
 export function SourceGuideView({
 	notebookId,
@@ -19,7 +20,9 @@ export function SourceGuideView({
 	onBack: () => void;
 }) {
 	const t = useTranslations("notebooks");
-	const guide = useSourceGuide(notebookId, source.id);
+	const failed = source.status === "failed";
+	// A source that could not be read has no guide to ask for: it says why.
+	const guide = useSourceGuide(notebookId, failed ? null : source.id);
 	const showSkeleton = useDelayedFlag(guide.isLoading);
 
 	return (
@@ -42,7 +45,9 @@ export function SourceGuideView({
 				<p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
 					{t("source_guide")}
 				</p>
-				{guide.isLoading ? (
+				{failed ? (
+					<SourceFailure documentId={source.target_id} />
+				) : guide.isLoading ? (
 					showSkeleton ? (
 						<div className="space-y-2" aria-busy>
 							<Skeleton className="h-3 w-full" />

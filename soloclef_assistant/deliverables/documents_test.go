@@ -53,6 +53,13 @@ type shed struct {
 		otherHash bool
 		timedOut  bool
 	}
+	// recalc is how the next workbook recalculation goes: failed is the
+	// step it reports failing at, or ""; result, when set, is the file the
+	// recalculation writes over the workbook.
+	recalc struct {
+		failed string
+		result []byte
+	}
 	// runError fails every command.
 	runError error
 }
@@ -110,6 +117,20 @@ func (s *shed) Run(_ context.Context, command string) (sandbox.Result, error) {
 			}
 		}
 		return sandbox.Result{}, nil
+	}
+	if strings.Contains(command, markRecalculated) {
+		// The recalculation: LibreOffice saves the workbook again in place.
+		source := shellWord(command, "src")
+		if _, found := s.files[source]; !found {
+			return sandbox.Result{Output: markFailed + "copying\n"}, nil
+		}
+		if s.recalc.failed != "" {
+			return sandbox.Result{Output: markFailed + s.recalc.failed + "\n"}, nil
+		}
+		if s.recalc.result != nil {
+			s.files[source] = append([]byte(nil), s.recalc.result...)
+		}
+		return sandbox.Result{Output: markRecalculated + "\n"}, nil
 	}
 	if !strings.Contains(command, markPages) {
 		return sandbox.Result{Output: "ran\n"}, nil
@@ -731,7 +752,8 @@ func TestWhatFailsVerification(t *testing.T) {
 }
 
 // A workbook and a page are checked from their bytes alone: nothing is
-// rendered and no model is asked.
+// rendered and no model is asked. (A workbook is recalculated first, which
+// is one command; TestAWorkbookIsSavedRecalculated.)
 func TestAWorkbookAndAPageAreNotRendered(t *testing.T) {
 	for format, file := range map[string][]byte{
 		"xlsx": xlsx(t, `<c r="A1"><v>4</v></c>`),
@@ -741,7 +763,11 @@ func TestAWorkbookAndAPageAreNotRendered(t *testing.T) {
 		_, l, tools := built(t, path, file)
 		text, err := runTool(t, tools[VerifyTool], `{"path":"`+path+`","format":"`+format+`"}`)
 		got := verdict(t, text)
-		if err != nil || got.Status != "verified" || got.PageCount != nil || len(l.shed.ran) != 0 {
+		recalculations := 0
+		if format == "xlsx" {
+			recalculations = 1
+		}
+		if err != nil || got.Status != "verified" || got.PageCount != nil || len(l.shed.ran) != recalculations {
 			t.Errorf("%s: %s, %v, ran %v", format, text, err, l.shed.ran)
 		}
 		if format == "html" && (len(got.Notes) != 1 || !strings.Contains(got.Notes[0], "will be blocked")) {
@@ -751,6 +777,41 @@ func TestAWorkbookAndAPageAreNotRendered(t *testing.T) {
 		if err != nil || len(l.created) != 1 || l.created[0].Preview != nil || l.created[0].Filename != "made."+format || l.created[0].MimeType != documentFormats[format].mime {
 			t.Errorf("%s: %s, %v, %+v", format, saved, err, l.created)
 		}
+	}
+}
+
+// A workbook is recalculated by LibreOffice before it is checked, and what
+// is checked and saved is the recalculated file: a formula the model left
+// without a value (openpyxl writes none) has one once it is stored.
+func TestAWorkbookIsSavedRecalculated(t *testing.T) {
+	path := "/workspace/table.xlsx"
+	uncalculated := xlsx(t, `<c r="A1"><v>4</v></c><c r="B1"><f>A1*2</f></c>`)
+	recalculated := xlsx(t, `<c r="A1"><v>4</v></c><c r="B1" t="n"><f aca="false">A1*2</f><v>8</v></c>`)
+	_, l, tools := built(t, path, uncalculated)
+	l.shed.recalc.result = recalculated
+	text, err := runTool(t, tools[VerifyTool], `{"path":"`+path+`","format":"xlsx"}`)
+	if err != nil || verdict(t, text).Status != "verified" {
+		t.Fatalf("verify: %s, %v", text, err)
+	}
+	if len(l.shed.ran) != 1 || !strings.Contains(l.shed.ran[0], "OOXMLRecalcMode") || !strings.Contains(l.shed.ran[0], "src='"+path+"'") {
+		t.Errorf("the recalculation ran as %q", l.shed.ran)
+	}
+	if _, err := runTool(t, tools[SaveTool], `{"format":"xlsx","title":"Table","path":"`+path+`","markdown_representation":"A table."}`); err != nil {
+		t.Fatal(err)
+	}
+	if len(l.created) != 1 || !bytes.Equal(l.created[0].Data, recalculated) {
+		t.Error("the stored workbook is not the recalculated one")
+	}
+
+	// A workbook LibreOffice cannot open is a finding, and nothing else runs.
+	_, l, tools = built(t, path, uncalculated)
+	l.shed.recalc.failed = "recalculating"
+	if text, err := runTool(t, tools[VerifyTool], `{"path":"`+path+`","format":"xlsx"}`); err != nil || !strings.Contains(verdict(t, text).Findings[0], "could not open the workbook to recalculate") {
+		t.Errorf("an unreadable workbook: %s, %v", text, err)
+	}
+	// A missing one says so, as for any format.
+	if text, err := runTool(t, tools[VerifyTool], `{"path":"/workspace/none.xlsx","format":"xlsx"}`); err != nil || verdict(t, text).Findings[0] != "The artifact file is missing. Generate it again before verification." {
+		t.Errorf("a missing workbook: %s, %v", text, err)
 	}
 }
 

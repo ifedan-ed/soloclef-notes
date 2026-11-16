@@ -68,7 +68,7 @@ calls.
 | Chat answers | The model stub picks its reply from the last user message: `E2E_ANSWER` gives a fixed answer, `E2E_CITE:<chunk id>` an answer citing that chunk (the spec reads a real chunk id from the API). Streamed through the real chat route. |
 | Follow-ups, welcome questions, Studio focus ideas, source guides | The model stub, told apart by the prompt's opening sentence; every string has "E2E" in it. |
 | Embeddings | The model stub makes vectors from the text's own words, so a search finds the passage a spec just wrote. |
-| Studio generation | The sandbox is switched off in the settings. Specs assert the dialog and the exact generate request. An Audio Overview goes the whole way (drafted, voiced with one short MP3, joined, stored). |
+| Studio generation | The sandbox is switched off in the settings. Specs assert the dialog and the exact generate request. An Audio overview goes the whole way (drafted, voiced with one short MP3, joined, stored). |
 | Studio viewers | `POST /__e2e__/seed/studio-output` saves finished outputs as Studio does (real files in the bucket, document rows), for every kind and for running and failed states. |
 | An answer looked at mid-stream | The stub answers at once, so `chat-steps-line.spec.ts` replaces the chat request in the browser with a stream the test pushes, in the API's event shapes; the reload reads the real thread. |
 | Research search | The stack has no internet: the real API is used for the failure path; result lists come from a browser-side stub with the API's event shape. The import that follows is real. |

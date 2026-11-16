@@ -155,16 +155,25 @@ type refusal struct {
 
 func (r *refusal) Error() string { return r.message }
 
+// chosen is what a generation reads: the documents, and the notebook
+// sources they were reached through. The output keeps the sources so that
+// its Try again asks for the same ones; they are nil when the documents
+// were not chosen as sources (a report's own documents).
+type chosen struct {
+	documents []SourceDocument
+	sourceIDs []int64
+}
+
 // readSources is the documents a generation reads: the ticked sources'
 // when ids is nil, otherwise exactly the named sources'. A named source
 // that is not this notebook's refuses the whole request, so a request can
 // never pull in a document through an id that only looks like a source.
-func readSources(ctx context.Context, q *Queries, userID string, notebookID int64, ids []int64) ([]SourceDocument, error) {
+func readSources(ctx context.Context, q *Queries, userID string, notebookID int64, ids []int64) (chosen, error) {
 	sources, err := q.ChosenSources(ctx, ChosenSourcesParams{
 		NotebookID: notebookID, UserID: userID, OnlyEnabled: ids == nil, SourceIds: ids,
 	})
 	if err != nil {
-		return nil, err
+		return chosen{}, err
 	}
 	if ids != nil {
 		distinct := map[int64]bool{}
@@ -172,11 +181,16 @@ func readSources(ctx context.Context, q *Queries, userID string, notebookID int6
 			distinct[id] = true
 		}
 		if len(sources) != len(distinct) {
-			return nil, &refusal{http.StatusNotFound, sourceAbsent}
+			return chosen{}, &refusal{http.StatusNotFound, sourceAbsent}
 		}
 	}
+	// Never nil once read: an output made from sources records them, even
+	// the ticked ones, so its Try again is made from these and not from
+	// whatever is ticked on the day of the retry.
+	sourceIDs := make([]int64, 0, len(sources))
 	var documentIDs, folderIDs []int64
 	for _, source := range sources {
+		sourceIDs = append(sourceIDs, source.ID)
 		if source.DocumentID != nil {
 			documentIDs = append(documentIDs, *source.DocumentID)
 		}
@@ -185,22 +199,25 @@ func readSources(ctx context.Context, q *Queries, userID string, notebookID int6
 		}
 	}
 	if len(documentIDs)+len(folderIDs) == 0 {
-		return nil, &refusal{http.StatusBadRequest, noSources}
+		return chosen{}, &refusal{http.StatusBadRequest, noSources}
 	}
 	rows, err := q.SourceDocuments(ctx, SourceDocumentsParams{
 		UserID: userID, DocumentIds: documentIDs, FolderIds: folderIDs, Most: maxSourceDocuments,
 	})
 	if err != nil {
-		return nil, err
+		return chosen{}, err
 	}
 	if len(rows) == 0 {
-		return nil, &refusal{http.StatusBadRequest, noSources}
+		return chosen{}, &refusal{http.StatusBadRequest, noSources}
 	}
 	documents := make([]SourceDocument, len(rows))
 	for i, row := range rows {
-		documents[i] = SourceDocument{ID: row.ID, Title: row.Title, Text: strings.TrimSpace(row.Body)}
+		documents[i] = SourceDocument{
+			ID: row.ID, Title: row.Title, Text: strings.TrimSpace(row.Body),
+			Read: row.IsRead, Version: row.ContentHash,
+		}
 	}
-	return documents, nil
+	return chosen{documents: documents, sourceIDs: sourceIDs}, nil
 }
 
 // toolCallID is the job's idempotency key for a click: namespaced so it can
@@ -234,7 +251,7 @@ func (r Routes) generate(x *exchange) {
 		return
 	}
 	outputID, err := r.start(x.ctx.Context(), Caller{UserID: x.userID, RequestID: x.requestID}, notebookID, request,
-		func(ctx context.Context, q *Queries) ([]SourceDocument, error) {
+		func(ctx context.Context, q *Queries) (chosen, error) {
 			return readSources(ctx, q, x.userID, notebookID, request.SourceIDs)
 		})
 	if !x.proceed(err, "could not start the generation") {
@@ -254,7 +271,7 @@ type Caller struct {
 // report view's "Add" (start_from_report.go) start an output by the same
 // steps and differ only in which documents it reads (`read`).
 func (r Routes) start(ctx context.Context, who Caller, notebookID int64, request Request,
-	read func(context.Context, *Queries) ([]SourceDocument, error)) (int64, error) {
+	read func(context.Context, *Queries) (chosen, error)) (int64, error) {
 	q := New(r.Pool)
 	notebookTitle, err := q.NotebookTitle(ctx, NotebookTitleParams{NotebookID: notebookID, UserID: who.UserID})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -266,10 +283,11 @@ func (r Routes) start(ctx context.Context, who Caller, notebookID int64, request
 	if needsSandbox(request) && !r.SandboxEnabled {
 		return 0, &refusal{http.StatusServiceUnavailable, notEnabled}
 	}
-	documents, err := read(ctx, q)
+	material, err := read(ctx, q)
 	if err != nil {
 		return 0, err
 	}
+	documents := material.documents
 	callID, err := toolCallID(notebookID, request.RequestID)
 	if err != nil {
 		return 0, fmt.Errorf("making the request's id: %w", err)
@@ -295,7 +313,7 @@ func (r Routes) start(ctx context.Context, who Caller, notebookID int64, request
 	}
 	output := notebookoutput.CreateOutputParams{
 		Kind: request.Kind, Title: outputTitle(request, notebookTitle), Options: options,
-		SourceDocumentIds: made, NotebookID: notebookID, UserID: who.UserID,
+		SourceDocumentIds: made, NotebookSourceIds: material.sourceIDs, NotebookID: notebookID, UserID: who.UserID,
 	}
 	// The output's own heading, apart from the listing title above, which
 	// names the kind (heading.go). A podcast has none: its title reaches no
@@ -424,6 +442,7 @@ func (r Routes) startVideo(ctx context.Context, who Caller, request Request, own
 		// video's own heading, not the listing title (heading.go). The
 		// brief is on one line, as the worker stores it.
 		Title: videoTitle(own, output.Title), Brief: oneLine(videoBrief(request, own)), Material: wholeMaterial(documents),
+		MaxSeconds: videoCaps[request.Options["format"]],
 	})
 	if err != nil {
 		// The same click, already queued under another thread.

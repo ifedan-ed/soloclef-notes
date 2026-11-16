@@ -185,6 +185,23 @@ export function NotebookWorkspace({ notebookId }: { notebookId: number }) {
 		setResearchFocusToken((token) => token + 1);
 	}, [openSources]);
 	const showChat = useCallback(() => setMobileTab("chat"), []);
+	// What the chat made is listed in Studio (one output per artifact), so a
+	// chat card opens it in Studio's own output view: the same viewer, with
+	// Share publicly, Expand and the prompt, as opening it from Studio. An
+	// artifact that is not a Studio kind (a picture) has no output and is left
+	// to the chat's artifact panel.
+	const outputList = outputs.data;
+	const openArtifactOutput = useCallback(
+		(artifactId: number) => {
+			const output = outputList?.find((candidate) => candidate.artifact_id === artifactId);
+			if (!output) return false;
+			changeOpenOutput(output.id);
+			setStudioCollapsed(false);
+			setMobileTab("studio");
+			return true;
+		},
+		[outputList, changeOpenOutput, setStudioCollapsed]
+	);
 
 	const deleteHistory = useCallback(async () => {
 		await notebooksApi.deleteChatHistory(notebookId);
@@ -210,6 +227,7 @@ export function NotebookWorkspace({ notebookId }: { notebookId: number }) {
 			uploadSources,
 			openResearch,
 			showChat,
+			openArtifactOutput,
 		}),
 		[
 			notebookId,
@@ -225,6 +243,7 @@ export function NotebookWorkspace({ notebookId }: { notebookId: number }) {
 			uploadSources,
 			openResearch,
 			showChat,
+			openArtifactOutput,
 		]
 	);
 
@@ -339,6 +358,7 @@ export function NotebookWorkspace({ notebookId }: { notebookId: number }) {
 						notebookId={notebookId}
 						notebookTitle={data?.title ?? ""}
 						sources={sourceList}
+						sourcesLoaded={sources.data !== undefined}
 						onAddSources={openAddSources}
 						onResearch={openResearch}
 						openOutputId={openOutputId}

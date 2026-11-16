@@ -1,11 +1,11 @@
 import { useSetAtom } from "jotai";
 import { useEffect, useRef, useState } from "react";
-import { openArtifactPanelAtom } from "@/features/artifacts/state/artifact-panel.atom";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { ARTIFACT_QUERY_PARAM, artifactIdFromSearch } from "../lib/artifact-deep-link";
 import { openChatArtifact } from "../lib/open-chat-artifact";
 import type { ChatArtifact } from "../model/artifact";
 import { closeArtifactsPanelAtom } from "../state/artifacts-panel.atom";
+import { useOpenArtifact } from "./use-open-artifact";
 
 function removeArtifactTargetFromUrl(artifactId: number): void {
 	const url = new URL(window.location.href);
@@ -24,7 +24,7 @@ export function useArtifactDeepLink(
 	isArtifactDataReady: boolean,
 	routeKey: string
 ): void {
-	const openArtifactPanel = useSetAtom(openArtifactPanelAtom);
+	const openArtifactPanel = useOpenArtifact();
 	const closeArtifactsPanel = useSetAtom(closeArtifactsPanelAtom);
 	const isDesktop = useMediaQuery("(min-width: 1024px)");
 	const [targetArtifactId, setTargetArtifactId] = useState<number | null>(null);

@@ -63,8 +63,10 @@ export const INFOGRAPHIC_DETAILS = ["concise", "standard", "detailed"] as const;
 
 /**
  * Video looks the renderer can really draw (React/SVG, Inter/Lora/JetBrains
- * Mono only): see VIDEO_STYLES in app/notebooks/studio/briefs.py. "auto"
- * leaves the look to the author; "custom" asks for a short description.
+ * Mono only). The server accepts the same list (visual_style in
+ * soloclef_api/internal/studiogenerate/request.go) and describes each look to
+ * the author in briefs.go (videoStyles). "auto" leaves the look to the
+ * author; "custom" asks for a short description.
  */
 export const VIDEO_STYLES = [
 	"auto",

@@ -49,4 +49,6 @@ test("a preview keeps a note's lines apart", () => {
 		"Plan · Oral fluids first. · Recheck at 4 hours · Sodium"
 	);
 	assert.equal(previewLine(""), "");
+	// The editor saves an empty paragraph as a zero-width space: no empty dot.
+	assert.equal(previewLine("Plan\n\n\u200b\n\nGive fluids."), "Plan · Give fluids.");
 });

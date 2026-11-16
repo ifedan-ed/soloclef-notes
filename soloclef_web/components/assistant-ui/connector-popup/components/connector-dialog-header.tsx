@@ -31,7 +31,7 @@ export const ConnectorDialogHeader: FC<ConnectorDialogHeaderProps> = ({
 		>
 			<DialogHeader>
 				<DialogTitle className="text-xl sm:text-3xl font-semibold tracking-tight">
-					MCP Connectors
+					MCP connectors
 				</DialogTitle>
 				<DialogDescription className="text-xs sm:text-base text-muted-foreground/80 mt-1 sm:mt-1.5">
 					Connect external tools and services through MCP.
@@ -44,7 +44,7 @@ export const ConnectorDialogHeader: FC<ConnectorDialogHeaderProps> = ({
 						value="all"
 						className="px-0 pb-3 bg-transparent data-[state=active]:bg-transparent shadow-none data-[state=active]:shadow-none rounded-none border-b-[1.5px] border-transparent data-[state=active]:border-foreground dark:data-[state=active]:border-white transition-all text-base font-medium text-muted-foreground data-[state=active]:text-foreground"
 					>
-						All Connectors
+						All connectors
 					</TabsTrigger>
 					<TabsTrigger
 						value="active"

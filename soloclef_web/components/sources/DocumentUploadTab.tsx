@@ -690,6 +690,27 @@ export function DocumentUploadTab({
 				</output>
 			)}
 
+			{/* VISION: shown before anything is picked, not only beside picked files.
+			    Pictures are accepted only with it on, so a person who picked only
+			    pictures had every one refused and no switch to turn on. */}
+			{visionAvailable && (
+				<div className={toggleRowClass}>
+					<div className="space-y-0.5">
+						<p className="font-medium text-sm">{t("vision_llm_label")}</p>
+					</div>
+					<Switch
+						checked={useVisionLlm}
+						aria-label={t("vision_llm_label")}
+						disabled={isAnyUploading}
+						onCheckedChange={(next) => {
+							setUseVisionLlm(next);
+							// Pictures picked while it was on go when it goes off.
+							reapplyAcceptance(activeParser, next);
+						}}
+					/>
+				</div>
+			)}
+
 			{/* FILES SELECTED */}
 			{hasContent && (
 				<div className="rounded-lg border border-border p-3 space-y-2">
@@ -766,6 +787,7 @@ export function DocumentUploadTab({
 											className="h-6 w-6 shrink-0"
 											onClick={() => setFiles((prev) => prev.filter((e) => e.id !== entry.id))}
 											disabled={isAnyUploading}
+											aria-label={t("remove_file", { name: entry.file.name })}
 										>
 											<X className="h-3 w-3" />
 										</Button>
@@ -780,23 +802,6 @@ export function DocumentUploadTab({
 								<span>{Math.round(uploadProgress)}%</span>
 							</div>
 							<Progress value={uploadProgress} className="h-1.5" />
-						</div>
-					)}
-
-					{visionAvailable && (
-						<div className={toggleRowClass}>
-							<div className="space-y-0.5">
-								<p className="font-medium text-sm">{t("vision_llm_label")}</p>
-								<p className="text-xs text-muted-foreground">{t("vision_llm_desc")}</p>
-							</div>
-							<Switch
-								checked={useVisionLlm}
-								onCheckedChange={(next) => {
-									setUseVisionLlm(next);
-									// Pictures picked while it was on go when it goes off.
-									reapplyAcceptance(activeParser, next);
-								}}
-							/>
 						</div>
 					)}
 

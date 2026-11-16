@@ -22,7 +22,7 @@ import { useStudioOutputs } from "../../hooks/use-notebook-queries";
 import { useReportView } from "../../hooks/use-report-view";
 import { reportPassageMessage } from "../../lib/explain-messages";
 import { READING_LINE_PX } from "../../lib/report-bridge";
-import { activeSectionIndex, isReadable, splitReport } from "../../lib/report-outline";
+import { activeSectionIndex, headingLabel, isReadable, splitReport } from "../../lib/report-outline";
 import { placeSuggestions } from "../../lib/report-suggestions";
 import type { ReportSuggestion, StudioOutput } from "../../model/notebook";
 import { useExplain } from "../../state/explain";
@@ -114,7 +114,9 @@ export function ReportBody({
 		mode === "document"
 			? outline.sections.map((s) => ({ index: s.index, label: s.heading }))
 			: mode === "interactive"
-				? frameToc.map((label, index) => ({ index, label }))
+				? // An interactive report's headings carry their own numbers too
+					// ("01 Randomized trials"); the list numbers them, as for a document.
+					frameToc.map((label, index) => ({ index, label: headingLabel(label) }))
 				: [];
 	const [active, setActive] = useState(0);
 	const activeRef = useRef(0);
@@ -337,7 +339,11 @@ export function ReportBody({
 					<List className="size-4" />
 				</Button>
 			) : null}
-			{manifestData && primary && mode !== "interactive" ? (
+			{/* Every report has a download, an interactive one too: its
+			    self-contained page is saved as an .html file, which the
+			    server sends as an attachment under a sandbox policy so it
+			    can never run as this site's page. */}
+			{manifestData && primary ? (
 				<ArtifactDownloadButton
 					path={shared ? primary.content_url : artifactDownloadPath(artifactId)}
 					filename={artifactDownloadFilename(manifestData, artifactId)}

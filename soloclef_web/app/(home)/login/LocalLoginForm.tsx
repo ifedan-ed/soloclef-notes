@@ -10,6 +10,7 @@ import { loginMutationAtom } from "@/atoms/auth/auth-mutation.atoms";
 import { Button } from "@/components/ui/button";
 import { ViewIcon, ViewOffSlashIcon } from "@/components/ui/icons";
 import { Spinner } from "@/components/ui/spinner";
+import { useSupportEmail } from "@/hooks/use-support-email";
 import { getAuthErrorDetails, isNetworkError } from "@/lib/auth-errors";
 import { getPostLoginRedirectPath } from "@/lib/auth-utils";
 import { ValidationError } from "@/lib/error";
@@ -18,6 +19,7 @@ import { REQUEST_ACCESS_HREF, SIGNUPS_OPEN } from "@/lib/signups";
 
 export function LocalLoginForm() {
 	const t = useTranslations("auth");
+	const { email: supportEmail } = useSupportEmail();
 	const [username, setUsername] = useState("");
 	const [password, setPassword] = useState("");
 	const [showPassword, setShowPassword] = useState(false);
@@ -105,7 +107,7 @@ export function LocalLoginForm() {
 									strokeLinejoin="round"
 									className="flex-shrink-0 mt-0.5 text-destructive"
 								>
-									<title>Error Icon</title>
+									<title>Error icon</title>
 									<circle cx="12" cy="12" r="10" />
 									<line x1="15" y1="9" x2="9" y2="15" />
 									<line x1="9" y1="9" x2="15" y2="15" />
@@ -226,17 +228,21 @@ export function LocalLoginForm() {
 				</Button>
 			</form>
 
-			<div className="mt-4 text-center text-sm">
-				<p className="text-muted-foreground">
-					{t("dont_have_account")}{" "}
-					<Link
-						href={SIGNUPS_OPEN ? "/register" : REQUEST_ACCESS_HREF}
-						className="font-medium text-primary hover:text-primary/90"
-					>
-						{SIGNUPS_OPEN ? t("sign_up") : t("request_access")}
-					</Link>
-				</p>
-			</div>
+			{/* With sign-ups closed, asking for access needs someone to ask: the
+			    line is left out on a server that publishes no contact address. */}
+			{SIGNUPS_OPEN || supportEmail ? (
+				<div className="mt-4 text-center text-sm">
+					<p className="text-muted-foreground">
+						{t("dont_have_account")}{" "}
+						<Link
+							href={SIGNUPS_OPEN ? "/register" : REQUEST_ACCESS_HREF}
+							className="font-medium text-primary hover:text-primary/90"
+						>
+							{SIGNUPS_OPEN ? t("sign_up") : t("request_access")}
+						</Link>
+					</p>
+				</div>
+			) : null}
 		</div>
 	);
 }

@@ -53,7 +53,7 @@ interface DocumentMentionPickerProps {
 	/**
 	 * Documents and folders only, with no Connectors branch: for picking
 	 * notebook sources, where a connector account is not a document and
-	 * picking one added nothing. Opens straight on Files & Folders.
+	 * picking one added nothing. Opens straight on Files & folders.
 	 */
 	documentsOnly?: boolean;
 }
@@ -296,7 +296,7 @@ export const DocumentMentionPicker = forwardRef<
 		return [
 			{
 				id: "files-folders",
-				label: "Files & Folders",
+				label: "Files & folders",
 				subtitle: "Browse your knowledge base",
 				icon: <Files className="size-4" />,
 				type: "branch",
@@ -506,7 +506,7 @@ export const DocumentMentionPicker = forwardRef<
 		hasSearch || view.kind === "root" || (documentsOnly && view.kind === "files-folders")
 			? null
 			: view.kind === "files-folders"
-				? "Files & Folders"
+				? "Files & folders"
 				: view.kind === "connectors"
 					? "Connectors"
 					: view.title;
@@ -552,7 +552,7 @@ export const DocumentMentionPicker = forwardRef<
 					{visibleNodes.length > 0 ? (
 						<>
 							{hasSearch ? (
-								<ComposerSuggestionGroupHeading>Suggested Context</ComposerSuggestionGroupHeading>
+								<ComposerSuggestionGroupHeading>Suggested context</ComposerSuggestionGroupHeading>
 							) : null}
 							{visibleNodes.map((node, index) => {
 								return (

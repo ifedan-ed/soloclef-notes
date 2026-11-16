@@ -177,9 +177,16 @@ func planAudio(request Request) audioPlan {
 }
 
 var videoFormats = map[string]string{
-	"short":     "Format: Short. A bite-sized video of about 60 to 90 seconds of narration in 3 or 4 slides that lands the single most important idea.",
+	"short":     "Format: Short. A bite-sized video of about a minute of narration in 3 or 4 slides that lands the single most important idea.",
 	"explainer": "Format: Explainer. A structured, comprehensive video that walks through the key ideas in a logical order, in 6 to 16 slides. Take as long as the material needs, up to the time limit; don't pad.",
 }
+
+// videoCaps is the most seconds of narration a format may run, held by the
+// worker (it budgets the words to it, and shortens a narration measured
+// over it). A "Short" video said "60 to 90 seconds" in its brief alone and
+// ran 1:40 (15 Nov 2026); an explainer is held only by the worker's own
+// limit.
+var videoCaps = map[string]int{"short": 90}
 
 // Each style is one of the deck renderer's themes (deckspec.Themes), named
 // so the author uses exactly it: a video is a deck drawn and animated by

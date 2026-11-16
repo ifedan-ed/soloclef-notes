@@ -2,9 +2,13 @@
 
 import { ZoomInIcon, ZoomOutIcon } from "lucide-react";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist";
-import * as pdfjsLib from "pdfjs-dist";
+// The legacy build, which carries polyfills: the modern one calls
+// Uint8Array.prototype.toHex (Chrome 140, Safari 18.2, Firefox 133) while
+// reading any PDF, and every older browser failed with "n.toHex is not a
+// function" instead of showing the file. Same API, same version.
+import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
+import type { PDFViewer as PDFViewerCore } from "pdfjs-dist/legacy/web/pdf_viewer.mjs";
 import type { TextItem } from "pdfjs-dist/types/src/display/api";
-import type { PDFViewer as PDFViewerCore } from "pdfjs-dist/web/pdf_viewer.mjs";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
@@ -18,7 +22,7 @@ import {
 import { authenticatedFetch } from "@/lib/auth-fetch";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-	"pdfjs-dist/build/pdf.worker.min.mjs",
+	"pdfjs-dist/legacy/build/pdf.worker.min.mjs",
 	import.meta.url
 ).toString();
 
@@ -216,8 +220,9 @@ export function PdfViewer({
 		let pinchFrame: number | null = null;
 		let pinchPreview: PinchPreview | null = null;
 		let latestTouchMidpoint: [number, number] | null = null;
-		let eventBus: InstanceType<typeof import("pdfjs-dist/web/pdf_viewer.mjs")["EventBus"]> | null =
-			null;
+		let eventBus: InstanceType<
+			typeof import("pdfjs-dist/legacy/web/pdf_viewer.mjs")["EventBus"]
+		> | null = null;
 		let handlePagesInit: (() => void) | null = null;
 		let handlePageRendered: ((event: PageRenderedEvent) => void) | null = null;
 
@@ -246,7 +251,7 @@ export function PdfViewer({
 					}
 				).pdfjsLib = pdfjsLib;
 
-				const viewerModulePromise = import("pdfjs-dist/web/pdf_viewer.mjs");
+				const viewerModulePromise = import("pdfjs-dist/legacy/web/pdf_viewer.mjs");
 				// With range requests this first call is a one-byte probe: it refreshes
 				// an expired session (pdf.js cannot) and shows whether ranges are served.
 				const responsePromise = authenticatedFetch(pdfUrl, {

@@ -38,17 +38,30 @@ function TooltipProvider({
 
 function Tooltip({
 	open,
+	defaultOpen = false,
 	onOpenChange,
 	...props
 }: React.ComponentProps<typeof TooltipPrimitive.Root>) {
 	const canHover = useCanHover();
+	// Radix is always given `open` here. Passing `false` until the hover check
+	// ran and then the caller's `open` (usually undefined) switched every
+	// tooltip from controlled to uncontrolled on a desktop, which React warns
+	// about once per tooltip on every page. So the open state for callers that
+	// don't control it lives here instead.
+	const [ownOpen, setOwnOpen] = useState(defaultOpen);
+	const isControlled = open !== undefined;
+
+	const handleOpenChange = (next: boolean) => {
+		if (!isControlled) setOwnOpen(next);
+		onOpenChange?.(next);
+	};
 
 	return (
 		<TooltipProvider>
 			<TooltipPrimitive.Root
 				data-slot="tooltip"
-				open={canHover ? open : false}
-				onOpenChange={canHover ? onOpenChange : undefined}
+				open={canHover && (isControlled ? open : ownOpen)}
+				onOpenChange={canHover ? handleOpenChange : undefined}
 				{...props}
 			/>
 		</TooltipProvider>

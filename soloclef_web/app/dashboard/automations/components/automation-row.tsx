@@ -20,10 +20,13 @@ interface AutomationRowProps {
 export function AutomationRow({ automation }: AutomationRowProps) {
 	return (
 		<TableRow className="h-12 border-b border-border/60 hover:bg-muted/40">
-			<TableCell className="px-4 md:px-6 py-2.5 border-r border-border/60 align-middle">
+			{/* The name wraps to two lines before it is cut: at phone width the
+			    status and menu columns leave it little room, and one line cut
+			    "Walkthrough C…" told similar names apart by nothing. */}
+			<TableCell className="px-4 md:px-6 py-2.5 border-r border-border/60 align-middle whitespace-normal">
 				<Link
 					href={automationPath(automation.id)}
-					className="block truncate text-sm font-medium text-foreground hover:underline"
+					className="line-clamp-2 break-words text-sm font-medium text-foreground hover:underline"
 				>
 					{automation.name}
 				</Link>

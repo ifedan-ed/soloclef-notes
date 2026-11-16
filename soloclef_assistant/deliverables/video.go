@@ -106,6 +106,11 @@ type VideoRequest struct {
 	// Material is the text the video is written from, or "" when the task
 	// gave only a subject.
 	Material string
+	// MaxSeconds caps the narration below the worker's own limit, or is 0
+	// for none. A Studio "Short" video sets it: the worker budgets its
+	// words to the cap and shortens a narration measured over it, where a
+	// length said only in the brief was a wish the author could overrun.
+	MaxSeconds int
 }
 
 // videoRequest is the job's request column, the worker's VideoJobRequestV1.
@@ -120,6 +125,7 @@ type videoRequest struct {
 	SourceReferences []string `json:"source_references"`
 	RootThreadID     int64    `json:"root_thread_id"`
 	SourceMaterial   string   `json:"source_material,omitempty"`
+	MaxSeconds       int      `json:"max_seconds,omitempty"`
 }
 
 // newVideoRequest checks what the model supplied and returns it as it will
@@ -231,7 +237,7 @@ func (v Videos) Queue(ctx context.Context, owner Owner, toolCallID string, reque
 	}
 	column, err := json.Marshal(videoRequest{
 		Version: 1, Brief: request.Brief, SourceReferences: []string{},
-		RootThreadID: owner.ThreadID, SourceMaterial: request.Material,
+		RootThreadID: owner.ThreadID, SourceMaterial: request.Material, MaxSeconds: request.MaxSeconds,
 	})
 	if err != nil {
 		return 0, err

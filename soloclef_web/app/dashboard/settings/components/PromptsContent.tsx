@@ -266,10 +266,8 @@ export function PromptsContent() {
 			{!isLoading && !isError && list.length === 0 && !showForm && (
 				<div className="rounded-lg border border-dashed border-border/60 p-8 text-center">
 					<Sparkles className="mx-auto size-8 text-muted-foreground/40" />
+					{/* The line above the list already says what prompts are for. */}
 					<p className="mt-2 text-sm text-muted-foreground">No prompts yet</p>
-					<p className="text-xs text-muted-foreground/60">
-						Create prompts to quickly transform or explore text with /
-					</p>
 				</div>
 			)}
 
@@ -309,7 +307,7 @@ export function PromptsContent() {
 										type="button"
 										variant="ghost"
 										size="icon"
-										className="h-7 w-7 shrink-0 self-center rounded-lg text-muted-foreground opacity-100 pointer-events-auto transition-opacity duration-150 hover:text-accent-foreground sm:opacity-0 sm:pointer-events-none sm:group-hover:opacity-100 sm:group-hover:pointer-events-auto sm:focus-visible:opacity-100 sm:data-[state=open]:opacity-100"
+										className="h-7 w-7 shrink-0 self-center rounded-lg text-muted-foreground transition-opacity duration-150 hover:text-accent-foreground pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:focus-visible:opacity-100 pointer-fine:data-[state=open]:opacity-100"
 									>
 										<MoreHorizontal className="size-3.5" />
 										<span className="sr-only">Prompt actions</span>

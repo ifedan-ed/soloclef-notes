@@ -94,13 +94,13 @@ test.describe("Settings", () => {
 
 	test("profile: change the display name", async ({ page, request, token }) => {
 		await openSection(page, "profile");
-		const name = page.getByLabel("Display Name");
+		const name = page.getByLabel("Display name");
 		const original = await name.inputValue();
 		// Unique per run: the desktop and phone projects share this account and
 		// may run this test at the same moment.
 		const fresh = `E2E Tester ${Date.now().toString(36)}`;
 		await name.fill(fresh);
-		await page.getByRole("button", { name: "Save Changes" }).click();
+		await page.getByRole("button", { name: "Save changes" }).click();
 		await expect
 			.poll(async () => {
 				const r = await request.get("/users/me", { headers: authHeaders(token) });
@@ -109,7 +109,7 @@ test.describe("Settings", () => {
 			.toBe(fresh);
 		// Put it back; other specs read the account menu's name.
 		await name.fill(original);
-		await page.getByRole("button", { name: "Save Changes" }).click();
+		await page.getByRole("button", { name: "Save changes" }).click();
 	});
 
 	test("profile: the delete-account dialog needs DELETE typed (not confirmed)", async ({
@@ -241,7 +241,7 @@ test.describe("Settings", () => {
 		page,
 	}) => {
 		await openSection(page, "models");
-		await expect(page.getByText("Model Roles")).toBeVisible();
+		await expect(page.getByText("Model roles")).toBeVisible();
 		// The server calls only OpenAI-compatible endpoints, so that is all the
 		// grid offers, to every account: known providers' public addresses and
 		// the custom form. Nothing Go cannot call (Bedrock, Azure, Vertex, a

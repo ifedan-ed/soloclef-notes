@@ -17,8 +17,10 @@ func videoStudio(t *testing.T) (*studio, []byte) {
 	content := bytesOf(300_000)
 	s.put(t, videoStorageKey, content)
 	s.file = &StoredFile{
-		ID: 88, Role: "primary", Filename: "Tour of the cell.mp4", MimeType: "video/mp4",
+		ID: 88, Role: "primary", Filename: "tour-of-the-cell.mp4", MimeType: "video/mp4",
 		Size: 300_000, Backend: "local", Key: videoStorageKey, Checksum: inventedChecksum,
+		// The file is named after the output's title, not its stored slug.
+		Title: "Tour of the cell",
 	}
 	return s, content
 }
@@ -232,8 +234,8 @@ func TestTheDownloadIsTheFileNamedAfterTheArtifact(t *testing.T) {
 		"Content-Length":         strconv.Itoa(len(deck)),
 		"Cache-Control":          "private, no-store",
 		"X-Content-Type-Options": "nosniff",
-		"Content-Disposition": `attachment; filename="Cell biology_ the basics.json"; ` +
-			`filename*=UTF-8''Cell%20biology_%20the%20basics.json`,
+		"Content-Disposition": `attachment; filename="Cell biology the basics.json"; ` +
+			`filename*=UTF-8''Cell%20biology%20the%20basics.json`,
 	} {
 		if got.header.Get(header) != want {
 			t.Errorf("%s: %q, want %q", header, got.header.Get(header), want)
@@ -279,8 +281,8 @@ func TestAnArtifactWithNoFileDownloadsAsItsMarkdown(t *testing.T) {
 		"Cache-Control":           "private, no-store",
 		"X-Content-Type-Options":  "nosniff",
 		"Content-Security-Policy": "sandbox",
-		"Content-Disposition": `attachment; filename="Runion _ notes.md"; ` +
-			`filename*=UTF-8''R%C3%A9union%20_%20notes.md`,
+		"Content-Disposition": `attachment; filename="Runion notes.md"; ` +
+			`filename*=UTF-8''R%C3%A9union%20notes.md`,
 	} {
 		if got.header.Get(header) != want {
 			t.Errorf("%s: %q, want %q", header, got.header.Get(header), want)

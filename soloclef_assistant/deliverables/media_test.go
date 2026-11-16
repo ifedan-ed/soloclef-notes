@@ -602,6 +602,10 @@ func TestAVideoIsWrittenThenPublished(t *testing.T) {
 	if _, err := videos.Queue(context.Background(), owner, "call-2", VideoRequest{Title: "T", Brief: "A brief."}); err != nil || table.requests[1] != `{"version":1,"brief":"A brief.","source_references":[],"root_thread_id":3}` {
 		t.Fatalf("request = %s, %v", table.requests[1], err)
 	}
+	// A cap is the worker's max_seconds; none (above) is left out.
+	if _, err := videos.Queue(context.Background(), owner, "call-2b", VideoRequest{Title: "T", Brief: "A brief.", MaxSeconds: 90}); err != nil || table.requests[2] != `{"version":1,"brief":"A brief.","source_references":[],"root_thread_id":3,"max_seconds":90}` {
+		t.Fatalf("request = %s, %v", table.requests[2], err)
+	}
 
 	// The broker is down: the job is queued all the same, because the row
 	// is, and the reconciler publishes it.

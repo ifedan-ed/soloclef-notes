@@ -162,7 +162,7 @@ export function Audio({ id, src, title, durationMs, className }: AudioProps) {
 				)}
 			>
 				<div className="px-5 pt-5 pb-4">
-					<p className="text-sm font-semibold text-destructive">Audio Error</p>
+					<p className="text-sm font-semibold text-destructive">Audio error</p>
 				</div>
 				<div className="mx-5 h-px bg-border/50" />
 				<div className="px-5 py-4">

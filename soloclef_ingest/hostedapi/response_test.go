@@ -32,9 +32,40 @@ func TestEachStatusBecomesTheKindTheCallerActsOn(t *testing.T) {
 		if err.Kind != want || err.Status != status || err.Parser != parse.Datalab {
 			t.Errorf("%d: %+v", status, err)
 		}
-		if !strings.Contains(err.Message, `{"detail":"why"}`) {
-			t.Errorf("%d: the service's own words are missing: %s", status, err.Message)
+		if !strings.HasSuffix(err.Message, ": why") || strings.Contains(err.Message, "{") {
+			t.Errorf("%d: the service's own words are missing, or the raw reply is there: %s", status, err.Message)
 		}
+		if !strings.Contains(err.Error(), `{"detail":"why"}`) {
+			t.Errorf("%d: the log line lost the reply: %s", status, err.Error())
+		}
+	}
+}
+
+func TestAFailureReasonIsTheServicesSentenceNotItsJSON(t *testing.T) {
+	for body, want := range map[string]string{
+		// The model proxy's shape, a provider's reply inside: the class
+		// names go, the sentence stays.
+		`{"error":{"message":"litellm.BadRequestError: OpenAIException - Image could not be decoded.","type":null,"param":null,"code":"400"}}`: "describing photo.png was refused (status 400): Image could not be decoded",
+		`{"error":"Invalid API key"}`:                    "describing photo.png was refused (status 400): Invalid API key",
+		`{"message":"Too many pages"}`:                   "describing photo.png was refused (status 400): Too many pages",
+		`{"error":{"message":"{\"nested\": \"json\"}"}}`: "describing photo.png was refused (status 400)",
+		`<html><body>Bad request</body></html>`:          "describing photo.png was refused (status 400)",
+		`Bad Request`:                                    "describing photo.png was refused (status 400): Bad Request",
+		``:                                               "describing photo.png was refused (status 400)",
+	} {
+		response := &http.Response{StatusCode: 400, Body: io.NopCloser(strings.NewReader(body))}
+		if got := StatusError(parse.Vision, "describing photo.png", response).Message; got != want {
+			t.Errorf("%s:\n got %q\nwant %q", body, got, want)
+		}
+	}
+	response := &http.Response{StatusCode: 503, Body: io.NopCloser(strings.NewReader(`{"detail":"Down for upkeep."}`))}
+	if got := StatusError(parse.Datalab, "the upload", response).Message; got != "the upload failed at the service (status 503): Down for upkeep" {
+		t.Errorf("a 5xx: %q", got)
+	}
+	long := `{"detail":"` + strings.Repeat("word ", 200) + `"}`
+	response = &http.Response{StatusCode: 400, Body: io.NopCloser(strings.NewReader(long))}
+	if got := StatusError(parse.Datalab, "the upload", response).Message; len(got) > mostServiceWords+80 || !strings.HasSuffix(got, "word…") {
+		t.Errorf("a long sentence is not cut at a word: %d %q", len(got), got)
 	}
 }
 

@@ -2,17 +2,17 @@ import { useSetAtom } from "jotai";
 import { TextShimmerLoader } from "@/components/prompt-kit/loader";
 import { artifactDownloadPath } from "@/features/artifacts/api/artifact-download-path";
 import { isArtifactDownloadable } from "@/features/artifacts/lib/artifact-format-catalog";
-import { openArtifactPanelAtom } from "@/features/artifacts/state/artifact-panel.atom";
 import { ArtifactDownloadButton } from "@/features/artifacts/ui/artifact-download-button";
 import { ArtifactFormatIcon } from "@/features/artifacts/ui/artifact-format-icon";
 import { ArtifactFormatLabel } from "@/features/artifacts/ui/artifact-format-label";
 import { useMediaQuery } from "@/hooks/use-media-query";
+import { useOpenArtifact } from "../hooks/use-open-artifact";
 import { openChatArtifact } from "../lib/open-chat-artifact";
 import type { ChatArtifact } from "../model/artifact";
 import { closeArtifactsPanelAtom } from "../state/artifacts-panel.atom";
 
 export function ArtifactRow({ artifact }: { artifact: ChatArtifact }) {
-	const openArtifactPanel = useSetAtom(openArtifactPanelAtom);
+	const openArtifactPanel = useOpenArtifact();
 	const closeArtifactsPanel = useSetAtom(closeArtifactsPanelAtom);
 	const isDesktop = useMediaQuery("(min-width: 1024px)");
 	const canOpen = artifact.artifactId != null;

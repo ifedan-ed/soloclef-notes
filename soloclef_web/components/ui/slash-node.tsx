@@ -42,7 +42,7 @@ interface SlashCommandItem {
 
 const slashCommandGroups: { heading: string; items: SlashCommandItem[] }[] = [
 	{
-		heading: "Basic Blocks",
+		heading: "Basic blocks",
 		items: [
 			{
 				icon: <PilcrowIcon />,

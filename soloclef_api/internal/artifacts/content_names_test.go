@@ -1,6 +1,9 @@
 package artifacts
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestTheNameADownloadIsGiven(t *testing.T) {
 	for name, test := range map[string]struct {
@@ -11,13 +14,14 @@ func TestTheNameADownloadIsGiven(t *testing.T) {
 		"a title that already ends in it":                {"Budget.xlsx", "book.xlsx", "Budget.xlsx"},
 		"...in another case":                             {"Budget.XLSX", "book.xlsx", "Budget.xlsx"},
 		"a title in another script is kept":              {"细胞生物学", "deck.json", "细胞生物学.json"},
-		"an accented title is kept":                      {"Résumé d'été", "notes.pdf", "Résumé d_été.pdf"},
-		"separators and wildcards become underscores":    {`a/b\c:d*e?f"g<h>i|j`, "x.pdf", "a_b_c_d_e_f_g_h_i_j.pdf"},
-		"dots in a title are not extensions":             {"v1.2 plan", "plan.docx", "v1_2 plan.docx"},
-		"a line break cannot start a header":             {"Notes\r\nSet-Cookie: x", "n.pdf", "Notes__Set-Cookie_ x.pdf"},
+		"an accented title is kept, its apostrophe gone": {"Résumé d'été", "notes.pdf", "Résumé dété.pdf"},
+		"a colon and its space are one space":            {"Walkthrough C: Calcium", "r.pdf", "Walkthrough C Calcium.pdf"},
+		"separators and wildcards become one space":      {`a/b\c:d*e?f"g<h>i|j`, "x.pdf", "a b c d e f g h i j.pdf"},
+		"dots in a title are not extensions":             {"v1.2 plan", "plan.docx", "v1 2 plan.docx"},
+		"a line break cannot start a header":             {"Notes\r\nSet-Cookie: x", "n.pdf", "Notes Set-Cookie x.pdf"},
 		"surrounding space goes":                         {"  Plan  ", "p.pdf", "Plan.pdf"},
 		"an empty title":                                 {"", "deck.json", "artifact.json"},
-		"a title of only punctuation is kept as written": {"???", "deck.json", "___.json"},
+		"a title of only punctuation has a name":         {"???", "deck.json", "artifact.json"},
 		"a title of only spaces":                         {"   ", "deck.json", "artifact.json"},
 		"a stored file with no extension":                {"Plan", "README", "Plan"},
 		"an extension that is not one":                   {"Plan", "archive.tar gz", "Plan"},
@@ -33,21 +37,29 @@ func TestTheNameADownloadIsGiven(t *testing.T) {
 	}
 }
 
-func TestALongTitleIsCutAtEightyCharactersNotBytes(t *testing.T) {
-	title := ""
-	for range 100 {
-		title += "é" // two bytes each
+func TestALongTitleIsCutWhereAPhraseEnds(t *testing.T) {
+	// At a clause that keeps at least half the limit.
+	clause := "Calcium and vitamin D in rickets: what the trials show for children under five"
+	if got := downloadName(clause, "r.pdf"); got != "Calcium and vitamin D in rickets.pdf" {
+		t.Errorf("at a clause: %q", got)
 	}
-	got := downloadName(title, "f.pdf")
-	if runes := []rune(got); len(runes) != 80+len(".pdf") || string(runes[80:]) != ".pdf" {
-		t.Errorf("%d characters: %q", len(runes), got)
+	// Otherwise at the last whole word that fits, never inside one.
+	words := "Walkthrough C: Calcium and Vitamin D Supplementation for Rickets Prevention in Children"
+	if got := downloadName(words, "r.pdf"); got != "Walkthrough C Calcium and Vitamin D Supplementation for.pdf" {
+		t.Errorf("at a word: %q", got)
 	}
-	// A cut that lands after a space leaves no trailing space.
-	spaced := downloadName("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa b", "f.pdf")
-	if spaced != "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.pdf" {
-		t.Errorf("got %q", spaced)
+	// One word longer than the limit is cut inside it, by characters, not bytes.
+	long := strings.Repeat("é", 100)
+	if runes := []rune(downloadName(long, "f.pdf")); len(runes) != nameLimit+len(".pdf") {
+		t.Errorf("%d characters", len(runes))
 	}
-	if got := markdownName("Field notes: day 1"); got != "Field notes_ day 1.md" {
+	// A short title is left whole, and every format gets the same name.
+	for _, stored := range []string{"walkthrough-c.png", "walkthrough-c.svg", "deck.pptx", "x.mp4"} {
+		if got := downloadName("Walkthrough C", stored); got != "Walkthrough C"+stored[strings.LastIndex(stored, "."):] {
+			t.Errorf("%s: %q", stored, got)
+		}
+	}
+	if got := markdownName("Field notes: day 1"); got != "Field notes day 1.md" {
 		t.Errorf("got %q", got)
 	}
 }

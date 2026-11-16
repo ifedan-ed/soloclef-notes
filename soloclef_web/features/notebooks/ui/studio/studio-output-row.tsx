@@ -68,7 +68,13 @@ export function StudioOutputRow({
 		}
 	};
 
-	const phase = inFlight && output.status === "running" ? knownPhase(output.phase) : null;
+	// A queued output shows a phase only when it waits on the person (a
+	// podcast's brief to approve); otherwise "Queued" says it all.
+	const phase =
+		output.status === "running" ||
+		(output.status === "queued" && output.phase === "awaiting_brief")
+			? knownPhase(output.phase)
+			: null;
 	const status = inFlight
 		? phase
 			? output.progress
@@ -86,10 +92,17 @@ export function StudioOutputRow({
 		? t(`options.${output.kind}.format.${String(output.options.format)}.label`)
 		: output.kind === "infographic" && isInfographicStyle(output.options.style)
 			? t(`options.infographic.style.${output.options.style}.label`)
-			: t(`kinds.${output.kind}.label`);
+			: t(`kinds.${output.kind}.item`);
+	// A document report is a PDF or a Word file: without it, two reports made
+	// side by side read the same ("Document") in the list.
+	const fileType =
+		output.kind === "report" && output.options.format === "document" && output.options.file_type
+			? t(`options.report.file_type.${String(output.options.file_type)}.label`)
+			: null;
 	const meta = [
 		output.duration_seconds ? formatDuration(output.duration_seconds) : null,
 		format,
+		fileType,
 		// An output a notebook's chat made names no sources of its own: no count.
 		output.source_count > 0 ? t("source_count", { count: output.source_count }) : null,
 		relativeTime(output.created_at, locale),
@@ -137,7 +150,13 @@ export function StudioOutputRow({
 	if (mode === "confirming-delete") {
 		return (
 			<div className="space-y-2 rounded-lg border px-3 py-2" role="alert">
-				<p className="text-sm">{t("delete_output_confirm", { title: output.title })}</p>
+				{/* Only an output with a file says its file goes too: a failed or
+				    unfinished one has none. */}
+				<p className="text-sm">
+					{t(output.artifact_id ? "delete_output_confirm" : "delete_output_confirm_no_file", {
+						title: output.title,
+					})}
+				</p>
 				<div className="flex justify-end gap-2">
 					<Button size="sm" variant="ghost" onClick={() => setMode("idle")} disabled={busy}>
 						{t("cancel")}
@@ -182,6 +201,17 @@ export function StudioOutputRow({
 					) : null}
 					{meta}
 				</span>
+				{/* Why it failed, in the server's words: the notification said
+				    it, and the row is where the person looks for it. */}
+				{output.status === "failed" && output.failure_reason ? (
+					<span
+						className="line-clamp-2 text-xs text-muted-foreground"
+						title={output.failure_reason}
+						data-testid="studio-output-failure"
+					>
+						{output.failure_reason}
+					</span>
+				) : null}
 			</button>
 			{playable ? (
 				<Button

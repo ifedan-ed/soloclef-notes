@@ -30,7 +30,7 @@ export function PodcastErrorState({ title, error }: { title: string; error: stri
 	return (
 		<div className="my-4 max-w-lg overflow-hidden rounded-2xl border bg-muted/30 select-none">
 			<div className="px-5 pt-5 pb-4">
-				<p className="text-sm font-semibold text-destructive">Podcast Generation Failed</p>
+				<p className="text-sm font-semibold text-destructive">Podcast generation failed</p>
 			</div>
 			<div className="mx-5 h-px bg-border/50" />
 			<div className="px-5 py-4">

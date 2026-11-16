@@ -509,20 +509,23 @@ WITH old AS (
     SELECT d.id, d.status ->> 'state' AS previous_state,
            COALESCE(d.source_markdown, '') AS previous_markdown
     FROM documents d
-    WHERE d.id = $4 AND d.user_id = $5 AND d.document_type = 'NOTE'
+    WHERE d.id = $6 AND d.user_id = $7 AND d.document_type = 'NOTE'
       AND d.status ->> 'state' <> 'deleting'
     FOR UPDATE
 ),
 changed AS (
     SELECT old.id, old.previous_state,
-           ($2::text IS NOT NULL
-            AND $2::text IS DISTINCT FROM old.previous_markdown) AS needs_indexing
+           ($4::text IS NOT NULL
+            AND $4::text IS DISTINCT FROM old.previous_markdown) AS needs_indexing
     FROM old
 )
 UPDATE documents d
-SET title = COALESCE($1::text, d.title),
-    source_markdown = COALESCE($2::text, d.source_markdown),
-    content_hash = COALESCE($3::text, d.content_hash),
+SET title = COALESCE(
+        $1::text,
+        CASE WHEN d.title = $2::text THEN $3::text END,
+        d.title),
+    source_markdown = COALESCE($4::text, d.source_markdown),
+    content_hash = COALESCE($5::text, d.content_hash),
     content_needs_reindexing = d.content_needs_reindexing OR changed.needs_indexing,
     status = CASE WHEN changed.needs_indexing THEN '{"state": "pending"}'::jsonb ELSE d.status END,
     updated_at = now()
@@ -533,11 +536,13 @@ RETURNING d.id, changed.previous_state::text AS previous_state,
 `
 
 type UpdateNoteTextParams struct {
-	Title       *string
-	Markdown    *string
-	ContentHash *string
-	ID          int64
-	UserID      string
+	Title         *string
+	Untitled      *string
+	TitleFromText *string
+	Markdown      *string
+	ContentHash   *string
+	ID            int64
+	UserID        string
 }
 
 type UpdateNoteTextRow struct {
@@ -555,9 +560,17 @@ type UpdateNoteTextRow struct {
 // not the title. A text that changed is marked pending, an emptied one
 // included: the indexer takes an emptied note's passages out of search
 // and marks it ready with none, and without the job they would stay.
+//
+// A note still called by the untitled name takes the title its text gives
+// (title_from_text, worked out by the route) when no title is sent: a new
+// note starts empty and so untitled, and is then named by its first line as
+// it is typed. The comparison is in the statement, on the locked row, so a
+// title typed meanwhile is never overwritten.
 func (q *Queries) UpdateNoteText(ctx context.Context, arg UpdateNoteTextParams) (UpdateNoteTextRow, error) {
 	row := q.db.QueryRow(ctx, updateNoteText,
 		arg.Title,
+		arg.Untitled,
+		arg.TitleFromText,
 		arg.Markdown,
 		arg.ContentHash,
 		arg.ID,

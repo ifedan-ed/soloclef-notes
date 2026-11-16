@@ -16,7 +16,7 @@ notebook, or to none.
 
 Notes save as you type. The status beside the title says Saving…, then
 Saved. A new note is named after its first line with words in it, or
-"Untitled note" if there is none.
+"Untitled note" if there is none. A title you type yourself is kept.
 
 Notes take Markdown: headings, lists, tables, code, links and maths.
 
@@ -43,9 +43,9 @@ automation, whether it is a source, and when it was last edited.
 
 ## A note's menu
 
-Open a note and use its More actions menu:
+The pin button at the top of an open note pins it to the top of your
+lists, or unpins it. Its More actions menu has the rest:
 
-- Pin to the top, or Unpin.
 - Move to another notebook, or File in a notebook for a note in none.
 - Take out of the notebook.
 - Delete.

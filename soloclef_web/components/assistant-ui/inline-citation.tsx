@@ -19,7 +19,7 @@ import {
 	DrawerTitle,
 } from "@/components/ui/drawer";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { openArtifactPanelAtom } from "@/features/artifacts/state/artifact-panel.atom";
+import { useOpenArtifact } from "@/features/chat-artifacts/hooks/use-open-artifact";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { documentsApiService } from "@/lib/apis/documents-api.service";
 import { tryGetHostname } from "@/lib/url";
@@ -104,7 +104,7 @@ const NumericChunkCitation: FC<{ chunkId: number; number: number | null }> = ({
 }) => {
 	const isTouchLike = useMediaQuery("(hover: none), (pointer: coarse)");
 	const openCitationPanel = useSetAtom(openCitationPanelAtom);
-	const openArtifactPanel = useSetAtom(openArtifactPanelAtom);
+	const openArtifactPanel = useOpenArtifact();
 	const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false);
 	const [loading, setLoading] = useState(false);
 

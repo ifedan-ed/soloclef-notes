@@ -9,6 +9,7 @@ import {
 	ParseWorkbookError,
 	parseWorkbook,
 } from "@/features/file-viewers/parse-workbook";
+import { gridColumnWidth } from "@/features/file-viewers/grid-column-width";
 
 async function workbookBytes(
 	build: (wb: ExcelJS.Workbook) => void | Promise<void>
@@ -69,5 +70,46 @@ test("parseWorkbook rejects corrupt workbooks", async () => {
 	await assert.rejects(
 		() => parseWorkbook(corrupt),
 		(error: unknown) => error instanceof ParseWorkbookError && error.code === "corrupt"
+	);
+});
+
+test("parseWorkbook keeps each column's width, null where the workbook sets none", async () => {
+	const data = await workbookBytes((wb) => {
+		const sheet = wb.addWorksheet("Overview");
+		sheet.getColumn(1).width = 26;
+		sheet.getCell("A1").value = "A long title that runs well past its column";
+		sheet.getCell("B5").value = "Value";
+		sheet.getCell("C5").value = "Plain";
+		sheet.getColumn(2).width = 104;
+	});
+
+	const view = await parseWorkbook(data);
+	assert.deepEqual(view.sheets[0].widths, [26, 104, null]);
+});
+
+test("grid columns follow the workbook's widths within bounds", () => {
+	assert.equal(gridColumnWidth(26), 192);
+	assert.equal(gridColumnWidth(null), 69);
+	assert.equal(gridColumnWidth(104), 420);
+	assert.equal(gridColumnWidth(2), 64);
+});
+
+test("a merged range's value shows once, in its first cell", async () => {
+	const data = await workbookBytes((wb) => {
+		const sheet = wb.addWorksheet("Overview");
+		sheet.getCell("A1").value = "Title";
+		sheet.mergeCells("A1:C1");
+		sheet.getCell("A2").value = "a";
+		sheet.getCell("B2").value = "b";
+	});
+
+	const view = await parseWorkbook(data);
+	assert.deepEqual(
+		view.sheets[0].cells[0].map((cell) => cell.text),
+		["Title", "", ""]
+	);
+	assert.deepEqual(
+		view.sheets[0].cells[1].map((cell) => cell.text),
+		["a", "b", ""]
 	);
 });

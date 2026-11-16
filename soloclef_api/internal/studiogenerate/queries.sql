@@ -33,8 +33,11 @@ WHERE notebook_id = sqlc.arg(notebook_id) AND user_id = sqlc.arg(user_id)
 -- name: SourceDocuments :many
 -- The documents those sources reach: each named document and every document
 -- directly in a named folder, the caller's own, in a stable order. One being
--- deleted is left out: its text is on its way out of the account.
-SELECT id, title, COALESCE(NULLIF(source_markdown, ''), content) AS body
+-- deleted is left out: its text is on its way out of the account. `is_read`
+-- says the document has been read (state "ready"): one still being read has
+-- no text yet. `content_hash` changes when a document is read again.
+SELECT id, title, COALESCE(NULLIF(source_markdown, ''), content) AS body,
+       (status ->> 'state') = 'ready' AS is_read, content_hash
 FROM documents
 WHERE user_id = sqlc.arg(user_id)
   AND (id = ANY(sqlc.arg(document_ids)::bigint[]) OR folder_id = ANY(sqlc.arg(folder_ids)::bigint[]))

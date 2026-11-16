@@ -38,7 +38,7 @@ export function buildIssueUrl(error: unknown, to?: string): string {
 }
 
 /**
- * Show a standardized error toast with a "Report Issue" action.
+ * Show a standardized error toast with a "Report issue" action.
  *
  * Suppressed for:
  * - AbortedError (user-initiated cancellation)
@@ -74,7 +74,7 @@ export function showErrorToast(error: unknown, fallbackMessage?: string) {
 		description: descParts.length > 0 ? descParts.join(" | ") : undefined,
 		duration: 8000,
 		action: {
-			label: "Report Issue",
+			label: "Report issue",
 			onClick: () => {
 				void loadSupportEmail().then((to) => {
 					window.location.href = buildIssueUrl(error, to);

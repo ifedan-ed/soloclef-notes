@@ -13,6 +13,7 @@ import { useStudioNotifications } from "../../hooks/use-studio-notifications";
 import { studioOpenAction } from "../../lib/open-output";
 import { retryDecision } from "../../lib/studio-link";
 import { newRequestId } from "../../lib/studio-request";
+import { retryRequest } from "../../lib/studio-retry";
 import type { NotebookSource, StudioKind, StudioOutput } from "../../model/notebook";
 import { AudioOverviewView } from "./audio-overview-view";
 import { GenerateDialog } from "./generate-dialog";
@@ -24,6 +25,7 @@ export function StudioPanel({
 	notebookId,
 	notebookTitle,
 	sources,
+	sourcesLoaded,
 	onAddSources,
 	onResearch,
 	openOutputId,
@@ -34,6 +36,8 @@ export function StudioPanel({
 	notebookId: number;
 	notebookTitle: string;
 	sources: NotebookSource[];
+	/** The source list has been read: until then it is empty, not "none". */
+	sourcesLoaded: boolean;
 	onAddSources: () => void;
 	onResearch: () => void;
 	/** The output open in the output view (the notebook page widens the column for it). */
@@ -59,22 +63,26 @@ export function StudioPanel({
 	);
 	const viewing = (outputs.data ?? []).find((output) => output.id === openOutputId) ?? null;
 
-	// Run an output again with the options it was made with: the row's Retry
-	// and the inbox's "Try again" are the same action.
+	// Run an output again with the options and sources it was made with
+	// (retryRequest): the row's Retry and the inbox's "Try again" are the
+	// same action. The new run takes the
+	// failed one's place: the failed row (which holds no file) is removed
+	// once the new one is queued, so the list does not keep a stale
+	// "Failed" beside the output that replaced it.
 	const retry = (output: StudioOutput) =>
 		studio.generate.mutate(
+			retryRequest(output, sourcesLoaded ? sources : undefined, newRequestId()),
 			{
-				...(output.options as Record<string, unknown>),
-				kind: output.kind,
-				title: output.title,
-				request_id: newRequestId(),
-			},
-			{
-				onSuccess: (generated) => notifications.markStarted(generated.id),
+				onSuccess: (generated) => {
+					notifications.markStarted(generated.id);
+					studio.remove.mutate(output.id);
+				},
 				// The server's own sentence when it gave one (an account with
 				// ten outputs already waiting is told so), as the dialog does.
 				onError: (error) =>
-					toast.error(error instanceof Error && error.message ? error.message : t("generate_failed")),
+					toast.error(
+						error instanceof Error && error.message ? error.message : t("generate_failed")
+					),
 			}
 		);
 
@@ -84,7 +92,9 @@ export function StudioPanel({
 	useEffect(() => {
 		if (retryOutputId === null || linkRetried.current === retryOutputId) return;
 		const decision = retryDecision(outputs.data, retryOutputId);
-		if (decision === "wait") return;
+		// The sources too: a retry sent before they are read could not leave
+		// out the ones removed since.
+		if (decision === "wait" || !sourcesLoaded) return;
 		linkRetried.current = retryOutputId;
 		const output = outputs.data?.find((candidate) => candidate.id === retryOutputId);
 		if (decision === "retry" && output) retry(output);

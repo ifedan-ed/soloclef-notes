@@ -60,3 +60,25 @@ func TestTheSourcesKeyIsTheSetNotTheOrder(t *testing.T) {
 		t.Errorf("%s %s %s", a, b, c)
 	}
 }
+
+func TestADocumentReadAgainMakesANewSourcesKey(t *testing.T) {
+	before := sourcesKey([]SourceDocument{{ID: 2, Version: "h1"}, {ID: 10, Version: "h2"}})
+	after := sourcesKey([]SourceDocument{{ID: 2, Version: "h1"}, {ID: 10, Version: "h3"}})
+	if before == after {
+		t.Error("re-reading a document kept the key, so its old ideas would stay")
+	}
+}
+
+func TestIdeasAreWrittenOnlyFromDocumentsThatHaveBeenRead(t *testing.T) {
+	read := readDocuments([]SourceDocument{
+		{ID: 1, Title: "ready.pdf", Text: "text", Read: true},
+		{ID: 2, Title: "still-reading.docx"},
+		{ID: 3, Title: "ready.md", Text: "more", Read: true},
+	})
+	if len(read) != 2 || read[0].ID != 1 || read[1].ID != 3 {
+		t.Errorf("read documents: %+v", read)
+	}
+	if got := readDocuments([]SourceDocument{{ID: 4}}); len(got) != 0 {
+		t.Errorf("a set with nothing read yet has ideas from: %+v", got)
+	}
+}

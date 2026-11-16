@@ -10,7 +10,7 @@ share with a public link (see [Studio](studio.md#sharing-an-output)).
 Sign in with your email and password. If the server offers single sign-on,
 its button is above the password form.
 
-If you have no account, choose Sign Up when the server offers it. Otherwise
+If you have no account, choose Sign up when the server offers it. Otherwise
 choose Request access, which opens the server's contact page.
 
 A password needs at least 8 characters, at most 256, and must not be your
@@ -19,7 +19,7 @@ past that, it asks you to wait a minute.
 
 ### Forgotten password
 
-Forgot Password?, on the sign-in page, emails you a link to choose a new
+Forgot password?, on the sign-in page, emails you a link to choose a new
 password. The link works once, for an hour. Setting the new password signs
 you out everywhere. If the server doesn't send email, the page says that
 password reset by email isn't available there: ask its administrator to set
@@ -32,7 +32,7 @@ that, the provider must confirm your address, and so must Soloclef:
 
 - An account you made with the sign-up form is not confirmed at first. Single
   sign-on then says "Account not confirmed". Sign in with your password, or
-  use Forgot Password? once, which confirms the address.
+  use Forgot password? once, which confirms the address.
 - If you have no account yet, the first sign-on makes one when the server
   lets people sign up. Otherwise it says "No account for this address".
 
@@ -45,7 +45,7 @@ app under More, Profile, Set a password. Unless you signed in with single
 sign-on in the last ten minutes, you are asked to confirm it's you with the
 provider first. On the website that takes you to the provider and back to
 Security, where you type the new password again; set it within ten minutes.
-Forgot Password? also works, when the server sends email.
+Forgot password? also works, when the server sends email.
 
 ## Staying signed in
 

@@ -38,7 +38,7 @@ export function AutomationRunsSection({ automationId }: AutomationRunsSectionPro
 						Recent runs
 					</CardTitle>
 					<p className="text-xs text-muted-foreground">
-						Most recent first. Click a row to inspect step results, output and artifacts.
+						Most recent first.
 					</p>
 				</div>
 				{!isLoading && !error && data && (

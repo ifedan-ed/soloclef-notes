@@ -301,7 +301,7 @@ export function ConnectionSettingsDialog({
 				<div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
 					<div className="space-y-6">
 						<div className="space-y-2">
-							<Label>API Base URL</Label>
+							<Label>API base URL</Label>
 							<Input
 								value={baseUrlDraft}
 								onChange={(event) => setBaseUrlDraft(event.target.value)}
@@ -314,7 +314,7 @@ export function ConnectionSettingsDialog({
 
 						<div className="space-y-2">
 							<div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-								<Label htmlFor={apiKeyFieldId}>API Key</Label>
+								<Label htmlFor={apiKeyFieldId}>API key</Label>
 								{connection.has_api_key ? (
 									<span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
 										<Check

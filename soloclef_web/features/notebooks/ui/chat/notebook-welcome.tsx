@@ -13,7 +13,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDelayedFlag } from "../../hooks/use-delayed-flag";
-import { useStudioSuggestions } from "../../hooks/use-notebook-queries";
+import { useStudioSuggestions, useSuggestionSources } from "../../hooks/use-notebook-queries";
 import { GUIDED_STARTS, type GuidedStart } from "../../lib/guided-starts";
 import { formatNotebookDate } from "../../lib/notebook-dates";
 import { useNotebookChat } from "../../state/notebook-chat-context";
@@ -44,7 +44,11 @@ export function NotebookWelcome() {
 		{},
 		!!notebook && hasSources
 	);
-	const showSkeleton = useDelayedFlag(hasSources && questions.isLoading, 400);
+	// While a ticked source is still being read the questions are not asked
+	// for yet (they come from read text): the skeleton holds their place.
+	const { settled } = useSuggestionSources(notebook?.notebookId ?? 0);
+	const waiting = hasSources && (questions.isLoading || !settled);
+	const showSkeleton = useDelayedFlag(waiting, 400);
 	if (!notebook) return null;
 
 	const ask = (text: string) => {
@@ -53,7 +57,7 @@ export function NotebookWelcome() {
 	};
 	const suggested = questions.data?.suggestions ?? [];
 	// Guided starts suit an empty notebook, or sources whose questions failed.
-	const guided = !hasSources || (!questions.isLoading && suggested.length === 0);
+	const guided = !hasSources || (!waiting && suggested.length === 0);
 	const meta = [
 		t("source_count", { count: notebook.sourceCount }),
 		formatNotebookDate(notebook.createdAt, locale),
@@ -80,7 +84,12 @@ export function NotebookWelcome() {
 						{hasSources ? t("welcome.heading_with_sources") : t("welcome.heading")}
 					</p>
 					<p className="text-sm text-muted-foreground">
-						{hasSources ? t("welcome.body_with_sources") : t("welcome.body_no_sources")}
+						{/* "One of these questions" only when questions are what is shown. */}
+						{!hasSources
+							? t("welcome.body_no_sources")
+							: guided
+								? t("welcome.body_with_sources_no_questions")
+								: t("welcome.body_with_sources")}
 					</p>
 					{guided ? (
 						<div className="flex flex-wrap gap-2">

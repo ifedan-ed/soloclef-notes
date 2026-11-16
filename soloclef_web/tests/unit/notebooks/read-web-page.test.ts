@@ -20,8 +20,6 @@ const PAGE_KEYS = [
 	"page_via_browserbase",
 	"page_adding",
 	"page_added",
-	"page_hint_browserbase",
-	"page_hint_crawler",
 	"page_failed",
 ];
 

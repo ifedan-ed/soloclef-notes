@@ -27,7 +27,7 @@ const (
 func authorPrompt(limitSeconds int) string {
 	return fmt.Sprintf(`You write a narrated video as a slide deck: each slide is drawn and animated by the application, and your narration is spoken over it. Reply with the deck as one JSON object and nothing else.
 
-The video has %d to %d slides and at most %d seconds of narration: all narration together must stay under %d words, because it is spoken at about two and a half words a second. Count the words.
+The video has %d to %d slides and at most %d seconds of narration: all narration together must stay under %d words, because it is spoken at a little over two words a second. Count the words.
 
 If the brief names a theme (theme "classic" and the like), use exactly that theme; otherwise choose the one that suits the audience. A video's slides cite no sources and the deck lists none: when where a fact comes from matters, say it in the narration.
 

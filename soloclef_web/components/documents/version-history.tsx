@@ -43,7 +43,7 @@ export function VersionHistoryButton({ documentId, documentType }: VersionHistor
 				</Button>
 			</DialogTrigger>
 			<DialogContent className={DIALOG_CLASSES}>
-				<DialogTitle className="sr-only">Version History</DialogTitle>
+				<DialogTitle className="sr-only">Version history</DialogTitle>
 				<VersionHistoryPanel documentId={documentId} />
 			</DialogContent>
 		</Dialog>
@@ -62,7 +62,7 @@ export function VersionHistoryDialog({
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className={DIALOG_CLASSES}>
-				<DialogTitle className="sr-only">Version History</DialogTitle>
+				<DialogTitle className="sr-only">Version history</DialogTitle>
 				{open && <VersionHistoryPanel documentId={documentId} />}
 			</DialogContent>
 		</Dialog>
@@ -172,7 +172,7 @@ function VersionHistoryPanel({ documentId }: { documentId: number }) {
 			{/* Left panel — version list */}
 			<nav className="w-full md:w-[260px] shrink-0 flex flex-col border-b md:border-b-0 md:border-r border-border">
 				<div className="px-4 pr-12 md:pr-4 pt-5 pb-2">
-					<h2 className="text-sm font-semibold text-foreground">Version History</h2>
+					<h2 className="text-sm font-semibold text-foreground">Version history</h2>
 				</div>
 				<div className="flex-1 overflow-y-auto p-2">
 					<div className="flex flex-col gap-0.5">

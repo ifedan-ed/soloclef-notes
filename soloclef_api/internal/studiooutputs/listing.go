@@ -3,32 +3,45 @@ package studiooutputs
 import (
 	"encoding/json"
 	"math"
+	"strings"
 	"time"
+
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/studiofailures"
 )
 
 // output is one studio output as both apps read it.
 type output struct {
-	ID              int64           `json:"id"`
-	Kind            string          `json:"kind"`
-	Title           string          `json:"title"`
-	Status          string          `json:"status"`
-	Phase           *string         `json:"phase"`
-	Progress        *int64          `json:"progress"`
-	FailureCode     *string         `json:"failure_code"`
-	ArtifactID      *int64          `json:"artifact_id"`
-	ArtifactFormat  *string         `json:"artifact_format"`
-	DurationSeconds *int64          `json:"duration_seconds"`
-	SourceCount     int             `json:"source_count"`
-	Options         json.RawMessage `json:"options"`
-	GeneratedBy     json.RawMessage `json:"generated_by"`
-	CreatedAt       time.Time       `json:"created_at"`
+	ID          int64   `json:"id"`
+	Kind        string  `json:"kind"`
+	Title       string  `json:"title"`
+	Status      string  `json:"status"`
+	Phase       *string `json:"phase"`
+	Progress    *int64  `json:"progress"`
+	FailureCode *string `json:"failure_code"`
+	// FailureReason is the server's sentence for a failed output, the one
+	// its notification gave, or null when it has none.
+	FailureReason   *string `json:"failure_reason"`
+	ArtifactID      *int64  `json:"artifact_id"`
+	ArtifactFormat  *string `json:"artifact_format"`
+	DurationSeconds *int64  `json:"duration_seconds"`
+	SourceCount     int     `json:"source_count"`
+	// SourceIDs is the notebook sources the output was asked for, which
+	// Try again sends back; null when none were chosen as sources (an
+	// output made before they were kept, or in a notebook's chat).
+	SourceIDs   []int64         `json:"source_ids"`
+	Options     json.RawMessage `json:"options"`
+	GeneratedBy json.RawMessage `json:"generated_by"`
+	CreatedAt   time.Time       `json:"created_at"`
 }
 
-// A podcast's status, as the studio's five states and the phase within
-// "running" the panel shows.
+// A podcast's status, as the studio's five states and the phase the panel
+// shows. A podcast a notebook's chat opened waits at its brief until the
+// person approves the card in the chat: it is queued, but on them, not on
+// the server, so it carries a phase that says so. Without it the panel
+// showed "Queued" for as long as the card went unanswered.
 var podcastStates = map[string]struct{ status, phase string }{
 	"pending":         {"queued", ""},
-	"awaiting_brief":  {"queued", ""},
+	"awaiting_brief":  {"queued", "awaiting_brief"},
 	"drafting":        {"running", "drafting"},
 	"awaiting_review": {"running", "drafting"},
 	"rendering":       {"running", "rendering"},
@@ -51,7 +64,7 @@ func outputOf(row OutputsRow) output {
 	out := output{
 		ID: row.ID, Kind: row.Kind, Title: row.Title, Status: "failed",
 		Options: objectOrEmpty(row.Options), GeneratedBy: objectOrNull(row.GeneratedBy),
-		SourceCount: countOf(row.SourceDocumentIds), CreatedAt: row.CreatedAt,
+		SourceCount: countOf(row.SourceDocumentIds), SourceIDs: row.NotebookSourceIds, CreatedAt: row.CreatedAt,
 	}
 	if status, ok := jsonText(row.PodcastStatus); ok {
 		state := podcastStates[status]
@@ -73,6 +86,9 @@ func outputOf(row OutputsRow) output {
 		// exists (the join found it), so it is ready.
 		out.Status, out.ArtifactID = "ready", row.MadeArtifact
 	}
+	if out.Status == "failed" {
+		out.FailureReason = failureReason(row, out)
+	}
 	if out.ArtifactID != nil {
 		out.ArtifactFormat = row.ArtifactFormat
 		if out.DurationSeconds == nil {
@@ -80,6 +96,27 @@ func outputOf(row OutputsRow) output {
 		}
 	}
 	return out
+}
+
+// failureReason is the sentence a failed output's notification gave: a
+// podcast's own (the worker writes it to the run), or the one for its
+// job's code (studiofailures). nil when there is none, as for an output
+// whose run is gone.
+func failureReason(row OutputsRow, out output) *string {
+	var sentence string
+	switch {
+	case row.PodcastError != nil:
+		sentence = strings.TrimSpace(*row.PodcastError)
+	case out.FailureCode == nil:
+	case out.Kind == "video":
+		sentence = studiofailures.ForVideo(*out.FailureCode)
+	default:
+		sentence = studiofailures.ForArtifact(*out.FailureCode)
+	}
+	if sentence == "" {
+		return nil
+	}
+	return &sentence
 }
 
 func jsonText(raw []byte) (string, bool) {

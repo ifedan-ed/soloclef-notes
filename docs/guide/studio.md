@@ -25,14 +25,14 @@ A written report from your sources.
 
 - Format: Document, a PDF or Word file, or Interactive, a page with sections
   to explore that can embed the notebook's other outputs.
-- Templates: Briefing Doc, Study Guide and Blog Post for a document, and
-  Learning Overview for an interactive page. You can edit a template's
+- Templates: Briefing doc, Study guide and Blog post for a document, and
+  Learning overview for an interactive page. You can edit a template's
   instructions and save them as your default, or choose no template.
 
 A report opens with a contents list. Recommended cards suggest other outputs
 for a section. Select a passage and choose Explain to ask the chat about it.
 
-### Slide Deck
+### Slide deck
 
 An editable PowerPoint (.pptx) deck.
 
@@ -40,12 +40,14 @@ An editable PowerPoint (.pptx) deck.
   slides, clean slides with talking points in the speaker notes.
 - Length: Short, about 6 slides; Default, about 10; or Long, about 16.
 
-### Data Table
+### Data table
 
 An Excel workbook of the facts in your sources, laid out in rows. For
-example, one row per study with its sample size and main result.
+example, one row per study with its sample size and main result. Its
+formulas are calculated before it is saved, so every cell shows its value in
+the viewer as well as in Excel.
 
-### Mind Map
+### Mind map
 
 A map of the main ideas and how they connect. Level of detail: Overview,
 Standard or Detailed. In the viewer you can expand and collapse branches,
@@ -60,8 +62,8 @@ by the application from your sources.
 - Orientation: Landscape, Portrait or Square.
 - Level of detail: Concise, Standard or Detailed: how many sections, points
   and figures the poster holds.
-- Visual style: Auto-select, or one of Sketch Note, Editorial, Instructional,
-  Bento Grid, Scientific and Professional.
+- Visual style: Auto-select, or one of Sketch note, Editorial, Instructional,
+  Bento grid, Scientific and Professional.
 
 Every word and number on the poster is the text written for it, never
 redrawn by a picture model, and charts place each value exactly. The
@@ -88,11 +90,11 @@ Multiple-choice questions with one right answer, scored as you go.
 After you answer, each option says why it is right or wrong. Explain takes
 the question to the chat.
 
-### Audio Overview
+### Audio overview
 
 A podcast-style conversation about your sources, read aloud.
 
-- Format: Deep Dive, two hosts; Brief, one narrator and a short overview;
+- Format: Deep dive, two hosts; Brief, one narrator and a short overview;
   Critique, an expert review in two voices; or Debate, two hosts arguing
   different views.
 - Length: Short, 1 to 2½ minutes; Default, 3 to 5½ minutes; or Long, 10 to
@@ -100,9 +102,9 @@ A podcast-style conversation about your sources, read aloud.
 
 Each speaker gets a different voice. Audio plays in Studio with a transcript.
 
-![Audio Overview options](../images/screens/studio-audio.png)
+![Audio overview options](../images/screens/studio-audio.png)
 
-### Video Overview
+### Video overview
 
 A narrated, animated explainer video.
 
@@ -159,12 +161,15 @@ Delete. It also names the model that made it, as Made with …. View prompt
 and sources shows the focus and the sources it was made from.
 
 The viewer has Download for every output but flashcards and quizzes, and
-Expand to full window.
+Expand to full window. A download is named after the output's title, the
+same for every format it comes in.
 
 Deleting an output deletes its file and ends its public link.
 
 A failed output's notification also has Try again, which makes it once more
-with the same options.
+with the same options and from the same sources. A source removed from the
+notebook since is left out. The new output takes the failed one's place in
+the list.
 
 ## Sharing an output
 

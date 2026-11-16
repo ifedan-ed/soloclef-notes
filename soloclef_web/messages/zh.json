@@ -341,7 +341,7 @@
 		"unsupported_files_no_parser": "选择解析器之前无法读取：{files}",
 		"unsupported_files_dismiss": "关闭",
 		"vision_llm_label": "启用视觉 LLM",
-		"vision_llm_desc": "使用 AI 视觉描述图像（成本较高，较慢）"
+		"remove_file": "移除 {name}"
 	},
 	"add_webpage": {
 		"title": "添加网页爬取",
@@ -792,7 +792,6 @@
 		"source_google_scholar": "Google 学术",
 		"unavailable_not_connected": "未连接",
 		"unavailable_not_available": "不可用",
-		"unavailable_hint": "未连接？选择“连接”添加你自己的 API 密钥。",
 		"error_search_failed": "搜索未完成。请重试，或选择其他来源。",
 		"error_source_blocked": "{source} 目前正在阻止自动搜索。请几分钟后重试，或改为搜索 PubMed、arXiv 或 medRxiv。",
 		"error_source_busy": "{source} 暂时没有响应。请一分钟后重试。",
@@ -813,12 +812,9 @@
 		"page_submit": "添加网页",
 		"page_via_browserbase": "Browserbase",
 		"page_adding": "正在添加网页…",
-		"page_added": "网页已添加。正在读取，稍后即可在来源中使用。",
-		"page_hint_browserbase": "Browserbase 会在真实浏览器中打开它，所以用 JavaScript 构建的网页也能读取。",
-		"page_hint_crawler": "读取方式与你添加的搜索结果相同。",
+		"page_added": "网页已添加。",
 		"page_failed": "无法添加该网页。",
 		"search_several": "同时搜索多个来源",
-		"search_several_hint": "最多勾选 {max} 个来源，将同时搜索。",
 		"sources_picked": "{count} 个来源",
 		"provider_searching": "{source}：搜索中",
 		"provider_done": "{source}：{count, plural, =0 {未找到结果} other {找到 # 个}}",
@@ -865,7 +861,7 @@
 		"collapse_studio": "收起工作室",
 		"expand_studio": "展开工作室",
 		"add_sources": "添加来源",
-		"add_sources_description": "上传新文件，选择资料库中已有的文档，或从 Nextcloud 选择文件。",
+		"add_sources_description": "上传文件，或从资料库或连接器中选择。",
 		"add_from_library": "从你的资料库",
 		"add_upload": "上传文件",
 		"search_library": "搜索文档和文件夹",
@@ -881,6 +877,8 @@
 		"source_stage_embedding": "正在生成嵌入",
 		"source_stage_indexing": "正在保存到索引",
 		"source_stage_retrying": "等待重试",
+		"source_stage_reading": "正在读取网页",
+		"source_stage_downloading": "正在下载文件",
 		"source_index_failed": "索引失败",
 		"reindex_source": "重新索引…",
 		"reindex_title": "重新索引此来源",
@@ -899,6 +897,7 @@
 		"source_guide": "来源指南",
 		"source_guide_generating": "正在为此来源撰写指南…",
 		"source_guide_unavailable": "此来源暂无指南。",
+		"source_failed_title": "无法读取此来源。",
 		"new_chat_failed": "无法开始聊天。",
 		"mention_heading": "此笔记本中的来源",
 		"mention_no_match": "没有匹配的来源",
@@ -949,7 +948,8 @@
 				"description": "两位主持人（简要格式为一位）讲解你的来源。",
 				"focus_label": "AI 主持人应该重点讨论什么？",
 				"focus_placeholder": "例如：重点讲研究方法及其对实践的意义",
-				"ideas_label": "主持人话题建议"
+				"ideas_label": "主持人话题建议",
+				"item": "音频概览"
 			},
 			"video": {
 				"label": "视频概览",
@@ -958,7 +958,8 @@
 				"description": "根据你的来源制作的带旁白动画视频。",
 				"focus_label": "视频应该重点讲什么？",
 				"focus_placeholder": "例如：向新同事解释主要发现",
-				"ideas_label": "旁白话题建议"
+				"ideas_label": "旁白话题建议",
+				"item": "视频概览"
 			},
 			"report": {
 				"label": "报告",
@@ -967,7 +968,8 @@
 				"description": "根据你的来源撰写的报告，可为文档或交互式页面。",
 				"focus_label": "有需要强调的内容吗？",
 				"focus_placeholder": "例如：控制在两页内，并突出尚未解决的问题",
-				"ideas_label": "切入角度"
+				"ideas_label": "切入角度",
+				"item": "报告"
 			},
 			"slides": {
 				"label": "演示文稿",
@@ -976,7 +978,8 @@
 				"description": "根据你的来源制作的可编辑 .pptx 演示文稿。",
 				"focus_label": "演示文稿应涵盖什么？",
 				"focus_placeholder": "例如：面向住院医师的 10 分钟教学",
-				"ideas_label": "切入角度"
+				"ideas_label": "切入角度",
+				"item": "演示文稿"
 			},
 			"mindmap": {
 				"label": "思维导图",
@@ -985,7 +988,8 @@
 				"description": "来源中观点的层级结构图。",
 				"focus_label": "导图应以什么为中心？",
 				"focus_placeholder": "例如：以诊断和治疗为中心",
-				"ideas_label": "导图框架"
+				"ideas_label": "导图框架",
+				"item": "思维导图"
 			},
 			"flashcards": {
 				"label": "闪卡",
@@ -994,7 +998,8 @@
 				"description": "正面是问题、背面是答案的学习卡组。",
 				"focus_label": "闪卡应考查什么？",
 				"focus_placeholder": "例如：定义和临界值",
-				"ideas_label": "考查内容"
+				"ideas_label": "考查内容",
+				"item": "闪卡"
 			},
 			"quiz": {
 				"label": "测验",
@@ -1003,7 +1008,8 @@
 				"description": "带计分的单一答案题目。",
 				"focus_label": "测验应涵盖什么？",
 				"focus_placeholder": "例如：侧重临床推理而非记忆",
-				"ideas_label": "考查内容"
+				"ideas_label": "考查内容",
+				"item": "测验"
 			},
 			"data_table": {
 				"label": "数据表",
@@ -1012,7 +1018,8 @@
 				"description": "包含来源中结构化事实的 Excel 工作簿。",
 				"focus_label": "表格应记录什么？",
 				"focus_placeholder": "例如：每项研究一行，包含样本量和主要结局",
-				"ideas_label": "表格设计"
+				"ideas_label": "表格设计",
+				"item": "数据表"
 			},
 			"infographic": {
 				"label": "信息图",
@@ -1021,7 +1028,8 @@
 				"description": "一张海报，一目了然地呈现关键事实和数据。",
 				"focus_label": "描述你想创建的信息图",
 				"focus_placeholder": "例如：先列出 3 个关键数字，并用图表展示趋势",
-				"ideas_label": "核心信息"
+				"ideas_label": "核心信息",
+				"item": "信息图"
 			}
 		},
 		"options": {
@@ -1082,7 +1090,7 @@
 					},
 					"whiteboard": {
 						"label": "白板",
-						"description": "白底上的马克笔手绘、箭头和圈出的关键词。"
+						"description": "白底黑墨、描边卡片，一红一蓝两种点缀。"
 					},
 					"playful": {
 						"label": "活泼",
@@ -1090,7 +1098,7 @@
 					},
 					"dark": {
 						"label": "深色",
-						"description": "深炭灰背景，明亮文字，一种青绿点缀。"
+						"description": "深海军蓝背景，浅色文字，一种柔和的蓝色点缀。"
 					},
 					"minimal": {
 						"label": "极简",
@@ -1358,6 +1366,7 @@
 			"heading": "开始你的笔记本吧",
 			"body_no_sources": "添加来源为对话提供依据，或者选一个起点，我来引导你。",
 			"body_with_sources": "就你的来源随便提问，或从下面的问题开始。",
+			"body_with_sources_no_questions": "就你的来源随便提问，或选择一个起点。",
 			"heading_with_sources": "向你的来源提问",
 			"questions_label": "推荐问题",
 			"starts": {
@@ -1405,17 +1414,14 @@
 			"rendering": "正在渲染",
 			"verifying": "正在检查结果",
 			"saving": "正在保存",
-			"waiting_for_sandbox": "正在等待沙箱"
+			"waiting_for_sandbox": "正在等待沙箱",
+			"awaiting_brief": "等待你在聊天中批准"
 		},
 		"add_from_connector": "来自连接器",
-		"connector_sources_title": "来自已连接应用的文件",
-		"connector_sources_files": "资料库中已有的文件（包括连接器同步的文件）请从“从你的资料库”添加。",
-		"connector_sources_tools": "工具连接器（如 Nextcloud 等 MCP 服务器、网页搜索、浏览器）不会被复制：当问题需要时，笔记本的聊天会实时调用它们。",
 		"manage_connectors": "管理连接器",
 		"add_from_library_short": "资料库",
 		"add_upload_short": "上传",
 		"add_from_connector_short": "连接器",
-		"nextcloud_picker_hint": "勾选文件或文件夹即可将其添加为来源。它们现在复制一次，之后不会持续同步。",
 		"made_with": "由 {model} 生成",
 		"made_with_fallback": "由 {model} 生成（备用）",
 		"output_view": {
@@ -1435,8 +1441,8 @@
 			"try_again": "重试"
 		},
 		"back_to_output": "返回 {title}",
-		"google_drive_picker_hint": "在 Google Drive 自带的文件选择器中选择文件；它们会添加到这里，并在 Drive 中改动时重新读取。",
-		"retry_link_gone": "该输出已无法重试。"
+		"retry_link_gone": "该输出已无法重试。",
+		"delete_output_confirm_no_file": "删除“{title}”？"
 	},
 	"notes": {
 		"title": "笔记",

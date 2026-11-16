@@ -22,12 +22,16 @@ export function NoteListRow({ note, selected, onOpen, showNotebook = true }: Not
 	const locale = useLocale();
 	const preview = previewLine(note.preview);
 	return (
+		// items-stretch: Chrome gives a <button> align-items: flex-start, so the
+		// bottom line was only as wide as its words. "ml-auto" then had no room
+		// to push the time to the right, and the notebook's max-w-[55%] was 55%
+		// of that short line, cutting "Not in a notebook" to "Not in a no…".
 		<button
 			type="button"
 			onClick={onOpen}
 			aria-current={selected ? "page" : undefined}
 			className={cn(
-				"group flex w-full min-w-0 flex-col gap-1 rounded-xl px-3 py-2.5 text-left transition-colors",
+				"group flex w-full min-w-0 flex-col items-stretch gap-1 rounded-xl px-3 py-2.5 text-left transition-colors",
 				"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
 				selected ? "bg-accent" : "hover:bg-accent/60"
 			)}

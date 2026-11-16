@@ -37,9 +37,11 @@ export function stagesByDocument(
 
 /** The message key for a stage, in the `notebooks` namespace. */
 export const SOURCE_STAGE_KEYS = {
+	reading: "source_stage_reading",
 	parsing: "source_stage_parsing",
 	chunking: "source_stage_chunking",
 	embedding: "source_stage_embedding",
 	indexing: "source_stage_indexing",
 	retrying: "source_stage_retrying",
+	downloading: "source_stage_downloading",
 } as const satisfies Record<DocumentStage, string>;

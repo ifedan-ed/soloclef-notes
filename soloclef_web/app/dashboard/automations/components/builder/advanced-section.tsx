@@ -11,6 +11,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import type { BuilderExecution } from "@/lib/automations/builder-schema";
 import { CONCURRENCY_OPTIONS } from "@/lib/automations/concurrency-options";
+import { EMAIL_RESULT_LABEL } from "@/lib/automations/reach-wording";
 import { Field } from "./form-field";
 
 interface AdvancedSectionProps {
@@ -120,7 +121,7 @@ export function AdvancedSection({
 
 			<div className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-background/30 px-4 py-3">
 				<div className="min-w-0">
-					<div className="text-sm font-medium text-foreground">Email me the result</div>
+					<div className="text-sm font-medium text-foreground">{EMAIL_RESULT_LABEL}</div>
 					<div className="text-xs text-muted-foreground">
 						Sends the run's output to the account email of whoever created this automation each time
 						it finishes, or a short email if it fails or needs attention.
@@ -129,7 +130,7 @@ export function AdvancedSection({
 				<Switch
 					checked={execution.emailResult}
 					onCheckedChange={(checked) => onExecutionChange({ emailResult: checked })}
-					aria-label={execution.emailResult ? "Stop emailing results" : "Email me the result"}
+					aria-label={execution.emailResult ? "Stop emailing results" : EMAIL_RESULT_LABEL}
 				/>
 			</div>
 		</div>

@@ -285,7 +285,7 @@ export const useConnectorDialog = () => {
 		try {
 			await createConnector({
 				data: {
-					name: "Web Pages",
+					name: "Web pages",
 					connector_type: EnumConnectorName.WEBCRAWLER_CONNECTOR,
 					config: {},
 					is_indexable: true,
@@ -312,7 +312,7 @@ export const useConnectorDialog = () => {
 						const config = validateIndexingConfigState({
 							connectorType: EnumConnectorName.WEBCRAWLER_CONNECTOR,
 							connectorId: connector.id,
-							connectorTitle: "Web Pages",
+							connectorTitle: "Web pages",
 						});
 						setIndexingConfig(config);
 						setIndexingConnector(connector);

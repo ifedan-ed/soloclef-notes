@@ -43,7 +43,6 @@ test("Exa and Tavily are named, and their unavailable and error wording exists e
 			"unavailable_not_connected",
 			"unavailable_not_available",
 			"error_source_unavailable",
-			"unavailable_hint",
 			"error_source_not_connected",
 			"error_source_key_rejected",
 			"error_source_quota",

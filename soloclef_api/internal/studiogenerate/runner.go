@@ -16,6 +16,7 @@ import (
 	"git.danvics.com/danvics/soloclef/soloclef_agent/model"
 
 	"git.danvics.com/danvics/soloclef/soloclef_api/internal/inflight"
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/studiofailures"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/deliverables"
 	"git.danvics.com/danvics/soloclef/soloclef_notify/livechange"
 	"git.danvics.com/danvics/soloclef/soloclef_notify/notify"
@@ -50,36 +51,22 @@ const (
 	maxInternalError = 1900
 )
 
-// The failure codes a job is closed with. The panel shows a generic
-// sentence for a code it does not know, so these are for the log and for
-// whoever reads the row. A run that made nothing is closed with the code
-// its specialist's tools noted instead, when there is one
-// (deliverables.Failures, unattended.go).
+// The failure codes a job is closed with, and their sentences, are
+// studiofailures': the output list shows the same sentence on the row.
 const (
-	codeModel       = "model_unavailable"
-	codeTimeout     = "timeout"
-	codeStepLimit   = "step_limit"
-	codeFailed      = "generation_failed"
-	codeNothingMade = "nothing_made"
-	codeInterrupted = "interrupted"
-	codeCancelled   = "cancelled"
+	codeModel       = studiofailures.ModelUnavailable
+	codeTimeout     = studiofailures.Timeout
+	codeStepLimit   = studiofailures.StepLimit
+	codeFailed      = studiofailures.GenerationFailed
+	codeNothingMade = studiofailures.NothingMade
+	codeInterrupted = studiofailures.Interrupted
+	codeCancelled   = studiofailures.Cancelled
 )
 
 // Notifier tells a job's owner that its output is ready or could not be
 // made (notify.Notifier).
 type Notifier interface {
 	StudioFinished(ctx context.Context, run notify.StudioRun) error
-}
-
-// reasons is what the owner is told about a failure, by its code. A code
-// with no sentence here says only that the output could not be made, which
-// is all the person can act on; the detail is for the log.
-var reasons = map[string]string{
-	codeModel:       "The model could not be reached. Try again in a few minutes.",
-	codeTimeout:     "It took longer than this server allows.",
-	codeStepLimit:   "It took more steps than one output may.",
-	codeNothingMade: "The run ended without making anything. Try again.",
-	codeInterrupted: "The server restarted while it was being made. Try again.",
 }
 
 // Models answers which model an account's requests run on (chat.Models).

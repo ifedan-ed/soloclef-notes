@@ -270,7 +270,8 @@ func (q *Queries) SharedArtifactFiles(ctx context.Context, arg SharedArtifactFil
 }
 
 const sharedFile = `-- name: SharedFile :one
-SELECT f.storage_backend, f.storage_key, f.original_filename, f.mime_type, f.checksum_sha256
+SELECT f.storage_backend, f.storage_key, f.original_filename, f.mime_type, f.checksum_sha256,
+       COALESCE(l.snapshot_data ->> 'title', '')::text AS title
 FROM output_public_links l
 JOIN artifacts a ON a.user_id = l.user_id
 JOIN artifact_files f ON f.artifact_id = a.id
@@ -295,6 +296,7 @@ type SharedFileRow struct {
 	OriginalFilename string
 	MimeType         string
 	ChecksumSha256   string
+	Title            string
 }
 
 // One file, by its id, of an artifact the link shares: a deck's PDF preview
@@ -314,12 +316,14 @@ func (q *Queries) SharedFile(ctx context.Context, arg SharedFileParams) (SharedF
 		&i.OriginalFilename,
 		&i.MimeType,
 		&i.ChecksumSha256,
+		&i.Title,
 	)
 	return i, err
 }
 
 const sharedPrimaryFile = `-- name: SharedPrimaryFile :one
-SELECT f.storage_backend, f.storage_key, f.original_filename, f.mime_type, f.checksum_sha256
+SELECT f.storage_backend, f.storage_key, f.original_filename, f.mime_type, f.checksum_sha256,
+       COALESCE(l.snapshot_data ->> 'title', '')::text AS title
 FROM output_public_links l
 JOIN artifacts a ON a.user_id = l.user_id
 JOIN artifact_files f ON f.artifact_id = a.id AND f.role = 'primary'
@@ -342,9 +346,11 @@ type SharedPrimaryFileRow struct {
 	OriginalFilename string
 	MimeType         string
 	ChecksumSha256   string
+	Title            string
 }
 
-// The main file of an artifact the link shares.
+// The main file of an artifact the link shares, with the shared output's
+// title, which the file is named after as the owner's download is.
 // owner: through the share token; the artifact must be the link owner's.
 func (q *Queries) SharedPrimaryFile(ctx context.Context, arg SharedPrimaryFileParams) (SharedPrimaryFileRow, error) {
 	row := q.db.QueryRow(ctx, sharedPrimaryFile, arg.ShareToken, arg.Now, arg.ArtifactID)
@@ -355,6 +361,7 @@ func (q *Queries) SharedPrimaryFile(ctx context.Context, arg SharedPrimaryFilePa
 		&i.OriginalFilename,
 		&i.MimeType,
 		&i.ChecksumSha256,
+		&i.Title,
 	)
 	return i, err
 }

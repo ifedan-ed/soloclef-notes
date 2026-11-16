@@ -47,7 +47,7 @@ const AUTH_ERROR_MESSAGES: AuthErrorMapping = {
 	// Sign-in and sign-up refusals, as the API names them in the message
 	LOGIN_BAD_CREDENTIALS: {
 		title: "Login failed",
-		description: "Invalid email or password. If you don't have an account, please sign up.",
+		description: "Wrong email or password.",
 	},
 	LOGIN_USER_NOT_VERIFIED: {
 		title: "Account not verified",

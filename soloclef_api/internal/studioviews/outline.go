@@ -19,8 +19,10 @@ import (
 var (
 	headingLine = regexp.MustCompile(`^(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$`)
 	fenceLine   = regexp.MustCompile("^[ \t]{0,3}(`{3,}|~{3,})")
-	// "1. ", "2) ", "1.2 ", "IV. ": not a bare number ("2024 in review").
-	numbering = regexp.MustCompile(`^(?:\d+(?:\.\d+)*[.)]|\d+(?:\.\d+)+|[IVXLC]+\.)\s+`)
+	// "1. ", "2) ", "1.2 ", "01 ", "IV. ": not a bare number ("2024 in
+	// review"). A zero-padded number ("01 Executive summary") is numbering
+	// too; the web's report-outline.ts holds the same rule.
+	numbering = regexp.MustCompile(`^(?:\d+(?:\.\d+)*[.)]|\d+(?:\.\d+)+|0\d+|[IVXLC]+\.)\s+`)
 	emphasis  = regexp.MustCompile("[*_`]+")
 )
 

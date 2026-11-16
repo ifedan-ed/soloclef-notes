@@ -24,6 +24,7 @@ export function NotebookRightPanel({
 	notebookId,
 	notebookTitle,
 	sources,
+	sourcesLoaded,
 	onAddSources,
 	onResearch,
 	openOutputId,
@@ -39,6 +40,8 @@ export function NotebookRightPanel({
 	notebookId: number;
 	notebookTitle: string;
 	sources: NotebookSource[];
+	/** The source list has been read: until then it is empty, not "none". */
+	sourcesLoaded: boolean;
 	onAddSources: () => void;
 	onResearch: () => void;
 	openOutputId: number | null;
@@ -121,6 +124,7 @@ export function NotebookRightPanel({
 					notebookId={notebookId}
 					notebookTitle={notebookTitle}
 					sources={sources}
+					sourcesLoaded={sourcesLoaded}
 					onAddSources={onAddSources}
 					onResearch={onResearch}
 					openOutputId={openOutputId}

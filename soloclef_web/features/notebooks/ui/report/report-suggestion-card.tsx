@@ -31,7 +31,7 @@ export function ReportSuggestionCard({
 }) {
 	const t = useTranslations("report_view");
 	const tn = useTranslations("notebooks");
-	const kindLabel = tn(`kinds.${suggestion.kind}.label`);
+	const kindLabel = tn(`kinds.${suggestion.kind}.item`);
 	const Icon = studioTile(suggestion.kind).icon;
 
 	if (phase === "starting" || phase === "running") {

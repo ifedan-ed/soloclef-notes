@@ -44,9 +44,11 @@ WHERE l.share_token = sqlc.arg(share_token)
   AND l.snapshot_data -> 'artifact_ids' @> to_jsonb(sqlc.arg(artifact_id)::bigint);
 
 -- name: SharedPrimaryFile :one
--- The main file of an artifact the link shares.
+-- The main file of an artifact the link shares, with the shared output's
+-- title, which the file is named after as the owner's download is.
 -- owner: through the share token; the artifact must be the link owner's.
-SELECT f.storage_backend, f.storage_key, f.original_filename, f.mime_type, f.checksum_sha256
+SELECT f.storage_backend, f.storage_key, f.original_filename, f.mime_type, f.checksum_sha256,
+       COALESCE(l.snapshot_data ->> 'title', '')::text AS title
 FROM output_public_links l
 JOIN artifacts a ON a.user_id = l.user_id
 JOIN artifact_files f ON f.artifact_id = a.id AND f.role = 'primary'
@@ -60,7 +62,8 @@ WHERE l.share_token = sqlc.arg(share_token)
 -- One file, by its id, of an artifact the link shares: a deck's PDF preview
 -- as well as its main file.
 -- owner: through the share token; the artifact must be the link owner's.
-SELECT f.storage_backend, f.storage_key, f.original_filename, f.mime_type, f.checksum_sha256
+SELECT f.storage_backend, f.storage_key, f.original_filename, f.mime_type, f.checksum_sha256,
+       COALESCE(l.snapshot_data ->> 'title', '')::text AS title
 FROM output_public_links l
 JOIN artifacts a ON a.user_id = l.user_id
 JOIN artifact_files f ON f.artifact_id = a.id

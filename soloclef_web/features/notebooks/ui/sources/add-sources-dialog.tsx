@@ -58,7 +58,8 @@ export interface DroppedFiles {
 /**
  * Upload new files (the regular upload tab, with its four-parser
  * choice), pick existing documents and folders with the composer's picker,
- * or pick files straight from a connected Nextcloud.
+ * or pick files from a connector the server has set up (Google Drive,
+ * Nextcloud).
  */
 export function AddSourcesDialog({
 	open,

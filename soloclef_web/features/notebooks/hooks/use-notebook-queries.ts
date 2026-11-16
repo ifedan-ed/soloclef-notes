@@ -1,6 +1,7 @@
 "use client";
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
 
 /**
  * For mutations whose callers show their own, worded error toast: without
@@ -12,6 +13,7 @@ import { notebookKeys } from "../api/notebook-query-keys";
 import { notebooksApi, type SourceTarget } from "../api/notebooks-api";
 import { withToggled } from "../lib/source-selection";
 import type { StudioRequestBody } from "../lib/studio-request";
+import { type SuggestionSources, suggestionSources } from "../lib/suggestion-sources";
 import type { Notebook, NotebookSource } from "../model/notebook";
 
 /*
@@ -79,16 +81,25 @@ export function useSourceGuide(notebookId: number, sourceId: number | null) {
 	});
 }
 
+/** The ticked sources the notebook's ideas are written from (lib/suggestion-sources.ts). */
+export function useSuggestionSources(notebookId: number): SuggestionSources {
+	const { data } = useNotebookSources(notebookId);
+	return useMemo(() => suggestionSources(data ?? []), [data]);
+}
+
 export function useStudioSuggestions(
 	notebookId: number,
 	kind: string,
 	{ variant = "", language = "" }: { variant?: string; language?: string },
 	enabled: boolean
 ) {
+	const sources = useSuggestionSources(notebookId);
 	return useQuery({
-		queryKey: notebookKeys.suggestions(notebookId, kind, variant, language),
+		queryKey: notebookKeys.suggestions(notebookId, kind, variant, language, sources.signature),
 		queryFn: () => notebooksApi.suggestions(notebookId, kind, { variant, language }),
-		enabled,
+		// Not while a ticked source is still being read: its text is not there
+		// to have ideas about, and the ask would only be made again.
+		enabled: enabled && sources.settled,
 		staleTime: 10 * 60_000,
 		// Switching format or language keeps the last ideas painted until the
 		// new ones arrive, instead of blanking the chips.

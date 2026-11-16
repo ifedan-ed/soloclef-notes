@@ -17,12 +17,10 @@ that verification and the browser grid require.
 - Set column widths deliberately. Freeze header rows when tables are scrolled.
 - Style headers once (bold, fill, borders) and reuse the style objects. Prefer
   number formats (`#,##0.00`, `0%`, dates) over pre-formatted strings.
-- Write formulas with **both** the formula string and a computed cached value:
-  `worksheet.write_formula("B2", "=A2*1.1", cell_format, 110)`. Verification
-  rejects formula cells that lack a cached result, and the in-browser grid
-  shows the cache rather than recalculating.
-- Also call `workbook.set_calc_mode("auto")` (or the equivalent recalculation
-  on open) so Excel/LibreOffice recompute when the file is opened.
+- Write formulas as formulas (`worksheet.write_formula("B2", "=A2*1.1",
+  cell_format)`), never as values you worked out yourself. `verify_artifact`
+  recalculates the workbook with LibreOffice and saves the recalculated file,
+  so every formula carries its computed value in the browser grid.
 - Never leave Excel error literals (`#DIV/0!`, `#REF!`, `#VALUE!`, `#N/A`, …)
   as cached results. Fix the formula or the inputs instead.
 - Keep workbooks under the verification cell ceiling (100 000 cells). Prefer
@@ -39,24 +37,16 @@ unaffected worksheets, formulas, formatting, panes, validation, links, and
 workbook settings. Use `markdown_path` as textual context, not as a replacement
 workbook. Do not use vision to reconstruct workbook contents.
 
-If the workbook contains formulas, saving with `openpyxl` is not the final
-step: run headless LibreOffice on a temporary copy and place the recalculated
-XLSX at `expected_output_path` before verification. This refreshes formula
-caches for verification and the browser grid. Use distinct temporary input and
-conversion-output paths so LibreOffice never overwrites its own input. Check
-the command's exit status and confirm the recalculated file exists. The
-conversion command is
-`libreoffice --headless --convert-to xlsx --outdir <recalc-dir> <temporary.xlsx>`;
-move its output to `expected_output_path`.
-
 Save the verified revision with the returned `artifact_id` and
 `expected_generation`. A changed title, filename, or design is still the same
 artifact unless the user explicitly asks for a separate copy.
 
 ## Verify and save
 
-Call `verify_artifact(path=output_path, format="xlsx")`. Spreadsheet verification is
-structural only: there is no PDF preview and no placement check. Warnings are
+Call `verify_artifact(path=output_path, format="xlsx")`. Verification first
+recalculates every formula with LibreOffice and writes the recalculated file
+over yours, then checks its structure: there is no PDF preview and no
+placement check. A formula whose value is an Excel error is a blocker. Warnings are
 advisory. If it reports blocking findings, fix all blockers together,
 regenerate once at the same output path, and reverify. If a blocker remains,
 stop and explain it instead of entering another automatic rewrite loop.

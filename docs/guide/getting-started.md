@@ -23,10 +23,10 @@ Everything you add is private to your account.
 
 Open your server's address and sign in with your email and password, or with
 the single sign-on button if the server has one. If you don't have an
-account yet, choose Sign Up when the server offers it, or Request access when
+account yet, choose Sign up when the server offers it, or Request access when
 it does not.
 
-Forgot Password? emails you a link to choose a new password. More on signing
+Forgot password? emails you a link to choose a new password. More on signing
 in is in [Account and security](account-and-security.md).
 
 ## 2. Find your way around

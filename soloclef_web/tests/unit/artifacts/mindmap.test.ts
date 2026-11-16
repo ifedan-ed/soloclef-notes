@@ -163,6 +163,14 @@ test("the download is the expanded tree as a standalone SVG", () => {
 	assert.equal((svg.match(/<circle /g) ?? []).length, 0);
 	// ...and a stub joins each expanded pill to its connectors.
 	assert.equal((svg.match(/<line /g) ?? []).length, 3);
+	// Each stub ends where its connectors start (no gap at the button's place).
+	const starts = new Set(
+		[...svg.matchAll(/<path d="M([\d.-]+),([\d.-]+)/g)].map((m) => `${Number(m[1])},${Number(m[2])}`)
+	);
+	for (const stub of svg.matchAll(/<line [^>]*x2="([\d.-]+)" y2="([\d.-]+)"/g)) {
+		const end = `${Math.round(Number(stub[1]) * 10) / 10},${Math.round(Number(stub[2]) * 10) / 10}`;
+		assert.ok(starts.has(end), `stub ends at ${end}, no connector starts there`);
+	}
 	// The page font first, then sans-serif fallbacks (never Times).
 	assert.ok(
 		svg.includes(

@@ -21,7 +21,7 @@ export interface ChatExampleCategory {
 export const CHAT_EXAMPLE_CATEGORIES: ChatExampleCategory[] = [
 	{
 		id: "research",
-		label: "Research the Web",
+		label: "Research the web",
 		prompts: ["Research [topic] across the live web and give me a cited brief"],
 	},
 	{

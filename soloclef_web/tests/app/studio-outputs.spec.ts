@@ -581,7 +581,7 @@ test.describe("Report reading view", () => {
 			})
 		).toBeVisible({ timeout: 30_000 });
 		await expect(
-			dialog.getByRole("button", { name: "Add Mind Map: E2E map: summary" })
+			dialog.getByRole("button", { name: "Add Mind map: E2E map: summary" })
 		).toBeVisible();
 		await expect(dialog.getByText("E2E cards: rounds")).toHaveCount(0);
 	});

@@ -138,6 +138,14 @@
 	padding-inline: var(--home-gutter);
 }
 
+/* A page that fills the screen below the sticky bar (sign-in, sign-up, the
+ * password pages). `min-h-screen` on these added the bar's own height on top,
+ * so every one of them scrolled by 3.25rem with nothing below the fold. The
+ * bar is 3.25rem tall plus the notch padding it takes on an iPhone. */
+.ss-home-fill {
+	min-height: calc(100dvh - 3.25rem - env(safe-area-inset-top));
+}
+
 /* A hairline that separates stacked sections. Applied to every section after
  * the first, so the rule between two sections is drawn exactly once. */
 .ss-home-rule {

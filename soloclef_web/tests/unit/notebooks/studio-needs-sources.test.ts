@@ -22,7 +22,7 @@ test("a tile opened with no sources explains why and offers both ways to add som
 		children: body,
 	};
 	const html = renderToStaticMarkup(createElement(NextIntlClientProvider, props));
-	assert.match(html, /Mind Map is made from your notebook&#x27;s sources/);
+	assert.match(html, /Mind map is made from your notebook&#x27;s sources/);
 	assert.match(html, /Add sources/);
 	assert.match(html, /Research the web/);
 });

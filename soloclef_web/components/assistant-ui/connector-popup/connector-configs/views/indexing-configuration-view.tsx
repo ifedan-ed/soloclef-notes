@@ -193,7 +193,7 @@ export const IndexingConfigurationView: FC<IndexingConfigurationViewProps> = ({
 					disabled={isStartingIndexing}
 					className="text-xs sm:text-sm relative"
 				>
-					<span className={isStartingIndexing ? "opacity-0" : ""}>Start Indexing</span>
+					<span className={isStartingIndexing ? "opacity-0" : ""}>Start indexing</span>
 					{isStartingIndexing && <Spinner size="sm" className="absolute" />}
 				</Button>
 			</div>

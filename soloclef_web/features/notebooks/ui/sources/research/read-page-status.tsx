@@ -4,7 +4,6 @@ import { CheckCircle2, TriangleAlert } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import type { PageReader } from "../../../model/research-sources";
 
 export type ReadPageState =
 	| { status: "idle" }
@@ -12,14 +11,16 @@ export type ReadPageState =
 	| { status: "added" }
 	| { status: "failed"; message: string | null };
 
-/** How "Read a web page" is going: adding, added (read in the background), or why not. */
+/**
+ * How "Read a web page" is going: adding, added (read in the background), or
+ * why not. Status only: how the page is read is not explained here (UI text
+ * stays minimal); the source's own row shows its progress.
+ */
 export function ReadPageStatus({
 	state,
-	pageReader,
 	onDismiss,
 }: {
 	state: ReadPageState;
-	pageReader: PageReader;
 	onDismiss: () => void;
 }) {
 	const t = useTranslations("notebook_research");
@@ -36,12 +37,7 @@ export function ReadPageStatus({
 		return (
 			<output className="flex items-start gap-2 rounded-xl border px-3 py-2.5 text-xs">
 				<CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-emerald-600" aria-hidden />
-				<span className="min-w-0 flex-1 break-words">
-					{t("page_added")}
-					<span className="block text-muted-foreground">
-						{pageReader === "browserbase" ? t("page_hint_browserbase") : t("page_hint_crawler")}
-					</span>
-				</span>
+				<span className="min-w-0 flex-1 break-words">{t("page_added")}</span>
 				<Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={onDismiss}>
 					{t("dismiss")}
 				</Button>

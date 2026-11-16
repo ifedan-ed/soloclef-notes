@@ -64,6 +64,10 @@ export const ConnectorCard: FC<ConnectorCardProps> = ({
 	const isEnabled = isConnectorEnabled(connectorType);
 	const statusMessage = getConnectorStatusMessage(connectorType);
 	const showWarnings = shouldShowWarnings();
+	// A card given nothing to do (Google Drive on a server without its
+	// OAuth client: onConnect is left out) shows its button disabled, not a
+	// Connect that does nothing when pressed.
+	const action = isConnected ? onManage : onConnect;
 
 	// Determine the status content to display
 	const getStatusContent = () => {
@@ -149,8 +153,8 @@ export const ConnectorCard: FC<ConnectorCardProps> = ({
 						"bg-white text-slate-700 hover:bg-accent hover:text-accent-foreground border-0 shadow-xs dark:bg-secondary dark:text-secondary-foreground",
 					!isConnected && "shadow-xs"
 				)}
-				onClick={isConnected ? onManage : onConnect}
-				disabled={isConnecting || !isEnabled}
+				onClick={action}
+				disabled={isConnecting || !isEnabled || !action}
 			>
 				<span className={isConnecting ? "opacity-0" : ""}>
 					{!isEnabled ? "Unavailable" : isConnected ? "Manage" : connectorType ? "Connect" : "Add"}

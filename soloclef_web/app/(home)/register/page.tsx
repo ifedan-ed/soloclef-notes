@@ -12,6 +12,7 @@ import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useSession } from "@/hooks/use-session";
+import { useSupportEmail } from "@/hooks/use-support-email";
 import { getAuthErrorDetails, isNetworkError, shouldRetry } from "@/lib/auth-errors";
 import { AppError, ValidationError } from "@/lib/error";
 import { trackRegistrationAttempt, trackRegistrationFailure } from "@/lib/posthog/events";
@@ -21,6 +22,7 @@ import { AmbientBackground } from "../login/AmbientBackground";
 export default function RegisterPage() {
 	const t = useTranslations("auth");
 	const tCommon = useTranslations("common");
+	const { email: supportEmail } = useSupportEmail();
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [confirmPassword, setConfirmPassword] = useState("");
@@ -151,7 +153,7 @@ export default function RegisterPage() {
 		return (
 			<div className="relative w-full overflow-hidden">
 				<AmbientBackground />
-				<div className="mx-auto flex h-screen max-w-lg flex-col items-center justify-center px-6 text-center md:px-0">
+				<div className="mx-auto ss-home-fill flex max-w-lg flex-col items-center justify-center px-6 text-center md:px-0">
 					<Logo className="h-16 w-16 rounded-md md:h-20 md:w-20" />
 					<h1 className="mt-6 text-xl font-bold text-neutral-800 dark:text-neutral-100 md:text-3xl">
 						{t("signups_closed_title")}
@@ -160,9 +162,12 @@ export default function RegisterPage() {
 						{t("signups_closed_body")}
 					</p>
 					<div className="mt-8 flex flex-wrap justify-center gap-3">
-						<Button asChild>
-							<Link href={REQUEST_ACCESS_HREF}>{t("request_access")}</Link>
-						</Button>
+						{/* Only where there is someone to ask (useSupportEmail). */}
+						{supportEmail ? (
+							<Button asChild>
+								<Link href={REQUEST_ACCESS_HREF}>{t("request_access")}</Link>
+							</Button>
+						) : null}
 						<Button asChild variant="outline">
 							<Link href="/login">{t("sign_in")}</Link>
 						</Button>
@@ -175,7 +180,7 @@ export default function RegisterPage() {
 	return (
 		<div className="relative w-full overflow-hidden">
 			<AmbientBackground />
-			<div className="mx-auto flex h-screen max-w-lg flex-col items-center justify-center px-6 md:px-0">
+			<div className="mx-auto ss-home-fill flex max-w-lg flex-col items-center justify-center px-6 md:px-0">
 				<Logo priority className="h-16 w-16 md:h-32 md:w-32 rounded-md transition-all" />
 				<h1 className="mt-4 mb-6 text-xl font-bold text-neutral-800 dark:text-neutral-100 md:mt-8 md:mb-8 md:text-3xl lg:text-4xl transition-all">
 					{t("create_account")}
@@ -206,7 +211,7 @@ export default function RegisterPage() {
 											strokeLinejoin="round"
 											className="flex-shrink-0 mt-0.5 text-red-500 dark:text-red-400"
 										>
-											<title>Error Icon</title>
+											<title>Error icon</title>
 											<circle cx="12" cy="12" r="10" />
 											<line x1="15" y1="9" x2="9" y2="15" />
 											<line x1="9" y1="9" x2="15" y2="15" />

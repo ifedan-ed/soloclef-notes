@@ -38,12 +38,12 @@ async function signIn(page: Page, email: string, password: string) {
 	await page.goto("/login");
 	await page.getByLabel("Email").fill(email);
 	await page.getByLabel("Password", { exact: true }).fill(password);
-	await page.getByRole("button", { name: "Sign In" }).click();
+	await page.getByRole("button", { name: "Sign in" }).click();
 }
 
 test("the sign-in page links to Forgot password, and that page fits", async ({ page }) => {
 	await page.goto("/login");
-	await page.getByRole("link", { name: "Forgot Password?" }).click();
+	await page.getByRole("link", { name: "Forgot password?" }).click();
 	await expect(page).toHaveURL(/\/forgot-password$/);
 	await expect(page.getByRole("heading", { name: "Reset your password" })).toBeVisible();
 	await expectNoOverflow(page, "forgot password page");

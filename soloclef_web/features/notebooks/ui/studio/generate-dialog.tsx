@@ -28,7 +28,11 @@ import { podcastsApiService } from "@/lib/apis/podcasts-api.service";
 import { notebookKeys } from "../../api/notebook-query-keys";
 import { notebooksApi } from "../../api/notebooks-api";
 import { useDelayedFlag } from "../../hooks/use-delayed-flag";
-import { useReportTemplates, useStudioSuggestions } from "../../hooks/use-notebook-queries";
+import {
+	useReportTemplates,
+	useStudioSuggestions,
+	useSuggestionSources,
+} from "../../hooks/use-notebook-queries";
 import { useSuggestionRotation } from "../../hooks/use-suggestion-rotation";
 import { CUSTOM_STYLE_MAX_CHARS, studioTile } from "../../lib/studio-catalog";
 import {
@@ -116,7 +120,7 @@ export function NeedsSourcesBody({ kind, onAddSources, onResearch }: NeedsSource
 	return (
 		<div className="space-y-4">
 			<p className="text-sm text-muted-foreground">
-				{t("needs_sources.body", { output: t(`kinds.${kind}.label`) })}
+				{t("needs_sources.body", { output: t(`kinds.${kind}.item`) })}
 			</p>
 			<div className="grid gap-2 sm:grid-cols-2">
 				<Button
@@ -175,6 +179,8 @@ function GenerateForm({
 		{ variant, language: state.language },
 		state.sourceIds.length > 0
 	);
+	// The key the ideas above are kept under, for "More ideas" to replace them.
+	const suggestionSourcesKey = useSuggestionSources(notebookId).signature;
 	const showSuggestionSkeleton = useDelayedFlag(suggestions.isLoading);
 	const rotation = useSuggestionRotation(`${notebookId}:${kind}:${variant}:${state.language}`);
 	const pool = suggestions.data?.pool.length
@@ -206,7 +212,7 @@ function GenerateForm({
 				refresh: true,
 			});
 			queryClient.setQueryData(
-				notebookKeys.suggestions(notebookId, kind, variant, state.language),
+				notebookKeys.suggestions(notebookId, kind, variant, state.language, suggestionSourcesKey),
 				fresh
 			);
 			rotation.restart();
@@ -265,7 +271,9 @@ function GenerateForm({
 			await onGenerate(
 				buildStudioRequest(state, {
 					enabledSourceIds: enabledIds,
-					title: `${t(`kinds.${kind}.label`)}: ${notebookTitle}`,
+					// `item` names one output ("Report"); `label` is the tile's name, which
+					// can be plural ("Reports") and made titles read "Reports: …".
+					title: `${t(`kinds.${kind}.item`)}: ${notebookTitle}`,
 					requestId,
 				})
 			);
@@ -313,12 +321,15 @@ function GenerateForm({
 				return (
 					<div key={group.field} className="space-y-2">
 						{/* A pill has no room for "(Default)" on a phone, so segmented
-						    groups say which option is the default beside the field label. */}
+						    groups say which option is the default beside the field label.
+						    An option that is itself called Default needs no hint: it read
+						    "Default: Default". */}
 						<div className="flex items-baseline justify-between gap-3">
 							<p className="text-sm font-medium">{label}</p>
 							{group.presentation !== "gallery" &&
 							group.presentation !== "cards" &&
-							group.defaultValue ? (
+							group.defaultValue &&
+							group.defaultValue !== "default" ? (
 								<p className="text-xs text-muted-foreground">
 									{t("default_is", {
 										value: t(`options.${kind}.${group.field}.${group.defaultValue}.label`),

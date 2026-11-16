@@ -1,22 +1,6 @@
 "use client";
-import {
-	AlertCircle,
-	AlertTriangle,
-	ChevronDown,
-	FileOutput,
-	GitCommitHorizontal,
-	Mail,
-	MailX,
-	Package,
-	Settings2,
-} from "lucide-react";
-import { useState } from "react";
-import { JsonView } from "@/components/json-view";
+import { AlertCircle, AlertTriangle, GitCommitHorizontal, Mail, MailX } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { RunStatus, RunStepResult } from "@/contracts/types/automation.types";
 import { useAutomationRun } from "@/hooks/use-automation-runs";
@@ -36,15 +20,15 @@ interface RunDetailsPanelProps {
 /**
  * Expanded view of a single run, read whole when it opens (GET .../runs/{id})
  * and again whenever the change stream reports the automation's runs moved,
- * so the steps tick while the run is in flight. Output, artifacts, inputs and
- * the run-level error appear once it ends.
+ * so the steps tick while the run is in flight.
  *
- * Surfacing order is outcome-first: a run-level error (when present),
- * then per-step cards that render the agent's markdown ``final_message``
- * directly, and finally the structural artifacts/inputs. The full
- * ``definition_snapshot`` is omitted because it usually mirrors the live
- * definition — surfacing it would dominate the panel without informing
- * what the user is trying to learn ("did this work? what did it do?").
+ * It shows what a person can read and nothing else: the run's outcome when
+ * it did not succeed, the email it sent, and per-step cards that render the
+ * agent's markdown ``final_message``. The run's raw records (its output with
+ * ``final_message`` and token ``usage``, the structured error, the resolved
+ * inputs, the artifact list and the definition snapshot) are the server's
+ * internals: as JSON they repeated what the step cards say in words, or said
+ * nothing a person could act on, so they are not shown.
  */
 export function RunDetailsPanel({ automationId, runId, liveStatus }: RunDetailsPanelProps) {
 	const isTerminal = liveStatus !== "pending" && liveStatus !== "running";
@@ -53,10 +37,7 @@ export function RunDetailsPanel({ automationId, runId, liveStatus }: RunDetailsP
 	const liveSteps = (run?.step_results ?? []) as RunStepResult[];
 
 	const runError = run?.error && Object.keys(run.error).length > 0 ? run.error : null;
-	const hasOutput = !!run?.output && Object.keys(run.output).length > 0;
 	const email = readRunEmail(run?.output);
-	const hasInputs = !!run && Object.keys(run.inputs ?? {}).length > 0;
-	const hasDiagnostics = !!run && (run.artifacts.length > 0 || hasInputs);
 	const heavyLoading = isTerminal && isLoading && !run;
 	const heavyError = isTerminal && !!error;
 
@@ -82,12 +63,6 @@ export function RunDetailsPanel({ automationId, runId, liveStatus }: RunDetailsP
 				</p>
 			) : null}
 
-			{hasOutput ? (
-				<Section icon={FileOutput} label="Output">
-					<JsonBlock value={run.output} />
-				</Section>
-			) : null}
-
 			<Section icon={GitCommitHorizontal} label={`Step results · ${liveSteps.length}`}>
 				{liveSteps.length === 0 ? (
 					<p className="text-xs text-muted-foreground">
@@ -108,20 +83,6 @@ export function RunDetailsPanel({ automationId, runId, liveStatus }: RunDetailsP
 				<p className="text-xs text-muted-foreground">
 					Couldn't load run details{error?.message ? `: ${error.message}` : "."}
 				</p>
-			) : hasDiagnostics ? (
-				<>
-					<Separator className="bg-border/60" />
-					{run && run.artifacts.length > 0 ? (
-						<Section icon={Package} label={`Artifacts · ${run.artifacts.length}`}>
-							<JsonBlock value={run.artifacts} />
-						</Section>
-					) : null}
-					{hasInputs ? (
-						<Section icon={Settings2} label="Resolved inputs">
-							<JsonBlock value={run?.inputs} />
-						</Section>
-					) : null}
-				</>
 			) : null}
 		</div>
 	);
@@ -136,12 +97,11 @@ const SECTION_LABEL = {
 const ALERT_VARIANT = { destructive: "destructive", warning: "warning", muted: "default" } as const;
 
 /**
- * Run-level error: a readable alert when a message is present, with the full
- * structured error available behind a raw toggle. Needs attention and Timed
- * out read as warnings, Cancelled as a plain note, the rest as failures.
+ * Run-level error: a readable alert, its title from the error's type and its
+ * sentence when the server gave one. Needs attention and Timed out read as
+ * warnings, Cancelled as a plain note, the rest as failures.
  */
 function RunErrorSection({ error }: { error: Record<string, unknown> }) {
-	const [rawOpen, setRawOpen] = useState(false);
 	const message = typeof error.message === "string" ? error.message : null;
 	const type = typeof error.type === "string" ? error.type : undefined;
 	const { title, tone } = describeRunError(type);
@@ -153,38 +113,13 @@ function RunErrorSection({ error }: { error: Record<string, unknown> }) {
 
 	return (
 		<Section icon={Icon} label={label} tone={tone === "destructive" ? "destructive" : "default"}>
-			{message ? (
-				<Alert variant={ALERT_VARIANT[tone]}>
-					<Icon aria-hidden />
-					<AlertTitle>{title}</AlertTitle>
+			<Alert variant={ALERT_VARIANT[tone]}>
+				<Icon aria-hidden />
+				<AlertTitle>{title}</AlertTitle>
+				{message ? (
 					<AlertDescription className="wrap-break-word">{message}</AlertDescription>
-				</Alert>
-			) : null}
-			<Collapsible open={rawOpen} onOpenChange={setRawOpen} className="mt-2">
-				<CollapsibleTrigger asChild>
-					<Button
-						type="button"
-						variant="ghost"
-						size="sm"
-						className="h-7 w-fit px-2 text-xs text-muted-foreground"
-						aria-expanded={rawOpen}
-					>
-						<ChevronDown
-							className={cn(
-								"transition-transform motion-reduce:transition-none",
-								rawOpen && "rotate-180"
-							)}
-							aria-hidden
-						/>
-						{rawOpen ? "Hide raw" : "View raw"}
-					</Button>
-				</CollapsibleTrigger>
-				<CollapsibleContent>
-					<ScrollArea className="mt-2 max-h-64 rounded-md bg-muted/40 px-3 py-2">
-						<JsonView src={error} collapsed={1} />
-					</ScrollArea>
-				</CollapsibleContent>
-			</Collapsible>
+				) : null}
+			</Alert>
 		</Section>
 	);
 }
@@ -213,13 +148,5 @@ function Section({
 			</div>
 			{children}
 		</div>
-	);
-}
-
-function JsonBlock({ value }: { value: unknown }) {
-	return (
-		<ScrollArea className="max-h-64 rounded-md bg-muted/40 px-3 py-2">
-			<JsonView src={value} collapsed={1} />
-		</ScrollArea>
 	);
 }

@@ -303,13 +303,13 @@ function ApprovalCard({
 
 								{selectedAccountId && (
 									<div className="space-y-2">
-										<p className="text-xs font-medium text-muted-foreground">Parent Folder</p>
+										<p className="text-xs font-medium text-muted-foreground">Parent folder</p>
 										<Select value={parentFolderId} onValueChange={setParentFolderId}>
 											<SelectTrigger className="w-full">
-												<SelectValue placeholder="Drive Root" />
+												<SelectValue placeholder="Drive root" />
 											</SelectTrigger>
 											<SelectContent>
-												<SelectItem value="__root__">Drive Root</SelectItem>
+												<SelectItem value="__root__">Drive root</SelectItem>
 												{availableParentFolders.map((folder) => (
 													<SelectItem key={folder.folder_id} value={folder.folder_id}>
 														{folder.name}

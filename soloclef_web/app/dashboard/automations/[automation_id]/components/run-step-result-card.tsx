@@ -12,14 +12,12 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { memo, useMemo, useState } from "react";
-import { JsonView } from "@/components/json-view";
 import { MarkdownViewer } from "@/components/markdown-viewer";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import type { RunStepResult } from "@/contracts/types/automation.types";
 import { notePath } from "@/features/notes/lib/note-paths";
 import { formatDuration } from "@/lib/automations/run-duration";
@@ -71,15 +69,15 @@ function StepStatusBadge({ status }: { status: string }) {
  * readable alert, the tools nobody was present to approve with the reason
  * each was not run, the agent's markdown ``final_message`` rendered, where
  * the result was saved, and then the transcript (what the assistant said,
- * called and was answered) behind a fold. The full structured payload stays
- * behind "View raw".
+ * called and was answered) behind a fold. The step's structured record is
+ * not shown: it is the server's internals (ids, token usage), and the card
+ * already says in words what it holds.
  */
 export const RunStepResultCard = memo(function RunStepResultCard({
 	step,
 }: {
 	step: RunStepResult;
 }) {
-	const [rawOpen, setRawOpen] = useState(false);
 	const [transcriptOpen, setTranscriptOpen] = useState(false);
 
 	const duration = formatDuration(step.started_at, step.finished_at);
@@ -203,32 +201,6 @@ export const RunStepResultCard = memo(function RunStepResultCard({
 						</CollapsibleContent>
 					</Collapsible>
 				) : null}
-
-				<Collapsible open={rawOpen} onOpenChange={setRawOpen}>
-					<CollapsibleTrigger asChild>
-						<Button
-							type="button"
-							variant="ghost"
-							size="sm"
-							className="h-7 w-fit px-2 text-xs text-muted-foreground"
-							aria-expanded={rawOpen}
-						>
-							<ChevronDown
-								className={cn(
-									"transition-transform motion-reduce:transition-none",
-									rawOpen && "rotate-180"
-								)}
-								aria-hidden
-							/>
-							{rawOpen ? "Hide raw" : "View raw"}
-						</Button>
-					</CollapsibleTrigger>
-					<CollapsibleContent>
-						<ScrollArea className="mt-2 max-h-64 rounded-md bg-muted/40 px-3 py-2">
-							<JsonView src={step} collapsed={1} />
-						</ScrollArea>
-					</CollapsibleContent>
-				</Collapsible>
 			</CardContent>
 		</Card>
 	);

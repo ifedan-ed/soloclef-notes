@@ -35,15 +35,37 @@ func TransportError(ctx context.Context, parser parse.ID, action string, err err
 	return &parse.Error{Kind: parse.Unavailable, Parser: parser, Message: action + " did not get an answer", Err: err}
 }
 
-// StatusError types a response whose status is not a success. It reads the
-// start of the body for the message and leaves closing it to the caller.
+// StatusError types a response whose status is not a success. Its Message
+// is a person's sentence: what was being done, the status, and the
+// service's own sentence where it gave one (serviceWords), never the raw
+// reply. The reply itself, its start, goes in Err for the log. It reads
+// the body and leaves closing it to the caller.
 func StatusError(parser parse.ID, action string, response *http.Response) *parse.Error {
 	snippet, _ := io.ReadAll(io.LimitReader(response.Body, errorBodyLimit))
-	message := fmt.Sprintf("%s was answered %d", action, response.StatusCode)
-	if text := strings.TrimSpace(string(snippet)); text != "" {
-		message += ": " + text
+	raw := strings.TrimSpace(string(snippet))
+	message := fmt.Sprintf("%s %s (status %d)", action, outcomeOf(response.StatusCode), response.StatusCode)
+	if words := serviceWords(raw); words != "" {
+		message += ": " + words
 	}
-	return &parse.Error{Kind: kindOfStatus(response.StatusCode), Parser: parser, Message: message, Status: response.StatusCode}
+	failure := &parse.Error{Kind: kindOfStatus(response.StatusCode), Parser: parser, Message: message, Status: response.StatusCode}
+	if raw != "" {
+		failure.Err = fmt.Errorf("the reply: %s", raw)
+	}
+	return failure
+}
+
+// outcomeOf says what a status means to the person, in a phrase: a 4xx is
+// the service refusing, a 5xx the service failing, anything else a reply
+// nothing here expects.
+func outcomeOf(status int) string {
+	switch {
+	case status >= 500:
+		return "failed at the service"
+	case status >= 400:
+		return "was refused"
+	default:
+		return "got an unexpected answer"
+	}
 }
 
 func kindOfStatus(status int) parse.Kind {

@@ -42,12 +42,12 @@ func TestABriefInMinutesIsStillRead(t *testing.T) {
 func TestTheOutlineIsSizedToTheBriefsCeiling(t *testing.T) {
 	brief, _ := ReadBrief([]byte(twoSpeakerBrief))
 	target, minimum, segments := sizes(brief)
-	// 300s at 150 words a minute; 120s likewise; 750/250 beats.
-	if target != 750 || minimum != 300 || segments != 3 {
+	// 300s at 135 words a minute; 120s likewise; 675/250 beats, rounded.
+	if target != 675 || minimum != 270 || segments != 3 {
 		t.Fatalf("got %d, %d, %d", target, minimum, segments)
 	}
 	prompt := outlinePrompt(brief)
-	for _, want := range []string{"up to about 750 words", "up to about 3 segments", "at least 300 words", "- slot 1 — Ben (role: guest)", `"target_words": 250`} {
+	for _, want := range []string{"up to about 675 words", "up to about 3 segments", "at least 270 words", "- slot 1 — Ben (role: guest)", `"target_words": 225`} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("the outline prompt lacks %q", want)
 		}

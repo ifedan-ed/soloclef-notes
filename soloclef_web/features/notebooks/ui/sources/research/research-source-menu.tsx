@@ -17,7 +17,6 @@ import {
 import { connectableSource, connectLinkFor } from "../../../lib/research-connect-link";
 import {
 	canTick,
-	MAX_RESEARCH_SOURCES,
 	pickOnly,
 	type SourcePicks,
 	searchedSources,
@@ -134,7 +133,6 @@ export function ResearchSourceMenu({
 	const t = useTranslations("notebook_research");
 	const sourceName = useResearchSourceName();
 	// The hint is about connecting a key, so it shows only when a key is missing.
-	const anyNotConnected = Object.values(unavailable).includes("not_connected");
 	const searched = searchedSources(picks);
 	const label = t("source_label", {
 		source: searched.length > 1 ? searched.map(sourceName).join(", ") : sourceName(picks.source),
@@ -183,11 +181,6 @@ export function ResearchSourceMenu({
 				>
 					{t("search_several")}
 				</SourceCheckboxItem>
-				{picks.several ? (
-					<p className="px-2 pb-1.5 text-[11px] leading-snug text-muted-foreground">
-						{t("search_several_hint", { max: MAX_RESEARCH_SOURCES })}
-					</p>
-				) : null}
 				<DropdownMenuSeparator />
 				{picks.several ? (
 					GROUPS.map((group, index) => (
@@ -254,11 +247,6 @@ export function ResearchSourceMenu({
 						))}
 					</DropdownMenuRadioGroup>
 				)}
-				{anyNotConnected ? (
-					<p className="px-2 pt-1 pb-1.5 text-[11px] leading-snug text-muted-foreground">
-						{t("unavailable_hint")}
-					</p>
-				) : null}
 			</DropdownMenuContent>
 		</DropdownMenu>
 	);

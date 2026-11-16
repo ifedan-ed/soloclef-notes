@@ -17,9 +17,10 @@ source or your first question if you don't.
   featured undoes it.
 - Copy notebook makes a new notebook, called "(copy)", with the same sources,
   icon and chat settings. Notes, chats and Studio outputs are not copied.
-- Delete, in the card's menu, deletes the notebook with its chat and its
-  Studio outputs, and ends their public links. The documents stay in your
-  library, and its notes stay on the Notes page.
+- Delete, in the card's menu, deletes the notebook with its Studio outputs,
+  and ends their public links. The documents stay in your library, its notes
+  stay on the Notes page, and its chat is kept as a chat outside any
+  notebook. To delete the chat too, use Delete chat history first.
 
 The notebook's own menu also has Configure chat and Delete chat history (see
 [Chat and citations](chat-and-citations.md#configure-chat)), and Customize
@@ -86,7 +87,7 @@ file, the upload says so.
 
 ### Vision
 
-Enable Vision LLM asks a vision model to describe the pictures in PDFs, so
+Enable vision LLM asks a vision model to describe the pictures in PDFs, so
 charts and figures can be found and cited. With it on you can also upload
 pictures on their own. It is slower, so it starts off. It is only offered
 when you or the server have a vision model.

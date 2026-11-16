@@ -130,15 +130,15 @@ for (const [viewportName, device] of [
 			// Studio: every generate dialog, opened and closed.
 			await tab("Studio");
 			for (const tile of [
-				"Audio Overview",
-				"Video Overview",
-				"Mind Map",
+				"Audio overview",
+				"Video overview",
+				"Mind map",
 				"Reports",
 				"Flashcards",
 				"Quiz",
 				"Infographic",
-				"Slide Deck",
-				"Data Table",
+				"Slide deck",
+				"Data table",
 			]) {
 				await page.getByRole("button", { name: tile, exact: true }).first().click();
 				await expect(page.getByRole("dialog")).toBeVisible();
@@ -213,7 +213,7 @@ for (const [viewportName, device] of [
 				["settings/automations", "Settings"],
 				["settings/public-links", "Settings"],
 				["settings/agent-permissions", "Settings"],
-				["logs", "Task Logs"],
+				["logs", "Task logs"],
 			];
 			for (const [path, heading] of pages) {
 				await page.goto(`/dashboard/${path}`);

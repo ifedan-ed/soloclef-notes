@@ -108,7 +108,7 @@ export function OutputView({
 	}, [expanded, setSize]);
 
 	const sourceCount = view.data?.sources.length ?? output.source_count;
-	const kindLabel = tn(`kinds.${output.kind}.label`);
+	const kindLabel = tn(`kinds.${output.kind}.item`);
 
 	return (
 		<>

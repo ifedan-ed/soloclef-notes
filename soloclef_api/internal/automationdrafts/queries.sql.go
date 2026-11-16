@@ -11,7 +11,7 @@ import (
 )
 
 const createdAutomation = `-- name: CreatedAutomation :many
-SELECT a.name, t.type::text AS type, t.params
+SELECT a.name, COALESCE(t.type::text, '')::text AS type, t.params
 FROM automations AS a
 LEFT JOIN automation_triggers AS t ON t.automation_id = a.id
 WHERE a.id = $1 AND a.user_id = $2
@@ -31,7 +31,9 @@ type CreatedAutomationRow struct {
 
 // What a created draft became, as saved (the person may have changed it
 // on the card before Create): its name and its triggers, oldest first.
-// No rows when the automation was deleted since.
+// No rows when the automation was deleted since; one row with an empty
+// type when it has no trigger left. The outer cast is what tells sqlc the
+// column is text: it types a bare COALESCE as unknown (interface{}).
 func (q *Queries) CreatedAutomation(ctx context.Context, arg CreatedAutomationParams) ([]CreatedAutomationRow, error) {
 	rows, err := q.db.Query(ctx, createdAutomation, arg.AutomationID, arg.UserID)
 	if err != nil {

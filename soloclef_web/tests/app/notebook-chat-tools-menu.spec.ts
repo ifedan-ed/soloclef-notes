@@ -1,7 +1,7 @@
 import { expect, openNotebook, test } from "./fixtures";
 
 /**
- * A notebook chat's Manage Tools lists the account's connections, each as
+ * A notebook chat's Manage tools lists the account's connections, each as
  * one row with one switch: the tools its next message will be offered
  * (GET /api/v1/agent/tools, assembly.Menu). Switching a connection off
  * leaves its tools out of the next message.
@@ -15,7 +15,7 @@ import { expect, openNotebook, test } from "./fixtures";
 
 const SHOTS = process.env.E2E_SCREENSHOT_DIR;
 
-test("Manage Tools lists the account's connections with one switch each", async ({
+test("Manage tools lists the account's connections with one switch each", async ({
 	page,
 	notebook,
 	isPhone,
@@ -29,9 +29,9 @@ test("Manage Tools lists the account's connections with one switch each", async 
 	await openNotebook(page, notebook.id, "Chat");
 	await page.getByRole("button", { name: "Upload files, manage tools and more" }).first().click();
 	if (isPhone) {
-		await page.getByRole("button", { name: "Manage Tools" }).click();
+		await page.getByRole("button", { name: "Manage tools" }).click();
 	} else {
-		await page.getByRole("menuitem", { name: "Manage Tools" }).hover();
+		await page.getByRole("menuitem", { name: "Manage tools" }).hover();
 	}
 	await expect(page.getByText("Your connections")).toBeVisible();
 	for (const group of groups) {

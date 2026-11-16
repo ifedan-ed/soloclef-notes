@@ -110,9 +110,9 @@ export function ComposerAddMenuDrawer({
 	const close = useCallback(() => handleOpenChange(false), [handleOpenChange]);
 	const title =
 		current.kind === "connectors"
-			? "MCP Connectors"
+			? "MCP connectors"
 			: current.kind === "tools"
-				? "Manage Tools"
+				? "Manage tools"
 				: current.kind === "toolGroup"
 					? current.label
 					: "Add";
@@ -146,16 +146,16 @@ export function ComposerAddMenuDrawer({
 						}}
 					>
 						<Upload className="size-4 shrink-0 text-muted-foreground" />
-						<span className="flex-1 text-left">Upload Files</span>
+						<span className="flex-1 text-left">Upload files</span>
 					</button>
 					<button type="button" className={ROW} onClick={() => push({ kind: "connectors" })}>
 						<Unplug className="size-4 shrink-0 text-muted-foreground" />
-						<span className="flex-1 text-left">MCP Connectors</span>
+						<span className="flex-1 text-left">MCP connectors</span>
 						<ChevronRight className="size-4 shrink-0 text-muted-foreground" />
 					</button>
 					<button type="button" className={ROW} onClick={() => push({ kind: "tools" })}>
 						<Settings2 className="size-4 shrink-0 text-muted-foreground" />
-						<span className="flex-1 text-left">Manage Tools</span>
+						<span className="flex-1 text-left">Manage tools</span>
 						<ChevronRight className="size-4 shrink-0 text-muted-foreground" />
 					</button>
 				</>

@@ -53,7 +53,7 @@ export const useSearchSourceConnectors = (lazy: boolean = false) => {
 		},
 		{
 			id: 4,
-			name: "Youtube Video",
+			name: "YouTube video",
 			type: "YOUTUBE_VIDEO",
 			sources: [],
 		},
@@ -81,7 +81,7 @@ export const useSearchSourceConnectors = (lazy: boolean = false) => {
 			},
 			{
 				id: 4,
-				name: "Youtube Video",
+				name: "YouTube video",
 				type: "YOUTUBE_VIDEO",
 				sources: [],
 			},

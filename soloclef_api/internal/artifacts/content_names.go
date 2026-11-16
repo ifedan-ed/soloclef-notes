@@ -3,7 +3,6 @@ package artifacts
 import (
 	"path"
 	"strings"
-	"unicode"
 )
 
 // This file is the names a browser is told: what a downloaded file is called,
@@ -86,22 +85,21 @@ func encodeForHeader(text string) string {
 	return encoded.String()
 }
 
-// The download is named after the artifact's *title*, which is what the
-// person sees in the Studio, with the extension of the stored file: a deck
-// titled "Cell biology" downloads as "Cell biology.json" whatever the agent
-// called the file it wrote.
+// A downloaded file is named after the output's title, the name the person
+// sees in the Studio (or the artifact's own title when no output lists it),
+// with the extension of the stored file: a deck titled "Cell biology"
+// downloads as "Cell biology.json" whatever the agent called the file it
+// wrote. Every file of an artifact is named the same way, its main file and
+// the copies beside it (a poster's SVG beside its PNG), so one output's
+// downloads read as one thing (download_title.go has the rule).
 const (
-	// stemLimit keeps a name comfortably inside every filesystem's limit
-	// with room for the extension. It counts characters, not bytes.
-	stemLimit = 80
 	// extensionLimit is the longest thing still believed to be an extension
 	// ("." included); past it, a dot in a filename is just a dot.
 	extensionLimit = 16
-	nameless       = "artifact"
 )
 
-// downloadName is the title made safe as a filename, plus the stored file's
-// extension.
+// downloadName is the title as a filename (fileStem), plus the stored
+// file's extension.
 func downloadName(title, storedFilename string) string {
 	extension := strings.ToLower(path.Ext(storedFilename))
 	// ".env" is a name, not a nameless file with the extension "env": an
@@ -110,17 +108,21 @@ func downloadName(title, storedFilename string) string {
 		extension = ""
 	}
 	// A title that already ends in the extension ("Budget.xlsx") must not
-	// come out as "Budget_xlsx.xlsx".
+	// come out as "Budget xlsx.xlsx".
 	if extension != "" && len(title) >= len(extension) &&
 		strings.EqualFold(title[len(title)-len(extension):], extension) {
 		title = title[:len(title)-len(extension)]
 	}
-	return safeStem(title) + extension
+	return fileStem(title) + extension
 }
+
+// DownloadName is downloadName for another package's route that serves an
+// output's files (a public link's).
+func DownloadName(title, storedFilename string) string { return downloadName(title, storedFilename) }
 
 // markdownName is the name of the download for an artifact with no file:
 // its document, as Markdown.
-func markdownName(title string) string { return safeStem(title) + ".md" }
+func markdownName(title string) string { return fileStem(title) + ".md" }
 
 // plainExtension says the text is a dot followed by one to fifteen ASCII
 // letters or digits.
@@ -136,29 +138,4 @@ func plainExtension(extension string) bool {
 		}
 	}
 	return true
-}
-
-// safeStem keeps letters and digits of any script, spaces, hyphens and
-// underscores, and turns everything else into an underscore -- which is every
-// character that is a path separator, a wildcard or reserved on some system.
-func safeStem(title string) string {
-	var stem strings.Builder
-	kept := 0
-	for _, character := range strings.TrimSpace(title) {
-		if kept == stemLimit {
-			break
-		}
-		if unicode.IsLetter(character) || unicode.IsNumber(character) ||
-			character == ' ' || character == '-' || character == '_' {
-			stem.WriteRune(character)
-		} else {
-			stem.WriteByte('_')
-		}
-		kept++
-	}
-	// Trimmed again: the cut may have landed just after a space.
-	if name := strings.TrimSpace(stem.String()); name != "" {
-		return name
-	}
-	return nameless
 }

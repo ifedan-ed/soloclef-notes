@@ -21,6 +21,9 @@ func TestANoteWithNoTitleIsNamedFromItsFirstLineOfWords(t *testing.T) {
 		{"1. First *step* with a [link](https://example.test)", "First step with a link"},
 		{"![chart](a.png)\nThe dose is $5\\,mg/kg$", "The dose is 5\\,mg/kg"},
 		{"| A | B |\n|---|---|\n| 1 | 2 |", "A | B"},
+		// The web editor's empty paragraph is a zero-width space.
+		{"\u200b\n\nWard round\n\nBody", "Ward round"},
+		{"Ward\u200b round", "Ward round"},
 	}
 	for _, c := range cases {
 		if got := NoteTitle("", c.text); got != c.want {
@@ -30,7 +33,7 @@ func TestANoteWithNoTitleIsNamedFromItsFirstLineOfWords(t *testing.T) {
 }
 
 func TestANoteWithNothingToNameItIsUntitled(t *testing.T) {
-	for _, text := range []string{"", "   \n\n", "---", "[citation:1]"} {
+	for _, text := range []string{"", "   \n\n", "---", "[citation:1]", "\u200b\n\n\ufeff"} {
 		if got := NoteTitle(" ", text); got != untitled {
 			t.Errorf("NoteTitle(%q) = %q, want %q", text, got, untitled)
 		}

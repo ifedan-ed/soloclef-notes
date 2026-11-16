@@ -141,13 +141,16 @@ export function ApiKeyContent() {
 											</p>
 										</div>
 									</div>
+									{/* Hidden until hover only where there is a hover: a mouse
+									    or trackpad (pointer-fine). A touch tablet is as wide
+									    as a laptop but has no hover, so there it always shows. */}
 									<Button
 										variant="ghost"
 										size="icon"
 										disabled={isMutating}
 										onClick={() => setDeleteTarget({ id: token.id, label: token.label })}
 										aria-label={`Delete API key ${token.label}`}
-										className="h-7 w-7 shrink-0 rounded-lg text-muted-foreground transition-opacity duration-150 hover:text-accent-foreground sm:opacity-0 sm:pointer-events-none sm:group-hover:opacity-100 sm:group-hover:pointer-events-auto sm:focus-visible:opacity-100"
+										className="h-7 w-7 shrink-0 rounded-lg text-muted-foreground transition-opacity duration-150 hover:text-accent-foreground pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:focus-visible:opacity-100"
 									>
 										<Trash2 className="h-4 w-4" />
 									</Button>

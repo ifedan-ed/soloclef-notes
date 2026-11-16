@@ -208,6 +208,9 @@ export default function FlashcardsViewer({ manifest, localOnly = false }: Artifa
 
 	const faceClass = "relative mx-auto flex min-h-full max-w-md flex-col justify-center";
 	const progressValue = ((currentIndex + 1) / deck.cards.length) * 100;
+	// The card's small print ("1 / 10", "See answer") is #6b6b6b: the
+	// #a9a9a9 it had read at about 2.3:1 on the white card, below the 4.5:1
+	// small text needs.
 	return (
 		<div
 			data-vaul-no-drag=""
@@ -236,7 +239,7 @@ export default function FlashcardsViewer({ manifest, localOnly = false }: Artifa
 									<p className="text-xs font-medium uppercase tracking-wider text-[#4a4a4a]">
 										Question
 									</p>
-									<p className="text-xs text-[#a9a9a9] tabular-nums">
+									<p className="text-xs text-[#6b6b6b] tabular-nums">
 										{currentIndex + 1} / {deck.cards.length}
 									</p>
 								</div>
@@ -252,7 +255,7 @@ export default function FlashcardsViewer({ manifest, localOnly = false }: Artifa
 								) : null}
 								<p
 									aria-hidden="true"
-									className="absolute inset-x-0 -bottom-5 text-center text-xs text-[#a9a9a9]"
+									className="absolute inset-x-0 -bottom-5 text-center text-xs text-[#6b6b6b]"
 								>
 									See answer
 								</p>
@@ -266,7 +269,7 @@ export default function FlashcardsViewer({ manifest, localOnly = false }: Artifa
 									<p className="text-xs font-medium uppercase tracking-wider text-[#4a4a4a]">
 										Answer
 									</p>
-									<p className="text-xs text-[#a9a9a9] tabular-nums">
+									<p className="text-xs text-[#6b6b6b] tabular-nums">
 										{currentIndex + 1} / {deck.cards.length}
 									</p>
 								</div>

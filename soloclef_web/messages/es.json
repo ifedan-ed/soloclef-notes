@@ -341,7 +341,7 @@
 		"unsupported_files_no_parser": "No se pueden leer hasta que se elija un analizador: {files}",
 		"unsupported_files_dismiss": "Descartar",
 		"vision_llm_label": "Activar LLM de visión",
-		"vision_llm_desc": "Describe imágenes con visión artificial (más caro y lento)"
+		"remove_file": "Quitar {name}"
 	},
 	"add_webpage": {
 		"title": "Agregar páginas web para rastreo",
@@ -792,7 +792,6 @@
 		"source_google_scholar": "Google Académico",
 		"unavailable_not_connected": "No conectado",
 		"unavailable_not_available": "No disponible",
-		"unavailable_hint": "¿No conectado? Elige Conectar para añadir tu propia clave de API.",
 		"error_search_failed": "La búsqueda no se completó. Inténtalo de nuevo o elige otra fuente.",
 		"error_source_blocked": "{source} está bloqueando las búsquedas automáticas en este momento. Inténtalo de nuevo en unos minutos o busca en PubMed, arXiv o medRxiv.",
 		"error_source_busy": "{source} no respondió ahora mismo. Inténtalo de nuevo en un minuto.",
@@ -813,12 +812,9 @@
 		"page_submit": "Añadir página",
 		"page_via_browserbase": "Browserbase",
 		"page_adding": "Añadiendo la página…",
-		"page_added": "Página añadida. Se está leyendo y estará lista en tus fuentes en breve.",
-		"page_hint_browserbase": "Browserbase la abre en un navegador real, así que también funcionan las páginas hechas con JavaScript.",
-		"page_hint_crawler": "Se lee igual que los resultados de búsqueda que añades.",
+		"page_added": "Página añadida.",
 		"page_failed": "No se pudo añadir esa página.",
 		"search_several": "Buscar en varias a la vez",
-		"search_several_hint": "Marca hasta {max} fuentes. Se buscan en paralelo.",
 		"sources_picked": "{count} fuentes",
 		"provider_searching": "{source}: buscando",
 		"provider_done": "{source}: {count, plural, =0 {sin resultados} one {# encontrado} other {# encontrados}}",
@@ -865,7 +861,7 @@
 		"collapse_studio": "Contraer estudio",
 		"expand_studio": "Expandir estudio",
 		"add_sources": "Añadir fuentes",
-		"add_sources_description": "Sube archivos nuevos, elige documentos que ya están en tu biblioteca o elige archivos de Nextcloud.",
+		"add_sources_description": "Sube archivos o elige de tu biblioteca o de un conector.",
 		"add_from_library": "De tu biblioteca",
 		"add_upload": "Subir archivos",
 		"search_library": "Buscar documentos y carpetas",
@@ -881,6 +877,8 @@
 		"source_stage_embedding": "Generando embeddings",
 		"source_stage_indexing": "Guardando en el índice",
 		"source_stage_retrying": "Esperando para reintentar",
+		"source_stage_reading": "Leyendo la página",
+		"source_stage_downloading": "Descargando el archivo",
 		"source_index_failed": "La indexación falló",
 		"reindex_source": "Volver a indexar…",
 		"reindex_title": "Volver a indexar esta fuente",
@@ -899,6 +897,7 @@
 		"source_guide": "Guía de la fuente",
 		"source_guide_generating": "Redactando una guía para esta fuente…",
 		"source_guide_unavailable": "Todavía no hay una guía disponible para esta fuente.",
+		"source_failed_title": "No se pudo leer esta fuente.",
 		"new_chat_failed": "No se pudo iniciar el chat.",
 		"mention_heading": "Fuentes de este cuaderno",
 		"mention_no_match": "Ninguna fuente coincide",
@@ -949,7 +948,8 @@
 				"description": "Dos presentadores (o uno, en el formato breve) repasan tus fuentes.",
 				"focus_label": "¿En qué deberían centrarse los presentadores?",
 				"focus_placeholder": "p. ej., Céntrate en los métodos y en lo que implican para la práctica",
-				"ideas_label": "Ideas para los presentadores"
+				"ideas_label": "Ideas para los presentadores",
+				"item": "Resumen en audio"
 			},
 			"video": {
 				"label": "Resumen en vídeo",
@@ -958,7 +958,8 @@
 				"description": "Un vídeo narrado y animado creado a partir de tus fuentes.",
 				"focus_label": "¿En qué debería centrarse el vídeo?",
 				"focus_placeholder": "p. ej., Explica el hallazgo principal a un colega nuevo",
-				"ideas_label": "Ideas para el narrador"
+				"ideas_label": "Ideas para el narrador",
+				"item": "Resumen en vídeo"
 			},
 			"report": {
 				"label": "Informes",
@@ -967,7 +968,8 @@
 				"description": "Un informe escrito a partir de tus fuentes, como documento o como página interactiva.",
 				"focus_label": "¿Algo que destacar?",
 				"focus_placeholder": "p. ej., Que ocupe dos páginas y resalte las preguntas abiertas",
-				"ideas_label": "Enfoques"
+				"ideas_label": "Enfoques",
+				"item": "Informe"
 			},
 			"slides": {
 				"label": "Presentación",
@@ -976,7 +978,8 @@
 				"description": "Una presentación .pptx editable creada a partir de tus fuentes.",
 				"focus_label": "¿Qué debería cubrir la presentación?",
 				"focus_placeholder": "p. ej., Una sesión docente de 10 minutos para residentes",
-				"ideas_label": "Enfoques"
+				"ideas_label": "Enfoques",
+				"item": "Presentación"
 			},
 			"mindmap": {
 				"label": "Mapa mental",
@@ -985,7 +988,8 @@
 				"description": "Un mapa jerárquico de las ideas de tus fuentes.",
 				"focus_label": "¿En torno a qué debería girar el mapa?",
 				"focus_placeholder": "p. ej., Céntralo en el diagnóstico y el tratamiento",
-				"ideas_label": "Esquemas del mapa"
+				"ideas_label": "Esquemas del mapa",
+				"item": "Mapa mental"
 			},
 			"flashcards": {
 				"label": "Tarjetas didácticas",
@@ -994,7 +998,8 @@
 				"description": "Un mazo de estudio con preguntas en una cara y respuestas en la otra.",
 				"focus_label": "¿Qué deberían evaluar las tarjetas?",
 				"focus_placeholder": "p. ej., Definiciones y valores de corte",
-				"ideas_label": "Qué evaluar"
+				"ideas_label": "Qué evaluar",
+				"item": "Tarjetas didácticas"
 			},
 			"quiz": {
 				"label": "Cuestionario",
@@ -1003,7 +1008,8 @@
 				"description": "Preguntas de respuesta única con puntuación.",
 				"focus_label": "¿Qué debería cubrir el cuestionario?",
 				"focus_placeholder": "p. ej., Razonamiento clínico más que memoria",
-				"ideas_label": "Qué evaluar"
+				"ideas_label": "Qué evaluar",
+				"item": "Cuestionario"
 			},
 			"data_table": {
 				"label": "Tabla de datos",
@@ -1012,7 +1018,8 @@
 				"description": "Un libro de Excel con los datos estructurados de tus fuentes.",
 				"focus_label": "¿Qué debería recoger la tabla?",
 				"focus_placeholder": "p. ej., Una fila por estudio con el tamaño muestral y el resultado principal",
-				"ideas_label": "Diseños de tabla"
+				"ideas_label": "Diseños de tabla",
+				"item": "Tabla de datos"
 			},
 			"infographic": {
 				"label": "Infografía",
@@ -1021,7 +1028,8 @@
 				"description": "Un solo póster que presenta de un vistazo los datos y cifras clave.",
 				"focus_label": "Describe la infografía que quieres crear",
 				"focus_placeholder": "p. ej., Empieza por las 3 cifras clave y muestra la tendencia en un gráfico",
-				"ideas_label": "Mensajes clave"
+				"ideas_label": "Mensajes clave",
+				"item": "Infografía"
 			}
 		},
 		"options": {
@@ -1082,7 +1090,7 @@
 					},
 					"whiteboard": {
 						"label": "Pizarra",
-						"description": "Dibujos a rotulador, flechas y palabras clave rodeadas sobre blanco."
+						"description": "Tinta negra sobre blanco, tarjetas con contorno y un acento rojo y otro azul."
 					},
 					"playful": {
 						"label": "Divertido",
@@ -1090,7 +1098,7 @@
 					},
 					"dark": {
 						"label": "Oscuro",
-						"description": "Fondos gris antracita con texto brillante y un acento verde azulado."
+						"description": "Fondos azul marino profundo con texto claro y un acento azul suave."
 					},
 					"minimal": {
 						"label": "Minimalista",
@@ -1358,6 +1366,7 @@
 			"heading": "Empecemos tu cuaderno",
 			"body_no_sources": "Añade fuentes para fundamentar la conversación, o elige un punto de partida y te guiaré.",
 			"body_with_sources": "Pregunta lo que quieras sobre tus fuentes o empieza con una de estas preguntas.",
+			"body_with_sources_no_questions": "Pregunta lo que quieras sobre tus fuentes o elige un punto de partida.",
 			"heading_with_sources": "Pregunta a tus fuentes",
 			"questions_label": "Preguntas sugeridas",
 			"starts": {
@@ -1405,17 +1414,14 @@
 			"rendering": "Renderizando",
 			"verifying": "Comprobando el resultado",
 			"saving": "Guardando",
-			"waiting_for_sandbox": "Esperando un entorno aislado"
+			"waiting_for_sandbox": "Esperando un entorno aislado",
+			"awaiting_brief": "Esperando tu aprobación en el chat"
 		},
 		"add_from_connector": "Desde un conector",
-		"connector_sources_title": "Archivos de tus aplicaciones conectadas",
-		"connector_sources_files": "Los archivos que ya están en tu biblioteca, incluidos los que sincronizó un conector, se añaden desde “De tu biblioteca”.",
-		"connector_sources_tools": "Los conectores de herramientas (servidores MCP como Nextcloud, búsqueda web, un navegador) no se copian: el chat del cuaderno los usa en vivo cuando una pregunta lo requiere.",
 		"manage_connectors": "Administrar conectores",
 		"add_from_library_short": "Biblioteca",
 		"add_upload_short": "Subir",
 		"add_from_connector_short": "Conector",
-		"nextcloud_picker_hint": "Marca archivos o carpetas para añadirlos como fuentes. Se copian una vez ahora; nada se sigue sincronizando.",
 		"made_with": "Hecho con {model}",
 		"made_with_fallback": "Hecho con {model} (respaldo)",
 		"output_view": {
@@ -1435,8 +1441,8 @@
 			"try_again": "Reintentar"
 		},
 		"back_to_output": "Volver a {title}",
-		"google_drive_picker_hint": "Elige archivos en el selector de Google Drive; se añaden aquí y se vuelven a leer cuando cambian en Drive.",
-		"retry_link_gone": "Ese resultado ya no se puede volver a intentar."
+		"retry_link_gone": "Ese resultado ya no se puede volver a intentar.",
+		"delete_output_confirm_no_file": "¿Eliminar «{title}»?"
 	},
 	"notes": {
 		"title": "Notas",

@@ -141,6 +141,12 @@ VALUES (sqlc.arg(document_id), sqlc.arg(user_id), sqlc.narg(notebook_id),
 -- not the title. A text that changed is marked pending, an emptied one
 -- included: the indexer takes an emptied note's passages out of search
 -- and marks it ready with none, and without the job they would stay.
+--
+-- A note still called by the untitled name takes the title its text gives
+-- (title_from_text, worked out by the route) when no title is sent: a new
+-- note starts empty and so untitled, and is then named by its first line as
+-- it is typed. The comparison is in the statement, on the locked row, so a
+-- title typed meanwhile is never overwritten.
 WITH old AS (
     SELECT d.id, d.status ->> 'state' AS previous_state,
            COALESCE(d.source_markdown, '') AS previous_markdown
@@ -156,7 +162,10 @@ changed AS (
     FROM old
 )
 UPDATE documents d
-SET title = COALESCE(sqlc.narg(title)::text, d.title),
+SET title = COALESCE(
+        sqlc.narg(title)::text,
+        CASE WHEN d.title = sqlc.narg(untitled)::text THEN sqlc.narg(title_from_text)::text END,
+        d.title),
     source_markdown = COALESCE(sqlc.narg(markdown)::text, d.source_markdown),
     content_hash = COALESCE(sqlc.narg(content_hash)::text, d.content_hash),
     content_needs_reindexing = d.content_needs_reindexing OR changed.needs_indexing,

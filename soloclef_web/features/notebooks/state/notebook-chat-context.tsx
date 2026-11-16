@@ -32,6 +32,11 @@ export interface NotebookChatContextValue {
 	openResearch?: () => void;
 	/** Brings the chat into view (the phone's Chat tab). */
 	showChat?: () => void;
+	/**
+	 * Opens something the chat made in Studio's output view, as Studio opens
+	 * it. False when the artifact is not one of the notebook's Studio outputs.
+	 */
+	openArtifactOutput?: (artifactId: number) => boolean;
 }
 
 const NotebookChatContext = createContext<NotebookChatContextValue | null>(null);

@@ -1,6 +1,5 @@
 "use client";
 
-import { Unplug } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
@@ -41,11 +40,12 @@ export function ConnectorSourcesTab({
 
 	return (
 		<div className="flex flex-col gap-4">
-			<div className="flex flex-col gap-3" data-testid="google-drive-sources">
-				<GoogleDriveConnectionControls />
-				{driveUsable && (
-					<>
-						<p className="text-sm text-muted-foreground">{t("google_drive_picker_hint")}</p>
+			{/* Each connector only where the server has it set up, as Nextcloud
+			    below: a "not set up" line is no use to someone adding sources. */}
+			{drive.connection?.configured && (
+				<div className="flex flex-col gap-3" data-testid="google-drive-sources">
+					<GoogleDriveConnectionControls />
+					{driveUsable && (
 						<GoogleDriveImportButton
 							connectorId={driveConnectorId}
 							// The server checks the notebook is the account's own
@@ -54,45 +54,30 @@ export function ConnectorSourcesTab({
 							onImported={onImported}
 							onNeedsReconnect={() => void drive.refresh()}
 						/>
-					</>
-				)}
-			</div>
+					)}
+				</div>
+			)}
 			{connection?.configured && (
 				<div className="flex flex-col gap-3" data-testid="nextcloud-sources">
 					<NextcloudConnectionControls />
 					{usable && (
-						<>
-							<p className="text-sm text-muted-foreground">{t("nextcloud_picker_hint")}</p>
-							<NextcloudPicker
-								connectorId={connectorId}
-								notebookId={notebookId}
-								onImported={onImported}
-							/>
-						</>
+						<NextcloudPicker
+							connectorId={connectorId}
+							notebookId={notebookId}
+							onImported={onImported}
+						/>
 					)}
 				</div>
 			)}
-			<div className="flex flex-col gap-4 rounded-lg border p-4 text-sm">
-				<div className="flex items-start gap-3">
-					<span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted">
-						<Unplug className="size-4" />
-					</span>
-					<div className="space-y-2">
-						<p className="font-medium">{t("connector_sources_title")}</p>
-						<p className="text-muted-foreground">{t("connector_sources_files")}</p>
-						<p className="text-muted-foreground">{t("connector_sources_tools")}</p>
-					</div>
-				</div>
-				<div className="flex flex-wrap justify-end gap-2">
-					<Button variant="ghost" onClick={onPickFromLibrary}>
-						{t("add_from_library")}
-					</Button>
-					<Button asChild variant="outline">
-						<Link href={settingsPath("connectors")} onClick={onLeave}>
-							{t("manage_connectors")}
-						</Link>
-					</Button>
-				</div>
+			<div className="flex flex-wrap justify-end gap-2">
+				<Button variant="ghost" onClick={onPickFromLibrary}>
+					{t("add_from_library")}
+				</Button>
+				<Button asChild variant="outline">
+					<Link href={settingsPath("connectors")} onClick={onLeave}>
+						{t("manage_connectors")}
+					</Link>
+				</Button>
 			</div>
 		</div>
 	);

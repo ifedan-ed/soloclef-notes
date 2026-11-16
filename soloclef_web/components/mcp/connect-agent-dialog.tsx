@@ -51,16 +51,13 @@ export function ConnectAgentDialog({
 			<DialogContent className="max-h-[85vh] min-w-0 overflow-x-hidden overflow-y-auto sm:max-w-2xl">
 				<DialogHeader>
 					<DialogTitle>Connect your agent to {BRAND.name}</DialogTitle>
+					{/* One line, not two: the second only repeated where API access is. */}
 					<DialogDescription>
-						Give your agent your {BRAND.name} knowledge base. It works only while API access is on
-						(Settings, API access).
+						Turn on API access and create an API key in Settings, API access. Then choose your
+						agent and paste its config.
 					</DialogDescription>
 				</DialogHeader>
 				<section className="min-w-0 space-y-3">
-					<p className="text-sm text-muted-foreground">
-						Create an API key in your settings under API Access, choose your agent, then paste the
-						config.
-					</p>
 					<AgentSetupTabs
 						options={{ baseUrl: publicBackendBaseUrl(), remoteUrl }}
 						selfHosted={selfHosted}

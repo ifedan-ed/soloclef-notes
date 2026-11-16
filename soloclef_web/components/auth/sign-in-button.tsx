@@ -23,7 +23,7 @@ export const SignInButton = ({ variant = "desktop" }: SignInButtonProps) => {
 
 	return (
 		<Link href="/login" className={cn("sign-in-link", getLocalClassName())}>
-			Sign In
+			Sign in
 		</Link>
 	);
 };

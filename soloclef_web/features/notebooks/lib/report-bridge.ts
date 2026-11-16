@@ -8,6 +8,11 @@
  * the shallowest repeated level), then which one is being read as the report
  * scrolls; it scrolls to a section when the viewer asks. The viewer accepts
  * messages only from that frame's window and shows the headings as text.
+ *
+ * A heading's label keeps a number set in its own element, or a block or
+ * inline-block inside it, apart from the words beside it: reports often
+ * write "<span>01</span>Randomized trials", whose textContent ran together
+ * as "01Randomized". Inline emphasis stays joined ("<em>53%</em>,").
  */
 
 export const BRIDGE_FROM_REPORT = "soloclef-report";
@@ -32,7 +37,11 @@ function pick(){
   if(!level)level=levels[0];
   return all.filter(function(h){return h.tagName===level;});
 }
-function label(h){return (h.textContent||"").replace(/\\s+/g," ").trim().slice(0,160);}
+function words(n,root){if(n.nodeType===3)return n.nodeValue;if(n.nodeType!==1)return "";
+  var s=[].map.call(n.childNodes,function(c){return words(c,root);}).join("");
+  var apart=n!==root&&(getComputedStyle(n).display!=="inline"||/^\\s*([0-9]+|[IVXLC]+)[.)]?\\s*$/.test(n.textContent||""));
+  return apart?" "+s+" ":s;}
+function label(h){return words(h,h).replace(/\\s+/g," ").trim().slice(0,160);}
 function post(msg){msg.source=FROM;try{parent.postMessage(msg,"*");}catch(e){}}
 function toc(){heads=pick();var items=heads.map(label),key=JSON.stringify(items);
   if(key!==sent){sent=key;last=-2;post({type:"toc",items:items});}spy();}

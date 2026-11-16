@@ -116,8 +116,8 @@ test.describe("Automations", () => {
 test.describe("Logs", () => {
 	test("task logs page renders its summary and filters", async ({ page }) => {
 		await page.goto("/dashboard/logs");
-		await expect(page.getByRole("heading", { name: "Task Logs" })).toBeVisible();
-		for (const card of ["Total Logs", "Active Tasks", "Success Rate", "Recent Failures"]) {
+		await expect(page.getByRole("heading", { name: "Task logs" })).toBeVisible();
+		for (const card of ["Total logs", "Active tasks", "Success rate", "Recent failures"]) {
 			await expect(page.getByText(card).first()).toBeVisible();
 		}
 		await page.getByPlaceholder("Filter by message...").fill("nothing-matches");

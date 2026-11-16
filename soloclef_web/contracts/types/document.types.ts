@@ -171,9 +171,13 @@ export const getDocumentsStatusRequest = z.object({
 });
 
 /**
- * What the indexer is doing with a document that is "processing", so a slow
+ * What is being done with a document that is not ready yet, so a slow
  * upload says what it is waiting on. "retrying" is a document waiting to be
- * tried again after a service it needs did not answer.
+ * tried again after a service it needs did not answer. "reading" is a web
+ * page or paper added by link or from research, being fetched and read
+ * (notebookresearch); "downloading" is a Nextcloud file waiting to be
+ * copied in (nextcloudimport). Every stage the server writes is listed: a
+ * stage missing here fails the whole status read.
  */
 export const documentStageEnum = z.enum([
 	"parsing",
@@ -181,10 +185,13 @@ export const documentStageEnum = z.enum([
 	"embedding",
 	"indexing",
 	"retrying",
+	"reading",
+	"downloading",
 ]);
 
 export const documentStatus = z.object({
-	state: z.enum(["ready", "pending", "processing", "failed"]),
+	// "deleting" is a document on its way out of the account (documents.status).
+	state: z.enum(["ready", "pending", "processing", "failed", "deleting"]),
 	reason: z.string().nullable().optional(),
 	/** Set only while the state is "processing". */
 	stage: documentStageEnum.nullable().optional(),

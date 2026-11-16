@@ -9,8 +9,9 @@ export const notebookKeys = {
 		["notebooks", notebookId, "guide", sourceId] as const,
 	threads: (notebookId: number) => ["notebooks", notebookId, "threads"] as const,
 	outputs: (notebookId: number) => ["notebooks", notebookId, "outputs"] as const,
-	suggestions: (notebookId: number, kind: string, variant = "", language = "") =>
-		["notebooks", notebookId, "suggestions", kind, variant, language] as const,
+	/** `sources` is the ticked sources' signature (lib/suggestion-sources.ts). */
+	suggestions: (notebookId: number, kind: string, variant = "", language = "", sources = "") =>
+		["notebooks", notebookId, "suggestions", kind, variant, language, sources] as const,
 	followups: (notebookId: number, messageId: string) =>
 		["notebooks", notebookId, "followups", messageId] as const,
 	reportView: (notebookId: number, outputId: number) =>

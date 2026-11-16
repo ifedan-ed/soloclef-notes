@@ -23,7 +23,7 @@ export function DocumentViewer({ title, content, trigger }: DocumentViewerProps)
 				{trigger || (
 					<Button variant="ghost" size="sm" className="flex items-center gap-1">
 						<FileText size={16} />
-						<span>View Content</span>
+						<span>View content</span>
 					</Button>
 				)}
 			</DialogTrigger>

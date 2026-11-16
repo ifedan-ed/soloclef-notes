@@ -27,7 +27,7 @@ on the tab you are on, once you confirm. What you delete goes from your other
 tabs and your phone too.
 
 Notifications are not sent by email. An automation can email you its result
-separately, with Email me the result.
+separately, with Email me each result.
 
 ## Pushes to your phone
 

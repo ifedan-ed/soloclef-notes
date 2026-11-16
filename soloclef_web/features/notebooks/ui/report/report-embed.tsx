@@ -77,7 +77,7 @@ export function ReportEmbedCard({
 }) {
 	const t = useTranslations("report_view");
 	const tn = useTranslations("notebooks");
-	const kindLabel = tn(`kinds.${output.kind}.label`);
+	const kindLabel = tn(`kinds.${output.kind}.item`);
 	const Icon = studioTile(output.kind).icon;
 	return (
 		<section

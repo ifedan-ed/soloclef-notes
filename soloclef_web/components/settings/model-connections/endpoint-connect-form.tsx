@@ -49,7 +49,7 @@ export function EndpointConnectForm({ preset, onDraftChange }: EndpointConnectFo
 			<ApiKeyField
 				value={apiKey}
 				onChange={setApiKey}
-				label="API Key"
+				label="API key"
 				placeholder="Enter your API key"
 			/>
 			<HeadersField

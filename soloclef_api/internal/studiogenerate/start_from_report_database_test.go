@@ -34,6 +34,11 @@ func TestAnOutputStartedFromAReportReadsTheReportsOwnSources(t *testing.T) {
 	if h.count("notebook_outputs WHERE id = "+strconv.FormatInt(id, 10)+" AND notebook_id = 10 AND kind = 'audio' AND source_document_ids = '[101]'") != 1 {
 		t.Error("the output does not record the one source it was made from")
 	}
+	// The report's documents were not chosen as notebook sources, so none
+	// is recorded: its Try again reads the ticked sources.
+	if h.count("notebook_outputs WHERE id = "+strconv.FormatInt(id, 10)+" AND notebook_source_ids IS NULL") != 1 {
+		t.Error("an output from a report's documents recorded notebook sources")
+	}
 
 	// None of the report's sources is left in the notebook: the ticked
 	// sources are read, as for any other output.
@@ -44,6 +49,10 @@ func TestAnOutputStartedFromAReportReadsTheReportsOwnSources(t *testing.T) {
 	}
 	if len(h.focuses) != 2 || !strings.Contains(h.focuses[1], "The moon pulls the sea.") || strings.Contains(h.focuses[1], "BOBS SECRET TEXT") {
 		t.Errorf("with none of its own left, the material was %q", h.focuses)
+	}
+	// Read from the ticked sources, which it then records.
+	if h.count("notebook_outputs WHERE notebook_source_ids = '{1}'") != 1 {
+		t.Error("an output read from the ticked sources did not record them")
 	}
 
 	// An artifact kind is one output however often the same attempt is sent.

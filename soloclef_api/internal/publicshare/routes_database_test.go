@@ -219,6 +219,11 @@ func TestALinksFilesAreReachedByItsTokenAlone(t *testing.T) {
 			!strings.HasPrefix(response.Header.Get("Content-Disposition"), "attachment;") {
 			t.Errorf("HTML was sent as a page of this site: %v", response.Header)
 		}
+		// Named after the shared output's title, as the owner's download
+		// is, not after the slug it was stored under ("report.html").
+		if got := response.Header.Get("Content-Disposition"); !strings.Contains(got, `filename="Tide report.html"`) {
+			t.Errorf("the file is named %q", got)
+		}
 	})
 
 	t.Run("nothing outside the link is reached", func(t *testing.T) {

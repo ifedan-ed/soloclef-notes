@@ -67,3 +67,12 @@ test("Settings › Public links reads the server's list as output links", () => 
 		},
 	]);
 });
+
+test("a public link's read leaves its failures to the page, not the error toast", async () => {
+	// Imported here: the module reads the API's base address when loaded.
+	const { publicOutputQuery } = await import("@/features/public-sharing/hooks/use-public-output");
+	const query = publicOutputQuery("token");
+	assert.equal(query.meta.suppressGlobalErrorToast, true);
+	assert.equal(query.retry, false);
+	assert.equal(publicOutputQuery("").enabled, false);
+});

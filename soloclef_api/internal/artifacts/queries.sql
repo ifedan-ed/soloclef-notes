@@ -99,12 +99,21 @@ WHERE f.artifact_id = sqlc.arg(artifact_id) AND a.user_id = sqlc.arg(user_id)
 ORDER BY (f.role <> 'primary'), f.id;
 
 -- name: DownloadOfArtifact :one
+-- `title` is what the file is named after: the title of the Studio output
+-- that lists the artifact (what the person sees and may have renamed),
+-- found through the artifact itself, its job or its podcast, each by its
+-- own index; the document's title when no output lists it.
 -- The download: the artifact's primary file when it has one, and the
 -- document's Markdown when it has none. The CASE is what keeps a whole
 -- document from being read out of the table and thrown away for every
 -- artifact that *does* have a file, which is nearly all of them; for those
 -- the column is the empty string and `file_id` says why.
-SELECT d.title,
+SELECT COALESCE((SELECT o.title FROM notebook_outputs o
+                 WHERE o.user_id = a.user_id
+                   AND (o.artifact_id = a.id
+                        OR o.deliverable_job_id IN (SELECT j.id FROM deliverable_jobs j WHERE j.artifact_id = a.id AND j.user_id = a.user_id)
+                        OR o.podcast_id IN (SELECT p.id FROM podcast_runs p WHERE p.artifact_id = a.id AND p.user_id = a.user_id))
+                 ORDER BY o.id LIMIT 1), d.title)::text AS title,
        f.id AS file_id, f.original_filename, f.mime_type,
        f.storage_backend, f.storage_key, f.checksum_sha256,
        COALESCE(CASE WHEN f.id IS NULL
@@ -116,13 +125,21 @@ LEFT JOIN artifact_files f ON f.artifact_id = a.id AND f.role = 'primary'
 WHERE a.id = sqlc.arg(id) AND a.user_id = sqlc.arg(user_id);
 
 -- name: FileOfArtifactOfOwner :one
+-- `title` names the file, as DownloadOfArtifact's does.
 -- One file, found only through its artifact and that artifact's owner: a
 -- file id from another artifact, or an artifact of another account, is not
 -- found.
 SELECT f.id, f.role::text AS role, f.original_filename, f.mime_type, f.size_bytes,
-       f.storage_backend, f.storage_key, f.checksum_sha256
+       f.storage_backend, f.storage_key, f.checksum_sha256,
+       COALESCE((SELECT o.title FROM notebook_outputs o
+                        WHERE o.user_id = a.user_id
+                          AND (o.artifact_id = a.id
+                               OR o.deliverable_job_id IN (SELECT j.id FROM deliverable_jobs j WHERE j.artifact_id = a.id AND j.user_id = a.user_id)
+                               OR o.podcast_id IN (SELECT p.id FROM podcast_runs p WHERE p.artifact_id = a.id AND p.user_id = a.user_id))
+                        ORDER BY o.id LIMIT 1), d.title)::text AS title
 FROM artifact_files f
 JOIN artifacts a ON f.artifact_id = a.id
+JOIN documents d ON d.id = a.document_id
 WHERE f.id = sqlc.arg(file_id) AND f.artifact_id = sqlc.arg(artifact_id)
   AND a.user_id = sqlc.arg(user_id);
 

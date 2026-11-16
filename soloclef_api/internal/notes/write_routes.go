@@ -134,6 +134,17 @@ func (r Routes) update(x *exchange) {
 		hash := contentHash(*change.Text)
 		arguments.ContentHash = &hash
 	}
+	if change.Title == nil && change.Text != nil {
+		// A note made empty is untitled; the first save of its text names
+		// it from its first line, as a note created with text is named. The
+		// statement applies it only while the title is still the untitled
+		// one, so a title the person typed is never replaced.
+		if fromText := TitleFromText(*change.Text); fromText != "" {
+			name := untitled
+			arguments.Untitled = &name
+			arguments.TitleFromText = &fromText
+		}
+	}
 	if change.Title != nil {
 		// An emptied title field names the note from its text, as a new
 		// note is named: the text being saved with it, or the one there.

@@ -53,20 +53,22 @@ func (r Routes) StartFromReport(ctx context.Context, who Caller, notebookID int6
 	if len(failures) > 0 {
 		return 0, &refusal{http.StatusUnprocessableEntity, failures[0].Message}
 	}
-	return r.start(ctx, who, notebookID, request, func(ctx context.Context, q *Queries) ([]SourceDocument, error) {
+	return r.start(ctx, who, notebookID, request, func(ctx context.Context, q *Queries) (chosen, error) {
 		if len(asked.DocumentIDs) > 0 {
 			rows, err := q.DocumentsStillInNotebook(ctx, DocumentsStillInNotebookParams{
 				UserID: who.UserID, NotebookID: notebookID, DocumentIds: asked.DocumentIDs, Most: maxSourceDocuments,
 			})
 			if err != nil {
-				return nil, err
+				return chosen{}, err
 			}
 			if len(rows) > 0 {
 				documents := make([]SourceDocument, len(rows))
 				for i, row := range rows {
 					documents[i] = SourceDocument{ID: row.ID, Title: row.Title, Text: strings.TrimSpace(row.Body)}
 				}
-				return documents, nil
+				// The report's documents, not sources anyone chose: no
+				// source ids, so a Try again reads the ticked sources.
+				return chosen{documents: documents}, nil
 			}
 		}
 		return readSources(ctx, q, who.UserID, notebookID, nil)

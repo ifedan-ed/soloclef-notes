@@ -147,7 +147,7 @@ export const ActiveConnectorsTab: FC<ActiveConnectorsTabProps> = ({
 					{hasActiveConnectors && (
 						<div className="space-y-4">
 							<div className="flex items-center gap-2">
-								<h3 className="text-sm font-semibold text-muted-foreground">Active Connectors</h3>
+								<h3 className="text-sm font-semibold text-muted-foreground">Active connectors</h3>
 							</div>
 							<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 								{/* OAuth Connectors - Grouped by Type */}

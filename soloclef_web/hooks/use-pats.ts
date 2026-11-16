@@ -39,11 +39,11 @@ export function usePats() {
 				const data = await patsApiService.createPat(request);
 				setCreatedToken(data);
 				await refresh();
-				toast.success("Personal access token created");
+				toast.success("API key created");
 				return data;
 			} catch (error) {
 				console.error("Failed to create personal access token:", error);
-				toast.error("Failed to create personal access token");
+				toast.error("Could not create the API key");
 				throw error;
 			} finally {
 				setIsMutating(false);
@@ -58,10 +58,10 @@ export function usePats() {
 			try {
 				await patsApiService.deletePat(id);
 				await refresh();
-				toast.success("Personal access token deleted");
+				toast.success("API key deleted");
 			} catch (error) {
 				console.error("Failed to delete personal access token:", error);
-				toast.error("Failed to delete personal access token");
+				toast.error("Could not delete the API key");
 				throw error;
 			} finally {
 				setIsMutating(false);

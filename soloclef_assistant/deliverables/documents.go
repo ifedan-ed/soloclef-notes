@@ -88,6 +88,10 @@ type documentFormat struct {
 	// placement rules, expected to be exactly as many as the deck declares,
 	// and allowed to hold no text.
 	slides bool
+	// recalculated says the file's formulas are recalculated by LibreOffice
+	// before it is checked, and the recalculated file is what is saved
+	// (recalculate.go).
+	recalculated bool
 	// drawn says this process draws the file from content the model
 	// writes (a deck): it is never built, verified or saved from the
 	// sandbox.
@@ -99,7 +103,7 @@ var documentFormats = map[string]documentFormat{
 	FormatPDF:  {suffix: ".pdf", mime: "application/pdf", check: checkPDFBytes, rendered: true},
 	FormatDOCX: {suffix: ".docx", mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", check: checkDOCX, rendered: true, converted: true},
 	FormatPPTX: {suffix: ".pptx", mime: "application/vnd.openxmlformats-officedocument.presentationml.presentation", check: checkPPTX, rendered: true, converted: true, slides: true, drawn: true},
-	FormatXLSX: {suffix: ".xlsx", mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", check: checkXLSX},
+	FormatXLSX: {suffix: ".xlsx", mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", check: checkXLSX, recalculated: true},
 	FormatHTML: {suffix: ".html", mime: "text/html", check: checkHTML},
 }
 

@@ -11,12 +11,15 @@ import { SIGNUPS_OPEN } from "@/lib/signups";
 
 export type SiteLink = { name: string; href: string };
 
+/** The contact page: a dead end on a server that publishes no address. */
+export const CONTACT_HREF = "/contact";
+
 export { REQUEST_ACCESS_HREF, SIGNUPS_OPEN } from "@/lib/signups";
 
 export const NAV_LINKS: SiteLink[] = [
 	{ name: "Features", href: "/features" },
 	{ name: "Docs", href: "/docs" },
-	{ name: "Contact", href: "/contact" },
+	{ name: "Contact", href: CONTACT_HREF },
 ];
 
 export const FOOTER_COLUMNS: { heading: string; links: SiteLink[] }[] = [
@@ -32,7 +35,7 @@ export const FOOTER_COLUMNS: { heading: string; links: SiteLink[] }[] = [
 		links: [
 			{ name: "Docs", href: "/docs" },
 			{ name: "Getting started", href: "/docs/getting-started" },
-			{ name: "Contact", href: "/contact" },
+			{ name: "Contact", href: CONTACT_HREF },
 		],
 	},
 	{
@@ -43,6 +46,16 @@ export const FOOTER_COLUMNS: { heading: string; links: SiteLink[] }[] = [
 		],
 	},
 ];
+
+/**
+ * The links to show: all of them, or all but Contact when the server publishes
+ * no contact address (useSupportEmail), since a contact page with nobody to
+ * contact is a dead end. Privacy and Terms keep their own in-text link: they
+ * must say where to write, and the page itself says when there is no one.
+ */
+export function shownLinks(links: SiteLink[], hasContact: boolean): SiteLink[] {
+	return hasContact ? links : links.filter((link) => link.href !== CONTACT_HREF);
+}
 
 export type Advantage = { key: string; title: string; body: string; href: string };
 
@@ -178,7 +191,7 @@ export const HOME_FAQ: Faq[] = [
 		question: "Can I sign up?",
 		answer: SIGNUPS_OPEN
 			? "Yes. Create an account from the sign-up page."
-			: "Not yet: new accounts are not open. You can request access from the contact page, and if you already have an account, sign in.",
+			: "Not yet: new accounts are by invitation. If you already have an account, sign in.",
 	},
 	{
 		question: "Is there an app?",

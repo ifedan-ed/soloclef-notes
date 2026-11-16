@@ -45,12 +45,12 @@ INSERT INTO deliverable_jobs (id, user_id, kind, title, tool_call_id, status, ph
  (82, '`+alice+`', 'artifact', 'Queued', 't3', 'queued', NULL, 0, NULL, '{"task":"her sources"}');
 INSERT INTO podcast_runs (id, user_id, title, status, duration_seconds, artifact_id) VALUES
  (90, '`+alice+`', 'Talk', 'rendering', NULL, 71);
-INSERT INTO notebook_outputs (id, notebook_id, user_id, kind, title, deliverable_job_id, podcast_id, source_document_ids, created_at) VALUES
- (1001, 10, '`+alice+`', 'slides', 'Deck', 80, NULL, '[1,2]', '2026-01-01'),
- (1002, 10, '`+alice+`', 'report', 'Draft', 81, NULL, '[]', '2026-01-02'),
- (1003, 10, '`+alice+`', 'report', 'Queued', 82, NULL, '[]', '2026-01-03'),
- (1004, 10, '`+alice+`', 'audio', 'Talk', NULL, 90, '[1]', '2026-01-04'),
- (1005, 20, '`+bob+`',   'report', 'His', NULL, NULL, '[]', '2026-01-05');`)
+INSERT INTO notebook_outputs (id, notebook_id, user_id, kind, title, deliverable_job_id, podcast_id, source_document_ids, notebook_source_ids, created_at) VALUES
+ (1001, 10, '`+alice+`', 'slides', 'Deck', 80, NULL, '[1,2]', '{7}', '2026-01-01'),
+ (1002, 10, '`+alice+`', 'report', 'Draft', 81, NULL, '[]', NULL, '2026-01-02'),
+ (1003, 10, '`+alice+`', 'report', 'Queued', 82, NULL, '[]', NULL, '2026-01-03'),
+ (1004, 10, '`+alice+`', 'audio', 'Talk', NULL, 90, '[1]', NULL, '2026-01-04'),
+ (1005, 20, '`+bob+`',   'report', 'His', NULL, NULL, '[]', NULL, '2026-01-05');`)
 
 	removed := &removals{}
 	api := humago.New(http.NewServeMux(), huma.DefaultConfig("test", "0"))
@@ -88,7 +88,7 @@ INSERT INTO notebook_outputs (id, notebook_id, user_id, kind, title, deliverable
 	status, body := as(alice, "GET", "/api/v1/notebooks/10/studio/outputs", "")
 	expect("her outputs", status, body, 200,
 		`[{"id":1004,"kind":"audio","title":"Talk","status":"running","phase":"rendering"`,
-		`"id":1001,"kind":"slides","title":"Deck","status":"ready","phase":"done","progress":100,"failure_code":null,"artifact_id":70,"artifact_format":"slides","duration_seconds":62,"source_count":2,"options":{},"generated_by":null`)
+		`"id":1001,"kind":"slides","title":"Deck","status":"ready","phase":"done","progress":100,"failure_code":null,"failure_reason":null,"artifact_id":70,"artifact_format":"slides","duration_seconds":62,"source_count":2,"source_ids":[7],"options":{},"generated_by":null`)
 	if strings.Contains(body, "His") {
 		t.Error("her list shows his output")
 	}

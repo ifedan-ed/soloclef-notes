@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 
+	"git.danvics.com/danvics/soloclef/soloclef_api/internal/studiofailures"
 	"git.danvics.com/danvics/soloclef/soloclef_assistant/deliverables"
 )
 
@@ -86,14 +87,9 @@ func (r *Runner) nothingMade(job Job, failures *deliverables.Failures, answer st
 	return ending{status: DeliverableJobStatusFailed, code: codeNothingMade, detail: "the specialist ended without saving an artifact"}
 }
 
-// reasonFor is the sentence the owner is told for a failure code: the
-// runner's own codes first, then the specialist's. A code with neither
-// has none, and the notification says only that the output could not be
-// made.
+// reasonFor is the sentence the owner is told for a failure code
+// (studiofailures.ForArtifact). A code with none gets a notification that
+// says only that the output could not be made.
 func reasonFor(code string) string {
-	if reason, known := reasons[code]; known {
-		return reason
-	}
-	reason, _ := deliverables.FailureSentence(code)
-	return reason
+	return studiofailures.ForArtifact(code)
 }

@@ -22,6 +22,8 @@ var (
 	blockMarker = regexp.MustCompile(`^\s*(?:#{1,6}\s+|>\s*|[-*+]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+)+`)
 	// Inline emphasis and code marks, and a maths delimiter.
 	inlineMarks = regexp.MustCompile("[*_`~]+|\\$+")
+	// Zero-width space, joiner, non-joiner and byte-order mark.
+	zeroWidth = regexp.MustCompile("[\u200b-\u200d\ufeff]")
 	// A line that is a fence, a rule or a table's divider says nothing.
 	emptyLine = regexp.MustCompile(`^\s*(?:` + "```" + `.*|~~~.*|[-*_=\s]{3,}|\|?[\s:|-]+\|?)?\s*$`)
 )
@@ -56,6 +58,10 @@ func TitleFromText(text string) string {
 		line = markdownLink.ReplaceAllString(line, "$1")
 		line = blockMarker.ReplaceAllString(line, "")
 		line = inlineMarks.ReplaceAllString(line, "")
+		// The web editor writes an empty paragraph as a zero-width space,
+		// which strings.Fields keeps: a note opening with a blank line was
+		// titled with that invisible character instead of its first words.
+		line = zeroWidth.ReplaceAllString(line, "")
 		line = strings.Trim(strings.Join(strings.Fields(line), " "), " |")
 		if line == "" {
 			continue

@@ -426,8 +426,10 @@ func TestAnArtifactIsMadeFromTheCallersOwnSourcesAlone(t *testing.T) {
 
 	// Her ticked source (document 100) and nothing else.
 	status, body = h.as(alice, "POST", generate, `{"kind":"mindmap","request_id":"click-1","focus":"spring tides"}`)
+	// The ticked source it was made from is kept as the output's choice,
+	// for its Try again.
 	expect(t, "her mind map", status, body, 201, `"kind":"mindmap"`, `"title":"Mind Map: Tides"`, `"source_count":1`,
-		`"generated_by":{"model":"test-model"}`, `"focus":"spring tides"`, `"detail":"standard"`)
+		`"source_ids":[1]`, `"generated_by":{"model":"test-model"}`, `"focus":"spring tides"`, `"detail":"standard"`)
 	h.until("the run finishes", "deliverable_jobs WHERE kind = 'artifact' AND status = 'ready' AND artifact_id IS NOT NULL AND progress = 100 AND finished_at IS NOT NULL")
 	if h.count(`artifacts a JOIN deliverable_jobs j ON j.artifact_id = a.id JOIN new_chat_threads t ON t.id = a.thread_id
 		WHERE a.user_id = '`+alice+`' AND a.format = 'mindmap' AND t.source = 'artifact_api' AND t.notebook_id = 10 AND j.thread_id = t.id`) != 1 {
@@ -477,8 +479,10 @@ func TestAnArtifactIsMadeFromTheCallersOwnSourcesAlone(t *testing.T) {
 
 	// A folder source she names reaches the folder's documents, but not
 	// one being deleted.
+	// The output keeps the folder source as it was chosen, not the
+	// document it reached, so a Try again reads the folder again.
 	status, body = h.as(alice, "POST", generate, `{"kind":"mindmap","source_ids":[2]}`)
-	expect(t, "her folder source", status, body, 201, `"source_count":1`)
+	expect(t, "her folder source", status, body, 201, `"source_count":1`, `"source_ids":[2]`)
 	h.until("the second run finishes", "(SELECT 1 FROM deliverable_jobs WHERE kind = 'artifact' AND status = 'ready' HAVING count(*) = 2) AS finished")
 	if h.count("notebook_outputs WHERE source_document_ids = '[101]'") != 1 {
 		t.Error("the folder source should have reached document 101 alone")
@@ -540,6 +544,11 @@ func TestAudioAndVideoGoThroughTheChatsOwnMakers(t *testing.T) {
 		queued.Material != "## Source: Moon\n\nThe moon pulls the sea." || queued.Title != "Tides" {
 		t.Errorf("the queued video: %+v", queued)
 	}
+	// A short video is held to its length by the worker, not by the brief
+	// alone; an explainer only by the worker's own limit.
+	if queued.MaxSeconds != 90 {
+		t.Errorf("a short video was queued with a cap of %d seconds", queued.MaxSeconds)
+	}
 	if h.count("new_chat_threads WHERE id = "+strconv.FormatInt(h.videos.threads[0], 10)+" AND user_id = '"+alice+"' AND source = 'artifact_api'") != 1 {
 		t.Error("the video should be queued under a hidden thread of hers")
 	}
@@ -557,6 +566,9 @@ func TestAudioAndVideoGoThroughTheChatsOwnMakers(t *testing.T) {
 	expect(t, "her video asked in Spanish", status, body, 201, `"title":"Resumen en vídeo: Tides"`)
 	if len(h.videos.briefs) != 2 || h.videos.briefs[1].Title != "Tides" {
 		t.Errorf("the Spanish dialog's video was queued as %+v", h.videos.briefs[len(h.videos.briefs)-1])
+	}
+	if h.videos.briefs[1].MaxSeconds != 0 {
+		t.Errorf("an explainer was queued with a cap of %d seconds", h.videos.briefs[1].MaxSeconds)
 	}
 }
 
@@ -653,5 +665,42 @@ func TestSuggestionsAreWrittenOncePerSourceSetAndAreTheOwnersAlone(t *testing.T)
 	expect(t, "no ticked source", status, body, 200, `"suggestions":[]`)
 	if h.model.calls() != before {
 		t.Error("the model was asked about no sources")
+	}
+}
+
+// A source still being read has no text: ideas written then were kept for
+// the finished set and named a document they never saw. Ideas wait for the
+// text, and a document read again is a new set.
+func TestSuggestionsAreWrittenOnlyFromSourcesThatHaveBeenRead(t *testing.T) {
+	h := newHarness(t, false)
+	const path = "/api/v1/notebooks/10/studio/suggestions?kind=chat"
+
+	testpostgres.Exec(t, h.pool, `UPDATE documents SET status = '{"state":"processing","stage":"parsing"}' WHERE id = 100`)
+	status, body := h.as(alice, "GET", path, "")
+	expect(t, "ideas while the only source is being read", status, body, 200, `"suggestions":[]`)
+	if h.model.calls() != 0 {
+		t.Errorf("the model was asked about a source with no text yet")
+	}
+	if h.count("notebooks WHERE id = 10 AND focus_suggestions IS NOT NULL") != 0 {
+		t.Error("an empty answer was stored as the set's ideas")
+	}
+
+	// Read: the ideas are written from its text, once.
+	testpostgres.Exec(t, h.pool, `UPDATE documents SET status = '{"state":"ready"}' WHERE id = 100`)
+	status, body = h.as(alice, "GET", path, "")
+	expect(t, "ideas once it is read", status, body, 200, `"Moon's pull"`)
+	if h.model.calls() != 1 || !strings.Contains(h.model.requests[0].Messages[1].Content, "The moon pulls the sea.") {
+		t.Fatalf("%d model calls: %+v", h.model.calls(), h.model.requests)
+	}
+	h.as(alice, "GET", path, "")
+	if h.model.calls() != 1 {
+		t.Error("the stored ideas were not reused")
+	}
+
+	// Read again with new text (re-indexed): new ideas.
+	testpostgres.Exec(t, h.pool, `UPDATE documents SET content = 'The moon pulls the tides.', content_hash = 'h100b' WHERE id = 100`)
+	h.as(alice, "GET", path, "")
+	if h.model.calls() != 2 || !strings.Contains(h.model.requests[1].Messages[1].Content, "The moon pulls the tides.") {
+		t.Errorf("a re-read document kept its old ideas: %d model calls", h.model.calls())
 	}
 }

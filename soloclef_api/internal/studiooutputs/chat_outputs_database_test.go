@@ -124,7 +124,7 @@ func TestWhatANotebooksChatMakesIsInItsStudio(t *testing.T) {
 		t.Fatalf("%d %s", status, body)
 	}
 	for _, want := range []string{
-		`"kind":"quiz","title":"Tide quiz","status":"ready","phase":null,"progress":null,"failure_code":null,"artifact_id":` + strconv.FormatInt(quiz.ArtifactID, 10) + `,"artifact_format":"quiz","duration_seconds":null,"source_count":0,"options":{"kind":"quiz"}`,
+		`"kind":"quiz","title":"Tide quiz","status":"ready","phase":null,"progress":null,"failure_code":null,"failure_reason":null,"artifact_id":` + strconv.FormatInt(quiz.ArtifactID, 10) + `,"artifact_format":"quiz","duration_seconds":null,"source_count":0,"source_ids":null,"options":{"kind":"quiz"}`,
 		`"kind":"report","title":"Tide report","status":"ready"`,
 		// jsonb keeps an object's keys in its own order.
 		`"options":{"kind":"report","format":"document","file_type":"docx"}`,

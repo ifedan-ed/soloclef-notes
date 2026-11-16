@@ -278,7 +278,7 @@ export const ConnectorEditView: FC<ConnectorEditViewProps> = ({
 							) : (
 								<>
 									<RefreshCw className="mr-2 h-4 w-4" />
-									Quick Index
+									Quick index
 								</>
 							)}
 						</Button>
@@ -387,7 +387,7 @@ export const ConnectorEditView: FC<ConnectorEditViewProps> = ({
 								disabled={isDisconnecting}
 								className="relative text-xs sm:text-sm flex-1 sm:flex-initial h-10 sm:h-auto py-2 sm:py-2"
 							>
-								<span className={isDisconnecting ? "opacity-0" : ""}>Confirm Disconnect</span>
+								<span className={isDisconnecting ? "opacity-0" : ""}>Confirm disconnect</span>
 								{isDisconnecting && <Spinner size="sm" className="absolute" />}
 							</Button>
 							<Button
@@ -426,7 +426,7 @@ export const ConnectorEditView: FC<ConnectorEditViewProps> = ({
 						disabled={isSaving || isDisconnecting || configPending}
 						className="relative text-xs sm:text-sm flex-1 sm:flex-initial sm:ml-auto h-12 sm:h-auto py-3 sm:py-2"
 					>
-						<span className={isSaving ? "opacity-0" : ""}>Save Changes</span>
+						<span className={isSaving ? "opacity-0" : ""}>Save changes</span>
 						{isSaving && <Spinner size="sm" className="absolute" />}
 					</Button>
 				) : null}

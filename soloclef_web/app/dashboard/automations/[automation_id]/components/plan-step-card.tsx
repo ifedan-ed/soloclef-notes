@@ -1,5 +1,7 @@
 "use client";
 import type { PlanStep } from "@/contracts/types/automation.types";
+import { useNotebooks } from "@/features/notebooks/hooks/use-notebook-queries";
+import { ANSWER_FROM, CAN_USE_LABEL, SAVE_RESULT_TO } from "@/lib/automations/reach-wording";
 
 interface PlanStepCardProps {
 	step: PlanStep;
@@ -11,8 +13,9 @@ interface PlanStepCardProps {
  * step does and only show advanced step controls when they are explicitly set.
  */
 export function PlanStepCard({ step, index }: PlanStepCardProps) {
+	const { data: notebooks } = useNotebooks();
 	const title = getStepTitle(step);
-	const details = getStepDetails(step);
+	const details = getStepDetails(step, (id) => notebookName(notebooks, id));
 
 	return (
 		<div className="rounded-md border border-border/60 bg-background/30 px-4 py-3">
@@ -51,7 +54,23 @@ function getStepTitle(step: PlanStep): string {
 	return sentenceCase(formatAction(step.action));
 }
 
-function getStepDetails(step: PlanStep): { label: string; value: string }[] {
+/**
+ * A notebook as the step card names it: its title. The card showed the raw
+ * id ("Only notebook #7"), which says nothing to the person who chose it by
+ * name. Until the list loads it reads "a notebook"; one since deleted says so.
+ */
+function notebookName(
+	notebooks: readonly { id: number; title: string }[] | undefined,
+	id: number
+): string {
+	if (!notebooks) return "a notebook";
+	return notebooks.find((notebook) => notebook.id === id)?.title ?? "a deleted notebook";
+}
+
+function getStepDetails(
+	step: PlanStep,
+	nameOf: (notebookId: number) => string
+): { label: string; value: string }[] {
 	const details: { label: string; value: string }[] = [];
 
 	if (step.action === "agent_task") {
@@ -62,14 +81,15 @@ function getStepDetails(step: PlanStep): { label: string; value: string }[] {
 			});
 		}
 
-		details.push({ label: "Can use", value: describeReach(step.params) });
+		// Labelled as the form and the draft card label the same fields.
+		details.push({ label: CAN_USE_LABEL, value: describeReach(step.params) });
 		if (typeof step.params.notebook_id === "number") {
-			details.push({ label: "Notebook", value: `Only notebook #${step.params.notebook_id}` });
+			details.push({ label: ANSWER_FROM.label, value: nameOf(step.params.notebook_id) });
 		}
 		if (typeof step.params.save_to_notebook_id === "number") {
 			details.push({
-				label: "Saves to notebook",
-				value: `Notebook #${step.params.save_to_notebook_id}`,
+				label: SAVE_RESULT_TO.label,
+				value: nameOf(step.params.save_to_notebook_id),
 			});
 		}
 

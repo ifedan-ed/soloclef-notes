@@ -79,10 +79,14 @@ export const studioOutputSchema = z.object({
 	phase: z.string().nullish(),
 	progress: z.number().nullish(),
 	failure_code: z.string().nullish(),
+	/** The server's sentence for a failed output, the one its notification gave. */
+	failure_reason: z.string().nullish(),
 	artifact_id: z.number().nullish(),
 	artifact_format: z.string().nullish(),
 	duration_seconds: z.number().nullish(),
 	source_count: z.number(),
+	/** The notebook sources it was asked for, which Try again sends back; null when none were recorded. */
+	source_ids: z.array(z.number()).nullish(),
 	options: z.record(z.string(), z.unknown()),
 	/** Which model wrote it; ``fallback`` when the primary model failed. */
 	generated_by: z

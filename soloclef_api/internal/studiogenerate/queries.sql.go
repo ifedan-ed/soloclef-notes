@@ -695,7 +695,8 @@ func (q *Queries) SetRunningPhase(ctx context.Context, arg SetRunningPhaseParams
 }
 
 const sourceDocuments = `-- name: SourceDocuments :many
-SELECT id, title, COALESCE(NULLIF(source_markdown, ''), content) AS body
+SELECT id, title, COALESCE(NULLIF(source_markdown, ''), content) AS body,
+       (status ->> 'state') = 'ready' AS is_read, content_hash
 FROM documents
 WHERE user_id = $1
   AND (id = ANY($2::bigint[]) OR folder_id = ANY($3::bigint[]))
@@ -712,14 +713,18 @@ type SourceDocumentsParams struct {
 }
 
 type SourceDocumentsRow struct {
-	ID    int64
-	Title string
-	Body  string
+	ID          int64
+	Title       string
+	Body        string
+	IsRead      bool
+	ContentHash string
 }
 
 // The documents those sources reach: each named document and every document
 // directly in a named folder, the caller's own, in a stable order. One being
-// deleted is left out: its text is on its way out of the account.
+// deleted is left out: its text is on its way out of the account. `is_read`
+// says the document has been read (state "ready"): one still being read has
+// no text yet. `content_hash` changes when a document is read again.
 func (q *Queries) SourceDocuments(ctx context.Context, arg SourceDocumentsParams) ([]SourceDocumentsRow, error) {
 	rows, err := q.db.Query(ctx, sourceDocuments,
 		arg.UserID,
@@ -734,7 +739,13 @@ func (q *Queries) SourceDocuments(ctx context.Context, arg SourceDocumentsParams
 	var items []SourceDocumentsRow
 	for rows.Next() {
 		var i SourceDocumentsRow
-		if err := rows.Scan(&i.ID, &i.Title, &i.Body); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Body,
+			&i.IsRead,
+			&i.ContentHash,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

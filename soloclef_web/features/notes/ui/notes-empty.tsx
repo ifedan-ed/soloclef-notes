@@ -32,17 +32,17 @@ export function NotesEmpty({
 			</div>
 		);
 	}
+	// Beside the list on a desktop, the open-note pane already says the same
+	// thing with its own button (notes-page.tsx), so the list stays empty
+	// there rather than repeating it; on a phone the list is the whole screen.
 	return (
-		<div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
-			<span className="flex size-12 items-center justify-center rounded-2xl bg-muted text-muted-foreground md:hidden">
+		<div className="flex flex-col items-center gap-3 px-6 py-14 text-center md:hidden">
+			<span className="flex size-12 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
 				<NotebookPen className="size-6" aria-hidden />
 			</span>
 			<p className="text-base font-semibold">{t("empty_title")}</p>
-			<p className="max-w-xs text-sm leading-6 text-muted-foreground md:hidden">
-				{t("empty_body")}
-			</p>
-			{/* Beside the list on a desktop, the open-note pane carries the button. */}
-			<Button className="mt-1 rounded-full md:hidden" onClick={onNew} disabled={creating}>
+			<p className="max-w-xs text-sm leading-6 text-muted-foreground">{t("empty_body")}</p>
+			<Button className="mt-1 rounded-full" onClick={onNew} disabled={creating}>
 				<Plus className="size-4" />
 				{t("new_note")}
 			</Button>

@@ -210,9 +210,9 @@ activity log.
 
 These come from the server's own mail service, if the server has one:
 
-- Password reset. Forgot Password? on the sign-in page sends a link to
+- Password reset. Forgot password? on the sign-in page sends a link to
   choose a new password. It works once, for an hour.
-- Automation results, when Email me the result is on. The subject is the
+- Automation results, when Email me each result is on. The subject is the
   automation's name and how the run ended, such as "Weekly digest:
   finished". A failed run's email gives the reason.
 

@@ -237,7 +237,6 @@ export function NextcloudPicker({ connectorId, notebookId, onImported }: Nextclo
 				<div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
 					<div className="min-w-0">
 						<p className="text-sm font-medium">{tUpload("vision_llm_label")}</p>
-						<p className="text-xs text-muted-foreground">{tUpload("vision_llm_desc")}</p>
 					</div>
 					<Switch
 						checked={useVision}

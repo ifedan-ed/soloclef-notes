@@ -13,7 +13,7 @@ export const VisionLLMConfig: FC<VisionLLMConfigProps> = ({ enabled, onEnabledCh
 		<div className="rounded-xl bg-slate-400/5 dark:bg-white/5 p-3 sm:p-6">
 			<div className="flex items-center justify-between">
 				<div className="space-y-1">
-					<h3 className="font-medium text-sm sm:text-base">Enable Vision LLM</h3>
+					<h3 className="font-medium text-sm sm:text-base">Enable vision LLM</h3>
 					<p className="text-xs sm:text-sm text-muted-foreground">
 						Describes images using AI vision (costly, slower)
 					</p>

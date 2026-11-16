@@ -16,6 +16,9 @@ export const KNOWN_PHASES = [
 	// An artifact whose account has every sandbox in use waits for one
 	// (soloclef_assistant/deliverables/sandboxwait.go).
 	"waiting_for_sandbox",
+	// A podcast a notebook's chat opened, queued until its brief card in the
+	// chat is approved (soloclef_api/internal/studiooutputs/listing.go).
+	"awaiting_brief",
 ] as const;
 export type KnownPhase = (typeof KNOWN_PHASES)[number];
 

@@ -39,7 +39,7 @@ How to switch on each optional feature, step by step, is in
 | `SOLOCLEF_API_FRONTEND_URL` | The web app's address. The same as the public address unless you serve the app from somewhere else. |
 | `SOLOCLEF_API_ALLOWED_ORIGINS` | The origins a browser may call the API from, comma-separated. |
 | `SOLOCLEF_API_ERROR_REPORT_URL` | The contact page error messages point to, usually the public address followed by `/contact`. |
-| `SOLOCLEF_API_SUPPORT_EMAIL` | Optional. The address shown on the contact page and used by Report Issue. Empty shows none. |
+| `SOLOCLEF_API_SUPPORT_EMAIL` | Optional. The address shown on the contact page and used by Report issue. Empty shows none. |
 | `SOLOCLEF_API_BRAND_NAME` | The product's name, as the assistant and the password-reset email use it. |
 | `SOLOCLEF_API_SESSION_COOKIE_SECURE_POLICY` | `always` for a site served over https. `auto` is only for a test stack on plain http. |
 

@@ -56,7 +56,7 @@ export default function ErrorPage({
 					href={issueUrl}
 					className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors"
 				>
-					Report Issue
+					Report issue
 				</a>
 			</div>
 		</div>

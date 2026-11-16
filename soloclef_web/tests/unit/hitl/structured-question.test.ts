@@ -14,10 +14,10 @@ import { INFOGRAPHIC_STYLES } from "@/features/notebooks/lib/studio-catalog";
 
 const STYLE_LABELS: Record<string, string> = {
 	auto: "Auto-select",
-	"sketch-note": "Sketch Note",
+	"sketch-note": "Sketch note",
 	editorial: "Editorial",
 	instructional: "Instructional",
-	"bento-grid": "Bento Grid",
+	"bento-grid": "Bento grid",
 	scientific: "Scientific",
 	professional: "Professional",
 };

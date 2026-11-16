@@ -2,7 +2,7 @@
 
 import type { ToolCallMessagePartProps } from "@assistant-ui/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAtomValue, useSetAtom } from "jotai";
+import { useAtomValue } from "jotai";
 import { useEffect } from "react";
 import { z } from "zod";
 import { Mp4VideoPlayer } from "@/components/tool-ui/video-presentation/mp4-player";
@@ -12,13 +12,11 @@ import {
 	artifactManifestQueryOptions,
 	invalidatePublishedArtifact,
 } from "@/features/artifacts/api/artifact-queries";
-import {
-	artifactPanelAtom,
-	openArtifactPanelAtom,
-} from "@/features/artifacts/state/artifact-panel.atom";
+import { artifactPanelAtom } from "@/features/artifacts/state/artifact-panel.atom";
 import { ArtifactDownloadButton } from "@/features/artifacts/ui/artifact-download-button";
 import { ArtifactFormatIcon } from "@/features/artifacts/ui/artifact-format-icon";
 import { ArtifactFormatLabel } from "@/features/artifacts/ui/artifact-format-label";
+import { useOpenArtifact } from "@/features/chat-artifacts/hooks/use-open-artifact";
 import { buildBackendUrl } from "@/lib/env-config";
 import { cn } from "@/lib/utils";
 
@@ -69,7 +67,7 @@ function ArtifactCard({
 	toolCallId: string;
 	metadataStatus?: "ready" | "loading" | "unavailable";
 }) {
-	const openPanel = useSetAtom(openArtifactPanelAtom);
+	const openArtifact = useOpenArtifact();
 	const panelState = useAtomValue(artifactPanelAtom);
 	const selected = panelState.isOpen && panelState.selectedCardToolCallId === toolCallId;
 
@@ -84,7 +82,7 @@ function ArtifactCard({
 			    since a button cannot be nested inside another button. */}
 			<button
 				type="button"
-				onClick={() => openPanel({ artifactId, selectedCardToolCallId: toolCallId })}
+				onClick={() => openArtifact({ artifactId, selectedCardToolCallId: toolCallId })}
 				className="absolute inset-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none"
 			>
 				<span className="sr-only">Open {title}</span>

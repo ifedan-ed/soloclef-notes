@@ -12,8 +12,6 @@ import {
 	ADVANTAGES,
 	type Faq,
 	PRIVACY_POINTS,
-	REQUEST_ACCESS_HREF,
-	SIGNUPS_OPEN,
 	STUDIO_OUTPUTS,
 } from "@/components/site/site-content";
 import { ArrowRightIcon } from "@/components/ui/icons";
@@ -49,17 +47,7 @@ export function SignInActions({ secondary }: { secondary?: { label: string; href
 	);
 }
 
-export function SignupNote() {
-	if (SIGNUPS_OPEN) return null;
-	return (
-		<p className="mt-4 text-sm text-[color:var(--muted-foreground)]" data-testid="signup-note">
-			New accounts are not open yet.{" "}
-			<Link className="ss-home-link" href={REQUEST_ACCESS_HREF}>
-				Request access
-			</Link>
-		</p>
-	);
-}
+export { SignupNote } from "@/components/site/signup-note";
 
 export function PageHero({
 	eyebrow,

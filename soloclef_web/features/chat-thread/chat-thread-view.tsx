@@ -678,7 +678,7 @@ export function ChatThreadView({ chatId, onThreadNotFound }: ChatThreadViewProps
 						void Promise.all([threadDetailQuery.refetch(), threadMessagesQuery.refetch()]);
 					}}
 				>
-					Try Again
+					Try again
 				</Button>
 			</div>
 		);

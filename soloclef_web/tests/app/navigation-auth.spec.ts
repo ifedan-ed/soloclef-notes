@@ -49,7 +49,7 @@ test.describe("Auth", () => {
 	test("signed out: the dashboard sends you to /login, which fits the screen", async ({ page }) => {
 		await page.goto("/dashboard");
 		await expect(page).toHaveURL(/\/login/);
-		await expect(page.getByRole("heading", { name: "Sign In" })).toBeVisible();
+		await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
 		await expectNoOverflow(page, "login page");
 	});
 
@@ -59,7 +59,7 @@ test.describe("Auth", () => {
 		await page
 			.getByLabel("Password", { exact: true })
 			.fill(process.env.PLAYWRIGHT_TEST_PASSWORD ?? "");
-		await page.getByRole("button", { name: "Sign In" }).click();
+		await page.getByRole("button", { name: "Sign in" }).click();
 		await expect(page).toHaveURL(/\/dashboard\/notebooks/, { timeout: 30_000 });
 
 		if (isPhone) {
@@ -83,7 +83,7 @@ test.describe("Auth", () => {
 		await page.goto("/login");
 		await page.getByLabel("Email").fill(process.env.PLAYWRIGHT_TEST_EMAIL ?? "");
 		await page.getByLabel("Password", { exact: true }).fill("not-the-password");
-		await page.getByRole("button", { name: "Sign In" }).click();
+		await page.getByRole("button", { name: "Sign in" }).click();
 		await expect(page.getByRole("button", { name: "Dismiss error" })).toBeVisible();
 		await expect(page).toHaveURL(/\/login/);
 	});

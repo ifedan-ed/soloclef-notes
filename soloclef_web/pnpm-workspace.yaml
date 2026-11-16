@@ -13,3 +13,10 @@ allowBuilds:
 minimumReleaseAge: 10080
 minimumReleaseAgeExclude:
   - lucide-react
+# One jotai for the whole app. @platejs/core pins jotai 2.8.4 (with jotai-x
+# and jotai-optics built on it) beside the app's own 2.18, and two copies
+# each keep their own store: React warned "Detected multiple Jotai
+# instances" on every page with the editor. "$jotai" is the version the app
+# itself depends on (package.json), so there is one place to change it.
+overrides:
+  jotai: $jotai

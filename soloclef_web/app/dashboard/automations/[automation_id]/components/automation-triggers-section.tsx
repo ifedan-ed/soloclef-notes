@@ -7,6 +7,8 @@ import { TriggerCard } from "./trigger-card";
 interface AutomationTriggersSectionProps {
 	triggers: Trigger[];
 	automationId: number;
+	/** The automation is paused or archived: none of its triggers will fire. */
+	paused: boolean;
 }
 
 /**
@@ -17,6 +19,7 @@ interface AutomationTriggersSectionProps {
 export function AutomationTriggersSection({
 	triggers,
 	automationId,
+	paused,
 }: AutomationTriggersSectionProps) {
 	return (
 		<Card className="border-border/60 bg-accent">
@@ -36,7 +39,12 @@ export function AutomationTriggersSection({
 				) : (
 					<div className="space-y-3">
 						{triggers.map((trigger) => (
-							<TriggerCard key={trigger.id} trigger={trigger} automationId={automationId} />
+							<TriggerCard
+								key={trigger.id}
+								trigger={trigger}
+								automationId={automationId}
+								paused={paused}
+							/>
 						))}
 					</div>
 				)}

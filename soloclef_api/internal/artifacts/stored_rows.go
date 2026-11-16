@@ -34,11 +34,15 @@ type StoredFile struct {
 	// Checksum is the SHA-256 the file was saved under, in hex. A file is
 	// never rewritten in place, so it is also the file's HTTP validator.
 	Checksum string
+	// Title is what the file is named after when it is downloaded (the
+	// output's title, download_title.go); read by the file route only.
+	Title string
 }
 
 // Download is what the download route reads.
 type Download struct {
-	// Title is the document's, and what the downloaded file is named after.
+	// Title is the output's (or the document's, when no output lists the
+	// artifact), and what the downloaded file is named after.
 	Title string
 	// File is the artifact's primary file, nil when it has none.
 	File *StoredFile
@@ -174,7 +178,7 @@ func (s Store) FileIn(ctx context.Context, userID string, artifactID, fileID int
 	return &StoredFile{
 		ID: row.ID, Role: row.Role, Filename: row.OriginalFilename, MimeType: row.MimeType,
 		Size: row.SizeBytes, Backend: row.StorageBackend, Key: row.StorageKey,
-		Checksum: row.ChecksumSha256,
+		Checksum: row.ChecksumSha256, Title: row.Title,
 	}, nil
 }
 

@@ -4,7 +4,8 @@ import { IconMenu2, IconX } from "@tabler/icons-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { BrandMark } from "@/components/Logo";
-import { NAV_LINKS } from "@/components/site/site-content";
+import { NAV_LINKS, shownLinks } from "@/components/site/site-content";
+import { useSupportEmail } from "@/hooks/use-support-email";
 import { BRAND } from "@/lib/brand";
 
 /**
@@ -32,6 +33,7 @@ function Wordmark() {
 export function SiteNav() {
 	const [menuOpen, setMenuOpen] = useState(false);
 	const headerRef = useRef<HTMLElement>(null);
+	const { email } = useSupportEmail();
 
 	useEffect(() => {
 		if (!menuOpen) return;
@@ -43,6 +45,7 @@ export function SiteNav() {
 	}, [menuOpen]);
 
 	const close = () => setMenuOpen(false);
+	const links = shownLinks(NAV_LINKS, Boolean(email));
 
 	return (
 		<header ref={headerRef} className="ss-home-nav">
@@ -50,7 +53,7 @@ export function SiteNav() {
 				<Wordmark />
 
 				<nav className="hidden items-center md:flex" aria-label="Main">
-					{NAV_LINKS.map((link) => (
+					{links.map((link) => (
 						<Link key={link.href} href={link.href} className="ss-home-nav-link">
 							{link.name}
 						</Link>
@@ -88,7 +91,7 @@ export function SiteNav() {
 					/>
 					<div className="ss-home-nav-drawer">
 						<nav className="flex flex-col gap-0.5 px-4 py-3" aria-label="Menu">
-							{NAV_LINKS.map((link) => (
+							{links.map((link) => (
 								<Link key={link.href} href={link.href} onClick={close} className="ss-home-nav-link">
 									{link.name}
 								</Link>

@@ -224,7 +224,9 @@ func (r FileContentRoute) serve(ctx huma.Context) {
 			ContentType:  mediaType,
 			ETag:         tagOf(file.Checksum),
 			CacheControl: immutableForever,
-			Disposition:  contentDisposition(file.Filename, inlineTypes[mediaType]),
+			// Named as the download is, by the output's title: a poster's
+			// SVG beside its PNG reads as the same output's.
+			Disposition: contentDisposition(downloadName(file.Title, file.Filename), inlineTypes[mediaType]),
 		},
 	})
 }

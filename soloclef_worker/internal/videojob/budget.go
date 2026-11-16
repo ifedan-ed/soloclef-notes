@@ -11,10 +11,11 @@ import (
 // measured overrun back into a word target after
 // (app/deliverables/video/narration_budget.py, with its measurements).
 const (
-	// wordsPerSecond was measured against the deployed voices (2.52 and
-	// 2.83 words a second) and rounded down, so pauses and slower voices
-	// stay inside it.
-	wordsPerSecond = 2.4
+	// wordsPerSecond is the narrating voice's rate, rounded down so pauses
+	// stay inside it. It was 2.4, from the voices of the day (2.52 and 2.83
+	// words a second); the voice now deployed, Kokoro af_heart, speaks
+	// about 2.28 (137 words a minute, measured 15 Nov 2026).
+	wordsPerSecond = 2.2
 	// budgetSafety leaves room for a draft exactly on budget.
 	budgetSafety = 0.9
 	// overrunTarget is how far below the limit a shortened draft aims.

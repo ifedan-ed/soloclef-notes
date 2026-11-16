@@ -5,7 +5,6 @@ import {
 	MessagePrimitive,
 	useAuiState,
 } from "@assistant-ui/react";
-import { useAtomValue } from "jotai";
 import {
 	CheckIcon,
 	CopyIcon,
@@ -19,17 +18,13 @@ import {
 import dynamic from "next/dynamic";
 import type { FC } from "react";
 import { useMemo, useState } from "react";
-import { modelConnectionsAtom } from "@/atoms/model-connections/model-connections-query.atoms";
 import {
 	CitationMetadataProvider,
 	useAllCitationMetadata,
 } from "@/components/assistant-ui/citation-metadata-context";
 import { MessageTimestamp } from "@/components/assistant-ui/message-timestamp";
 import { RevertTurnButton } from "@/components/assistant-ui/revert-turn-button";
-import {
-	type TokenUsageModelBreakdown,
-	useTokenUsage,
-} from "@/components/assistant-ui/token-usage-context";
+import { useTokenUsage } from "@/components/assistant-ui/token-usage-context";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { CitationNumbersProvider } from "@/components/citations/citation-numbers-context";
 import type { SerializableCitation } from "@/components/tool-ui/citation";
@@ -49,6 +44,9 @@ import {
 import { DropdownMenuLabel } from "@/components/ui/dropdown-menu";
 import { withArtifactAnchor } from "@/features/chat-artifacts";
 import { InterleavedMessageParts } from "@/features/chat-messages/timeline";
+import { ModelFamilyIcon } from "@/features/chat-model/model-family-icon";
+import { optionLabel } from "@/features/chat-model/model-option";
+import { useChatModel } from "@/features/chat-model/use-chat-model";
 import { useAnswerTexts } from "@/features/markdown-copy/use-answer-texts";
 import { useMarkdownCopy } from "@/features/markdown-copy/use-markdown-copy";
 import { NotebookFollowups } from "@/features/notebooks/ui/chat/notebook-followups";
@@ -56,7 +54,6 @@ import { SaveToNoteButton } from "@/features/notebooks/ui/save-to-note-button";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { isStreamedMessage } from "@/lib/chat/stream-engine/streamed-message";
 import { formatMessageTimestamp } from "@/lib/format-date";
-import { getProviderIcon } from "@/lib/provider-icons";
 import { tryGetHostname } from "@/lib/url";
 import { cn } from "@/lib/utils";
 
@@ -280,81 +277,22 @@ function formatTurnCost(micros: number): string {
 	return "$0";
 }
 
-function normalizeUsageModelKey(modelKey: string): string {
-	return modelKey.trim().replace(/^~/, "");
-}
-
-function bareModelKey(modelKey: string): string {
-	const normalized = normalizeUsageModelKey(modelKey);
-	const parts = normalized.split("/");
-	return parts[parts.length - 1] || normalized;
-}
-
-function inferProviderFromModelKey(modelKey: string) {
-	const normalized = normalizeUsageModelKey(modelKey);
-	const [provider] = normalized.split("/");
-	return provider && provider !== normalized ? provider : null;
-}
-
-function titleCaseModelPart(part: string) {
-	if (!part) return "";
-	const upper = part.toUpperCase();
-	if (/^\d+(\.\d+)?[BKM]$/.test(upper)) return upper;
-	if (["gpt", "oai", "api", "llm", "vlm"].includes(part.toLowerCase())) return upper;
-	return part.charAt(0).toUpperCase() + part.slice(1);
-}
-
-function humanizeModelId(modelKey: string): string {
-	const bare = bareModelKey(modelKey)
-		.replace(/:latest$/i, "")
-		.replace(/[-_]+/g, " ")
-		.trim();
-	if (!bare) return modelKey;
-	return bare.split(/\s+/).map(titleCaseModelPart).join(" ");
-}
-
 const MessageInfoDropdown: FC<{ chatTurnId: string | null | undefined }> = ({ chatTurnId }) => {
 	const messageId = useAuiState(({ message }) => message?.id);
 	const createdAt = useAuiState(({ message }) => message?.createdAt);
 	const usage = useTokenUsage(messageId);
 
-	// The account's own connections name their models; a model of the site's
-	// proxy is named by what the turn stored, or by its id.
-	const { data: connections = [] } = useAtomValue(modelConnectionsAtom);
-
-	const modelConnectionByKey = useMemo(() => {
-		const map = new Map<string, { name: string; provider: string; modelId: string }>();
-		for (const connection of connections) {
-			for (const model of connection.models) {
-				const normalizedModelId = normalizeUsageModelKey(model.model_id);
-				const entry = {
-					name: model.display_name || model.model_id,
-					provider: connection.provider,
-					modelId: model.model_id,
-				};
-				map.set(model.model_id, entry);
-				map.set(normalizedModelId, entry);
-				map.set(bareModelKey(model.model_id), entry);
-			}
-		}
-		return map;
-	}, [connections]);
-
-	const resolveModel = (modelKey: string, counts: TokenUsageModelBreakdown) => {
-		const normalizedKey = normalizeUsageModelKey(counts.model_id || counts.model || modelKey);
-		const connectionModel =
-			modelConnectionByKey.get(modelKey) ??
-			modelConnectionByKey.get(normalizeUsageModelKey(modelKey)) ??
-			modelConnectionByKey.get(normalizedKey) ??
-			modelConnectionByKey.get(bareModelKey(normalizedKey));
-		const provider =
-			counts.provider || connectionModel?.provider || inferProviderFromModelKey(normalizedKey);
-		const modelId = counts.model_id || connectionModel?.modelId || modelKey;
-		const name = counts.display_name || connectionModel?.name || humanizeModelId(modelId);
+	// A turn's usage is keyed by the id of the model that answered, the same
+	// id the model menus list (a proxy name, or "own:<n>"). It is named the
+	// way the picker and Model settings name it, from that one list, so every
+	// place calls a model the same thing; an id the list no longer has is
+	// shown as stored rather than prettified into a name nobody gave it.
+	const { data: chatModel } = useChatModel();
+	const resolveModel = (modelKey: string) => {
+		const name = optionLabel(chatModel?.models ?? [], modelKey);
 		return {
 			name,
-			modelId,
-			icon: provider ? getProviderIcon(provider, { className: "size-3.5 shrink-0" }) : null,
+			icon: <ModelFamilyIcon name={name} className="size-3.5 shrink-0" />,
 		};
 	};
 
@@ -384,7 +322,7 @@ const MessageInfoDropdown: FC<{ chatTurnId: string | null | undefined }> = ({ ch
 						<ActionBarMorePrimitive.Separator className="bg-popover-border mx-1 my-1 h-px" />
 						{models.length > 0 ? (
 							models.map(([model, counts]) => {
-								const { name, icon } = resolveModel(model, counts);
+								const { name, icon } = resolveModel(model);
 								const costMicros = counts.cost_micros;
 								return (
 									<ActionBarMorePrimitive.Item

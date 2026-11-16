@@ -341,7 +341,7 @@
 		"unsupported_files_no_parser": "파서를 선택하기 전에는 읽을 수 없습니다: {files}",
 		"unsupported_files_dismiss": "닫기",
 		"vision_llm_label": "비전 LLM 사용",
-		"vision_llm_desc": "AI 비전으로 이미지를 설명합니다 (비용이 크고 느림)"
+		"remove_file": "{name} 제거"
 	},
 	"add_webpage": {
 		"title": "크롤링할 웹페이지 추가",
@@ -792,7 +792,6 @@
 		"source_google_scholar": "Google 학술검색",
 		"unavailable_not_connected": "연결 안 됨",
 		"unavailable_not_available": "사용할 수 없음",
-		"unavailable_hint": "연결되지 않았나요? 연결을 눌러 내 API 키를 추가하세요.",
 		"error_search_failed": "검색이 완료되지 않았습니다. 다시 시도하거나 다른 소스를 선택하세요.",
 		"error_source_blocked": "{source}에서 지금 자동 검색을 차단하고 있습니다. 몇 분 후 다시 시도하거나 PubMed, arXiv 또는 medRxiv에서 검색하세요.",
 		"error_source_busy": "{source}에서 지금 응답하지 않았습니다. 잠시 후 다시 시도하세요.",
@@ -813,12 +812,9 @@
 		"page_submit": "페이지 추가",
 		"page_via_browserbase": "Browserbase",
 		"page_adding": "페이지를 추가하는 중…",
-		"page_added": "페이지가 추가되었습니다. 읽는 중이며 곧 소스에서 사용할 수 있습니다.",
-		"page_hint_browserbase": "Browserbase가 실제 브라우저로 열기 때문에 JavaScript로 만든 페이지도 읽을 수 있습니다.",
-		"page_hint_crawler": "추가한 검색 결과와 같은 방식으로 읽습니다.",
+		"page_added": "페이지가 추가되었습니다.",
 		"page_failed": "그 페이지를 추가하지 못했습니다.",
 		"search_several": "여러 곳에서 한 번에 검색",
-		"search_several_hint": "최대 {max}개 소스를 선택하세요. 동시에 검색합니다.",
 		"sources_picked": "소스 {count}개",
 		"provider_searching": "{source}: 검색 중",
 		"provider_done": "{source}: {count, plural, =0 {결과 없음} other {#개 찾음}}",
@@ -865,7 +861,7 @@
 		"collapse_studio": "스튜디오 접기",
 		"expand_studio": "스튜디오 펼치기",
 		"add_sources": "소스 추가",
-		"add_sources_description": "새 파일을 업로드하거나, 라이브러리에 있는 문서를 고르거나, Nextcloud에서 파일을 고르세요.",
+		"add_sources_description": "파일을 업로드하거나 라이브러리 또는 커넥터에서 고르세요.",
 		"add_from_library": "내 라이브러리에서",
 		"add_upload": "파일 업로드",
 		"search_library": "문서 및 폴더 검색",
@@ -881,6 +877,8 @@
 		"source_stage_embedding": "임베딩 생성 중",
 		"source_stage_indexing": "색인에 저장하는 중",
 		"source_stage_retrying": "재시도 대기 중",
+		"source_stage_reading": "페이지 읽는 중",
+		"source_stage_downloading": "파일 내려받는 중",
 		"source_index_failed": "색인 실패",
 		"reindex_source": "다시 색인…",
 		"reindex_title": "이 소스 다시 색인",
@@ -899,6 +897,7 @@
 		"source_guide": "소스 가이드",
 		"source_guide_generating": "이 소스의 가이드를 작성하는 중…",
 		"source_guide_unavailable": "아직 이 소스의 가이드가 없습니다.",
+		"source_failed_title": "이 소스를 읽을 수 없습니다.",
 		"new_chat_failed": "채팅을 시작할 수 없습니다.",
 		"mention_heading": "이 노트북의 소스",
 		"mention_no_match": "일치하는 소스 없음",
@@ -949,7 +948,8 @@
 				"description": "두 명의 진행자(간략 형식에서는 한 명)가 소스를 설명합니다.",
 				"focus_label": "AI 진행자가 무엇에 집중해야 할까요?",
 				"focus_placeholder": "예: 연구 방법과 실무에서의 의미에 집중",
-				"ideas_label": "진행자를 위한 아이디어"
+				"ideas_label": "진행자를 위한 아이디어",
+				"item": "오디오 개요"
 			},
 			"video": {
 				"label": "동영상 개요",
@@ -958,7 +958,8 @@
 				"description": "소스로 만든 내레이션 애니메이션 동영상입니다.",
 				"focus_label": "동영상이 무엇에 집중해야 할까요?",
 				"focus_placeholder": "예: 새 동료에게 핵심 결과를 설명",
-				"ideas_label": "내레이터를 위한 아이디어"
+				"ideas_label": "내레이터를 위한 아이디어",
+				"item": "동영상 개요"
 			},
 			"report": {
 				"label": "보고서",
@@ -967,7 +968,8 @@
 				"description": "소스를 바탕으로 한 보고서를 문서 또는 인터랙티브 페이지로 만듭니다.",
 				"focus_label": "강조할 내용이 있나요?",
 				"focus_placeholder": "예: 두 페이지 이내로, 남은 질문을 강조",
-				"ideas_label": "관점"
+				"ideas_label": "관점",
+				"item": "보고서"
 			},
 			"slides": {
 				"label": "슬라이드",
@@ -976,7 +978,8 @@
 				"description": "소스로 만든 편집 가능한 .pptx 슬라이드입니다.",
 				"focus_label": "슬라이드에서 무엇을 다룰까요?",
 				"focus_placeholder": "예: 전공의 대상 10분 교육 세션",
-				"ideas_label": "관점"
+				"ideas_label": "관점",
+				"item": "슬라이드"
 			},
 			"mindmap": {
 				"label": "마인드맵",
@@ -985,7 +988,8 @@
 				"description": "소스에 담긴 아이디어의 계층형 지도입니다.",
 				"focus_label": "지도의 중심은 무엇으로 할까요?",
 				"focus_placeholder": "예: 진단과 치료를 중심으로",
-				"ideas_label": "맵 구성안"
+				"ideas_label": "맵 구성안",
+				"item": "마인드맵"
 			},
 			"flashcards": {
 				"label": "플래시카드",
@@ -994,7 +998,8 @@
 				"description": "앞면에는 질문, 뒷면에는 답이 있는 학습용 카드입니다.",
 				"focus_label": "카드에서 무엇을 확인할까요?",
 				"focus_placeholder": "예: 정의와 기준값",
-				"ideas_label": "무엇을 테스트할까"
+				"ideas_label": "무엇을 테스트할까",
+				"item": "플래시카드"
 			},
 			"quiz": {
 				"label": "퀴즈",
@@ -1003,7 +1008,8 @@
 				"description": "점수가 매겨지는 단일 정답 문제입니다.",
 				"focus_label": "퀴즈에서 무엇을 다룰까요?",
 				"focus_placeholder": "예: 암기보다 임상 추론",
-				"ideas_label": "무엇을 테스트할까"
+				"ideas_label": "무엇을 테스트할까",
+				"item": "퀴즈"
 			},
 			"data_table": {
 				"label": "데이터 표",
@@ -1012,7 +1018,8 @@
 				"description": "소스의 구조화된 사실을 담은 Excel 통합 문서입니다.",
 				"focus_label": "표에 무엇을 담을까요?",
 				"focus_placeholder": "예: 연구마다 한 행, 표본 크기와 주요 결과 포함",
-				"ideas_label": "표 구성안"
+				"ideas_label": "표 구성안",
+				"item": "데이터 표"
 			},
 			"infographic": {
 				"label": "인포그래픽",
@@ -1021,7 +1028,8 @@
 				"description": "핵심 사실과 수치를 한눈에 보여 주는 한 장의 포스터입니다.",
 				"focus_label": "만들고 싶은 인포그래픽을 설명해 주세요",
 				"focus_placeholder": "예: 핵심 수치 3개를 먼저 보여 주고 추세를 차트로 표시해 주세요",
-				"ideas_label": "핵심 메시지"
+				"ideas_label": "핵심 메시지",
+				"item": "인포그래픽"
 			}
 		},
 		"options": {
@@ -1082,7 +1090,7 @@
 					},
 					"whiteboard": {
 						"label": "화이트보드",
-						"description": "흰 바탕에 마커로 그린 그림, 화살표, 동그라미 친 핵심어."
+						"description": "흰 바탕에 검은 잉크, 테두리 카드, 빨강과 파랑 포인트 하나씩."
 					},
 					"playful": {
 						"label": "발랄",
@@ -1090,7 +1098,7 @@
 					},
 					"dark": {
 						"label": "다크",
-						"description": "짙은 차콜 배경에 밝은 글자와 청록색 포인트."
+						"description": "짙은 남색 배경에 밝은 글자와 부드러운 파란 포인트."
 					},
 					"minimal": {
 						"label": "미니멀",
@@ -1358,6 +1366,7 @@
 			"heading": "노트북을 시작해 볼까요",
 			"body_no_sources": "대화의 근거가 될 소스를 추가하거나, 시작점을 고르면 제가 안내해 드릴게요.",
 			"body_with_sources": "소스에 대해 무엇이든 물어보거나 아래 질문 중 하나로 시작하세요.",
+			"body_with_sources_no_questions": "소스에 대해 무엇이든 묻거나 시작점을 고르세요.",
 			"heading_with_sources": "소스에 질문하기",
 			"questions_label": "추천 질문",
 			"starts": {
@@ -1405,17 +1414,14 @@
 			"rendering": "렌더링 중",
 			"verifying": "결과 확인 중",
 			"saving": "저장 중",
-			"waiting_for_sandbox": "샌드박스 대기 중"
+			"waiting_for_sandbox": "샌드박스 대기 중",
+			"awaiting_brief": "채팅에서 승인 대기 중"
 		},
 		"add_from_connector": "커넥터에서",
-		"connector_sources_title": "연결된 앱의 파일",
-		"connector_sources_files": "라이브러리에 이미 있는 파일(커넥터가 동기화한 파일 포함)은 “내 라이브러리에서”에서 추가하세요.",
-		"connector_sources_tools": "도구 커넥터(Nextcloud 같은 MCP 서버, 웹 검색, 브라우저)는 복사되지 않습니다. 질문에 필요할 때 노트북 채팅이 실시간으로 호출합니다.",
 		"manage_connectors": "커넥터 관리",
 		"add_from_library_short": "라이브러리",
 		"add_upload_short": "업로드",
 		"add_from_connector_short": "커넥터",
-		"nextcloud_picker_hint": "파일이나 폴더를 체크하면 소스로 추가됩니다. 지금 한 번 복사되며 이후 동기화되지 않습니다.",
 		"made_with": "{model}(으)로 생성",
 		"made_with_fallback": "{model}(으)로 생성 (대체)",
 		"output_view": {
@@ -1435,8 +1441,8 @@
 			"try_again": "다시 시도"
 		},
 		"back_to_output": "{title}(으)로 돌아가기",
-		"google_drive_picker_hint": "Google Drive 파일 선택기에서 파일을 고르세요. 여기에 추가되고 Drive에서 바뀌면 다시 읽습니다.",
-		"retry_link_gone": "그 결과물은 더 이상 다시 시도할 수 없습니다."
+		"retry_link_gone": "그 결과물은 더 이상 다시 시도할 수 없습니다.",
+		"delete_output_confirm_no_file": "“{title}”을(를) 삭제할까요?"
 	},
 	"notes": {
 		"title": "노트",

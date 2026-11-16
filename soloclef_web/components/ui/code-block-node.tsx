@@ -95,7 +95,7 @@ function CodeBlockCombobox() {
 					aria-expanded={open}
 					role="combobox"
 				>
-					{languages.find((language) => language.value === value)?.label ?? "Plain Text"}
+					{languages.find((language) => language.value === value)?.label ?? "Plain text"}
 				</Button>
 			</PopoverTrigger>
 			<PopoverContent className="w-[200px] p-0" onCloseAutoFocus={() => setSearchValue("")}>
@@ -173,7 +173,7 @@ export function CodeSyntaxLeaf(props: PlateLeafProps<TCodeSyntaxLeaf>) {
 
 const languages: { label: string; value: string }[] = [
 	{ label: "Auto", value: "auto" },
-	{ label: "Plain Text", value: "plaintext" },
+	{ label: "Plain text", value: "plaintext" },
 	{ label: "ABAP", value: "abap" },
 	{ label: "Agda", value: "agda" },
 	{ label: "Arduino", value: "arduino" },

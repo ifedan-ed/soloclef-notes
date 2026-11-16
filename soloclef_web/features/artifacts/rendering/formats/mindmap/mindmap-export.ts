@@ -69,11 +69,13 @@ export function mindMapSvg(
 			);
 		});
 		if (placed.node.children.length > 0 && placed.expanded) {
-			// Connectors leave from where the on-screen button sits; with no
-			// button in the picture, a stub joins them to the pill.
+			// Connectors leave from the on-screen button's right edge
+			// (connectorPath); with no button in the picture, a stub joins
+			// them to the pill. It runs to that edge: stopped at the button's
+			// centre, it left a gap of half a button in every exported map.
 			const centre = chevronCentre(placed);
 			parts.push(
-				`<line x1="${placed.x + placed.width}" y1="${centre.y}" x2="${centre.x}" y2="${centre.y}" stroke="${palette.connector}" stroke-width="1.5"/>`
+				`<line x1="${placed.x + placed.width}" y1="${centre.y}" x2="${centre.x + CHEVRON_SIZE / 2}" y2="${centre.y}" stroke="${palette.connector}" stroke-width="1.5"/>`
 			);
 		}
 		if (placed.node.children.length > 0 && !placed.expanded) {

@@ -46,7 +46,7 @@ require (
 	git.danvics.com/danvics/soloclef/soloclef_notify v0.0.0
 	git.danvics.com/danvics/soloclef/soloclef_schema v0.0.0
 	git.danvics.com/danvics/soloclef/soloclef_studio v0.0.0
-	github.com/ifedan-ed/figures-go v0.4.1
+	github.com/ifedan-ed/figures-go v0.5.0
 	golang.org/x/text v0.32.0
 )
 

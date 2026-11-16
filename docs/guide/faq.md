@@ -39,7 +39,7 @@ changes by themselves.
 
 ## How do I get an account?
 
-Choose Sign Up on the sign-in page when the server offers it; otherwise
+Choose Sign up on the sign-in page when the server offers it; otherwise
 choose Request access, or ask through the server's contact page.
 
 ## How do I change my password?
@@ -65,5 +65,5 @@ Soloclef is open in front of you. The inbox always keeps everything.
 
 Check your spam folder first. A password-reset link works once, for an hour.
 Automation results are emailed only to the person who made the automation,
-and only with Email me the result on. If the server doesn't send email at
+and only with Email me each result on. If the server doesn't send email at
 all, ask its administrator.

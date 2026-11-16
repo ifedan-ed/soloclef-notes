@@ -45,7 +45,11 @@ export function AutomationDetailContent({ automationId }: AutomationDetailConten
 					<AutomationRunsSection automationId={automation.id} />
 				</div>
 				<div className="space-y-6 min-w-0">
-					<AutomationTriggersSection triggers={automation.triggers} automationId={automation.id} />
+					<AutomationTriggersSection
+						triggers={automation.triggers}
+						automationId={automation.id}
+						paused={automation.status !== "active"}
+					/>
 				</div>
 			</div>
 		</>

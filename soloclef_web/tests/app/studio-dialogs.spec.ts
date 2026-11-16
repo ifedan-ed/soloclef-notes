@@ -26,17 +26,17 @@ type Kind = {
 
 const KINDS: Kind[] = [
 	{
-		tile: "Audio Overview",
+		tile: "Audio overview",
 		kind: "audio",
-		title: "Customize Audio Overview",
-		cards: { label: "Format", def: "Deep Dive" },
+		title: "Customize audio overview",
+		cards: { label: "Format", def: "Deep dive" },
 		segmented: [{ label: "Length", def: "Default", pick: "Long" }],
 		body: { format: "deep_dive", length: "long" },
 	},
 	{
-		tile: "Video Overview",
+		tile: "Video overview",
 		kind: "video",
-		title: "Customize Video Overview",
+		title: "Customize video overview",
 		cards: { label: "Format", def: "Explainer" },
 		body: { format: "explainer" },
 	},
@@ -49,7 +49,7 @@ const KINDS: Kind[] = [
 		body: { format: "document", file_type: "docx" },
 	},
 	{
-		tile: "Slide Deck",
+		tile: "Slide deck",
 		kind: "slides",
 		title: "Customize slide deck",
 		cards: { label: "Format", def: "Detailed deck" },
@@ -57,7 +57,7 @@ const KINDS: Kind[] = [
 		body: { length: "short" },
 	},
 	{
-		tile: "Mind Map",
+		tile: "Mind map",
 		kind: "mindmap",
 		title: "Customize mind map",
 		segmented: [{ label: "Level of detail", def: "Standard", pick: "Detailed" }],
@@ -94,7 +94,7 @@ const KINDS: Kind[] = [
 		],
 		body: { style: "auto", orientation: "portrait", detail: "concise" },
 	},
-	{ tile: "Data Table", kind: "data_table", title: "Create data table", body: {} },
+	{ tile: "Data table", kind: "data_table", title: "Create data table", body: {} },
 ];
 
 /**
@@ -213,8 +213,8 @@ test.describe("Studio dialogs", () => {
 	}) => {
 		await addNoteSource(request, token, notebook.id, "Video source", "Cells.");
 		await openNotebook(page, notebook.id, "Studio");
-		await studioTile(page, "Video Overview").click();
-		const dialog = page.getByRole("dialog", { name: "Customize Video Overview" });
+		await studioTile(page, "Video overview").click();
+		const dialog = page.getByRole("dialog", { name: "Customize video overview" });
 		const gallery = dialog.getByRole("group", { name: "Choose visual style" });
 		await expect(gallery.getByRole("button", { name: /Auto-select \(Default\)/ })).toHaveAttribute(
 			"aria-pressed",
@@ -250,10 +250,10 @@ test.describe("Studio dialogs", () => {
 		const gallery = dialog.getByRole("group", { name: "Visual style" });
 		const styles = [
 			"Auto-select",
-			"Sketch Note",
+			"Sketch note",
 			"Editorial",
 			"Instructional",
-			"Bento Grid",
+			"Bento grid",
 			"Scientific",
 			"Professional",
 		];
@@ -273,7 +273,7 @@ test.describe("Studio dialogs", () => {
 		}
 		await expectNoOverflow(page, "infographic style gallery");
 
-		const bento = gallery.getByRole("button", { name: /^Bento Grid/ });
+		const bento = gallery.getByRole("button", { name: /^Bento grid/ });
 		await bento.scrollIntoViewIfNeeded();
 		await bento.click();
 		await expect(bento).toHaveAttribute("aria-pressed", "true");
@@ -339,7 +339,7 @@ test.describe("Studio dialogs", () => {
 		await addNoteSource(request, token, notebook.id, "Source one", "One.");
 		const two = await addNoteSource(request, token, notebook.id, "Source two", "Two.");
 		await openNotebook(page, notebook.id, "Studio");
-		await studioTile(page, "Mind Map").click();
+		await studioTile(page, "Mind map").click();
 		const dialog = page.getByRole("dialog", { name: "Customize mind map" });
 		await dialog.getByRole("button", { name: "2 sources" }).click();
 		// The picker view names the dialog (it replaces the options view).

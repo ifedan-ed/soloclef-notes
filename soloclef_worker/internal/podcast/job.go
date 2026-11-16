@@ -321,6 +321,10 @@ func (j *Job) draft(ctx context.Context, log *slog.Logger, run Run, brief Brief,
 	if err != nil {
 		return Transcript{}, failed(draftFailed, err)
 	}
+	// The beats are drafted to their own sizes, so the plan is held to the
+	// episode's ceiling before any is (outline_fit.go).
+	ceiling, _, _ := sizes(brief)
+	plan = fitOutline(plan, ceiling)
 
 	// Lines voiced ahead are a head start, not a requirement: a line that
 	// fails here is voiced again by the render, which is where a failure

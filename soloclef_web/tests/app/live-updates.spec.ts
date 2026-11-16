@@ -93,7 +93,7 @@ test.describe("Live updates, signed in through the form", () => {
 			.fill(process.env.PLAYWRIGHT_TEST_PASSWORD ?? "");
 		// The signed-in shell opens the change stream once the session is known.
 		const stream = page.waitForResponse((r) => r.url().endsWith("/api/v1/events"), { timeout: 30_000 });
-		await page.getByRole("button", { name: "Sign In" }).click();
+		await page.getByRole("button", { name: "Sign in" }).click();
 		await expect(page).toHaveURL(/\/dashboard\/notebooks/, { timeout: 30_000 });
 		const opened = await stream;
 		expect(opened.status()).toBe(200);

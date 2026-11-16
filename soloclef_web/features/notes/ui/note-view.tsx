@@ -3,7 +3,7 @@
 import { ArrowLeft, MessageSquareText, Pin } from "lucide-react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { usePlateEditorComponent } from "@/components/editor/plate-editor-module";
 import { Button } from "@/components/ui/button";
@@ -53,6 +53,14 @@ export function NoteView({
 	const autosave = useNoteAutosave(note.id);
 	const actions = useNoteActions();
 	const [title, setTitle] = useState(note.title);
+	// Until the person types a title, the field follows the saved one: a new
+	// note starts as "Untitled note" and the server names it from its first
+	// line when the text is saved (soloclef_api/internal/notes/write_routes.go).
+	// Once they type in the field, it is theirs and a save never changes it.
+	const titleTyped = useRef(false);
+	useEffect(() => {
+		if (!titleTyped.current) setTitle(note.title);
+	}, [note.title]);
 	const [initialText] = useState(note.content);
 	const [pinning, setPinning] = useState(false);
 	const editorRef = useRef<HTMLDivElement>(null);
@@ -139,6 +147,7 @@ export function NoteView({
 					<NoteTitleField
 						value={title}
 						onChange={(next) => {
+							titleTyped.current = true;
 							setTitle(next);
 							autosave.queue({ title: next });
 						}}

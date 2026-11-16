@@ -183,8 +183,7 @@ test("the form runs on the chat's model unless one is picked", async ({ page }, 
 
 	// Each task says what it may read and which notebook it answers from.
 	await expect(page.getByRole("combobox", { name: "Can use" })).toContainText("Your documents");
-	// (Exact: "Save results to notebook" is a combobox of the same task.)
-	await expect(page.getByRole("combobox", { name: "Notebook", exact: true })).toContainText(
+	await expect(page.getByRole("combobox", { name: "Answer from", exact: true })).toContainText(
 		"Any notebook"
 	);
 	await page.getByRole("combobox", { name: "Can use" }).click();

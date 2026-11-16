@@ -8,7 +8,7 @@ import (
 
 func TestEverySourceKeepsAFairShareOfTheBudget(t *testing.T) {
 	long := "# Intro\n\n" + strings.Repeat("alpha ", 4000) + "\n\n# Results\n\n" + strings.Repeat("omega ", 4000)
-	documents := []SourceDocument{{1, "Long  paper", long}, {2, "Note", "A short note."}}
+	documents := []SourceDocument{{ID: 1, Title: "Long  paper", Text: long}, {ID: 2, Title: "Note", Text: "A short note."}}
 	material := compileMaterial(documents, 2000)
 	if n := utf8.RuneCountInString(material); n > 2000 {
 		t.Errorf("the material is %d characters, over its budget of 2000", n)
@@ -38,7 +38,7 @@ func TestATextIsFittedBySectionAndNeverPastItsBudget(t *testing.T) {
 	if got := fit(unstructured, 5000); !strings.Contains(got, "the very end") && !strings.Contains(got[len(got)/2:], "word") {
 		t.Errorf("the fitted text keeps nothing from its later half")
 	}
-	if whole := wholeMaterial([]SourceDocument{{1, "A", "one"}, {2, "B", "two"}}); whole != "## Source: A\n\none\n\n## Source: B\n\ntwo" {
+	if whole := wholeMaterial([]SourceDocument{{ID: 1, Title: "A", Text: "one"}, {ID: 2, Title: "B", Text: "two"}}); whole != "## Source: A\n\none\n\n## Source: B\n\ntwo" {
 		t.Errorf("%q", whole)
 	}
 }

@@ -99,6 +99,15 @@ func TestADraftIsItsOwnersAlone(t *testing.T) {
 	if status != http.StatusOK || !strings.Contains(body, `"automation":{"name":"Renamed on the card","triggers":[{"type":"schedule","params":{"cron":"30 9 * * 1","timezone":"Africa/Lagos"}}]}`) {
 		t.Errorf("a created draft: %d %s", status, body)
 	}
+	// With every trigger removed the automation is still shown, by name,
+	// with no triggers: the join finds the automation and no trigger row.
+	if _, err := pool.Exec(ctx, `DELETE FROM automation_triggers WHERE automation_id = $1`, automation); err != nil {
+		t.Fatal(err)
+	}
+	status, body = call(alice, "GET", "/api/v1/automation-drafts/"+created)
+	if status != http.StatusOK || !strings.Contains(body, `"automation":{"name":"Renamed on the card","triggers":[]}`) {
+		t.Errorf("a created draft whose automation has no trigger: %d %s", status, body)
+	}
 	// Once the automation is deleted the draft stays created, with nothing to show.
 	if _, err := pool.Exec(ctx, `DELETE FROM automations WHERE id = $1`, automation); err != nil {
 		t.Fatal(err)

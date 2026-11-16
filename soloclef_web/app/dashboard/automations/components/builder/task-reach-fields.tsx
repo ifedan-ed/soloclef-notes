@@ -10,20 +10,15 @@ import {
 } from "@/components/ui/select";
 import { useNotebooks } from "@/features/notebooks/hooks/use-notebook-queries";
 import type { BuilderTask, TaskScope } from "@/lib/automations/builder-schema";
+import {
+	ANSWER_FROM,
+	CAN_USE_LABEL,
+	DELETED_NOTEBOOK,
+	REACH_OPTIONS,
+	reachOption,
+	SAVE_RESULT_TO,
+} from "@/lib/automations/reach-wording";
 import { Field } from "./form-field";
-
-// Worded for a run nobody watches: it can search the web, but not read a
-// page in full (reading one asks first, and nobody is there to ask). The
-// chat's draft card (automation-draft-form.tsx) and the phone say the same.
-const SCOPES: { value: TaskScope; label: string; hint: string }[] = [
-	{ value: "documents", label: "Your documents", hint: "Searches your documents and notes." },
-	{
-		value: "all",
-		label: "Your documents and the web",
-		hint: "Also web search (Exa or Tavily, if connected), PubMed, arXiv and preprints.",
-	},
-	{ value: "web", label: "The web only", hint: "Web and research search, not your documents." },
-];
 
 const ANY_NOTEBOOK = "any";
 const DONT_SAVE = "none";
@@ -39,7 +34,7 @@ export function TaskReachFields({ task, onChange }: TaskReachFieldsProps) {
 	const notebookId = useId();
 	const saveToNotebookId = useId();
 	const { data: notebooks } = useNotebooks();
-	const scope = SCOPES.find((option) => option.value === task.scope) ?? SCOPES[0];
+	const scope = reachOption(task.scope);
 	// A notebook that was deleted still shows as picked until changed.
 	const pickedMissing =
 		task.notebookId !== null && !(notebooks ?? []).some((n) => n.id === task.notebookId);
@@ -49,13 +44,13 @@ export function TaskReachFields({ task, onChange }: TaskReachFieldsProps) {
 
 	return (
 		<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-			<Field label="Can use" htmlFor={scopeId} hint={scope.hint}>
+			<Field label={CAN_USE_LABEL} htmlFor={scopeId} hint={scope.hint}>
 				<Select value={task.scope} onValueChange={(v) => onChange({ scope: v as TaskScope })}>
-					<SelectTrigger id={scopeId} aria-label="Can use" className="w-full">
+					<SelectTrigger id={scopeId} aria-label={CAN_USE_LABEL} className="w-full">
 						<SelectValue />
 					</SelectTrigger>
 					<SelectContent>
-						{SCOPES.map((option) => (
+						{REACH_OPTIONS.map((option) => (
 							<SelectItem key={option.value} value={option.value}>
 								{option.label}
 							</SelectItem>
@@ -64,63 +59,51 @@ export function TaskReachFields({ task, onChange }: TaskReachFieldsProps) {
 				</Select>
 			</Field>
 			<Field
-				label="Notebook"
+				label={ANSWER_FROM.label}
 				htmlFor={notebookId}
-				hint={
-					task.notebookId === null
-						? "Any notebook: the agent can list and read them all."
-						: "Answers only from this notebook's switched-on sources."
-				}
+				hint={ANSWER_FROM.hint(task.notebookId !== null)}
 			>
 				<Select
 					value={task.notebookId === null ? ANY_NOTEBOOK : String(task.notebookId)}
 					onValueChange={(v) => onChange({ notebookId: v === ANY_NOTEBOOK ? null : Number(v) })}
 				>
-					<SelectTrigger id={notebookId} aria-label="Notebook" className="w-full">
+					<SelectTrigger id={notebookId} aria-label={ANSWER_FROM.label} className="w-full">
 						<SelectValue />
 					</SelectTrigger>
 					<SelectContent>
-						<SelectItem value={ANY_NOTEBOOK}>Any notebook</SelectItem>
+						<SelectItem value={ANY_NOTEBOOK}>{ANSWER_FROM.any}</SelectItem>
 						{(notebooks ?? []).map((notebook) => (
 							<SelectItem key={notebook.id} value={String(notebook.id)}>
 								{notebook.title}
 							</SelectItem>
 						))}
 						{pickedMissing ? (
-							<SelectItem value={String(task.notebookId)}>A deleted notebook</SelectItem>
+							<SelectItem value={String(task.notebookId)}>{DELETED_NOTEBOOK}</SelectItem>
 						) : null}
 					</SelectContent>
 				</Select>
 			</Field>
 			<Field
-				label="Save results to notebook"
+				label={SAVE_RESULT_TO.label}
 				htmlFor={saveToNotebookId}
-				hint={
-					task.saveToNotebookId === null
-						? "Not saved anywhere automatically."
-						: "The final result is saved there as a note each run."
-				}
+				hint={SAVE_RESULT_TO.hint(task.saveToNotebookId !== null)}
 			>
 				<Select
 					value={task.saveToNotebookId === null ? DONT_SAVE : String(task.saveToNotebookId)}
 					onValueChange={(v) => onChange({ saveToNotebookId: v === DONT_SAVE ? null : Number(v) })}
 				>
-					<SelectTrigger
-						id={saveToNotebookId}
-						aria-label="Save results to notebook"
-						className="w-full"
-					>
+					<SelectTrigger id={saveToNotebookId} aria-label={SAVE_RESULT_TO.label} className="w-full">
 						<SelectValue />
 					</SelectTrigger>
 					<SelectContent>
-						<SelectItem value={DONT_SAVE}>Don't save</SelectItem>
+						<SelectItem value={DONT_SAVE}>{SAVE_RESULT_TO.none}</SelectItem>
 						{(notebooks ?? []).map((notebook) => (
 							<SelectItem key={notebook.id} value={String(notebook.id)}>
 								{notebook.title}
 							</SelectItem>
 						))}
 						{saveTargetMissing ? (
-							<SelectItem value={String(task.saveToNotebookId)}>A deleted notebook</SelectItem>
+							<SelectItem value={String(task.saveToNotebookId)}>{DELETED_NOTEBOOK}</SelectItem>
 						) : null}
 					</SelectContent>
 				</Select>

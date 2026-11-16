@@ -16,11 +16,11 @@ interface ApiBaseUrlFieldProps {
 	hint?: ReactNode;
 }
 
-/** Shared API Base URL input. The prefilled default is passed in via `value`. */
+/** Shared API base URL input. The prefilled default is passed in via `value`. */
 export function ApiBaseUrlField({ value, onChange, placeholder, hint }: ApiBaseUrlFieldProps) {
 	return (
 		<div className="flex flex-col gap-2">
-			<Label>API Base URL</Label>
+			<Label>API base URL</Label>
 			<Input
 				value={value}
 				onChange={(event) => onChange(event.target.value)}
@@ -42,7 +42,7 @@ interface ApiKeyFieldProps {
 export function ApiKeyField({
 	value,
 	onChange,
-	label = "API Key",
+	label = "API key",
 	placeholder = "API key",
 }: ApiKeyFieldProps) {
 	const [showApiKey, setShowApiKey] = useState(false);

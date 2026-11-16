@@ -21,6 +21,8 @@ const revalidate = "private, no-cache"
 // A stored file as a link sends it.
 type linkFile struct {
 	backend, key, filename, mimeType, checksum string
+	// title is the shared output's, which the file is named after.
+	title string
 }
 
 // shownInline reports whether a browser may display a shared file from the
@@ -78,7 +80,9 @@ func (x *exchange) sendFile(file linkFile, absent string) {
 			ContentType:  mediaType,
 			ETag:         etag,
 			CacheControl: revalidate,
-			Disposition:  artifacts.ContentDisposition(file.filename, inline),
+			// Named as the owner's download is: the output's title with the
+			// stored file's extension (artifacts.DownloadName).
+			Disposition: artifacts.ContentDisposition(artifacts.DownloadName(file.title, file.filename), inline),
 		},
 	})
 }
@@ -101,7 +105,7 @@ func (r Routes) content(x *exchange) {
 		return
 	}
 	x.sendFile(linkFile{backend: row.StorageBackend, key: row.StorageKey, filename: row.OriginalFilename,
-		mimeType: row.MimeType, checksum: row.ChecksumSha256}, artifactBytesGone)
+		mimeType: row.MimeType, checksum: row.ChecksumSha256, title: row.Title}, artifactBytesGone)
 }
 
 // file is any one file of a shared artifact, by its id: the address the
@@ -123,5 +127,5 @@ func (r Routes) file(x *exchange) {
 		return
 	}
 	x.sendFile(linkFile{backend: row.StorageBackend, key: row.StorageKey, filename: row.OriginalFilename,
-		mimeType: row.MimeType, checksum: row.ChecksumSha256}, artifactBytesGone)
+		mimeType: row.MimeType, checksum: row.ChecksumSha256, title: row.Title}, artifactBytesGone)
 }

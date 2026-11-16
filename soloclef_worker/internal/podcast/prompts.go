@@ -14,7 +14,12 @@ import (
 
 const (
 	// wordsPerMinute is the speaking rate that turns a length into words.
-	wordsPerMinute = 150
+	// It was 150, a common figure for speech, and a "Short" episode drafted
+	// to the ceiling of its 1 to 2½ minutes ran 2:47 (15 Nov 2026): the
+	// deployed voice (Kokoro af_heart) speaks about 137 words a minute,
+	// pauses between lines included. 135 is that, rounded down, so an
+	// episode drafted to its ceiling ends inside it.
+	wordsPerMinute = 135
 	// wordsPerSegment is roughly one beat, used to suggest how many to plan.
 	wordsPerSegment = 250
 	// recapRunes is how much of the dialogue so far each beat is shown.

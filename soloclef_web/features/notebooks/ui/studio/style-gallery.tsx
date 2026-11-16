@@ -98,7 +98,11 @@ export function StyleGallery({
 									)}
 								/>
 							) : null}
-							<span className="truncate px-0.5 text-xs font-medium text-foreground">
+							{/* w-full: the card's column did not stretch the label (Chrome sized
+							    it to its text), so a long name such as "Auto-select (Default)"
+							    ran past the card into the next one. Two lines keep the whole
+							    name readable instead of cutting it. */}
+							<span className="line-clamp-2 w-full break-words px-0.5 text-xs font-medium text-foreground">
 								{option.label}
 							</span>
 							{selected ? (

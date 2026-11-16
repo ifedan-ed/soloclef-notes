@@ -114,8 +114,8 @@ test.describe("Composer: sources only", () => {
 		if (isPhone) {
 			await root.getByRole("button", { name: "Upload files, manage tools and more" }).click();
 			const drawer = page.getByRole("dialog");
-			await expect(drawer.getByRole("button", { name: /Upload Files/ })).toBeVisible();
-			await expect(drawer.getByRole("button", { name: /Manage Tools/ })).toBeVisible();
+			await expect(drawer.getByRole("button", { name: /Upload files/ })).toBeVisible();
+			await expect(drawer.getByRole("button", { name: /Manage tools/ })).toBeVisible();
 			await expect(drawer.getByText(/Search Scope/i)).toHaveCount(0);
 			await expectNoOverflow(page, "phone + menu");
 			await page.keyboard.press("Escape");

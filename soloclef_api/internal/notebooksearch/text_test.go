@@ -42,6 +42,9 @@ func TestMarkdownIsFlattenedToReadableText(t *testing.T) {
 		"> quoted\n<b>tag</b> ~~gone~~":                   "quoted tag gone",
 		"a stray [ bracket (and paren) stays as written]": "a stray [ bracket (and paren) stays as written]",
 		"": "",
+		// Escapes show as the mark they escape; a backslash before a letter stays.
+		`tracheitis.\[4\]\[5] performed,\[4] but`: "tracheitis.[4][5] performed,[4] but",
+		`5 \* 3 C:\path`: "5 * 3 C:\\path",
 	}
 	for markdown, want := range cases {
 		if got := plainText(markdown); got != want {

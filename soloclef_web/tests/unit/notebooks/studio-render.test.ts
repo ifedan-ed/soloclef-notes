@@ -48,15 +48,15 @@ test("the Studio grid shows every output as a tile, two columns wide", () => {
 	const html = render(createElement(StudioTiles, { onPick: () => undefined }));
 	assert.match(html, /grid-cols-2/);
 	for (const label of [
-		"Audio Overview",
-		"Video Overview",
-		"Slide Deck",
-		"Mind Map",
+		"Audio overview",
+		"Video overview",
+		"Slide deck",
+		"Mind map",
 		"Reports",
 		"Flashcards",
 		"Quiz",
 		"Infographic",
-		"Data Table",
+		"Data table",
 	]) {
 		assert.ok(html.includes(`>${label}<`), label);
 	}

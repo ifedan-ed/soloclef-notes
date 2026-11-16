@@ -99,6 +99,7 @@ test("heading labels drop numbering and emphasis, not a leading year", () => {
 	assert.equal(headingLabel("1. Introduction"), "Introduction");
 	assert.equal(headingLabel("2) **Rounds**"), "Rounds");
 	assert.equal(headingLabel("IV. Results"), "Results");
+	assert.equal(headingLabel("01 Executive summary"), "Executive summary");
 	assert.equal(headingLabel("2024 in review"), "2024 in review");
 	assert.equal(headingLabel("10"), "10");
 });
@@ -247,9 +248,9 @@ test("suggestion cards: the offer, the progress card and a failure", () => {
 		onDismiss: () => undefined,
 	};
 	const offer = render(createElement(ReportSuggestionCard, { ...props, phase: "open" }));
-	assert.ok(offer.includes("Recommended · Slide Deck"));
+	assert.ok(offer.includes("Recommended · Slide deck"));
 	assert.ok(offer.includes("The Choreography of PICU Rounds"));
-	assert.ok(offer.includes('aria-label="Add Slide Deck: The Choreography of PICU Rounds"'));
+	assert.ok(offer.includes('aria-label="Add Slide deck: The Choreography of PICU Rounds"'));
 	assert.ok(offer.includes('aria-label="Dismiss suggestion: The Choreography of PICU Rounds"'));
 
 	const running = render(
@@ -260,13 +261,13 @@ test("suggestion cards: the offer, the progress card and a failure", () => {
 		})
 	);
 	assert.ok(running.startsWith("<output"));
-	assert.ok(running.includes("Generating Slide Deck…"));
+	assert.ok(running.includes("Generating Slide deck…"));
 	assert.ok(running.includes("Rendering · 40%"));
 
 	const failed = render(
 		createElement(ReportSuggestionCard, { ...props, phase: "failed", error: true })
 	);
-	assert.ok(failed.includes("Couldn&#x27;t generate this Slide Deck"));
+	assert.ok(failed.includes("Couldn&#x27;t generate this Slide deck"));
 	assert.ok(failed.includes("Couldn&#x27;t start it."));
 	assert.ok(failed.includes("Try again"));
 });

@@ -33,7 +33,7 @@ export const PeriodicSyncConfig: FC<PeriodicSyncConfigProps> = ({
 		<div className="rounded-xl bg-slate-400/5 dark:bg-white/5 p-3 sm:p-6">
 			<div className="flex items-center justify-between">
 				<div className="space-y-1">
-					<h3 className="font-medium text-sm sm:text-base">Enable Periodic Sync</h3>
+					<h3 className="font-medium text-sm sm:text-base">Enable periodic sync</h3>
 					<p className="text-xs sm:text-sm text-muted-foreground">
 						Automatically re-index at regular intervals
 					</p>
@@ -53,7 +53,7 @@ export const PeriodicSyncConfig: FC<PeriodicSyncConfigProps> = ({
 				<div className="mt-4 pt-4 border-t border-slate-400/20 space-y-3">
 					<div className="space-y-2">
 						<Label htmlFor="frequency" className="text-xs sm:text-sm">
-							Sync Frequency
+							Sync frequency
 						</Label>
 						<Select value={frequencyMinutes} onValueChange={onFrequencyChange}>
 							<SelectTrigger

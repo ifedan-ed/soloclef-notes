@@ -70,7 +70,7 @@ export default function InferenceParamsEditor({ params, setParams }: InferencePa
 			<div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_1fr_auto] md:gap-3 items-end">
 				<div className="flex flex-col space-y-1">
 					<Label htmlFor="param-key" className="text-xs sm:text-sm font-medium">
-						Parameter Key
+						Parameter key
 					</Label>
 					<Select value={selectedKey} onValueChange={setSelectedKey}>
 						<SelectTrigger id="param-key" className="w-full">
@@ -104,7 +104,7 @@ export default function InferenceParamsEditor({ params, setParams }: InferencePa
 					onClick={handleAdd}
 					disabled={!selectedKey || value === ""}
 				>
-					Add Parameter
+					Add parameter
 				</Button>
 			</div>
 

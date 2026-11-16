@@ -13,14 +13,16 @@ const createOutput = `-- name: CreateOutput :one
 
 WITH touched AS (
     UPDATE notebooks AS n SET updated_at = now()
-    WHERE n.id = $11 AND n.user_id = $12
+    WHERE n.id = $12 AND n.user_id = $13
     RETURNING n.id, n.user_id
 )
 INSERT INTO notebook_outputs (notebook_id, user_id, kind, title, options, source_document_ids,
-                              podcast_id, deliverable_job_id, artifact_id, thread_id, generated_by, request_key)
+                              podcast_id, deliverable_job_id, artifact_id, thread_id, generated_by, request_key,
+                              notebook_source_ids)
 SELECT touched.id, touched.user_id, $1, $2, $3::jsonb,
        $4::jsonb, $5, $6,
-       $7, $8, $9::jsonb, $10
+       $7, $8, $9::jsonb, $10,
+       $11::bigint[]
 FROM touched
 RETURNING notebook_outputs.id
 `
@@ -36,6 +38,7 @@ type CreateOutputParams struct {
 	ThreadID          *int64
 	GeneratedBy       []byte
 	RequestKey        *string
+	NotebookSourceIds []int64
 	NotebookID        int64
 	UserID            string
 }
@@ -49,7 +52,9 @@ type CreateOutputParams struct {
 // made with no run behind it. The notebook is read under the owner, so an
 // output is never added to another account's notebook (no row is written
 // and none returned), and a notebook used is a notebook moved to the top of
-// the list.
+// the list. `notebook_source_ids` is the notebook sources a Studio dialog
+// chose (NULL when nobody chose, as for what a chat made), which Try again
+// sends back.
 func (q *Queries) CreateOutput(ctx context.Context, arg CreateOutputParams) (int64, error) {
 	row := q.db.QueryRow(ctx, createOutput,
 		arg.Kind,
@@ -62,6 +67,7 @@ func (q *Queries) CreateOutput(ctx context.Context, arg CreateOutputParams) (int
 		arg.ThreadID,
 		arg.GeneratedBy,
 		arg.RequestKey,
+		arg.NotebookSourceIds,
 		arg.NotebookID,
 		arg.UserID,
 	)

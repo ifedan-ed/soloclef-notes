@@ -102,19 +102,33 @@ func shown(p pool) suggestionsAnswer {
 	return answer
 }
 
-// sourcesKey names a set of source documents.
+// sourcesKey names a set of source documents as read: each document with
+// its version, so a document read again (re-indexed, or refreshed from
+// Nextcloud) makes a new key as surely as a document added or removed.
 func sourcesKey(documents []SourceDocument) string {
-	ids := make([]string, len(documents))
-	sorted := make([]int64, len(documents))
-	for i, document := range documents {
-		sorted[i] = document.ID
+	sorted := append([]SourceDocument{}, documents...)
+	sort.Slice(sorted, func(a, b int) bool { return sorted[a].ID < sorted[b].ID })
+	parts := make([]string, len(sorted))
+	for i, document := range sorted {
+		parts[i] = strconv.FormatInt(document.ID, 10) + ":" + document.Version
 	}
-	sort.Slice(sorted, func(a, b int) bool { return sorted[a] < sorted[b] })
-	for i, id := range sorted {
-		ids[i] = strconv.FormatInt(id, 10)
-	}
-	sum := sha256.Sum256([]byte(strings.Join(ids, ",")))
+	sum := sha256.Sum256([]byte(strings.Join(parts, ",")))
 	return hex.EncodeToString(sum[:])
+}
+
+// readDocuments is the documents that have been read. Ideas are written
+// only from those: a document still being read has no text, and a pool
+// written while it was would be kept for the finished set and name a
+// document it never saw ("Does the document contain anything beyond its
+// title?"). A failed document has no text either and is left out the same.
+func readDocuments(documents []SourceDocument) []SourceDocument {
+	read := make([]SourceDocument, 0, len(documents))
+	for _, document := range documents {
+		if document.Read {
+			read = append(read, document)
+		}
+	}
+	return read
 }
 
 // suggestionPrompt is the instructions for one pool. variant is the
@@ -237,7 +251,7 @@ func (r Routes) suggestions(x *exchange) {
 		x.fail("could not read the notebook", err)
 		return
 	}
-	documents, err := readSources(ctx, q, x.userID, notebookID, nil)
+	read, err := readSources(ctx, q, x.userID, notebookID, nil)
 	var refused *refusal
 	if errors.As(err, &refused) {
 		// No ticked source: there is nothing to have ideas about.
@@ -249,6 +263,14 @@ func (r Routes) suggestions(x *exchange) {
 		return
 	}
 
+	documents := readDocuments(read.documents)
+	if len(documents) == 0 {
+		// Every ticked source is still being read (or could not be): there is
+		// no text to have ideas about yet. Nothing is stored, so the first ask
+		// after a source is read writes the pool.
+		x.send(http.StatusOK, shown(pool{}))
+		return
+	}
 	sources, key := sourcesKey(documents), kindName+"|"+variant+"|"+language
 	var cached pool
 	if cache.FocusSuggestionsKey != nil && *cache.FocusSuggestionsKey == sources {

@@ -146,8 +146,9 @@ func (q *Queries) NotebookIsOwned(ctx context.Context, arg NotebookIsOwnedParams
 }
 
 const outputs = `-- name: Outputs :many
-SELECT o.id, o.kind, o.title, o.options, o.source_document_ids, o.generated_by, o.created_at,
+SELECT o.id, o.kind, o.title, o.options, o.source_document_ids, o.notebook_source_ids, o.generated_by, o.created_at,
        to_jsonb(p.status) AS podcast_status, p.duration_seconds AS podcast_duration, p.artifact_id AS podcast_artifact,
+       p.error AS podcast_error,
        to_jsonb(j.status) AS job_status, j.phase AS job_phase, j.progress AS job_progress,
        j.failure_code AS job_failure, j.artifact_id AS job_artifact,
        o.artifact_id AS made_artifact,
@@ -173,11 +174,13 @@ type OutputsRow struct {
 	Title             string
 	Options           []byte
 	SourceDocumentIds []byte
+	NotebookSourceIds []int64
 	GeneratedBy       []byte
 	CreatedAt         time.Time
 	PodcastStatus     []byte
 	PodcastDuration   *int64
 	PodcastArtifact   *int64
+	PodcastError      *string
 	JobStatus         []byte
 	JobPhase          *string
 	JobProgress       *int64
@@ -210,11 +213,13 @@ func (q *Queries) Outputs(ctx context.Context, arg OutputsParams) ([]OutputsRow,
 			&i.Title,
 			&i.Options,
 			&i.SourceDocumentIds,
+			&i.NotebookSourceIds,
 			&i.GeneratedBy,
 			&i.CreatedAt,
 			&i.PodcastStatus,
 			&i.PodcastDuration,
 			&i.PodcastArtifact,
+			&i.PodcastError,
 			&i.JobStatus,
 			&i.JobPhase,
 			&i.JobProgress,

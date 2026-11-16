@@ -29,7 +29,7 @@ export function ModelConnectionsSettings() {
 		<div className="flex flex-col gap-6">
 			<div className="flex flex-col gap-4">
 				<div>
-					<h3 className="text-base font-semibold">Model Roles</h3>
+					<h3 className="text-base font-semibold">Model roles</h3>
 					<p className="text-sm text-muted-foreground">
 						Pick which of the available models powers chat, quick tasks, Studio, and vision.
 					</p>

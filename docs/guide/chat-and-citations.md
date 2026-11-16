@@ -16,7 +16,7 @@ still come first.
   questions appear under the latest answer.
 - Type @ to point a question at one or more of the notebook's sources.
 - Type / to use one of your saved prompts.
-- In the + menu, Upload Files adds files to the notebook as sources, and
+- In the + menu, Upload files adds files to the notebook as sources, and
   Take a screenshot attaches a picture of your screen to the question.
 - Tools, beside the send button, adds one tool to your next message only,
   such as an Exa search or a PubMed search. See [Tools](#tools).
@@ -75,7 +75,7 @@ or a page, ask the chat to add it to the notebook (see below), or add it from
 the Sources panel. The message after goes back to normal.
 
 Your connections are on by default. To keep one out of your chats, open +,
-then Manage Tools, then Your connections, and switch it off. You can switch
+then Manage tools, then Your connections, and switch it off. You can switch
 off single tools there too. These switches are kept in this browser and
 apply to every chat in it.
 
@@ -137,7 +137,7 @@ runs:
 
 - Approve runs it once.
 - Edit lets you change what it was about to do, then Approve with edits.
-- Always Allow runs it and switches Ask first off for that tool. It is not
+- Always allow runs it and switches Ask first off for that tool. It is not
   offered for adding a web page, which asks every time.
 - Reject stops it.
 

@@ -65,6 +65,9 @@ var (
 	markdownLink  = regexp.MustCompile(`\[([^\[\]]+)\]\([^)\]]*\)`)
 	htmlTag       = regexp.MustCompile(`<[^<>]{1,200}>`)
 	markdownMarks = regexp.MustCompile("(?m)(\\*\\*|__|`{1,3}|~~|^#{1,6}\\s+|^>\\s?|\\|)")
+	// A backslash-escaped punctuation mark, as a parser writes a citation's
+	// brackets ("tracheitis.\[4\]"): the mark is what shows when rendered.
+	markdownEscape = regexp.MustCompile(`\\([!-/:-@\[-` + "`" + `{-~])`)
 )
 
 // plainText is Markdown flattened to one line of readable text: a snippet
@@ -74,6 +77,9 @@ func plainText(markdown string) string {
 	text = markdownLink.ReplaceAllString(text, "$1")
 	text = htmlTag.ReplaceAllString(text, " ")
 	text = markdownMarks.ReplaceAllString(text, " ")
+	// Last, so an escaped bracket never becomes part of a link above, and a
+	// snippet shows "[4]" rather than "\[4]".
+	text = markdownEscape.ReplaceAllString(text, "$1")
 	return strings.Join(strings.Fields(text), " ")
 }
 

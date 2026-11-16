@@ -249,6 +249,36 @@ VALUES
 		}
 	})
 
+	t.Run("a file is named after the Studio output that lists it", func(t *testing.T) {
+		// Before any output lists them: the document's title.
+		if file, err := store.FileIn(ctx, alice, 7700, 7790); err != nil || file.Title != "A deck" {
+			t.Fatalf("no output: %+v, %v", file, err)
+		}
+		// 7700 is listed by an output directly (as a chat's), 7701 through
+		// its job and 7702 through its podcast, each under a title the
+		// person gave it. Bob's notebook and output never name hers.
+		testpostgres.Exec(t, pool, `
+INSERT INTO notebooks (id, user_id, title) VALUES (7750, '`+alice+`', 'Hers'), (7751, '`+bob+`', 'His');
+INSERT INTO deliverable_jobs (id, user_id, kind, title, tool_call_id, status, artifact_id) VALUES
+ (7760, '`+alice+`', 'artifact', 'job', 't-7760', 'ready', 7701);
+INSERT INTO podcast_runs (id, user_id, title, status, artifact_id) VALUES (7770, '`+alice+`', 'run', 'ready', 7702);
+INSERT INTO notebook_outputs (notebook_id, user_id, kind, title, artifact_id, deliverable_job_id, podcast_id) VALUES
+ (7750, '`+alice+`', 'flashcards', 'Renamed deck', 7700, NULL, NULL),
+ (7750, '`+alice+`', 'quiz', 'Quiz: Tides', NULL, 7760, NULL),
+ (7750, '`+alice+`', 'audio', 'Tide talk', NULL, NULL, 7770),
+ (7751, '`+bob+`', 'quiz', 'BOBS TITLE', NULL, NULL, NULL);`)
+		for artifact, want := range map[int64]string{7700: "Renamed deck", 7701: "Quiz: Tides", 7702: "Tide talk"} {
+			download, err := store.DownloadOf(ctx, alice, artifact)
+			if err != nil || download == nil || download.Title != want {
+				t.Errorf("%d: %+v, %v; want %q", artifact, download, err, want)
+			}
+		}
+		if file, err := store.FileIn(ctx, alice, 7700, 7790); err != nil || file.Title != "Renamed deck" {
+			t.Errorf("the preview: %+v, %v", file, err)
+		}
+		testpostgres.Exec(t, pool, `DELETE FROM notebook_outputs; DELETE FROM podcast_runs WHERE id = 7770; DELETE FROM deliverable_jobs WHERE id = 7760; DELETE FROM notebooks WHERE id IN (7750, 7751);`)
+	})
+
 	t.Run("a video's slides are read without its scene codes", func(t *testing.T) {
 		slides, err := store.SlidesOf(ctx, alice, 7702)
 		if err != nil || slides == nil || slides.Format != "video" {

@@ -18,7 +18,7 @@ import (
 const maxAttempts = 3
 
 // The internal reasons a job cut off for the last time is failed with; the
-// person is told reasons[codeInterrupted].
+// person is told reasonFor(codeInterrupted).
 const (
 	shutdownReason  = "the server shut down while this was being made, on every attempt it is allowed"
 	abandonedReason = "the process making this stopped answering, on every attempt it is allowed (or the job holds no task to make again)"

@@ -25,21 +25,16 @@ import {
 	type DraftReach,
 	draftFieldProblems,
 } from "@/lib/automations/draft-fields";
+import {
+	ANSWER_FROM,
+	CAN_USE_LABEL,
+	DELETED_NOTEBOOK,
+	EMAIL_RESULT_LABEL,
+	REACH_OPTIONS,
+	reachOption,
+	SAVE_RESULT_TO,
+} from "@/lib/automations/reach-wording";
 import { fromCron } from "@/lib/automations/schedule-builder";
-
-/**
- * What a task may read, worded for a run nobody watches: a page cannot be
- * read in full there (reading one asks first), so no hint promises it.
- */
-const REACH: { value: DraftReach; label: string; hint: string }[] = [
-	{ value: "documents", label: "Your documents", hint: "Searches your documents and notes." },
-	{
-		value: "all",
-		label: "Your documents and the web",
-		hint: "Also web search (Exa or Tavily, if connected), PubMed, arXiv and preprints.",
-	},
-	{ value: "web", label: "The web only", hint: "Web and research search, not your documents." },
-];
 
 const NONE = "none";
 
@@ -109,7 +104,7 @@ export function AutomationDraftForm({ draft, initial, disabled, onChange }: Draf
 		report(next, schedule, timezone);
 	};
 
-	const reach = REACH.find((option) => option.value === fields.reach) ?? REACH[0];
+	const reach = reachOption(fields.reach);
 	const folder = useMemo(
 		() =>
 			fields.trigger.kind === "event"
@@ -173,7 +168,7 @@ export function AutomationDraftForm({ draft, initial, disabled, onChange }: Draf
 			</div>
 
 			<div className="grid gap-3 sm:grid-cols-2">
-				<Field label="Can use" htmlFor={ids.reach} hint={reach.hint}>
+				<Field label={CAN_USE_LABEL} htmlFor={ids.reach} hint={reach.hint}>
 					<Select
 						value={fields.reach}
 						onValueChange={(value) => patch({ reach: value as DraftReach })}
@@ -182,7 +177,7 @@ export function AutomationDraftForm({ draft, initial, disabled, onChange }: Draf
 							<SelectValue />
 						</SelectTrigger>
 						<SelectContent>
-							{REACH.map((option) => (
+							{REACH_OPTIONS.map((option) => (
 								<SelectItem key={option.value} value={option.value}>
 									{option.label}
 								</SelectItem>
@@ -191,11 +186,9 @@ export function AutomationDraftForm({ draft, initial, disabled, onChange }: Draf
 					</Select>
 				</Field>
 				<Field
-					label="Answer only from"
+					label={ANSWER_FROM.label}
 					htmlFor={ids.only}
-					hint={
-						fields.notebookId === null ? "Any of your documents." : "That notebook's sources only."
-					}
+					hint={ANSWER_FROM.hint(fields.notebookId !== null)}
 				>
 					<Select
 						value={fields.notebookId === null ? NONE : String(fields.notebookId)}
@@ -205,14 +198,14 @@ export function AutomationDraftForm({ draft, initial, disabled, onChange }: Draf
 							<SelectValue />
 						</SelectTrigger>
 						<SelectContent>
-							<SelectItem value={NONE}>Any notebook</SelectItem>
+							<SelectItem value={NONE}>{ANSWER_FROM.any}</SelectItem>
 							{notebookOptions.map((notebook) => (
 								<SelectItem key={notebook.id} value={String(notebook.id)}>
 									{notebook.title}
 								</SelectItem>
 							))}
 							{missing(fields.notebookId) ? (
-								<SelectItem value={String(fields.notebookId)}>A notebook not found</SelectItem>
+								<SelectItem value={String(fields.notebookId)}>{DELETED_NOTEBOOK}</SelectItem>
 							) : null}
 						</SelectContent>
 					</Select>
@@ -220,11 +213,9 @@ export function AutomationDraftForm({ draft, initial, disabled, onChange }: Draf
 			</div>
 
 			<Field
-				label="Keep each result as a note in"
+				label={SAVE_RESULT_TO.label}
 				htmlFor={ids.save}
-				hint={
-					fields.saveToNotebookId === null ? "Results stay on the automation's page." : undefined
-				}
+				hint={SAVE_RESULT_TO.hint(fields.saveToNotebookId !== null)}
 			>
 				<Select
 					value={fields.saveToNotebookId === null ? NONE : String(fields.saveToNotebookId)}
@@ -236,14 +227,14 @@ export function AutomationDraftForm({ draft, initial, disabled, onChange }: Draf
 						<SelectValue />
 					</SelectTrigger>
 					<SelectContent>
-						<SelectItem value={NONE}>Don't keep as a note</SelectItem>
+						<SelectItem value={NONE}>{SAVE_RESULT_TO.none}</SelectItem>
 						{notebookOptions.map((notebook) => (
 							<SelectItem key={notebook.id} value={String(notebook.id)}>
 								{notebook.title}
 							</SelectItem>
 						))}
 						{missing(fields.saveToNotebookId) ? (
-							<SelectItem value={String(fields.saveToNotebookId)}>A notebook not found</SelectItem>
+							<SelectItem value={String(fields.saveToNotebookId)}>{DELETED_NOTEBOOK}</SelectItem>
 						) : null}
 					</SelectContent>
 				</Select>
@@ -251,7 +242,7 @@ export function AutomationDraftForm({ draft, initial, disabled, onChange }: Draf
 
 			<div className="flex items-start justify-between gap-3">
 				<div className="min-w-0 space-y-0.5">
-					<p className="text-sm font-medium text-foreground">Email me each result</p>
+					<p className="text-sm font-medium text-foreground">{EMAIL_RESULT_LABEL}</p>
 					<p className="text-xs text-muted-foreground">
 						Sent to your account's address when a run ends.
 					</p>
@@ -259,7 +250,7 @@ export function AutomationDraftForm({ draft, initial, disabled, onChange }: Draf
 				<Switch
 					checked={fields.emailResult}
 					onCheckedChange={(checked) => patch({ emailResult: checked })}
-					aria-label="Email me each result"
+					aria-label={EMAIL_RESULT_LABEL}
 				/>
 			</div>
 

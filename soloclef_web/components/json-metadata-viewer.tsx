@@ -76,7 +76,7 @@ export function JsonMetadataViewer({
 				{trigger || (
 					<Button variant="ghost" size="sm" className="flex items-center gap-1">
 						<FileJson size={16} />
-						<span>View Metadata</span>
+						<span>View metadata</span>
 					</Button>
 				)}
 			</DialogTrigger>

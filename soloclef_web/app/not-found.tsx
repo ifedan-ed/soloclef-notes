@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ContactLink } from "@/components/site/contact-link";
 import { BRAND } from "@/lib/brand";
 
 export const metadata: Metadata = {
-	title: `Page Not Found | ${BRAND.name}`,
+	title: `Page not found | ${BRAND.name}`,
 	description: `The page you're looking for doesn't exist. Go back to your notebooks, or read the docs.`,
 };
 
@@ -16,30 +17,24 @@ export default function NotFound() {
 			<p className="mt-4 text-xl text-neutral-600 dark:text-neutral-400">
 				The page you&apos;re looking for doesn&apos;t exist.
 			</p>
-			<p className="mt-2 text-base text-neutral-500 dark:text-neutral-500">
-				It may have been moved, or the URL might be incorrect.
-			</p>
 			<div className="mt-10 flex flex-col items-center gap-4 sm:flex-row">
 				<Link
 					href="/"
 					className="rounded-lg bg-black px-6 py-3 text-sm font-medium text-white transition hover:bg-neutral-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
 				>
-					Go Home
+					Go home
 				</Link>
 				<Link
 					href="/docs"
 					className="rounded-lg border border-neutral-200 px-6 py-3 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
 				>
-					Browse Docs
+					Browse docs
 				</Link>
 			</div>
+			{/* Only pages that exist: a "Changelog" link here led to a second 404,
+			    and Contact is left out where the server publishes no address. */}
 			<nav className="mt-16 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-neutral-500 dark:text-neutral-400">
-				<Link href="/contact" className="hover:text-neutral-900 dark:hover:text-neutral-200">
-					Contact
-				</Link>
-				<Link href="/changelog" className="hover:text-neutral-900 dark:hover:text-neutral-200">
-					Changelog
-				</Link>
+				<ContactLink className="hover:text-neutral-900 dark:hover:text-neutral-200" />
 			</nav>
 		</div>
 	);

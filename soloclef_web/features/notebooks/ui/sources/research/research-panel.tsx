@@ -116,11 +116,7 @@ export function ResearchPanel({
 				pageReader={pageReader}
 				busy={pageState.status === "adding"}
 			/>
-			<ReadPageStatus
-				state={pageState}
-				pageReader={pageReader}
-				onDismiss={() => setPageState({ status: "idle" })}
-			/>
+			<ReadPageStatus state={pageState} onDismiss={() => setPageState({ status: "idle" })} />
 			{state.status === "searching" && showProgress ? (
 				<ResearchProgress
 					phase={state.phase}

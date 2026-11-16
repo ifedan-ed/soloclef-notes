@@ -102,7 +102,7 @@ function MermaidDiagramComponent({ source, isDarkMode, fallback }: MermaidDiagra
 					}}
 					aria-label={hasCopied ? "Copied Mermaid source" : "Copy Mermaid source"}
 				>
-					<span className="sr-only">Copy Source</span>
+					<span className="sr-only">Copy source</span>
 					{hasCopied ? <CheckIcon className="!size-3" /> : <CopyIcon className="!size-3" />}
 				</Button>
 			</div>
