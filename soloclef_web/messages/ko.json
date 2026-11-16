@@ -1427,6 +1427,7 @@
 		"output_view": {
 			"studio": "스튜디오",
 			"view_prompt": "프롬프트 및 소스 {count, plural, other {#개}} 보기",
+			"view_prompt_only": "프롬프트 보기",
 			"prompt_title": "프롬프트",
 			"no_prompt": "맞춤 초점 없이 만들었습니다.",
 			"sources_title": "소스",

@@ -30,10 +30,10 @@ INSERT INTO soloclef_agent_checkpoints (thread_id, seq, status, node, state)
 	w.refusedWith("his start in her notebook", w.call(ben, http.MethodPost, "/api/v1/notebooks/7/threads", ""), 404, notebookAbsent)
 
 	started := w.call(ada, http.MethodPost, "/api/v1/notebooks/7/threads", "")
-	if started.status != 201 || started.body["title"] != "New Chat" {
+	if started.status != 201 || started.body["title"] != "New chat" {
 		t.Fatalf("her start: %d %s", started.status, started.raw)
 	}
-	if w.count(`SELECT count(*) FROM new_chat_threads WHERE notebook_id = 7 AND user_id = '`+ada+`' AND title = 'New Chat'`) != 1 ||
+	if w.count(`SELECT count(*) FROM new_chat_threads WHERE notebook_id = 7 AND user_id = '`+ada+`' AND title = 'New chat'`) != 1 ||
 		w.count(`SELECT count(*) FROM notebooks WHERE id = 7 AND updated_at = '2026-11-11 09:00:00+00'`) != 1 {
 		t.Error("the chat was not made in her notebook, or the notebook was not marked used")
 	}

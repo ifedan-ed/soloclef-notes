@@ -428,7 +428,7 @@ func TestAnArtifactIsMadeFromTheCallersOwnSourcesAlone(t *testing.T) {
 	status, body = h.as(alice, "POST", generate, `{"kind":"mindmap","request_id":"click-1","focus":"spring tides"}`)
 	// The ticked source it was made from is kept as the output's choice,
 	// for its Try again.
-	expect(t, "her mind map", status, body, 201, `"kind":"mindmap"`, `"title":"Mind Map: Tides"`, `"source_count":1`,
+	expect(t, "her mind map", status, body, 201, `"kind":"mindmap"`, `"title":"Mind map: Tides"`, `"source_count":1`,
 		`"source_ids":[1]`, `"generated_by":{"model":"test-model"}`, `"focus":"spring tides"`, `"detail":"standard"`)
 	h.until("the run finishes", "deliverable_jobs WHERE kind = 'artifact' AND status = 'ready' AND artifact_id IS NOT NULL AND progress = 100 AND finished_at IS NOT NULL")
 	if h.count(`artifacts a JOIN deliverable_jobs j ON j.artifact_id = a.id JOIN new_chat_threads t ON t.id = a.thread_id
@@ -461,7 +461,7 @@ func TestAnArtifactIsMadeFromTheCallersOwnSourcesAlone(t *testing.T) {
 			t.Errorf("the task lacks %q", piece)
 		}
 	}
-	for _, absent := range []string{"BOBS SECRET TEXT", "The sun pulls less.", "Being deleted.", "Mind Map: Tides"} {
+	for _, absent := range []string{"BOBS SECRET TEXT", "The sun pulls less.", "Being deleted.", "Mind map: Tides"} {
 		if strings.Contains(task, absent) {
 			t.Errorf("the task holds %q, which is not one of her ticked sources", absent)
 		}
@@ -596,7 +596,8 @@ func TestARunStopsWhenAskedAndFailsHonestly(t *testing.T) {
 		t.Error("a failed run saved an artifact")
 	}
 	h.until("the failure's inbox row", `notifications WHERE type = 'studio_output' AND title = 'Mind map could not be made'
-		AND (metadata ->> 'retry')::boolean AND metadata ->> 'status' = 'failed'`)
+		AND (metadata ->> 'retry')::boolean AND metadata ->> 'status' = 'failed'
+		AND message LIKE '%connection to the model broke off%'`)
 
 }
 

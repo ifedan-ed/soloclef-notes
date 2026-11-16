@@ -64,10 +64,11 @@ const (
 	defaultAutoStyle = "sketch-note"
 )
 
-// styleLabels are the styles as a person reads them.
+// styleLabels are the styles as a person reads them, in the site's sentence
+// case (the web's own style picker says "Sketch note" too).
 var styleLabels = map[string]string{
-	"sketch-note": "Sketch Note", "editorial": "Editorial", "instructional": "Instructional",
-	"bento-grid": "Bento Grid", "scientific": "Scientific", "professional": "Professional",
+	"sketch-note": "Sketch note", "editorial": "Editorial", "instructional": "Instructional",
+	"bento-grid": "Bento grid", "scientific": "Scientific", "professional": "Professional",
 }
 
 // styleSignals are the words in a poster that make "auto" pick a style,

@@ -37,7 +37,9 @@ func TestAFailedOutputSaysWhy(t *testing.T) {
 			"The video could not be rendered. Try again."},
 		"a podcast, in the worker's own words": {OutputsRow{Kind: "audio", PodcastStatus: []byte(`"failed"`), PodcastError: text("The podcast could not be made. Try again. ")},
 			"The podcast could not be made. Try again."},
-		"a code with no sentence":  {OutputsRow{Kind: "report", JobStatus: []byte(`"failed"`), JobFailure: text("generation_failed")}, ""},
+		"a run that broke off": {OutputsRow{Kind: "slides", JobStatus: []byte(`"failed"`), JobFailure: text("generation_failed")},
+			"The connection to the model broke off while it was being made. Try again; it usually works."},
+		"a code with no sentence":  {OutputsRow{Kind: "report", JobStatus: []byte(`"failed"`), JobFailure: text("no_such_code")}, ""},
 		"a run that is gone":       {OutputsRow{Kind: "report"}, ""},
 		"a ready one says nothing": {OutputsRow{Kind: "report", JobStatus: []byte(`"ready"`), JobFailure: text("timeout")}, ""},
 	} {

@@ -21,7 +21,7 @@ require (
 	git.danvics.com/danvics/soloclef/soloclef_notify v0.0.0
 	git.danvics.com/danvics/soloclef/soloclef_studio v0.0.0
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.0
-	github.com/ifedan-ed/figures-go v0.5.0
+	github.com/ifedan-ed/figures-go v0.5.1
 	github.com/jackc/pgx/v5 v5.7.1
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/valkey-io/valkey-go v1.0.69

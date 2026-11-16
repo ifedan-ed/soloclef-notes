@@ -69,7 +69,11 @@ export function AutomationDetailHeader({ automation }: AutomationDetailHeaderPro
 						)}
 					</div>
 
-					<div className="flex items-center gap-2 shrink-0 flex-wrap">
+					{/* Not shrink-0: a box that cannot shrink is as wide as its four
+					    buttons in one row, so at 390px its own wrap never happened
+					    and Delete ran off the right edge. Held to the row's width,
+					    the buttons wrap. */}
+					<div className="flex max-w-full flex-wrap items-center gap-2">
 						{/* Only an active automation runs; a paused one says so on Resume. */}
 						{automation.status === "active" && (
 							<Button

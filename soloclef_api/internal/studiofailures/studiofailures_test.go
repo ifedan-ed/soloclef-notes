@@ -9,7 +9,7 @@ import (
 // Every code an artifact job can be closed with has the owner's sentence:
 // the runner's own and the specialist's.
 func TestEveryArtifactFailureCodeHasASentence(t *testing.T) {
-	for _, code := range []string{ModelUnavailable, Timeout, StepLimit, NothingMade, Interrupted,
+	for _, code := range []string{ModelUnavailable, Timeout, StepLimit, GenerationFailed, NothingMade, Interrupted,
 		deliverables.FailureSandboxBusy, deliverables.FailureNoSandbox, deliverables.FailureSandbox,
 		deliverables.FailurePreview, deliverables.FailureDrawing, deliverables.FailureStorage} {
 		if ForArtifact(code) == "" {

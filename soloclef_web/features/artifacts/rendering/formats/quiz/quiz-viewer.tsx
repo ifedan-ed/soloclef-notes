@@ -219,7 +219,10 @@ export default function QuizViewer({ manifest }: ArtifactRendererProps) {
 			data-vaul-no-drag=""
 			className="h-full min-h-0 overflow-y-auto bg-sidebar p-4 text-sidebar-foreground sm:p-6"
 		>
-			<div className="mx-auto flex min-h-full w-full max-w-2xl flex-col justify-center">
+			{/* Centred only where there is room around it: on a phone, centring
+			    the question left a blank band of about 100px above it, under
+			    the output's own header. */}
+			<div className="mx-auto flex min-h-full w-full max-w-2xl flex-col justify-start sm:justify-center">
 				{screen === "taking" ? (
 					<section aria-labelledby={headingId}>
 						<div className="mb-6 flex items-center justify-between gap-4 text-sm text-muted-foreground">

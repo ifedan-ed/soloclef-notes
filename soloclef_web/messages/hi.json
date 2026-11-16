@@ -1427,6 +1427,7 @@
 		"output_view": {
 			"studio": "स्टूडियो",
 			"view_prompt": "प्रॉम्प्ट और {count, plural, one {# स्रोत} other {# स्रोत}} देखें",
+			"view_prompt_only": "प्रॉम्प्ट देखें",
 			"prompt_title": "प्रॉम्प्ट",
 			"no_prompt": "बिना किसी कस्टम फ़ोकस के बनाया गया।",
 			"sources_title": "स्रोत",

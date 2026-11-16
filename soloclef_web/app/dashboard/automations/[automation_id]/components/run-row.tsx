@@ -43,10 +43,13 @@ export function RunRow({ run, automationId, initiallyOpen = false }: RunRowProps
 				<button
 					type="button"
 					onClick={() => setOpen((value) => !value)}
-					className="flex min-w-0 flex-1 items-center justify-between gap-4 px-4 py-3 text-left"
+					className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-3 text-left"
 					aria-expanded={open}
 				>
-					<div className="flex items-center gap-3 min-w-0">
+					{/* The two halves wrap onto two lines when the row is narrow:
+					    side by side at 390px, the time had a few pixels and read
+					    "1." instead of "1 minute ago". */}
+					<div className="flex min-w-0 items-center gap-3">
 						{open ? (
 							<ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden />
 						) : (
@@ -55,7 +58,7 @@ export function RunRow({ run, automationId, initiallyOpen = false }: RunRowProps
 						<RunStatusBadge status={run.status} />
 						<span className="text-xs text-muted-foreground truncate">{startedLabel}</span>
 					</div>
-					<div className="flex items-center gap-3 shrink-0 text-xs text-muted-foreground">
+					<div className="flex shrink-0 items-center gap-3 pl-7 text-xs text-muted-foreground sm:pl-0">
 						{duration && <span className="font-mono">{duration}</span>}
 						<TriggerSource triggerId={run.trigger_id ?? null} />
 					</div>

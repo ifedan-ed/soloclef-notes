@@ -65,14 +65,14 @@ func TestReadingAnAppendedMessage(t *testing.T) {
 
 func TestReadingANewThreadAndAnUpdate(t *testing.T) {
 	request, failures := readCreate([]byte(`{}`))
-	if len(failures) > 0 || request.Title != "New Chat" || request.Archived {
+	if len(failures) > 0 || request.Title != "New chat" || request.Archived {
 		t.Errorf("defaults: %+v, %v", request, failures)
 	}
 	request, failures = readCreate([]byte(`{"title":"  Cell \n biology ","archived":true}`))
 	if len(failures) > 0 || request.Title != "Cell biology" || !request.Archived {
 		t.Errorf("a full body: %+v, %v", request, failures)
 	}
-	if request, _ = readCreate([]byte(`{"title":"   "}`)); request.Title != "New Chat" {
+	if request, _ = readCreate([]byte(`{"title":"   "}`)); request.Title != "New chat" {
 		t.Errorf("a blank title became %q", request.Title)
 	}
 	// What an older app still sends is read past: whose the thread is was

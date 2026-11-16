@@ -216,7 +216,9 @@ export default function FlashcardsViewer({ manifest, localOnly = false }: Artifa
 			data-vaul-no-drag=""
 			className="h-full min-h-0 select-none overflow-y-auto bg-[#f7f7f8] p-4 sm:p-6"
 		>
-			<div className="mx-auto flex min-h-full w-full max-w-[640px] flex-col items-center justify-center gap-4">
+			{/* Top-aligned on a phone, as the quiz is: centred, the deck sat
+			    below a blank band of over 100px. */}
+			<div className="mx-auto flex min-h-full w-full max-w-[640px] flex-col items-center justify-start gap-4 sm:justify-center">
 				<div className="flex w-full max-w-[560px] flex-wrap items-center justify-between gap-2 text-xs text-[#4a4a4a]">
 					<p>{deck.title}</p>
 					<p>{counts.unseen} remaining</p>

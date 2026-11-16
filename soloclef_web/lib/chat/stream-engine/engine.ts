@@ -381,7 +381,7 @@ export async function startNewChat(ctx: EngineContext, message: AppendMessage): 
 	let currentThreadId = threadId;
 	if (!currentThreadId) {
 		try {
-			const newThread = await createThread("New Chat");
+			const newThread = await createThread();
 			currentThreadId = newThread.id;
 			view.setThreadId(currentThreadId);
 			view.setCurrentThread(newThread);

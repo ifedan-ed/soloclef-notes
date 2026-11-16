@@ -11,12 +11,12 @@ func TestCreatingAThread(t *testing.T) {
 	w := newWorld(t)
 
 	// What the web app sends (lib/chat/thread-persistence.ts createThread).
-	made := w.call(ben, "POST", "/api/v1/threads", `{"title":"New Chat","archived":false}`)
+	made := w.call(ben, "POST", "/api/v1/threads", `{"title":"New chat","archived":false}`)
 	if made.status != 200 {
 		t.Fatalf("create: %d %s", made.status, made.raw)
 	}
 	id := int64(made.body["id"].(float64))
-	if made.body["title"] != "New Chat" || made.body["archived"] != false || id <= 1000 {
+	if made.body["title"] != "New chat" || made.body["archived"] != false || id <= 1000 {
 		t.Errorf("the new thread: %s", made.raw)
 	}
 	// The record says nothing of whose the thread is, and nothing of a

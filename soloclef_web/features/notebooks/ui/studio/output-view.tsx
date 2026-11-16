@@ -107,7 +107,15 @@ export function OutputView({
 		if (expanded) setSize("column");
 	}, [expanded, setSize]);
 
+	// An output made in a chat records no sources (its row keeps none), so
+	// "0 sources" would be wrong: it was not made from nothing. Only an
+	// output that recorded its sources counts them and lists them; one whose
+	// sources were removed since says so in the list.
+	const recordsSources = output.source_count > 0;
 	const sourceCount = view.data?.sources.length ?? output.source_count;
+	const detailsLabel = recordsSources
+		? t("view_prompt", { count: sourceCount })
+		: t("view_prompt_only");
 	const kindLabel = tn(`kinds.${output.kind}.item`);
 
 	return (
@@ -219,7 +227,7 @@ export function OutputView({
 						onClick={() => setDetails((open) => !open)}
 					>
 						<FileText className="size-3.5" />
-						<span className="truncate">{t("view_prompt", { count: sourceCount })}</span>
+						<span className="truncate">{detailsLabel}</span>
 						<ChevronDown
 							className={cn("size-3.5 transition-transform", details && "rotate-180")}
 							aria-hidden
@@ -227,7 +235,7 @@ export function OutputView({
 					</Button>
 					{details ? (
 						<section
-							aria-label={t("view_prompt", { count: sourceCount })}
+							aria-label={detailsLabel}
 							className="mt-2 max-h-56 space-y-3 overflow-y-auto rounded-xl border bg-muted/30 p-3 text-sm"
 						>
 							<div>
@@ -238,28 +246,30 @@ export function OutputView({
 									{view.data ? view.data.prompt || t("no_prompt") : t("loading")}
 								</p>
 							</div>
-							<div>
-								<p className="mb-1 text-xs font-medium text-muted-foreground">
-									{t("sources_title")}
-								</p>
-								{view.data?.sources.length ? (
-									<ul className="space-y-1">
-										{view.data.sources.map((source) => (
-											<li key={source.id} className="flex min-w-0 items-start gap-2">
-												<FileText
-													className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-													aria-hidden
-												/>
-												<span className="min-w-0 break-words">{source.title}</span>
-											</li>
-										))}
-									</ul>
-								) : (
-									<p className="text-muted-foreground">
-										{view.data ? t("no_sources") : t("loading_sources")}
+							{recordsSources ? (
+								<div>
+									<p className="mb-1 text-xs font-medium text-muted-foreground">
+										{t("sources_title")}
 									</p>
-								)}
-							</div>
+									{view.data?.sources.length ? (
+										<ul className="space-y-1">
+											{view.data.sources.map((source) => (
+												<li key={source.id} className="flex min-w-0 items-start gap-2">
+													<FileText
+														className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+														aria-hidden
+													/>
+													<span className="min-w-0 break-words">{source.title}</span>
+												</li>
+											))}
+										</ul>
+									) : (
+										<p className="text-muted-foreground">
+											{view.data ? t("no_sources") : t("loading_sources")}
+										</p>
+									)}
+								</div>
+							) : null}
 						</section>
 					) : null}
 				</div>

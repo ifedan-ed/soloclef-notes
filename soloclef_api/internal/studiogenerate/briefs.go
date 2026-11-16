@@ -240,10 +240,11 @@ func videoTitle(own heading, listing string) string {
 }
 
 // defaultTitles name an output whose dialog sent no title; the web sends a
-// localised one.
+// localised one. They are in sentence case, as every label on the site is:
+// a stored title is shown as it is, so the server must not write Title Case.
 var defaultTitles = map[string]string{
-	"audio": "Audio Overview", "video": "Video Overview", "report": "Report", "slides": "Slide Deck",
-	"mindmap": "Mind Map", "flashcards": "Flashcards", "quiz": "Quiz", "data_table": "Data Table", "infographic": "Infographic",
+	"audio": "Audio overview", "video": "Video overview", "report": "Report", "slides": "Slide deck",
+	"mindmap": "Mind map", "flashcards": "Flashcards", "quiz": "Quiz", "data_table": "Data table", "infographic": "Infographic",
 }
 
 // outputTitle is the title an output is listed under: the dialog's, or the

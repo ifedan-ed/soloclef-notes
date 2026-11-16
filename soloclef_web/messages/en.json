@@ -902,7 +902,7 @@
 		"mention_heading": "Sources in this notebook",
 		"mention_no_match": "No source matches",
 		"mention_no_sources": "This notebook has no sources to mention yet.",
-		"studio_empty": "After adding sources, click to add Audio Overview, Mind Map, and more!",
+		"studio_empty": "After adding sources, click to add an audio overview, a mind map, and more.",
 		"note": "Note",
 		"back_to_studio": "Back to studio",
 		"generate_now": "Generate now",
@@ -1427,6 +1427,7 @@
 		"output_view": {
 			"studio": "Studio",
 			"view_prompt": "View prompt and {count, plural, one {# source} other {# sources}}",
+			"view_prompt_only": "View prompt",
 			"prompt_title": "Prompt",
 			"no_prompt": "Made without a custom focus.",
 			"sources_title": "Sources",

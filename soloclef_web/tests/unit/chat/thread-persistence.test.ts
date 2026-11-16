@@ -7,7 +7,7 @@ import { createThread, getThreadFull } from "@/lib/chat/thread-persistence";
 
 /** A thread as the Go route writes it: no owner, no workspace, no sharing level. */
 const THREAD = {
-	title: "New Chat",
+	title: "New chat",
 	archived: false,
 	id: 5,
 	created_at: "2026-11-11T10:00:00Z",
@@ -51,11 +51,11 @@ test("creating a thread sends a title and nothing about who owns it", async () =
 	});
 });
 
-test("a thread created without a title is called New Chat", async () => {
+test("a thread created without a title is called New chat", async () => {
 	await withFetch(THREAD, async (calls) => {
 		await createThread();
 		assert.deepEqual(JSON.parse(String(calls[0].init.body)), {
-			title: "New Chat",
+			title: "New chat",
 			archived: false,
 		});
 	});

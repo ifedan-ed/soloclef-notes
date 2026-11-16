@@ -62,7 +62,9 @@ const (
 	threadAbsent       = "Thread not found"
 	stillStopping      = "This chat is still stopping its answer. Try again in a moment."
 	threadDeleted      = "Thread deleted successfully"
-	defaultThreadTitle = "New Chat"
+	// defaultThreadTitle is in sentence case, as the site's labels are;
+	// threads already stored as "New Chat" keep that title.
+	defaultThreadTitle = "New chat"
 )
 
 // The bounds of what a request may ask for. None is a deployment's choice:

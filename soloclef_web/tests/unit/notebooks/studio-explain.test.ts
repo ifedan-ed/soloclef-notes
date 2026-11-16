@@ -123,6 +123,9 @@ test("every locale words every Explain message with all of its values", () => {
 			namespace: "notebooks.output_view",
 		});
 		assert.ok(view("view_prompt", { count: 3 }).includes("3"), `${locale} view_prompt`);
+		// An output with no recorded sources (one made in a chat) offers its
+		// prompt alone, with no count in it.
+		assert.ok(!/\d/.test(view("view_prompt_only")), `${locale} view_prompt_only`);
 		// The retired Good / Bad content rating left no strings behind.
 		const outputView = (messages(locale).notebooks as Record<string, Record<string, unknown>>)
 			.output_view;

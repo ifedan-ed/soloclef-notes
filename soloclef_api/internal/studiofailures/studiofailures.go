@@ -28,9 +28,14 @@ const (
 // could not be made, which is all the person can act on; the detail is for
 // the log. The timeout and step limit end with what the person can do:
 // such a run often succeeds on the next try (a report that hit the step
-// limit on 2026-11-15 was made at once on retry).
+// limit on 2026-11-15 was made at once on retry). generation_failed is
+// the runner's code for a run that broke off on an error; nearly always the
+// model service's stream breaking part way ("the stream broke: unexpected
+// EOF"), which is gone on the next try, so the sentence says that and not
+// the rarer causes the log keeps.
 var artifactSentences = map[string]string{
 	ModelUnavailable: "The model could not be reached. Try again in a few minutes.",
+	GenerationFailed: "The connection to the model broke off while it was being made. Try again; it usually works.",
 	Timeout:          "It took longer than this server allows. Try again.",
 	StepLimit:        "It needed more steps than one output is allowed. Try again.",
 	NothingMade:      "The run ended without making anything. Try again.",

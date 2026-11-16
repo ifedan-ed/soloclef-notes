@@ -1427,6 +1427,7 @@
 		"output_view": {
 			"studio": "Studio",
 			"view_prompt": "查看提示和 {count, plural, other {# 个来源}}",
+			"view_prompt_only": "查看提示",
 			"prompt_title": "提示",
 			"no_prompt": "未使用自定义重点生成。",
 			"sources_title": "来源",

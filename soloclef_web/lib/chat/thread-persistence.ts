@@ -75,9 +75,10 @@ export interface ThreadHistoryLoadResponse {
  *
  * The body carries the title and nothing about ownership: the server keys
  * the thread by the session's account, so there is no id a caller could
- * send to place a thread anywhere else.
+ * send to place a thread anywhere else. The default title is in sentence
+ * case, the same as the server's own default for a thread sent without one.
  */
-export async function createThread(title = "New Chat"): Promise<ThreadRecord> {
+export async function createThread(title = "New chat"): Promise<ThreadRecord> {
 	return baseApiService.post<ThreadRecord>("/api/v1/threads", undefined, {
 		body: {
 			title,

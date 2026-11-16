@@ -1427,6 +1427,7 @@
 		"output_view": {
 			"studio": "Studio",
 			"view_prompt": "Ver instrucciones y {count, plural, one {# fuente} other {# fuentes}}",
+			"view_prompt_only": "Ver instrucciones",
 			"prompt_title": "Instrucciones",
 			"no_prompt": "Creado sin un enfoque personalizado.",
 			"sources_title": "Fuentes",

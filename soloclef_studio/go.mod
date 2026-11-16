@@ -15,7 +15,7 @@ go 1.24.4
 
 require (
 	git.danvics.com/danvics/soloclef/soloclef_filestore v0.0.0
-	github.com/ifedan-ed/figures-go v0.5.0
+	github.com/ifedan-ed/figures-go v0.5.1
 	github.com/jackc/pgx/v5 v5.7.1
 	golang.org/x/image v0.34.0
 )
